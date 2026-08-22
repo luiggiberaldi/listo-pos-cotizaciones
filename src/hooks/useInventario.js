@@ -13,6 +13,31 @@ import { authFetch } from '../services/authFetch'
 
 export const INVENTARIO_KEY = ['inventario']
 
+function nuevaIdempotencyKey() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+  throw new Error('El navegador no soporta claves de idempotencia')
+}
+
+async function llamarMutacionProducto(path, method, payload, fallbackMessage) {
+  const idempotencyKey = payload.idempotencyKey || nuevaIdempotencyKey()
+  const res = await authFetch(path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ ...payload, idempotencyKey }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    if (data.error?.includes('duplicate') || res.status === 409) {
+      throw new Error('Ya existe un producto con ese código')
+    }
+    throw new Error(data.error || fallbackMessage || `Error ${res.status}`)
+  }
+  return data
+}
+
 // Prefijos que se consolidan en una sola categoría padre
 export const CATEGORY_GROUPS = [
   'CONEXIONES',
@@ -238,31 +263,23 @@ export function useCrearProducto() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async (campos) => {
-      const { data, error } = await supabase.rpc('crear_producto_con_kardex', {
-        p_codigo:       campos.codigo?.trim()      || null,
-        p_nombre:       campos.nombre.trim(),
-        p_descripcion:  campos.descripcion?.trim() || null,
-        p_categoria:    campos.categoria?.trim()   || null,
-        p_unidad:       campos.unidad?.trim()      || 'und',
-        p_precio_usd:   Number(campos.precio_usd)  || 0,
-        p_costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
-        p_stock_actual: Number(campos.stock_actual) || 0,
-        p_stock_minimo: Number(campos.stock_minimo) || 0,
-        p_precio_2     : campos.precio_2 !== '' && campos.precio_2 != null ? Number(campos.precio_2) : null,
-        p_precio_3     : campos.precio_3 !== '' && campos.precio_3 != null ? Number(campos.precio_3) : null,
-        p_precio1_porcentaje: campos.precio1_porcentaje !== '' && campos.precio1_porcentaje != null ? Number(campos.precio1_porcentaje) : null,
-        p_precio2_porcentaje: campos.precio2_porcentaje !== '' && campos.precio2_porcentaje != null ? Number(campos.precio2_porcentaje) : null,
-        p_precio3_porcentaje: campos.precio3_porcentaje !== '' && campos.precio3_porcentaje != null ? Number(campos.precio3_porcentaje) : null,
-      })
-
-      if (error) {
-        if (error.message?.includes('duplicate') || error.code === '23505')
-          throw new Error('Ya existe un producto con ese código')
-        throw error
-      }
-      return data
-    },
+    mutationFn: async (campos) => llamarMutacionProducto('/api/productos/crear', 'POST', {
+      codigo: campos.codigo?.trim() || null,
+      nombre: campos.nombre.trim(),
+      descripcion: campos.descripcion?.trim() || null,
+      categoria: campos.categoria?.trim() || null,
+      unidad: campos.unidad?.trim() || 'und',
+      precio_usd: Number(campos.precio_usd) || 0,
+      costo_usd: campos.costo_usd ? Number(campos.costo_usd) : null,
+      stock_actual: Number(campos.stock_actual) || 0,
+      stock_minimo: Number(campos.stock_minimo) || 0,
+      precio_2: campos.precio_2 !== '' && campos.precio_2 != null ? Number(campos.precio_2) : null,
+      precio_3: campos.precio_3 !== '' && campos.precio_3 != null ? Number(campos.precio_3) : null,
+      precio1_porcentaje: campos.precio1_porcentaje !== '' && campos.precio1_porcentaje != null ? Number(campos.precio1_porcentaje) : null,
+      precio2_porcentaje: campos.precio2_porcentaje !== '' && campos.precio2_porcentaje != null ? Number(campos.precio2_porcentaje) : null,
+      precio3_porcentaje: campos.precio3_porcentaje !== '' && campos.precio3_porcentaje != null ? Number(campos.precio3_porcentaje) : null,
+      imagen_url: null,
+    }, 'Error al crear producto'),
     onSuccess: async () => {
       // Cancelar queries en vuelo para evitar race condition Vercel→Supabase:
       // el RPC puede tardar en ser visible en DB antes que el refetch inmediato complete.
@@ -287,33 +304,24 @@ export function useActualizarProducto() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, campos, imagen_url }) => {
-      const { data, error } = await supabase.rpc('actualizar_producto_con_kardex', {
-        p_id:           id,
-        p_codigo:       campos.codigo?.trim()      || null,
-        p_nombre:       campos.nombre.trim(),
-        p_descripcion:  campos.descripcion?.trim() || null,
-        p_categoria:    campos.categoria?.trim()   || null,
-        p_unidad:       campos.unidad?.trim()      || 'und',
-        p_precio_usd:   Number(campos.precio_usd)  || 0,
-        p_costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
-        p_stock_actual: Number(campos.stock_actual) || 0,
-        p_stock_minimo: Number(campos.stock_minimo) || 0,
-        p_precio_2     : campos.precio_2 !== '' && campos.precio_2 != null ? Number(campos.precio_2) : null,
-        p_precio_3     : campos.precio_3 !== '' && campos.precio_3 != null ? Number(campos.precio_3) : null,
-        p_precio1_porcentaje: campos.precio1_porcentaje !== '' && campos.precio1_porcentaje != null ? Number(campos.precio1_porcentaje) : null,
-        p_precio2_porcentaje: campos.precio2_porcentaje !== '' && campos.precio2_porcentaje != null ? Number(campos.precio2_porcentaje) : null,
-        p_precio3_porcentaje: campos.precio3_porcentaje !== '' && campos.precio3_porcentaje != null ? Number(campos.precio3_porcentaje) : null,
-        p_imagen_url   : imagen_url ?? null,
-      })
-
-      if (error) {
-        if (error.message?.includes('duplicate') || error.code === '23505')
-          throw new Error('Ya existe un producto con ese código')
-        throw error
-      }
-      return data
-    },
+    mutationFn: async ({ id, campos, imagen_url }) => llamarMutacionProducto('/api/productos/actualizar', 'PATCH', {
+      id,
+      codigo: campos.codigo?.trim() || null,
+      nombre: campos.nombre.trim(),
+      descripcion: campos.descripcion?.trim() || null,
+      categoria: campos.categoria?.trim() || null,
+      unidad: campos.unidad?.trim() || 'und',
+      precio_usd: Number(campos.precio_usd) || 0,
+      costo_usd: campos.costo_usd ? Number(campos.costo_usd) : null,
+      stock_actual: Number(campos.stock_actual) || 0,
+      stock_minimo: Number(campos.stock_minimo) || 0,
+      precio_2: campos.precio_2 !== '' && campos.precio_2 != null ? Number(campos.precio_2) : null,
+      precio_3: campos.precio_3 !== '' && campos.precio_3 != null ? Number(campos.precio_3) : null,
+      precio1_porcentaje: campos.precio1_porcentaje !== '' && campos.precio1_porcentaje != null ? Number(campos.precio1_porcentaje) : null,
+      precio2_porcentaje: campos.precio2_porcentaje !== '' && campos.precio2_porcentaje != null ? Number(campos.precio2_porcentaje) : null,
+      precio3_porcentaje: campos.precio3_porcentaje !== '' && campos.precio3_porcentaje != null ? Number(campos.precio3_porcentaje) : null,
+      imagen_url: imagen_url ?? null,
+    }, 'Error al actualizar producto'),
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: INVENTARIO_KEY })
       await qc.cancelQueries({ queryKey: MOVIMIENTOS_KEY })
@@ -335,12 +343,9 @@ export function useBorrarProducto() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id) => {
-      const { error } = await supabase.rpc('borrar_producto_con_kardex', {
-        p_producto_id: id,
-      })
-      if (error) throw error
-    },
+    mutationFn: async (id) => llamarMutacionProducto('/api/productos/borrar', 'DELETE', {
+      id,
+    }, 'Error al borrar producto'),
     onSuccess: (_, id) => {
       // Remover optimísticamente del cache para respuesta inmediata en UI
       qc.cancelQueries({ queryKey: INVENTARIO_KEY })
@@ -367,11 +372,16 @@ export function useDesactivarProducto() {
 
   return useMutation({
     mutationFn: async ({ id, activo }) => {
-      const { error } = await supabase
-        .from('productos')
-        .update({ activo })
-        .eq('id', id)
-      if (error) throw error
+      // Migrado a Worker/service_role: 06 revoca UPDATE de productos a authenticated.
+      const res = await authFetch('/api/productos/metadatos', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, activo }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `Error ${res.status}`)
+      }
     },
     onSuccess: (_, { id, activo }) => {
       qc.cancelQueries({ queryKey: INVENTARIO_KEY })

@@ -94,7 +94,7 @@ export async function handleAdmin(request, env, url) {
         categoria: 'USUARIO', accion: 'CREAR_USUARIO', descripcion: `Usuario "${nombre.trim()}" creado con rol ${rol}`,
         entidadTipo: 'usuario', entidadId: newId, meta: { nombre: nombre.trim(), rol, color }, ip,
       });
-    } catch {}
+    } catch { /* auditoría secundaria no debe bloquear la operación */ }
 
     return json({ id: newId, ok: true }, 201, request);
   }
@@ -164,7 +164,7 @@ export async function handleAdmin(request, env, url) {
         categoria: 'USUARIO', accion: 'EDITAR_USUARIO', descripcion: `Usuario ${userId} actualizado`,
         entidadTipo: 'usuario', entidadId: userId, meta: { campos_actualizados: Object.keys(updateData), rol: updateData.rol, nombre: updateData.nombre }, ip,
       });
-    } catch {}
+    } catch { /* auditoría secundaria no debe bloquear la operación */ }
 
     return json({ ok: true }, 200, request);
   }
@@ -199,7 +199,7 @@ export async function handleAdmin(request, env, url) {
         categoria: 'USUARIO', accion: 'ELIMINAR_USUARIO', descripcion: `Usuario ${userId} eliminado`,
         entidadTipo: 'usuario', entidadId: userId, ip,
       });
-    } catch {}
+    } catch { /* auditoría secundaria no debe bloquear la operación */ }
 
     return json({ ok: true }, 200, request);
   }
@@ -475,7 +475,7 @@ export async function handleSaveConfig(request, env) {
       entidadTipo: 'configuracion', entidadId: '1', meta: { campos: Object.keys(datosGuardar) },
       ip: request.headers.get('CF-Connecting-IP') || null,
     });
-  } catch {}
+  } catch { /* auditoría secundaria no debe bloquear la operación */ }
 
   return json({ ok: true }, 200, request);
 }
@@ -636,6 +636,149 @@ export async function handleTesterClearAll(request, env) {
   } catch (e) {
     logStep(`✗ ERROR: ${e.message}`);
     return json({ ok: false, error: e.message, log }, 500, request);
+  }
+}
+
+export async function handleTesterCleanupFixtures(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+  if (operador.rol !== 'desarrollador') {
+    return jsonError('Solo el rol desarrollador puede limpiar fixtures del Tester', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const idempotencyKey = body?.idempotencyKey || request.headers.get('Idempotency-Key');
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
+
+  const normalizeIds = (value, field) => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.length > 20) {
+      throw new Error(`${field} debe ser un arreglo de máximo 20 UUIDs`);
+    }
+    const ids = [...new Set(value)];
+    if (ids.some(id => !isValidUuid(id))) throw new Error(`${field} contiene un UUID inválido`);
+    return ids;
+  };
+
+  let clienteIds;
+  let loteIds;
+  let transportistaIds;
+  try {
+    clienteIds = normalizeIds(body?.clienteIds, 'clienteIds');
+    loteIds = normalizeIds(body?.loteIds, 'loteIds');
+    transportistaIds = normalizeIds(body?.transportistaIds, 'transportistaIds');
+  } catch (error) {
+    return jsonError(error.message, 400, request);
+  }
+
+  if (clienteIds.length === 0 && loteIds.length === 0 && transportistaIds.length === 0) {
+    return json({ ok: true, idempotency_key: idempotencyKey, deleted: 0, deactivated: 0 }, 200, request);
+  }
+
+  const accountId = user.id;
+  const TEST_CLIENT_RIF = 'J-88888888-0';
+  const TEST_TRANSPORTISTA_NAME = 'Transportista Determinista Test';
+  const TEST_MOVEMENT_MOTIVE = 'Ajuste de inventario por tester determinista';
+  const rest = async (table, query, method = 'GET', payload = undefined) => {
+    const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}${query}`, {
+      method,
+      headers: {
+        ...headers,
+        ...(method === 'GET' ? {} : { Prefer: 'return=representation' }),
+      },
+      ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+    });
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!response.ok) {
+      const detail = typeof data === 'string' ? data : data?.message || data?.hint || JSON.stringify(data);
+      const error = new Error(`${method} ${table} falló (${response.status}): ${detail}`);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  };
+
+  const requireTenantClient = async (clienteId) => {
+    const rows = await rest('clientes', `?id=eq.${clienteId}&cuenta_id=eq.${accountId}&select=id,nombre,rif_cedula`);
+    const client = Array.isArray(rows) ? rows[0] : null;
+    if (!client) return null;
+    if (client.rif_cedula !== TEST_CLIENT_RIF) {
+      const error = new Error('El cliente no coincide con el fixture determinista');
+      error.status = 409;
+      throw error;
+    }
+    return client;
+  };
+
+  const result = {
+    ok: true,
+    idempotency_key: idempotencyKey,
+    clientes_procesados: 0,
+    cxc_eliminadas: 0,
+    reasignaciones_eliminadas: 0,
+    lotes_procesados: 0,
+    movimientos_eliminados: 0,
+    transportistas_procesados: 0,
+    transportistas_desactivados: 0,
+  };
+
+  try {
+    // El endpoint solo acepta marcadores conocidos del Tester y siempre limita por tenant.
+    for (const clienteId of clienteIds) {
+      const client = await requireTenantClient(clienteId);
+      if (!client) continue;
+
+      const cxc = await rest('cuentas_por_cobrar', `?cliente_id=eq.${clienteId}&cuenta_id=eq.${accountId}&select=id`, 'DELETE');
+      const reasignaciones = await rest('reasignaciones_clientes', `?cliente_id=eq.${clienteId}&select=id`, 'DELETE');
+      await rest('clientes', `?id=eq.${clienteId}&cuenta_id=eq.${accountId}`, 'PATCH', {
+        activo: false,
+        saldo_pendiente: 0,
+        actualizado_en: new Date().toISOString(),
+      });
+      result.clientes_procesados += 1;
+      result.cxc_eliminadas += Array.isArray(cxc) ? cxc.length : 0;
+      result.reasignaciones_eliminadas += Array.isArray(reasignaciones) ? reasignaciones.length : 0;
+    }
+
+    for (const loteId of loteIds) {
+      const movements = await rest('inventario_movimientos', `?cuenta_id=eq.${accountId}&lote_id=eq.${loteId}&select=id,motivo`);
+      if (!Array.isArray(movements) || movements.length === 0) continue;
+      const nonTesterRows = movements.filter(row => String(row.motivo || '').trim() !== TEST_MOVEMENT_MOTIVE);
+      if (nonTesterRows.length > 0) {
+        const error = new Error(`El lote ${loteId} no coincide con un movimiento del Tester`);
+        error.status = 409;
+        throw error;
+      }
+      const deleted = await rest('inventario_movimientos', `?cuenta_id=eq.${accountId}&lote_id=eq.${loteId}&select=id`, 'DELETE');
+      result.lotes_procesados += 1;
+      result.movimientos_eliminados += Array.isArray(deleted) ? deleted.length : movements.length;
+    }
+
+    for (const transportistaId of transportistaIds) {
+      const rows = await rest('transportistas', `?id=eq.${transportistaId}&cuenta_id=eq.${accountId}&select=id,nombre,activo`);
+      const transportista = Array.isArray(rows) ? rows[0] : null;
+      if (!transportista) continue;
+      if (transportista.nombre !== TEST_TRANSPORTISTA_NAME) {
+        const error = new Error('El transportista no coincide con el fixture determinista');
+        error.status = 409;
+        throw error;
+      }
+      await rest('transportistas', `?id=eq.${transportistaId}&cuenta_id=eq.${accountId}`, 'PATCH', {
+        activo: false,
+        actualizado_en: new Date().toISOString(),
+      });
+      result.transportistas_procesados += 1;
+      if (transportista.activo !== false) result.transportistas_desactivados += 1;
+    }
+
+    return json({ ...result, cleanup_replay_safe: true }, 200, request);
+  } catch (error) {
+    return jsonError(error.message || 'Error al limpiar fixtures del Tester', error.status || 500, request);
   }
 }
 

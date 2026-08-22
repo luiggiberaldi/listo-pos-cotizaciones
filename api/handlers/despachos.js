@@ -1,7 +1,13 @@
-import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
-import { verifyAuth, validateOperator, getOperatorRole, verifySupervisor, verifyPrivileged } from '../lib/auth.js'
+import { json, jsonError, isValidUuid } from '../lib/utils.js'
+import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
+
+function resolverIdempotencyKey(request, body) {
+  const fromBody = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : ''
+  const fromHeader = (request.headers.get('Idempotency-Key') || '').trim()
+  return fromBody || fromHeader || crypto.randomUUID()
+}
 
 function errorReglaFlete(errorText, request, mensajeFallback) {
   const text = String(errorText || '')
@@ -109,7 +115,7 @@ export async function handleCrearDespacho(request, env) {
       return jsonError('Ya existe una nota de despacho para esta cotización', 400, request);
     }
 
-    const esSupervisorOp = operador.rol === 'supervisor';
+    const esSupervisorOp = ['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(operador.rol);
     const esPropietario = cot.vendedor_id === operador.id;
 
     if (!['enviada', 'aceptada'].includes(cot.estado)) {
@@ -140,9 +146,8 @@ export async function handleCrearDespacho(request, env) {
       });
     }
 
-    // Fetch cliente details and check if vendedor has no commission
+    // Fetch cliente details
     let clienteNombre = 'cliente';
-    let esVendedorSinComision = false;
     let clienteSaldoFavor = 0;
     const targetCliId = (clienteFacturaId && isValidUuid(clienteFacturaId)) ? clienteFacturaId : cot.cliente_id;
     if (targetCliId) {
@@ -152,7 +157,6 @@ export async function handleCrearDespacho(request, env) {
         if (cliData && cliData.length > 0) {
           clienteNombre = cliData[0].nombre;
           clienteSaldoFavor = Number(cliData[0].saldo_a_favor || 0);
-          esVendedorSinComision = cliData[0].vendedor?.rol === 'vendedor_sin_comision';
         }
       }
     }
@@ -173,7 +177,7 @@ export async function handleCrearDespacho(request, env) {
             return jsonError(`El monto en Saldo a Favor ($${sf.monto}) excede el disponible actual del cliente ($${clienteSaldoFavor.toFixed(2)})`, 400, request);
           }
         }
-      } catch (e) {}
+      } catch { /* forma de pago malformada; se ignora */ }
     }
 
     // 4. Crear nota de despacho (stock se descuenta al confirmar entrega por logística)
@@ -268,7 +272,7 @@ export async function handleCrearDespacho(request, env) {
 export async function handleEditarPagoDespacho(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, operador, headers: h, ip } = v;
+  const { operador, headers: h } = v;
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -320,20 +324,6 @@ export async function handleEditarPagoDespacho(request, env) {
     if (destinoError) return destinoError
   }
 
-  const cliToCheck = clienteId || despacho.cliente_id;
-  let esVendedorSinComision = false;
-  if (cliToCheck) {
-    try {
-      const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cliToCheck}&select=vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(rol)`, { headers: h });
-      if (cliRes.ok) {
-        const cliData = await cliRes.json();
-        if (Array.isArray(cliData) && cliData.length > 0) {
-          esVendedorSinComision = cliData[0].vendedor?.rol === 'vendedor_sin_comision';
-        }
-      }
-    } catch {}
-  }
-
   if (formaPago) {
     try {
       const fps = typeof formaPago === 'string' ? JSON.parse(formaPago) : formaPago;
@@ -346,7 +336,7 @@ export async function handleEditarPagoDespacho(request, env) {
           }
         }
       }
-    } catch {}
+    } catch { /* forma de pago malformada; se ignora */ }
   }
 
   const esConciliacionCod = formaPago !== undefined && 
@@ -465,7 +455,7 @@ export async function handleEditarPagoDespacho(request, env) {
         } else if (typeof fps === 'string') {
           esDonacion = fps === 'Donación';
         }
-      } catch (e) {}
+      } catch { /* forma de pago malformada */ }
     }
 
     if (esDonacion || ['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol2?.rol) || (vendRol2?.rol === 'vendedor_sin_comision' && parseFloat(vendRol2?.markup_pct || 0) <= 0)) {
@@ -498,7 +488,7 @@ export async function handleEditarPagoDespacho(request, env) {
       meta: campos,
       ip: request.headers.get('CF-Connecting-IP') || null,
     });
-  } catch {}
+  } catch { /* auditoría best-effort */ }
 
   return json({ ok: true }, 200, request);
 }
@@ -510,20 +500,23 @@ export async function handleActualizarEstadoDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { despachoId, nuevoEstado, tasaBcv } = body;
+  const { despachoId, nuevoEstado, tasaBcv } = body || {};
+  const idempotencyKey = resolverIdempotencyKey(request, body);
   if (!despachoId || !nuevoEstado) return jsonError('Faltan campos', 400, request);
   if (!isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
 
   try {
-    // 1. Obtener despacho
-    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=*`, { headers });
+    // 1. Obtener despacho dentro del tenant del operador
+    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=*`, { headers });
     const [desp] = await dRes.json();
     if (!desp) return jsonError('Despacho no encontrado', 404, request);
 
     // 2. Validar transición
     const valid = (desp.estado === 'pendiente' && ['despachada', 'entregada', 'anulada'].includes(nuevoEstado))
       || (desp.estado === 'despachada' && ['entregada', 'pendiente'].includes(nuevoEstado))
-      || (desp.estado === 'entregada' && ['pendiente', 'despachada'].includes(nuevoEstado));
+      || (desp.estado === 'entregada' && ['pendiente', 'despachada'].includes(nuevoEstado))
+      || (desp.estado === nuevoEstado && ['pendiente', 'despachada', 'entregada', 'anulada'].includes(nuevoEstado));
     if (!valid) {
       return jsonError(`No se puede pasar de "${desp.estado}" a "${nuevoEstado}"`, 400, request);
     }
@@ -600,7 +593,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
     }
 
     // Bloquear reversión o anulación si el Saldo a Favor generado por una devolución en este despacho ya fue consumido en otras compras
-    if (['pendiente', 'anulada'].includes(nuevoEstado) && desp.tiene_devoluciones) {
+    if (['pendiente', 'anulada'].includes(nuevoEstado) && desp.tiene_devoluciones && desp.estado !== nuevoEstado) {
       try {
         const cxcCredRes = await fetch(
           `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.credito&select=monto_usd`,
@@ -683,8 +676,86 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
+    let entregaAtomica = null
+    let reversaAtomica = null
+
+    // La RPC neutral es la autoridad para stock, Kardex y estado de entrega.
+    // En replay devuelve el resultado persistido antes de tocar efectos auxiliares.
+    const deliveryCandidate = nuevoEstado === 'entregada'
+      && ['pendiente', 'despachada', 'entregada'].includes(desp.estado)
+    if (deliveryCandidate) {
+      const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/confirmar_entrega_finanzas_idempotente`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          p_cuenta_id: operador.cuenta_id,
+          p_despacho_id: despachoId,
+          p_idempotency_key: idempotencyKey,
+          p_usuario_id: user.operator_id,
+          p_usuario_nombre: operador.nombre,
+          p_usuario_color: operador.color || null,
+          p_tasa_snapshot: Number.isFinite(Number(tasaBcv)) && Number(tasaBcv) > 0 ? Number(tasaBcv) : null,
+          p_permitir_negativo: null,
+        }),
+      })
+      const rpcText = await rpcRes.text()
+      let result = null
+      try { result = rpcText ? JSON.parse(rpcText) : null } catch { result = null }
+      if (!rpcRes.ok) {
+        return jsonError(`No se pudo confirmar la entrega atómica: ${result?.message || rpcText || `HTTP ${rpcRes.status}`}`, 400, request)
+      }
+      if (!result?.ok) return jsonError('La RPC no confirmó la entrega atómica', 500, request)
+      entregaAtomica = result
+      if (result.idempotent === true) {
+        return json({
+          ...result,
+          ok: true,
+          nuevoEstado: result.nuevo_estado || 'entregada',
+          idempotency_key: idempotencyKey,
+          idempotent: true,
+        }, 200, request)
+      }
+    }
+
+    // Reversión de entrega + finanzas: la RPC conserva las guardas de flete,
+    // abonos y comisión pagada y evita mutaciones REST parciales.
+    const reversalCandidate = ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado)
+      && (desp.estado === 'entregada' || desp.estado === nuevoEstado)
+    if (reversalCandidate) {
+      const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/revertir_entrega_finanzas_idempotente`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          p_cuenta_id: operador.cuenta_id,
+          p_despacho_id: despachoId,
+          p_idempotency_key: idempotencyKey,
+          p_nuevo_estado: nuevoEstado,
+          p_usuario_id: user.operator_id,
+          p_usuario_nombre: operador.nombre,
+          p_usuario_color: operador.color || null,
+        }),
+      })
+      const rpcText = await rpcRes.text()
+      let result = null
+      try { result = rpcText ? JSON.parse(rpcText) : null } catch { result = null }
+      if (!rpcRes.ok) {
+        return jsonError(`No se pudo revertir la entrega atómica: ${result?.message || rpcText || `HTTP ${rpcRes.status}`}`, 400, request)
+      }
+      if (!result?.ok) return jsonError('La RPC no confirmó la reversión atómica', 500, request)
+      reversaAtomica = result
+      if (result.idempotent === true) {
+        return json({
+          ...result,
+          ok: true,
+          nuevoEstado: result.nuevo_estado || nuevoEstado,
+          idempotency_key: idempotencyKey,
+          idempotent: true,
+        }, 200, request)
+      }
+    }
+
     // Solo restaurar stock si ya había sido entregada (stock ya descontado) y se anula o revierte
-    if (desp.estado === 'entregada' && ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado)) {
+    if (!reversaAtomica && desp.estado === 'entregada' && ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado)) {
       // 1. Obtener ítems originales
       const ciRes = await fetch(
         `${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&producto_id=not.is.null&origen=eq.inventario&select=producto_id,cantidad,nombre_snap`,
@@ -791,8 +862,10 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // 3b. Al confirmar entrega: descontar stock + registrar kardex
-    if (nuevoEstado === 'entregada') {
+    // 3b. Al confirmar entrega: descontar stock + registrar kardex.
+    // P0-B lo delega al wrapper neutral; esta rama queda solo como referencia
+    // para transiciones no portadas y no debe ejecutarse cuando hubo RPC.
+    if (!entregaAtomica && nuevoEstado === 'entregada') {
       const ciResEnt = await fetch(
         `${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&producto_id=not.is.null&origen=eq.inventario&select=producto_id,cantidad,nombre_snap`,
         { headers }
@@ -941,7 +1014,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
     }
 
     // 4b. Revertir CxC si se devuelve o anula desde despachada o entregada
-    if (['pendiente', 'anulada'].includes(nuevoEstado) && (desp.estado === 'despachada' || desp.estado === 'entregada')) {
+    if (!reversaAtomica && ['pendiente', 'anulada'].includes(nuevoEstado) && (desp.estado === 'despachada' || desp.estado === 'entregada')) {
       try {
         const clienteCxCId = desp.cliente_factura_id || desp.cliente_id;
         if (clienteCxCId) {
@@ -962,7 +1035,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
     }
 
     // 4c. Revertir/Eliminar comisión si pasa de aprobada/entregada a pendiente o anulada
-    if (['despachada', 'entregada'].includes(desp.estado) && ['pendiente', 'anulada'].includes(nuevoEstado)) {
+    if (!reversaAtomica && ['despachada', 'entregada'].includes(desp.estado) && ['pendiente', 'anulada'].includes(nuevoEstado)) {
       try {
         await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
           method: 'DELETE', headers,
@@ -973,18 +1046,20 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
-      method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify(updateData),
-    });
-    if (!patchRes.ok) {
-      const err = await patchRes.text();
-      console.error('[DESPACHOS] Error al hacer PATCH notas_despacho:', err);
-      return jsonError(`Error BD al actualizar despacho: ${err}`, 500, request);
+    if (!entregaAtomica && !reversaAtomica) {
+      const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify(updateData),
+      });
+      if (!patchRes.ok) {
+        const err = await patchRes.text();
+        console.error('[DESPACHOS] Error al hacer PATCH notas_despacho:', err);
+        return jsonError(`Error BD al actualizar despacho: ${err}`, 500, request);
+      }
     }
 
     // 5. Al aprobar (despachada): registrar cargo CxC si hay saldo a crédito / abono si hay Saldo a Favor
-    if (nuevoEstado === 'despachada') {
+    if (!reversaAtomica && nuevoEstado === 'despachada') {
       try {
         const fpRaw = desp.forma_pago_cliente || desp.forma_pago || '[]';
         let itemsCargos = []; // [{ monto: number, dias: number|null, metodo: 'cxc'|'cod', desc: string }]
@@ -1164,7 +1239,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
     }
 
     // 5b. Calcular comisión al aprobar o entregar
-    if (nuevoEstado === 'despachada' || nuevoEstado === 'entregada') {
+    if (!entregaAtomica && !reversaAtomica && (nuevoEstado === 'despachada' || nuevoEstado === 'entregada')) {
       try {
         const vendedorIdComision = await obtenerVendedorComisionId(desp, headers, env);
         const vendRolRes = await fetch(
@@ -1183,7 +1258,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
             } else if (typeof fps === 'string') {
               esDonacion = fps === 'Donación';
             }
-          } catch (e) {}
+          } catch { /* forma de pago malformada */ }
         }
 
         if (!esDonacion && !['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol?.rol) && (vendRol?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol?.markup_pct || 0) > 0)) {
@@ -1214,7 +1289,14 @@ export async function handleActualizarEstadoDespacho(request, env) {
       meta: { estado_anterior: desp.estado, estado_nuevo: nuevoEstado, cotizacion_id: desp.cotizacion_id }, ip,
     });
 
-    return json({ ok: true, nuevoEstado }, 200, request);
+    return json({
+      ok: true,
+      nuevoEstado,
+      idempotency_key: idempotencyKey,
+      inventario_atomico: Boolean(entregaAtomica || reversaAtomica),
+      finanzas_atomicas: Boolean(entregaAtomica?.finanzas_atomicas || reversaAtomica),
+      frontera_financiera: entregaAtomica ? 'sql_atomic' : null,
+    }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al actualizar despacho', 500, request);
   }
@@ -1299,7 +1381,7 @@ export async function handleReciclarDespacho(request, env) {
 export async function handleEditarItemsDespacho(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, operador, headers, ip } = v;
+  const { user, operador, headers } = v;
 
   // ── 1. Solo administración o jefes pueden editar ítems de despacho ──────────
   if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
@@ -1318,23 +1400,6 @@ export async function handleEditarItemsDespacho(request, env) {
   if (!Array.isArray(items) || items.length === 0) return jsonError('items no puede estar vacío', 400, request);
 
   try {
-    const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=cliente_id,cliente_factura_id`, { headers });
-    const despList = await checkRes.json();
-    const despacho = despList?.[0];
-    let esVendedorSinComision = false;
-    if (despacho) {
-      const cliToCheck = despacho.cliente_factura_id || despacho.cliente_id;
-      if (cliToCheck) {
-        const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${cliToCheck}&select=vendedor_id,vendedor:usuarios!clientes_vendedor_id_fkey(rol)`, { headers });
-        if (cliRes.ok) {
-          const cliData = await cliRes.json();
-          if (Array.isArray(cliData) && cliData.length > 0) {
-            esVendedorSinComision = cliData[0].vendedor?.rol === 'vendedor_sin_comision';
-          }
-        }
-      }
-    }
-
     if (pagos) {
       try {
         const fps = typeof pagos === 'string' ? JSON.parse(pagos) : pagos;
@@ -1347,7 +1412,7 @@ export async function handleEditarItemsDespacho(request, env) {
             }
           }
         }
-      } catch {}
+      } catch { /* pagos malformados; se ignoran */ }
     }
 
     // ── 2. Llamar al RPC que maneja la transacción e inventario ────────────────
@@ -1830,9 +1895,11 @@ export async function handleDevolucionParcialDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { despachoId, items, motivo, generarReemplazo, exchangeItems } = body;
+  const { despachoId, items, motivo, generarReemplazo, exchangeItems } = body || {};
+  const idempotencyKey = resolverIdempotencyKey(request, body);
 
   if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido o ausente', 400, request);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
   if (!Array.isArray(items) || items.length === 0) return jsonError('items debe ser un array no vacío', 400, request);
   if (!motivo || motivo.trim() === '') return jsonError('El motivo es requerido', 400, request);
 
@@ -1854,7 +1921,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
           return jsonError(`Precio inválido para producto de intercambio`, 400, request);
         }
 
-        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${producto_id}&select=nombre,codigo,unidad,stock_actual,activo`, { headers });
+        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${producto_id}&cuenta_id=eq.${operador.cuenta_id}&select=nombre,codigo,unidad,stock_actual,activo`, { headers });
         const [prod] = await pRes.json();
         if (!prod) {
           return jsonError(`Producto de intercambio no encontrado`, 404, request);
@@ -1885,8 +1952,8 @@ export async function handleDevolucionParcialDespacho(request, env) {
     totalIntercambioUsd = Math.round(totalIntercambioUsd * 10000) / 10000;
 
   try {
-    // 1. Obtener despacho
-    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=*`, { headers });
+    // 1. Obtener despacho dentro del tenant del operador
+    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=*`, { headers });
     const [desp] = await dRes.json();
     if (!desp) return jsonError('Despacho no encontrado', 404, request);
 
@@ -2002,6 +2069,105 @@ export async function handleDevolucionParcialDespacho(request, env) {
     }
 
     totalDevueltoUsd = Math.round(totalDevueltoUsd * 10000) / 10000;
+
+    // P0-C: la RPC neutral compone inventario, Kardex, documentos de
+    // devolución, CxC, comisión y, si corresponde, la cotización de reemplazo.
+    // La misma clave reserva el replay; no se deja una ruta REST alternativa.
+    const reemplazoPayload = generarReemplazo ? {
+      cliente_id: desp.cliente_id,
+      vendedor_id: desp.vendedor_id,
+      transportista_id: desp.transportista_id || null,
+      total_usd: totalDevueltoUsd,
+      notas_cliente: `Reemplazo por devolución en Despacho #${desp.numero}`,
+      notas_internas: `Generada automáticamente por devolución parcial de Despacho #${desp.numero}. Motivo: ${motivo}`,
+      items: processedItems.map((item, idx) => ({
+        producto_id: item.producto_id,
+        nombre_snap: item.nombre_snap,
+        codigo_snap: item.codigo_snap,
+        unidad_snap: item.unidad_snap || 'und',
+        cantidad: item.cantidad_devuelta,
+        precio_unit_usd: item.precio_unit_usd,
+        descuento_pct: 0,
+        total_linea_usd: item.total_devuelto_usd,
+        orden: idx,
+        origen: item.origen || 'inventario',
+      })),
+    } : null;
+
+    const atomicRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_devolucion_parcial_idempotente`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        p_cuenta_id: operador.cuenta_id,
+        p_despacho_id: despachoId,
+        p_idempotency_key: idempotencyKey,
+        p_devoluciones: processedItems,
+        p_intercambios: processedExchangeItems,
+        p_motivo: motivo.trim(),
+        p_usuario_id: user.operator_id,
+        p_usuario_nombre: operador.nombre,
+        p_usuario_color: operador.color || null,
+        p_cotizacion_reemplazo_id: null,
+        p_total_devuelto_usd: totalDevueltoUsd,
+        p_total_intercambio_usd: totalIntercambioUsd,
+        p_reemplazo: reemplazoPayload,
+      }),
+    });
+    const atomicText = await atomicRes.text();
+    let atomicResult = null;
+    try { atomicResult = atomicText ? JSON.parse(atomicText) : null; } catch { atomicResult = null; }
+    if (!atomicRes.ok) {
+      return jsonError(`No se pudo registrar la devolución atómica: ${atomicResult?.message || atomicText || `HTTP ${atomicRes.status}`}`, 400, request);
+    }
+    if (!atomicResult?.ok) return jsonError('La RPC no confirmó la devolución atómica', 500, request);
+    if (atomicResult.transaccion_atomica !== true) return jsonError('La RPC no confirmó una transacción atómica', 500, request);
+    if (atomicResult.idempotent === true) {
+      return json({
+        ...atomicResult,
+        ok: true,
+        cotizacionReemplazoId: atomicResult.cotizacion_reemplazo_id || null,
+        totalDevueltoUsd,
+        totalIntercambioUsd,
+        balanceNetoUsd: Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000,
+        idempotency_key: idempotencyKey,
+        idempotent: true,
+      }, 200, request);
+    }
+
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id,
+        usuarioNombre: operador.nombre,
+        usuarioRol: operador.rol,
+        categoria: 'DESPACHO',
+        accion: 'DEVOLUCION_PARCIAL',
+        descripcion: `Devolución parcial atómica en despacho #${desp.numero}. Motivo: ${motivo}`,
+        entidadTipo: 'nota_despacho',
+        entidadId: despachoId,
+        meta: {
+          idempotency_key: idempotencyKey,
+          cotizacion_reemplazo_id: atomicResult.cotizacion_reemplazo_id || null,
+          total_devuelto_usd: totalDevueltoUsd,
+          total_intercambio_usd: totalIntercambioUsd,
+        },
+        ip,
+      });
+    } catch (auditErr) {
+      console.warn('[DEVOLUCION] Auditoría atómica no registrada:', auditErr?.message);
+    }
+
+    if (atomicResult.transaccion_atomica === true) {
+      return json({
+        ...atomicResult,
+        ok: true,
+        cotizacionReemplazoId: atomicResult.cotizacion_reemplazo_id || null,
+        totalDevueltoUsd,
+        totalIntercambioUsd,
+        balanceNetoUsd: Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000,
+        idempotency_key: idempotencyKey,
+        idempotent: false,
+      }, 200, request);
+    }
 
     // 5. Devolver stock e insertar movimientos Kardex
     const loteId = crypto.randomUUID();

@@ -1,13 +1,18 @@
 // api/handlers/inventario.js
-import { json, jsonError, corsHeaders } from '../lib/utils.js'
-import { verifyAuth, verifySupervisor, validateOperator } from '../lib/auth.js'
+import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
+import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
+
+function resolverIdempotencyKey(request, body) {
+  const fromBody = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : ''
+  const fromHeader = (request.headers.get('Idempotency-Key') || '').trim()
+  return fromBody || fromHeader || crypto.randomUUID()
+}
 
 // ── PDF temporal handler (para WhatsApp) ──────────────────────────────────
 export async function handlePdfTemp(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user } = v;
 
   const blob = await request.arrayBuffer();
   if (!blob || blob.byteLength === 0) return jsonError('PDF vacío', 400, request);
@@ -49,29 +54,49 @@ export async function handleClearInventory(request, env) {
 
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { operador, headers: h } = v;
-  const ROLES_CLEAR = ['administracion', 'jefe', 'desarrollador'];
-  if (!ROLES_CLEAR.includes(operador.rol)) {
-    return jsonError('Solo administración, jefe o desarrollador pueden borrar el inventario', 403, request);
+  const { user, operador, headers: h, ip } = v;
+  if (operador.rol !== 'desarrollador') {
+    return jsonError('Solo el rol desarrollador puede borrar el inventario', 403, request);
   }
 
-  // Borrar kardex (movimientos) antes de productos
-  await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?cuenta_id=eq.${operador.cuenta_id}`, {
-    method: 'DELETE',
-    headers: h,
-  });
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const idempotencyKey = resolverIdempotencyKey(request, body);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?cuenta_id=eq.${operador.cuenta_id}`, {
-    method: 'DELETE',
+  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/limpiar_inventario_atomico`, {
+    method: 'POST',
     headers: h,
+    body: JSON.stringify({
+      p_cuenta_id: operador.cuenta_id,
+      p_usuario_id: user.operator_id,
+      p_confirmacion: `LIMPIAR_INVENTARIO:${operador.cuenta_id}`,
+      p_idempotency_key: idempotencyKey,
+    }),
   });
+  const text = await rpcRes.text();
+  let result = null;
+  try { result = text ? JSON.parse(text) : null; } catch {
+    // Best-effort parse: conservar la respuesta original.
+  }
+  if (!rpcRes.ok) {
+    return jsonError(`Error al borrar inventario: ${result?.message || text || `HTTP ${rpcRes.status}`}`, 500, request);
+  }
+  if (!result?.ok) return jsonError('La RPC no confirmó la limpieza del inventario', 500, request);
 
-  if (!res.ok) {
-    const text = await res.text();
-    return jsonError(`Error al borrar: ${text}`, 500, request);
+  try {
+    await registrarAuditoria(env, h, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'INVENTARIO', accion: 'LIMPIAR_INVENTARIO',
+      descripcion: `Limpieza atómica de inventario del tenant ${operador.cuenta_id}`,
+      entidadTipo: 'inventario', entidadId: operador.cuenta_id,
+      meta: { movimientos_eliminados: result.movimientos_eliminados, productos_eliminados: result.productos_eliminados, idempotency_key: idempotencyKey }, ip,
+    });
+  } catch {
+    // Best-effort operation; preserve the primary response.
   }
 
-  return json({ ok: true }, 200, request);
+  return json({ ok: true, ...result }, 200, request);
 }
 
 // ── Aplicar movimiento de inventario por lotes (admin) ────────────────────────
@@ -93,89 +118,58 @@ export async function handleAplicarMovimientoLote(request, env) {
   if (!['ingreso', 'egreso'].includes(tipo)) return jsonError('tipo debe ser ingreso o egreso', 400, request);
   if (!motivo.trim()) return jsonError('El motivo es obligatorio', 400, request);
 
+  const motivosPermitidos = ['compra_proveedor', 'ajuste_inventario', 'merma', 'devolucion', 'transferencia', 'otro', 'venta'];
+  if (!motivosPermitidos.includes(motivo_tipo)) return jsonError('motivo_tipo inválido', 400, request);
+  for (const item of items) {
+    if (!isValidUuid(item?.producto_id)) return jsonError('producto_id inválido', 400, request);
+    if (!Number.isFinite(Number(item?.cantidad)) || Number(item.cantidad) <= 0) {
+      return jsonError('La cantidad debe ser mayor a 0', 400, request);
+    }
+  }
+
+  const idempotencyKey = resolverIdempotencyKey(request, body);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
+
   try {
-    const loteId = crypto.randomUUID();
-    const movimientos = [];
-
-    // Consultar si la cuenta permite stock negativo (Venta Anticipada)
-    let permitirNegativo = false;
-    try {
-      const cuentaId = operador?.cuenta_id || user?.id;
-      const configUrl = cuentaId
-        ? `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${cuentaId}&select=*&limit=1`
-        : `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?select=*&limit=1`;
-      const cfgRes = await fetch(configUrl, { headers });
-      if (cfgRes.ok) {
-        const [cfgData] = await cfgRes.json();
-        permitirNegativo = cfgData?.permitir_stock_negativo === true ||
-          (Array.isArray(cfgData?._comision_extras) && cfgData._comision_extras.some(x => x && typeof x === 'object' && x.__meta_venta_anticipada === true));
-      }
-    } catch (e) {
-      console.warn('[VENTA ANTICIPADA] Error leyendo config permitir_stock_negativo:', e);
-    }
-
-    for (const item of items) {
-      const cantidad = Number(item.cantidad);
-      if (cantidad <= 0) return jsonError('La cantidad debe ser mayor a 0', 400, request);
-
-      // Obtener producto
-      const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,stock_actual`, { headers });
-      const [prod] = await pRes.json();
-      if (!prod) return jsonError('Producto no encontrado o inactivo', 400, request);
-
-      let nuevoStock;
-      if (tipo === 'egreso') {
-        nuevoStock = Number(prod.stock_actual) - cantidad;
-        if (nuevoStock < 0 && !permitirNegativo) {
-          return jsonError(`Stock insuficiente para "${prod.nombre}": tiene ${prod.stock_actual} y se intenta retirar ${cantidad}`, 400, request);
-        }
-      } else {
-        nuevoStock = Number(prod.stock_actual) + cantidad;
-      }
-
-      // Actualizar stock
-      await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}&cuenta_id=eq.${operador.cuenta_id}`, {
-        method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ stock_actual: nuevoStock, actualizado_en: new Date().toISOString() }),
-      });
-
-      movimientos.push({
-        lote_id: loteId,
-        tipo,
-        motivo: motivo.trim(),
-        motivo_tipo,
-        producto_id: item.producto_id,
-        producto_nombre: prod.nombre,
-        cantidad,
-        stock_anterior: Number(prod.stock_actual),
-        stock_nuevo: nuevoStock,
-        usuario_id: user.operator_id,
-        usuario_nombre: operador.nombre,
-        cuenta_id: operador.cuenta_id,
-      });
-    }
-
-    // Insertar todos los movimientos
-    const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos?select=numero`, {
-      method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify(movimientos),
+    const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/aplicar_movimiento_inventario_atomico`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        p_cuenta_id: operador.cuenta_id,
+        p_tipo: tipo,
+        p_motivo: motivo.trim(),
+        p_motivo_tipo: motivo_tipo,
+        p_items: items,
+        p_usuario_id: user.operator_id,
+        p_usuario_nombre: operador.nombre,
+        p_usuario_color: operador.color || null,
+        p_idempotency_key: idempotencyKey,
+      }),
     });
-    const movResults = await insRes.json();
-    const numero = movResults?.[0]?.numero || null;
+    const text = await rpcRes.text();
+    let result = null;
+    try { result = text ? JSON.parse(text) : null; } catch {
+      // Best-effort parse: conservar la respuesta original.
+    }
+    if (!rpcRes.ok) {
+      return jsonError(`No se pudo aplicar el movimiento atómico: ${result?.message || text || `HTTP ${rpcRes.status}`}`, 400, request);
+    }
+    if (!result?.ok) return jsonError('La RPC no confirmó el movimiento atómico', 500, request);
 
-    // Auditoría
     try {
       await registrarAuditoria(env, headers, {
         usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
         categoria: 'INVENTARIO', accion: tipo === 'ingreso' ? 'INGRESO_INVENTARIO' : 'EGRESO_INVENTARIO',
-        descripcion: `${tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} de ${items.length} producto(s): ${motivo}`,
-        entidadTipo: 'inventario', entidadId: loteId, meta: { tipo, motivo, motivo_tipo, items_count: items.length, numero }, ip,
+        descripcion: `${tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} atómico de ${items.length} producto(s): ${motivo}`,
+        entidadTipo: 'inventario', entidadId: result.lote_id, meta: { tipo, motivo, motivo_tipo, items_count: items.length, numero: result.numero, idempotency_key: idempotencyKey, idempotent: result.idempotent === true }, ip,
       });
-    } catch {}
+    } catch {
+      // Best-effort operation; preserve the primary response.
+    }
 
-    return json({ lote_id: loteId, numero }, 200, request);
+    return json({ lote_id: result.lote_id, numero: result.numero, movimientos: result.movimientos }, 200, request);
   } catch (e) {
-    return jsonError(e.message || 'Error al aplicar movimiento', 500, request);
+    return jsonError(e.message || 'Error al aplicar movimiento atómico', 500, request);
   }
 }
 
@@ -315,7 +309,7 @@ export async function handleScanMaterialList(request, env) {
   let binaryImg
   try {
     binaryImg = Uint8Array.from(atob(image), c => c.charCodeAt(0))
-  } catch (err) {
+  } catch {
     return jsonError('Error al decodificar la imagen Base64', 400, request)
   }
 
@@ -499,7 +493,9 @@ export async function handleBuscarProductosHibrido(request, env) {
   if (!res.ok) {
     const errorText = await res.text()
     let parsedError = {}
-    try { parsedError = JSON.parse(errorText) } catch {}
+    try { parsedError = JSON.parse(errorText) } catch {
+      // Conservar el texto original si la respuesta no es JSON.
+    }
 
     // Fallback: Si falla por PGRST202 (firma de función no coincide), reintentamos sin p_incluir_inactivos ni p_cuenta_id
     if (parsedError.code === 'PGRST202') {
@@ -530,7 +526,7 @@ export async function handleBuscarProductosHibrido(request, env) {
 
   const productos = await res.json()
   const totalCount = productos.length > 0 ? Number(productos[0].total_count) : 0
-  const productosLimpio = productos.map(({ total_count, vector_distance, costo_usd, ...rest }) => {
+  const productosLimpio = productos.map(({ total_count: _total_count, vector_distance: _vector_distance, costo_usd, ...rest }) => {
     return isSup ? { ...rest, costo_usd } : rest
   })
   
@@ -596,16 +592,19 @@ export async function handleBatchPriceUpdate(request, env) {
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
   const { 
-    cuenta_id, modo, porcentaje, valor_fijo, 
+    modo, porcentaje, valor_fijo,
     categoria, precio_objetivo, preview_only 
   } = body;
 
-  if (!cuenta_id) return jsonError('cuenta_id es obligatorio', 400, request);
   if (!['porcentaje', 'valor_fijo'].includes(modo)) return jsonError('Modo inválido', 400, request);
   if (!['precio_usd', 'precio_2', 'precio_3', 'todos'].includes(precio_objetivo)) return jsonError('Precio objetivo inválido', 400, request);
 
+  // Tenant-safety: el tenant siempre es el del operador autenticado, nunca
+  // el enviado por el cliente (evita actualizar precios de otro tenant).
+  const cuentaId = operador.cuenta_id;
+
   // 1. Obtener productos activos del tenant
-  let query = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${cuenta_id}&select=id,nombre,precio_usd,precio_2,precio_3,categoria`;
+  let query = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${cuentaId}&select=id,nombre,precio_usd,precio_2,precio_3,categoria`;
   if (categoria) {
     query += `&categoria=eq.${encodeURIComponent(categoria)}`;
   }
@@ -684,9 +683,288 @@ export async function handleBatchPriceUpdate(request, env) {
       entidadTipo: 'productos', entidadId: null, 
       meta: { modo, porcentaje, valor_fijo, categoria, precio_objetivo, count: totalUpdated }, ip
     });
-  } catch {}
+  } catch {
+    // La auditoría es best-effort y no debe invalidar la actualización.
+  }
 
   return json({ updated: totalUpdated }, 200, request);
+}
+
+// ── Producto + Kardex: helpers para RPCs tenant-safe ───────────────────────
+function productTextOrNull(value, field) {
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string') throw new Error(`${field} inválido`)
+  return value.trim() || null
+}
+
+function productNumber(value, field, fallback = null) {
+  if (value === undefined || value === null || value === '') return fallback
+  const number = Number(value)
+  if (!Number.isFinite(number)) throw new Error(`${field} inválido`)
+  return number
+}
+
+async function readProductBody(request) {
+  try {
+    const body = await request.json()
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Body inválido')
+    return body
+  } catch (error) {
+    throw new Error(error.message || 'Body inválido')
+  }
+}
+
+async function callProductKardexRpc(request, env, rpcName, payload, context) {
+  const { user, operador, headers, ip, action, description, requestedProductId, meta = {} } = context
+  let rpcRes
+  try {
+    rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${rpcName}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    })
+  } catch (error) {
+    return jsonError(`Error conectando con la RPC de producto: ${error.message}`, 502, request)
+  }
+
+  const text = await rpcRes.text()
+  let result = null
+  try { result = text ? JSON.parse(text) : null } catch {
+    // Conservar el texto original para diagnosticar respuestas no JSON.
+  }
+
+  if (!rpcRes.ok) {
+    return jsonError(result?.message || result?.details || text || `HTTP ${rpcRes.status}`, 400, request)
+  }
+  if (!result?.ok) return jsonError('La RPC de producto no confirmó la operación', 500, request)
+
+  if (!result.idempotent) {
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id,
+        usuarioNombre: operador.nombre,
+        usuarioRol: operador.rol,
+        categoria: 'INVENTARIO',
+        accion: action,
+        descripcion: description,
+        entidadTipo: 'productos',
+        entidadId: result.id || result.producto_id || requestedProductId || null,
+        meta: { ...meta, idempotency_key: payload.p_idempotency_key },
+        ip,
+      })
+    } catch {
+      // La auditoría es best-effort; la RPC ya confirmó la transacción atómica.
+    }
+  }
+
+  return json({ ok: true, ...result }, 200, request)
+}
+
+// ── Crear producto con Kardex (Worker/service_role) ─────────────────────────
+export async function handleCrearProductoConKardex(request, env) {
+  const v = await validateOperator(request, env)
+  if (v.error) return v.error
+  const { user, operador, headers, ip } = v
+  const roles = ['supervisor', 'administracion', 'jefe', 'desarrollador']
+  if (!roles.includes(operador.rol)) return jsonError('Permisos insuficientes para crear productos', 403, request)
+
+  let body
+  try { body = await readProductBody(request) } catch (error) { return jsonError(error.message, 400, request) }
+  const idempotencyKey = resolverIdempotencyKey(request, body)
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request)
+
+  let nombre
+  try { nombre = productTextOrNull(body.nombre, 'nombre') } catch (error) { return jsonError(error.message, 400, request) }
+  if (!nombre) return jsonError('nombre requerido', 400, request)
+
+  let payload
+  try {
+    const stock = productNumber(body.stock_actual, 'stock_actual', 0)
+    if (stock < 0) return jsonError('stock_actual no puede ser negativo', 400, request)
+    payload = {
+      p_cuenta_id: operador.cuenta_id,
+      p_usuario_id: user.operator_id,
+      p_usuario_nombre: operador.nombre || null,
+      p_usuario_color: operador.color || null,
+      p_codigo: productTextOrNull(body.codigo, 'codigo'),
+      p_nombre: nombre,
+      p_descripcion: productTextOrNull(body.descripcion, 'descripcion'),
+      p_categoria: productTextOrNull(body.categoria, 'categoria'),
+      p_unidad: productTextOrNull(body.unidad, 'unidad') || 'und',
+      p_precio_usd: productNumber(body.precio_usd, 'precio_usd', 0),
+      p_costo_usd: productNumber(body.costo_usd, 'costo_usd'),
+      p_stock_actual: stock,
+      p_stock_minimo: productNumber(body.stock_minimo, 'stock_minimo', 0),
+      p_imagen_url: productTextOrNull(body.imagen_url, 'imagen_url'),
+      p_precio_2: productNumber(body.precio_2, 'precio_2'),
+      p_precio_3: productNumber(body.precio_3, 'precio_3'),
+      p_precio1_porcentaje: productNumber(body.precio1_porcentaje, 'precio1_porcentaje'),
+      p_precio2_porcentaje: productNumber(body.precio2_porcentaje, 'precio2_porcentaje'),
+      p_precio3_porcentaje: productNumber(body.precio3_porcentaje, 'precio3_porcentaje'),
+      p_idempotency_key: idempotencyKey,
+    }
+  } catch (error) {
+    return jsonError(error.message, 400, request)
+  }
+
+  return callProductKardexRpc(request, env, 'crear_producto_con_kardex_tenant_safe', payload, {
+    user, operador, headers, ip,
+    action: 'CREAR_PRODUCTO',
+    description: `Creación atómica de producto ${nombre}`,
+    meta: { codigo: payload.p_codigo, stock_inicial: payload.p_stock_actual },
+  })
+}
+
+// ── Actualizar producto con Kardex (Worker/service_role) ────────────────────
+export async function handleActualizarProductoConKardex(request, env) {
+  const v = await validateOperator(request, env)
+  if (v.error) return v.error
+  const { user, operador, headers, ip } = v
+  const roles = ['supervisor', 'administracion', 'jefe', 'desarrollador']
+  if (!roles.includes(operador.rol)) return jsonError('Permisos insuficientes para actualizar productos', 403, request)
+
+  let body
+  try { body = await readProductBody(request) } catch (error) { return jsonError(error.message, 400, request) }
+  if (!isValidUuid(body.id)) return jsonError('id de producto inválido', 400, request)
+  const idempotencyKey = resolverIdempotencyKey(request, body)
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request)
+
+  let payload
+  try {
+    payload = {
+      p_cuenta_id: operador.cuenta_id,
+      p_usuario_id: user.operator_id,
+      p_producto_id: body.id,
+      p_usuario_nombre: operador.nombre || null,
+      p_usuario_color: operador.color || null,
+      p_codigo: productTextOrNull(body.codigo, 'codigo'),
+      p_nombre: productTextOrNull(body.nombre, 'nombre'),
+      p_descripcion: productTextOrNull(body.descripcion, 'descripcion'),
+      p_categoria: productTextOrNull(body.categoria, 'categoria'),
+      p_unidad: productTextOrNull(body.unidad, 'unidad'),
+      p_precio_usd: productNumber(body.precio_usd, 'precio_usd'),
+      p_costo_usd: productNumber(body.costo_usd, 'costo_usd'),
+      p_stock_actual: productNumber(body.stock_actual, 'stock_actual'),
+      p_stock_minimo: productNumber(body.stock_minimo, 'stock_minimo'),
+      p_imagen_url: productTextOrNull(body.imagen_url, 'imagen_url'),
+      p_precio_2: productNumber(body.precio_2, 'precio_2'),
+      p_precio_3: productNumber(body.precio_3, 'precio_3'),
+      p_precio1_porcentaje: productNumber(body.precio1_porcentaje, 'precio1_porcentaje'),
+      p_precio2_porcentaje: productNumber(body.precio2_porcentaje, 'precio2_porcentaje'),
+      p_precio3_porcentaje: productNumber(body.precio3_porcentaje, 'precio3_porcentaje'),
+      p_idempotency_key: idempotencyKey,
+    }
+  } catch (error) {
+    return jsonError(error.message, 400, request)
+  }
+
+  return callProductKardexRpc(request, env, 'actualizar_producto_con_kardex_tenant_safe', payload, {
+    user, operador, headers, ip,
+    action: 'ACTUALIZAR_PRODUCTO',
+    description: `Actualización atómica de producto ${body.id}`,
+    requestedProductId: body.id,
+    meta: { stock_nuevo: payload.p_stock_actual, codigo: payload.p_codigo },
+  })
+}
+
+// ── Borrar producto con Kardex (Worker/service_role) ────────────────────────
+export async function handleBorrarProductoConKardex(request, env) {
+  const v = await validateOperator(request, env)
+  if (v.error) return v.error
+  const { user, operador, headers, ip } = v
+  const roles = ['administracion', 'jefe', 'desarrollador']
+  if (!roles.includes(operador.rol)) return jsonError('Solo administración, jefe o desarrollador pueden borrar productos', 403, request)
+
+  let body
+  try { body = await readProductBody(request) } catch (error) { return jsonError(error.message, 400, request) }
+  const productId = body.id || body.producto_id
+  if (!isValidUuid(productId)) return jsonError('id de producto inválido', 400, request)
+  const idempotencyKey = resolverIdempotencyKey(request, body)
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request)
+
+  const payload = {
+    p_cuenta_id: operador.cuenta_id,
+    p_producto_id: productId,
+    p_usuario_id: user.operator_id,
+    p_usuario_nombre: operador.nombre || null,
+    p_usuario_color: operador.color || null,
+    p_confirmacion: 'BORRAR_PRODUCTO',
+    p_idempotency_key: idempotencyKey,
+  }
+
+  return callProductKardexRpc(request, env, 'borrar_producto_con_kardex_tenant_safe', payload, {
+    user, operador, headers, ip,
+    action: 'BORRAR_PRODUCTO',
+    description: `Borrado atómico de producto ${productId}`,
+    requestedProductId: productId,
+  })
+}
+
+// ── Actualización de metadatos de producto (imagen_url / activo) ──────────
+// Migrado desde writes directos del frontend (ProductoForm.jsx y useDesactivarProducto)
+// para que 06 pueda revocar UPDATE de productos a authenticated. Este handler
+// escribe por service_role (headers de validateOperator) y valida tenant.
+export async function handleActualizarProductoMetadatos(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  const ROLES = ['administracion', 'jefe', 'desarrollador', 'supervisor'];
+  if (!ROLES.includes(operador.rol)) {
+    return jsonError('Permisos insuficientes para actualizar producto', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { id } = body;
+  if (!id || typeof id !== 'string') return jsonError('id requerido', 400, request);
+
+  const hasImagen = Object.prototype.hasOwnProperty.call(body, 'imagen_url');
+  const hasActivo = Object.prototype.hasOwnProperty.call(body, 'activo');
+  if (!hasImagen && !hasActivo) return jsonError('Sin campos a actualizar (imagen_url o activo)', 400, request);
+  if (hasActivo && typeof body.activo !== 'boolean') return jsonError('activo debe ser booleano', 400, request);
+
+  // Tenant-safety: el producto debe pertenecer a la cuenta del operador.
+  const cuentaId = operador.cuenta_id;
+  const idQ = encodeURIComponent(id);
+  const cuentaQ = encodeURIComponent(cuentaId);
+  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${idQ}&cuenta_id=eq.${cuentaQ}&select=id`, { headers });
+  if (!checkRes.ok) return jsonError('Error verificando producto', 500, request);
+  const checkData = await checkRes.json();
+  if (!Array.isArray(checkData) || checkData.length === 0) {
+    return jsonError('Producto no encontrado o no pertenece a tu cuenta', 404, request);
+  }
+
+  const patch = { actualizado_en: new Date().toISOString() };
+  if (hasImagen) patch.imagen_url = body.imagen_url; // puede ser null (quitar imagen)
+  if (hasActivo) patch.activo = body.activo;
+
+  const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${idQ}&cuenta_id=eq.${cuentaQ}`, {
+    method: 'PATCH',
+    headers: { ...headers, 'Prefer': 'return=representation' },
+    body: JSON.stringify(patch),
+  });
+  if (!upRes.ok) {
+    const errText = await upRes.text().catch(() => '');
+    return jsonError(`Error actualizando producto: ${errText}`, 500, request);
+  }
+  const updated = await upRes.json();
+
+  // Auditoría best-effort (no invalida la actualización).
+  try {
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'INVENTARIO', accion: 'ACTUALIZAR_PRODUCTO_METADATOS',
+      descripcion: 'Actualización de metadatos del producto (imagen_url/activo)',
+      entidadTipo: 'productos', entidadId: id,
+      meta: { imagen_url: hasImagen ? body.imagen_url : undefined, activo: hasActivo ? body.activo : undefined },
+      ip,
+    });
+  } catch {
+    // best-effort
+  }
+
+  return json({ ok: true, producto: updated?.[0] || { id } }, 200, request);
 }
 
 // ── Transformación de Inventario (Procesamiento de un producto en otro) ──────
@@ -704,114 +982,65 @@ export async function handleTransformacionInventario(request, env) {
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
   const { origen, destino, motivo } = body;
+  const origenCantidad = Number(origen?.cantidad);
+  const destinoCantidad = Number(destino?.cantidad);
 
-  if (!origen?.producto_id || !origen?.cantidad || !destino?.producto_id || !destino?.cantidad || !motivo) {
-    return jsonError('Faltan campos: origen, destino, motivo', 400, request);
+  if (!isValidUuid(origen?.producto_id) || !isValidUuid(destino?.producto_id)
+      || !Number.isFinite(origenCantidad) || origenCantidad <= 0
+      || !Number.isFinite(destinoCantidad) || destinoCantidad <= 0
+      || !motivo?.trim()) {
+    return jsonError('Faltan o son inválidos origen, destino, cantidades o motivo', 400, request);
   }
 
   if (origen.producto_id === destino.producto_id) {
     return jsonError('Origen y destino no pueden ser el mismo producto', 400, request);
   }
 
-  const loteId = crypto.randomUUID();
-  const timestamp = new Date().toISOString();
+  const idempotencyKey = resolverIdempotencyKey(request, body);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
 
   try {
-    // 1. Fetch producto origen
-    const oriRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${origen.producto_id}&cuenta_id=eq.${user.id}&activo=eq.true&select=id,nombre,stock_actual`, { headers });
-    const oriData = await oriRes.json();
-    if (!Array.isArray(oriData) || oriData.length === 0) return jsonError('Producto origen no encontrado', 400, request);
-    const prodOri = oriData[0];
-
-    if (Number(prodOri.stock_actual) < Number(origen.cantidad)) {
-      return jsonError(`Stock insuficiente en origen. Disponible: ${prodOri.stock_actual}`, 400, request);
-    }
-
-    // 2. Fetch producto destino
-    const desRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${destino.producto_id}&cuenta_id=eq.${user.id}&activo=eq.true&select=id,nombre,stock_actual`, { headers });
-    const desData = await desRes.json();
-    if (!Array.isArray(desData) || desData.length === 0) return jsonError('Producto destino no encontrado', 400, request);
-    const prodDes = desData[0];
-
-    const stockNuevoOri = Math.round((Number(prodOri.stock_actual) - Number(origen.cantidad)) * 100) / 100;
-    const stockNuevoDes = Math.round((Number(prodDes.stock_actual) + Number(destino.cantidad)) * 100) / 100;
-
-    // 3. PATCH producto origen
-    const patchOri = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${origen.producto_id}`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({ stock_actual: stockNuevoOri, actualizado_en: timestamp }),
-    });
-    if (!patchOri.ok) throw new Error('Error al descontar stock de origen');
-
-    // 4. PATCH producto destino
-    const patchDes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${destino.producto_id}`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({ stock_actual: stockNuevoDes, actualizado_en: timestamp }),
-    });
-    if (!patchDes.ok) throw new Error('Error al sumar stock de destino');
-
-    // 5. INSERT movimientos
-    const movimientos = [
-      {
-        lote_id: loteId,
-        tipo: "egreso",
-        motivo: motivo.trim(),
-        motivo_tipo: "otro",
-        producto_id: prodOri.id,
-        producto_nombre: prodOri.nombre,
-        cantidad: Number(origen.cantidad),
-        stock_anterior: Number(prodOri.stock_actual),
-        stock_nuevo: stockNuevoOri,
-        usuario_id: user.operator_id,
-        usuario_nombre: operador.nombre
-      },
-      {
-        lote_id: loteId,
-        tipo: "ingreso",
-        motivo: motivo.trim(),
-        motivo_tipo: "otro",
-        producto_id: prodDes.id,
-        producto_nombre: prodDes.nombre,
-        cantidad: Number(destino.cantidad),
-        stock_anterior: Number(prodDes.stock_actual),
-        stock_nuevo: stockNuevoDes,
-        usuario_id: user.operator_id,
-        usuario_nombre: operador.nombre
-      }
-    ];
-
-    const movRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
+    const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/transformar_inventario_atomico`, {
       method: 'POST',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify(movimientos),
+      headers,
+      body: JSON.stringify({
+        p_cuenta_id: operador.cuenta_id,
+        p_origen_producto_id: origen.producto_id,
+        p_origen_cantidad: origenCantidad,
+        p_destino_producto_id: destino.producto_id,
+        p_destino_cantidad: destinoCantidad,
+        p_motivo: motivo.trim(),
+        p_usuario_id: user.operator_id,
+        p_usuario_nombre: operador.nombre,
+        p_usuario_color: operador.color || null,
+        p_idempotency_key: idempotencyKey,
+      }),
     });
-    if (!movRes.ok) {
-      const errText = await movRes.text();
-      throw new Error(`Error al registrar movimientos: ${errText}`);
+    const text = await rpcRes.text();
+    let result = null;
+    try { result = text ? JSON.parse(text) : null; } catch {
+      // Best-effort parse: conservar la respuesta original.
     }
+    if (!rpcRes.ok) {
+      return jsonError(`No se pudo aplicar la transformación atómica: ${result?.message || text || `HTTP ${rpcRes.status}`}`, 400, request);
+    }
+    if (!result?.ok) return jsonError('La RPC no confirmó la transformación atómica', 500, request);
 
-    // 6. Auditoría
     try {
       await registrarAuditoria(env, headers, {
         usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
         categoria: 'INVENTARIO', accion: 'TRANSFORMACION_INVENTARIO',
-        descripcion: `Transformación: ${prodOri.nombre} (${origen.cantidad}) → ${prodDes.nombre} (${destino.cantidad})`,
-        entidadTipo: 'inventario', entidadId: loteId, 
-        meta: { motivo, origen, destino, lote_id: loteId }, ip,
+        descripcion: `Transformación atómica (${origenCantidad}) → (${destinoCantidad}): ${motivo.trim()}`,
+        entidadTipo: 'inventario', entidadId: result.lote_id,
+        meta: { motivo: motivo.trim(), origen, destino, lote_id: result.lote_id, numero: result.numero }, ip,
       });
-    } catch {}
+    } catch {
+      // Best-effort operation; preserve the primary response.
+    }
 
-    return json({ 
-      ok: true, 
-      lote_id: loteId, 
-      origen: { nombre: prodOri.nombre, stock_nuevo: stockNuevoOri },
-      destino: { nombre: prodDes.nombre, stock_nuevo: stockNuevoDes } 
-    }, 200, request);
-
+    return json({ ok: true, lote_id: result.lote_id, numero: result.numero, origen: result.origen, destino: result.destino }, 200, request);
   } catch (e) {
-    return jsonError(e.message || 'Error en proceso de transformación', 500, request);
+    return jsonError(e.message || 'Error en transformación atómica', 500, request);
   }
 }
 
@@ -834,156 +1063,69 @@ export async function handleBatchIngest(request, env) {
   }
 
   const { motivo, productos } = body;
-  if (!motivo || !productos || !Array.isArray(productos) || productos.length === 0) {
+  if (!motivo?.trim() || !Array.isArray(productos) || productos.length === 0) {
     return jsonError('Faltan campos: motivo o lista de productos vacía', 400, request);
   }
 
-  const loteId = crypto.randomUUID();
-  const timestamp = new Date().toISOString();
-  const nuevosAInsertar = [];
-  const movimientosAAgregar = [];
-  let procesadosCount = 0;
+  const productosRpc = [];
+  for (const p of productos) {
+    const isNuevo = p?.isNuevo === true;
+    if (!isNuevo && !isValidUuid(p?.id)) {
+      return jsonError('Producto existente sin id válido', 400, request);
+    }
+    if (isNuevo && !p?.nombre?.trim()) {
+      return jsonError('Producto nuevo sin nombre', 400, request);
+    }
+    const cantidad = Number(p?.cantidad);
+    if (!Number.isFinite(cantidad) || cantidad <= 0) {
+      return jsonError('La cantidad debe ser mayor a 0', 400, request);
+    }
+    if (!isNuevo && p?.modoExistente && !['sumar', 'sobrescribir'].includes(p.modoExistente)) {
+      return jsonError('modoExistente debe ser "sumar" o "sobrescribir"', 400, request);
+    }
+
+    productosRpc.push({
+      producto_id: isNuevo ? null : p.id,
+      is_nuevo: isNuevo,
+      codigo: p.codigo ? String(p.codigo).toUpperCase().trim() : null,
+      nombre: p.nombre ? String(p.nombre).toUpperCase().trim() : null,
+      categoria: p.categoria ?? null,
+      unidad: p.unidad || 'und',
+      cantidad,
+      costo_usd: Number(p.costo) || 0,
+      precio_usd: Number(p.precio) || 0,
+      modo_existente: isNuevo ? null : (p.modoExistente || 'sumar'),
+      actualizar_costo: p.actualizarCosto === true,
+    });
+  }
+
+  const idempotencyKey = resolverIdempotencyKey(request, body);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
 
   try {
-    for (const p of productos) {
-      if (p.isNuevo) {
-        // Crear un producto nuevo
-        const nuevoId = crypto.randomUUID();
-        const codigoFinal = p.codigo ? p.codigo.toUpperCase().trim() : null;
-        const nombreFinal = p.nombre.toUpperCase().trim();
-
-        // 1. Agregar a la lista de inserción en lote
-        nuevosAInsertar.push({
-          id: nuevoId,
-          codigo: codigoFinal,
-          nombre: nombreFinal,
-          categoria: p.categoria,
-          unidad: p.unidad || 'und',
-          precio_usd: Number(p.precio) || 0,
-          costo_usd: Number(p.costo) || 0,
-          stock_actual: Number(p.cantidad) || 0,
-          activo: true,
-          cuenta_id: user.id,
-          creado_en: timestamp,
-          actualizado_en: timestamp
-        });
-
-        // 2. Crear movimiento de Kardex
-        movimientosAAgregar.push({
-          lote_id: loteId,
-          tipo: 'ingreso',
-          motivo: motivo.trim(),
-          motivo_tipo: 'ingreso_lote',
-          producto_id: nuevoId,
-          producto_nombre: nombreFinal,
-          cantidad: Number(p.cantidad),
-          stock_anterior: 0,
-          stock_nuevo: Number(p.cantidad),
-          usuario_id: user.operator_id,
-          usuario_nombre: operador.nombre,
-          creado_en: timestamp
-        });
-
-        procesadosCount++;
-      } else {
-        // Producto existente - Obtener stock y costo actuales de la DB
-        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${p.id}&cuenta_id=eq.${user.id}`, { headers });
-        const prodList = await pRes.json();
-        if (!Array.isArray(prodList) || prodList.length === 0) {
-          return jsonError(`Producto existente con ID ${p.id} no encontrado en el catálogo`, 400, request);
-        }
-        const prod = prodList[0];
-
-        const stockAnterior = Number(prod.stock_actual || 0);
-        let stockNuevo = stockAnterior;
-        if (p.modoExistente === 'sobrescribir') {
-          stockNuevo = Number(p.cantidad);
-        } else {
-          // sumar
-          stockNuevo = stockAnterior + Number(p.cantidad);
-        }
-
-        const updateObj = {
-          stock_actual: stockNuevo,
-          actualizado_en: timestamp
-        };
-
-        if (p.actualizarCosto) {
-          updateObj.costo_usd = Number(p.costo) || 0;
-        }
-        if (p.precio > 0) {
-          updateObj.precio_usd = Number(p.precio) || 0;
-        }
-
-        // Ejecutar PATCH inmediato para este producto
-        const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${p.id}`, {
-          method: 'PATCH',
-          headers: { ...headers, Prefer: 'return=minimal' },
-          body: JSON.stringify(updateObj)
-        });
-
-        if (!patchRes.ok) {
-          const errText = await patchRes.text();
-          throw new Error(`Error al actualizar producto "${prod.nombre}": ${errText}`);
-        }
-
-        // Crear movimiento de Kardex (ajustar tipo si es sobrescribir y bajó)
-        let diff = stockNuevo - stockAnterior;
-        let tipoMov = 'ingreso';
-        let cantidadMov = Math.abs(diff);
-
-        if (diff < 0) {
-          tipoMov = 'egreso';
-        }
-
-        if (diff !== 0 || p.modoExistente === 'sumar') {
-          movimientosAAgregar.push({
-            lote_id: loteId,
-            tipo: tipoMov,
-            motivo: motivo.trim(),
-            motivo_tipo: 'ingreso_lote',
-            producto_id: prod.id,
-            producto_nombre: prod.nombre,
-            cantidad: p.modoExistente === 'sumar' ? Number(p.cantidad) : cantidadMov,
-            stock_anterior: stockAnterior,
-            stock_nuevo: stockNuevo,
-            usuario_id: user.operator_id,
-            usuario_nombre: operador.nombre,
-            creado_en: timestamp
-          });
-        }
-
-        procesadosCount++;
-      }
+    const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/ingresar_lote_inventario_atomico`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        p_cuenta_id: operador.cuenta_id,
+        p_motivo: motivo.trim(),
+        p_productos: productosRpc,
+        p_usuario_id: user.operator_id,
+        p_usuario_nombre: operador.nombre,
+        p_usuario_color: operador.color || null,
+        p_idempotency_key: idempotencyKey,
+      }),
+    });
+    const text = await rpcRes.text();
+    let result = null;
+    try { result = text ? JSON.parse(text) : null; } catch {
+      // Best-effort parse: conservar la respuesta original.
     }
-
-    // 3. Insertar nuevos productos en lote
-    if (nuevosAInsertar.length > 0) {
-      const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos`, {
-        method: 'POST',
-        headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify(nuevosAInsertar)
-      });
-      if (!insRes.ok) {
-        const errText = await insRes.text();
-        throw new Error(`Error al insertar nuevos productos: ${errText}`);
-      }
+    if (!rpcRes.ok) {
+      return jsonError(`No se pudo aplicar el ingreso masivo atómico: ${result?.message || text || `HTTP ${rpcRes.status}`}`, 400, request);
     }
+    if (!result?.ok) return jsonError('La RPC no confirmó el ingreso masivo atómico', 500, request);
 
-    // 4. Insertar todos los movimientos de Kardex en lote
-    if (movimientosAAgregar.length > 0) {
-      const movRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
-        method: 'POST',
-        headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify(movimientosAAgregar)
-      });
-      if (!movRes.ok) {
-        const errText = await movRes.text();
-        throw new Error(`Error al registrar movimientos de Kardex: ${errText}`);
-      }
-    }
-
-    // 5. Registrar en la auditoría general del sistema
     try {
       await registrarAuditoria(env, headers, {
         usuarioId: user.operator_id,
@@ -991,20 +1133,18 @@ export async function handleBatchIngest(request, env) {
         usuarioRol: operador.rol,
         categoria: 'INVENTARIO',
         accion: 'BATCH_INGEST_PRODUCTOS',
-        descripcion: `Ingreso masivo por lote: ${procesadosCount} productos procesados (${nuevosAInsertar.length} nuevos, ${procesadosCount - nuevosAInsertar.length} existentes). Motivo: ${motivo}`,
+        descripcion: `Ingreso masivo por lote: ${result.procesados} productos procesados (${result.nuevos ?? 0} nuevos). Motivo: ${motivo.trim()}`,
         entidadTipo: 'inventario',
-        entidadId: loteId,
-        meta: { motivo, lote_id: loteId, count_nuevos: nuevosAInsertar.length, count_existentes: procesadosCount - nuevosAInsertar.length },
-        ip
+        entidadId: result.lote_id,
+        meta: { motivo: motivo.trim(), lote_id: result.lote_id, count_nuevos: result.nuevos ?? 0, count_existentes: (result.procesados ?? 0) - (result.nuevos ?? 0), movimientos: result.movimientos, idempotency_key: idempotencyKey, idempotent: result.idempotent === true },
+        ip,
       });
     } catch (e) {
       console.error('[BATCH_INGEST] Audit error:', e.message);
     }
 
-    return json({ ok: true, procesados: procesadosCount, lote_id: loteId }, 200, request);
-
+    return json({ ok: true, procesados: result.procesados, lote_id: result.lote_id, nuevos: result.nuevos, movimientos: result.movimientos }, 200, request);
   } catch (e) {
-    console.error('[BATCH_INGEST] General error:', e.message);
     return jsonError(e.message || 'Error en proceso de ingreso masivo', 500, request);
   }
 }

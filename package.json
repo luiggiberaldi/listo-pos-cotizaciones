@@ -13,8 +13,20 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
-  },
+    "test:watch": "vitest",
+    "verify:promotion:kardex": "node scripts/verify-kardex-promotion-package.mjs",
+    "prepare:kardex:isolated": "node scripts/prepare-kardex-isolated-run.mjs",
+    "promote:guardrails:main": "node scripts/apply-kardex-guardrails-main.mjs",
+    "backup:kardex:main": "node scripts/backup-kardex-main.mjs",
+    "correlate:kardex:main": "node scripts/correlate-kardex-main-readonly.mjs",
+    "prepare:05b:reconciliation": "node scripts/prepare-05b-reconciliation-main.mjs",
+    "correctivos:kardex:main": "node scripts/apply-kardex-correctivos-main.mjs",
+    "security:grants:main": "node scripts/apply-security-grants-main.mjs",
+    "security:grants:main:full": "node scripts/apply-security-grants-full-main.mjs",
+    "postflight:security:grants:main:full": "node scripts/postflight-security-grants-full-main.mjs",
+    "smoke:products:main": "node scripts/smoke-product-worker-main.mjs",
+    "smoke:tester:cleanup:main": "node scripts/smoke-tester-cleanup-worker-main.mjs"
+},
   "dependencies": {
     "@honcho-ai/sdk": "^2.1.1",
     "@supabase/supabase-js": "^2.97.0",

@@ -21,12 +21,12 @@ import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/h
 import { handleMarcarComisionPagada, handleLiberarComisionCxc, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
 import { handleRegistrarAbono, handleRevertirAbono, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
-import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
+import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp, handleActualizarProductoMetadatos, handleCrearProductoConKardex, handleActualizarProductoConKardex, handleBorrarProductoConKardex } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleGetRates } from './api/handlers/rates.js'
-import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista } from './api/handlers/admin.js'
+import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterCleanupFixtures, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista } from './api/handlers/admin.js'
 import { handleReporteTransportistas, handleDetalleTransportista, handlePagarTransportista, handleRevertirPagoTransportista } from './api/handlers/transportistas.js'
 import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
 import {
@@ -168,6 +168,21 @@ export default {
     // ── API: Actualización masiva de precios ────────────────────────────────
     if (url.pathname === '/api/productos/batch-price' && request.method === 'PATCH') {
       return handleBatchPriceUpdate(request, env);
+    }
+
+    // ── API: crear/actualizar/borrar producto con Kardex (service_role) ──────
+    if (url.pathname === '/api/productos/crear' && request.method === 'POST') {
+      return handleCrearProductoConKardex(request, env);
+    }
+    if (url.pathname === '/api/productos/actualizar' && request.method === 'PATCH') {
+      return handleActualizarProductoConKardex(request, env);
+    }
+    if (url.pathname === '/api/productos/borrar' && request.method === 'DELETE') {
+      return handleBorrarProductoConKardex(request, env);
+    }
+
+    if (url.pathname === '/api/productos/metadatos' && request.method === 'PATCH') {
+      return handleActualizarProductoMetadatos(request, env);
     }
 
     // ── API: Sincronizar embeddings de productos (admin) ────────────────────
@@ -421,6 +436,9 @@ export default {
     }
     if (url.pathname === '/api/admin/tester/clear-all' && request.method === 'DELETE') {
       return handleTesterClearAll(request, env);
+    }
+    if (url.pathname === '/api/admin/tester/cleanup-fixtures' && request.method === 'DELETE') {
+      return handleTesterCleanupFixtures(request, env);
     }
 
     // ── API: switch/clear operator (auth con PIN) ────────────────────────

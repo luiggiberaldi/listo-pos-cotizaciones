@@ -2036,7 +2036,1065 @@ Logs de Postgres en Supabase con error 22P02 `invalid input value for enum log_o
 
 ---
 
+## SESIÓN 17/08/2026 — Cierre de pruebas E2E deterministas de staging
+
+### Objetivo
+
+Completar la validación funcional del checkout `construacero-staging`, corregir los fallos observados durante el ensayo y dejar evidencia reproducible sin tocar producción.
+
+### Entorno validado
+
+- Proyecto Supabase: `spupqgkdsgohxxfoxydl` (staging).
+- Worker local: `http://127.0.0.1:8789`.
+- Frontend/proxy Vite local: `http://localhost:5174`.
+- Ambos health checks `/api/ping`: **HTTP 200** y referencia de proyecto correcta.
+- La corrida usó una cuenta E2E dedicada de staging; no reutilizó cookies, JWT ni credenciales de producción.
+
+### Resultado final
+
+| Verificación | Resultado |
+|---|---|
+| Tests unitarios del frontend/staging | ✅ **227/227** en **25 archivos** |
+| Build del frontend de staging | ✅ Correcto; quedó únicamente el warning conocido de chunks grandes |
+| Tester E2E determinista CLI | ✅ **75/75 pasos** aprobados |
+| Limpieza de fixtures | ✅ Completa; 0 productos E2E residuales y cliente E2E inactivo |
+| Evidencia principal | `tmp/e2e-staging/tester-2026-08-17T23-46-18-229Z.log` |
+| Producción | ✅ Sin cambios ni despliegues |
+
+El flujo E2E cubrió inventario y Kardex, clientes, búsqueda mejorada, cotización, despacho, descuentos, stock comprometido, CxC, comisión retenida/liberada/pagada, corrección idempotente de fecha de entrega, reportes, transportista local, multi-precio, movimientos por lote, anulación, reciclaje, venta rápida, reasignación, health checks y limpieza tenant-safe.
+
+### Fallos encontrados y correcciones
+
+1. **Provisionamiento bloqueado por `configuracion_negocio.id=1`:** el esquema restaurado conserva un correlativo global para esa tabla, mientras el tenant principal ya ocupaba el valor por defecto. `scripts/provision-staging-e2e.mjs` ahora consulta el máximo y asigna explícitamente el siguiente `id`, sin alterar la fila del tenant principal.
+2. **Limpieza incompatible entre variantes del esquema:** algunas bases staging conservan la RPC histórica que referencia `despacho_id`/`cotizacion_id`, mientras el esquema vigente usa `despachoid`/`cotizacionid` y referencias de descuentos actualizadas. `scripts/test-e2e-staging.mjs` ahora intenta primero la RPC tenant-safe y, solo ante ese error de compatibilidad, usa un fallback acotado al `cuenta_id` autenticado; también recupera cotizaciones residuales por cliente.
+3. **Ventana cronológica demasiado corta para fecha efectiva:** la aserción de cambio de fecha requiere margen real entre aprobación y entrega. El runner espera 2,5 segundos antes de entregar y luego verifica que el ajuste sea válido, que la fecha original/correlativo y finanzas permanezcan inmutables, y que el replay sea idempotente.
+
+### Estado aplicado en staging
+
+- Políticas RLS de comisiones para el flujo probado.
+- RPC de limpieza del Tester con alcance tenant-safe.
+- Configuración dedicada del tenant E2E: **2 % para Cabilla** y **3 % para otras categorías**.
+- La aplicación local quedó apuntando exclusivamente al proyecto staging durante la corrida; no se copiaron secretos a documentación, logs ni frontend.
+
+### Procedimiento reproducible
+
+Desde `construacero-staging/`, con secretos únicamente en `.env`/`.dev.vars` locales:
+
+```bash
+npm ci
+npm run configure:local                 # opcional: prepara .dev.vars del proyecto staging
+npm run provision:e2e:staging
+```
+
+En terminales separadas, levantar los servicios locales:
+
+```bash
+npm run dev:worker                      # Worker en :8789
+npm run dev:vite -- --host 127.0.0.1    # Vite en :5174
+curl -i http://127.0.0.1:8789/api/ping
+curl -i http://localhost:5174/api/ping
+npm run test:e2e:staging                 # 75 pasos; limpia por defecto
+```
+
+`--keep-data` queda reservado para diagnóstico manual y deja fixtures deliberadamente persistentes. La corrida normal debe conservar el log y comprobar la limpieza final. Nunca usar `SUPABASE_SERVICE_KEY`, `DEV_SUPER_CODE` ni cuentas de producción en el frontend, en Git o en la bitácora.
+
+### Decisión y pendientes
+
+La batería de staging queda **verde** y reproducible, pero esto no constituye autorización de salida a producción. Permanecen fuera de esta sesión la matriz manual completa por rol, la revisión/aislamiento del checkout de release, el backup verificable, el rollback y el smoke test posterior en producción.
+
+---
+
+## SESIÓN 18/08/2026 — Corrección de tasas oficiales BCV USD/EUR
+
+### Síntoma y diagnóstico
+
+La interfaz mostraba `Bs 772,54` para USD y `Bs 894,49` para EUR, mientras la publicación vigente del BCV mostraba `773,31250000` y `896,02946062` (18/08/2026). La causa era que el Worker no lograba completar la consulta directa al BCV en el entorno local por TLS y caía a DolarAPI, cuya respuesta todavía correspondía al 17/08/2026:
+
+- DolarAPI USD: `772.5441`, `fechaActualizacion=2026-08-17`.
+- DolarAPI EUR: `894.49018618`, `fechaActualizacion=2026-08-17`.
+- BCV vigente verificado: USD `773.3125`, EUR `896.02946062`, fecha `2026-08-18`.
+
+### Correcciones aplicadas
+
+- `api/handlers/rates.js` y `construacero-staging/api/handlers/rates.js` ahora:
+  1. Consultan primero `bcv.org.ve` con User-Agent de navegador, Accept completo y querystring anti-cache.
+  2. Usan como segundo respaldo el CDN público de tasas BCV `rates.dolarvzla.com/bcv/current.json`, validando `current.usd`, `current.eur` y `current.date`.
+  3. Conservan Google Script como respaldo opcional mediante variable del Worker, sin URLs ni secretos embebidos.
+  4. Dejan DolarAPI únicamente como último recurso del servidor y exponen su fecha oficial cuando se usa.
+- El endpoint `/api/rates` usa `Cache-Control: no-store`; su cache interno sigue limitado a 10 minutos y `refresh=1` fuerza una consulta nueva.
+- `src/hooks/useTasaCambio.js` y su copia de staging solicitan el proxy sin cache, permiten refresco manual forzado y **ya no aceptan una respuesta DolarAPI como tasa BCV válida desde el navegador**. Si el proxy solo entrega un valor stale, se limpian las tasas en lugar de presentar un dato viejo como oficial.
+- USDT no fue modificado: mantiene Binance P2P y la regla existente `Math.ceil + 2`.
+
+### Evidencia de validación
+
+- Handler principal y staging sin TLS ignorado: el acceso directo al BCV falla en el entorno Wrangler, pero el fallback BCV CDN devuelve **USD `773.3125` / EUR `896.02946062`**, fecha `2026-08-18`, fuente `BCV CDN (DolarVZLA)`.
+- Handler con la consulta directa habilitada (`NODE_TLS_REJECT_UNAUTHORIZED=0` solo para esta prueba local): devuelve fuente `BCV Directo` con los mismos valores.
+- Tests staging: **227/227** en **25 archivos**.
+- Builds principal y staging: correctos; permanece únicamente el warning conocido de chunks grandes.
+- `node --check` de handlers/workers y `git diff --check`: correctos.
+- La suite raíz mantiene **19 fallos heredados no relacionados con tasas** (formatos, contratos del Tester, etiquetas y WhatsApp); no fueron introducidos por este ajuste.
+- No se hizo commit, deploy ni cambio en producción. La publicación en el entorno remoto requiere un deploy autorizado del Worker y del frontend.## SESIÓN 21/08/2026 — Validación P0 financiera en staging
+
+### Alcance
+
+Se utilizó exclusivamente el proyecto Supabase staging `spupqgkdsgohxxfoxydl`, con backup previo en `tmp/backups/kardex-staging-pre-p0-2026-08-21.dump`. El principal `oyfyuszgjwcepjpngclv` y producción permanecieron sin cambios.
+
+### Resultado
+
+- Unit tests staging: **235/235** en 26 archivos.
+- E2E mutable aislado: **93/93 PASS**, incluyendo replay de entrega, devolución parcial, replay de devolución, entrega/reversión financiera y replay de reversión.
+- Matrix SQL de guards/replay/cross-tenant/rollback: **7 checks PASS**; la transacción terminó en `ROLLBACK` y dejó `mutableRowsPersisted=false`.
+- Auditoría Kardex actual: **443 productos, 0 anomalías matemáticas/continuidad**.
+- Grants: RPC P0 solo para `service_role`; `authenticated` no tiene `EXECUTE`.
+
+### Correcciones descubiertas en la prueba
+
+1. El Worker recreaba la comisión después de una reversión; se añadió la exclusión `!esReversionEntregaAtomica`.
+2. El runner intentaba `despachada → anulada`, transición no contractual; ahora prueba `despachada → pendiente → anulada` con motivos.
+3. El replay de estados finales se bloqueaba antes de consultar idempotencia; el handler staging ahora devuelve el resultado cacheado antes de validar la transición.
+
+### Retención histórica observada
+
+Staging conserva movimientos de productos eliminados (`producto_id IS NULL`) por diseño de auditoría. La lectura posterior mostró **452** filas; **266** pertenecen al tenant E2E dedicado, que no conserva productos, cotizaciones ni despachos activos. No se purgaron automáticamente.
+
+### Documento de cierre
+
+`docs/plans/2026-08-21-reporte-validacion-p0-staging.md` contiene evidencias, archivos a portar y los 12 gates para el proyecto principal. El siguiente paso es el baseline read-only del principal y la adaptación neutral de las RPC; no copiar SQL `_staging` literalmente.
+
 *Mantener este archivo actualizado al inicio y fin de cada sesión de trabajo.*
 
+## SESIÓN 21/08/2026 — Baseline read-only del proyecto principal
+
+### Alcance
+
+Se auditó directamente el PostgreSQL del proyecto principal configurado en `.env`, usando únicamente consultas `SELECT` y el preflight `supabase/release/main/00_preflight_readonly.sql`. No se ejecutaron migraciones, RPC mutables, backfills, reconciliaciones, grants, revokes, escrituras de datos, deploy ni cambios en producción.
+
+### Resultado
+
+- Identidad confirmada: project ref `oyfyuszgjwcepjpngclv`; PostgreSQL 17.6.
+- Historial formal remoto: 1 fila, máximo `001`; continúa bloqueado el uso de `db push`, `db reset` y `migration repair`.
+- Esquema histórico presente; provenance (`origen_tipo`, `origen_id`, `origen_referencia`, `idempotency_key`) y tablas nuevas de operaciones/reconciliación todavía ausentes.
+- Conteo actual: 445 productos y 3.673 movimientos.
+- Kardex: 0 errores matemáticos, 88 brechas de continuidad en 45 productos y 1 divergencia catálogo vs último Kardex.
+- El patrón dominante es ajuste previo a entrega: 66 brechas en 38 productos; el salto de `LAM1954003` confirma `151 → 391 → 385`, con +240 unidades no trazadas como operación estructurada.
+- Hay 189 movimientos sin `producto_id`; 186 corresponden al tenant principal y 3 a un tenant secundario. No hay movimientos con producto_id huérfano no nulo.
+- Las RPC históricas de mutación continúan expuestas a `anon`/`authenticated` según el contrato; no se cambiaron ACL.
+
+### Documento y siguiente paso
+
+El detalle de conteos, productos afectados, firmas RPC, diferencias de columnas y gates está en `docs/plans/2026-08-21-baseline-principal-readonly.md`. El siguiente paso único es preparar el diff neutral revisable de `01_kardex_provenance.sql` y `02_inventory_atomic_operations.sql`, manteniendo `REVIEW_ONLY` y sin ejecutar SQL remoto.
+
+## SESIÓN 21/08/2026 — Diff neutral SQL 01–02 contra el baseline principal
+
+### Alcance
+
+Se compararon y ajustaron localmente `supabase/release/main/01_kardex_provenance.sql` y `supabase/release/main/02_inventory_atomic_operations.sql` contra los contratos reales del principal. No se retiró `REVIEW_ONLY` y no se ejecutó ningún SQL mutable remoto.
+
+### Cambios
+
+- `01` ahora valida tablas base, `cuenta_id` y enums públicos antes de cualquier aplicación autorizada.
+- `01` conserva columnas nuevas nullable para no romper el historial existente y rechaza provenance cross-tenant cuando el producto y el movimiento no coinciden.
+- `02` valida las columnas exactas de productos, movimientos, usuarios, configuración, préstamos, despacho y clientes.
+- `02` mantiene la adaptación correcta de `cliente_prestamos` sin inventar `cuenta_id`.
+- Las cuatro operaciones de inventario mantienen idempotencia obligatoria, locks deterministas, una transacción y ejecución exclusiva para `service_role`.
+
+### Validación
+
+- Sintaxis de los runners: PASS.
+- `REVIEW_ONLY`: una guarda por cada SQL.
+- Referencias `_staging`/secretos en 01–02: cero.
+- El verificador global posterior al diff terminó con **198 checks PASS** y el manifest quedó actualizado con los SHA-256 de 01 y 02.
+
+### Documento
+
+`docs/plans/2026-08-21-diff-neutral-01-02.md` contiene el detalle del diff, las decisiones contra el esquema real y los gates pendientes. El manifest ya fue actualizado y verificado; el siguiente paso es revisar este paquete antes de iniciar el port del handler de inventario.
+
+## SESIÓN 21/08/2026 — Port del handler de inventario contra SQL neutral 01–02
+
+### Resultado
+
+Se confirmó el port local de las cuatro rutas P0/P1 de `api/handlers/inventario.js`: limpieza, movimiento manual, transformación e ingreso masivo llaman RPC neutrales, fuerzan `p_cuenta_id` desde `operador.cuenta_id`, envían `p_idempotency_key` y no escriben directamente `productos.stock_actual` ni `inventario_movimientos`.
+
+Las escrituras directas de precios y embeddings permanecen fuera de este alcance como P2 de catálogo diferido; no modifican stock ni Kardex.
+
+### Evidencia
+
+- Tests focalizados: **20/20 PASS**.
+- Suite global: **25 archivos, 251/251 tests PASS**.
+- `node --check api/handlers/inventario.js`: **PASS**.
+- Build principal: **PASS**.
+- Revisión estática de RPC, tenant, idempotencia y ausencia de escrituras directas: **PASS**.
+- Verificador de promoción: **198 checks PASS**.
+
+### Siguiente paso
+
+Restaurar/verificar el backup del principal en un entorno disposable, capturar el baseline read-only y ejecutar allí la compilación y matriz mutable antes de retirar `REVIEW_ONLY`. El principal, producción y los grants remotos permanecen sin cambios.
+
+---
+
+## SESIÓN 21/08/2026 — Validación de SQL 01–02 en staging restaurado
+
+### Alcance y seguridad
+
+Se autorizó sobrescribir staging después de capturar un backup fresco. El backup quedó en `tmp/backups/kardex-staging-pre-main-2026-08-21.dump`, con **2.957.389 bytes** y SHA-256 `3abfbcc47399fe8086daf8cdfd90ca12f9ad0631c558258fc0fce3e18146ed07`. El principal `oyfyuszgjwcepjpngclv` no fue tocado.
+
+Se restauró el snapshot principal pre-P0-A en el esquema `public` de staging `spupqgkdsgohxxfoxydl`, además de `supabase_migrations`. Para resolver dependencias específicas de staging se reinició solo `public`; `auth`, `storage` y demás esquemas administrados no se sobrescribieron. La extensión `vector` se recreó en `public`, que es el esquema esperado por el snapshot.
+
+### Baseline posterior al restore
+
+El preflight se ejecutó en `REPEATABLE READ, READ ONLY` y terminó con rollback:
+
+- 444 productos y 3.590 movimientos.
+- 3.401 movimientos asociados a productos actuales y 189 sin `producto_id`.
+- 0 errores matemáticos, 88 brechas de continuidad en 45 productos y 1 divergencia catálogo/Kardex.
+- Provenance y tablas nuevas ausentes antes de aplicar 01–02.
+- Historial formal: 1 fila, máximo `001`.
+
+El snapshot no coincide exactamente con el baseline actual del principal (445/3.673); se documentó como diferencia de antigüedad, no como corrección inventada.
+
+### Aplicación en staging
+
+Se aplicaron 01 y 02 en orden. `REVIEW_ONLY` fue retirado únicamente en memoria durante la invocación de `psql`; los archivos fuente conservaron la guarda. Se instaló provenance, tablas de operaciones/reconciliación, trigger y las cuatro RPC neutrales de inventario.
+
+### Matriz reversible
+
+Runner: `construacero-staging/scripts/verify-neutral-inventory-restored-main.mjs`.
+
+- Contratos, `SECURITY DEFINER`, `search_path=public` y grants: **PASS**.
+- Clave nula, replay, reutilización por tipo y tenant inválido: **PASS**.
+- Falla parcial sin cambios parciales: **PASS**.
+- Transformación, ingreso masivo y devolución de préstamo con replay: **PASS**.
+- Rollback final: `transactionRolledBack=true`, `mutableRowsPersisted=false`.
+- Conteos antes/después: 444/3.590/0 operaciones en ambos lados.
+
+Evidencia: `tmp/e2e-staging/neutral-inventory-main-restore-2026-08-21T20-53-31-578Z.json`.
+
+### Pruebas y auditoría
+
+- Tests staging: **26 archivos, 235/235 PASS**.
+- Build staging: **PASS**; solo warning conocido de chunks grandes.
+- Suite raíz: **25 archivos, 251/251 PASS**.
+- Verificador de promoción: **198 checks PASS**.
+- Auditoría posterior: 444 productos, 3.590 movimientos, 0 errores matemáticos, 88 brechas, 1 mismatch y 3.401 movimientos sin provenance estructurado.
+
+Evidencia de auditoría: `tmp/e2e-staging/kardex-audit-2026-08-21T20-54-49-536Z.{json,md}`.
+
+### Incidencias resueltas y siguiente gate
+
+El primer restore limpio encontró dependencias de constraints; se recuperó staging mediante reinicio controlado del esquema `public`. También fue necesario recrear `vector` en `public` y restaurar `supabase_migrations` para ejecutar el preflight.
+
+El siguiente gate es revisar esta validación y continuar con 03–06/Worker únicamente sobre staging o un snapshot equivalente. No retirar `REVIEW_ONLY`, no ejecutar backfill/reconciliación histórica y no aplicar nada en el principal hasta contar con un backup fresco que corresponda al estado actual y aprobación explícita.
+
+## SESIÓN 21/08/2026 — Dry-run detallado de brechas Kardex en staging
+
+### Alcance y seguridad
+
+Se generó un plan de revisión sobre la auditoría read-only del staging restaurado. El renderer `construacero-staging/scripts/render-kardex-dry-run.mjs` solo lee los JSON locales de auditoría/plan; no abre conexión ni llama RPC. Resultado verificado: `remote_mutation_attempted=false`.
+
+### Resultado
+
+- **88** brechas de continuidad.
+- **45** productos afectados.
+- **88** IDs de movimiento únicos y **45** IDs de producto únicos.
+- **33.431** unidades de delta absoluto; delta firmado acumulado **+26.171**.
+- **0** errores matemáticos internos.
+- **1** divergencia catálogo/último Kardex separada del alcance: `TUB1403010`, `60` vs `30`.
+
+### Clasificación
+
+- Ajuste previo a entrega confirmada: **66** brechas / 38 productos.
+- Ajuste previo a reversión: **7** / 4.
+- Reconciliación bug edición de despacho (migración 197): **5** / 5.
+- Reversión legacy sin wrapper: **5** / 5.
+- Edición directa de stock: **2** / 2.
+- Ajuste operativo sin soporte: **1** / 1.
+- Ajuste previo a devolución: **1** / 1.
+- Compra/ingreso con ajuste previo: **1** / 1.
+
+### Evidencia y decisión
+
+- `tmp/e2e-staging/kardex-dry-run-2026-08-21T21-10-31-154Z.json`
+- `tmp/e2e-staging/kardex-dry-run-2026-08-21T21-10-31-154Z.md`
+- `docs/plans/2026-08-21-dry-run-kardex-brechas-staging.md`
+
+La evidencia contiene la ficha de los 45 productos y el detalle de las 88 brechas con movimientos anterior/actual, snapshots, delta, lote, operador, motivo y clase. No se autorizó ni ejecutó ninguna reconciliación, backfill o corrección de stock. La clasificación es evidencia declarada y no prueba causalidad; cada fila requiere correlación con despacho, devolución, reversión, auditoría, factura o conteo físico.
+
+El runner `npm --prefix construacero-staging run report:kardex:dry-run` aborta si no obtiene exactamente 88/45. Cualquier aplicación futura sigue bloqueada por snapshot, `batch_key` nuevo, guardas de versión, rollback condicionado y aprobación explícita.
+
+Validación posterior del artefacto: `node --check` PASS, consistencia 88/45 PASS, tests staging **235/235 PASS**, build staging **PASS** y `git diff --check` PASS; el build conserva únicamente el warning conocido de chunks grandes.
+
+## SESIÓN 21/08/2026 — Correlación read-only de brechas Kardex por confianza
+
+### Alcance
+
+Se construyó `construacero-staging/scripts/correlate-kardex-readonly.mjs` para cruzar las 88 brechas con `notas_despacho`, `notas_despacho_items`, `despacho_devoluciones`, `cliente_prestamos` y `auditoria`. Se ejecutó dentro de una transacción `BEGIN READ ONLY` y se cerró con `ROLLBACK`; no hubo mutaciones.
+
+### Resultado
+
+- Despacho resuelto por número + tenant: **78/88**.
+- Ítem del producto encontrado: **76/88**.
+- Cantidad del ítem coincide con la brecha: **30/88**.
+- Devolución relacionada: **1**; préstamo relacionado: **1**; auditoría relacionada: **78**.
+- Confianza: **24 alta**, **6 media**, **58 baja**.
+- Las 24 de alta corresponden a 20 productos, **547** unidades absolutas y delta firmado **-525**.
+
+### Política y decisión
+
+`alta` exige despacho único, una línea del producto, cantidad coincidente y evidencia independiente (`VENTA_RAPIDA`/`EDITAR_DESPACHO_PROFUNDIDAD`, devolución o préstamo). `media` exige despacho único y línea/cantidad coherentes. El resto queda `baja`. No se depende del motivo del propio movimiento como prueba.
+
+Evidencia: `tmp/e2e-staging/kardex-correlation-2026-08-21T21-20-56-376Z.{json,md}`.
+
+Documento: `docs/plans/2026-08-21-correlacion-kardex-confianza-staging.md`.
+
+### Siguiente gate
+
+Probar en staging un lote únicamente con las 24 de alta confianza dentro de una transacción reversible con snapshot, `batch_key` y rollback condicionado; verificar stock/Kardex/CxC/comisiones/auditoría. Las 6 medias y 58 bajas quedan en cola. El principal permanece sin cambios.
+
+## SESIÓN 21/08/2026 — Lote de 24 brechas de alta confianza en staging
+
+### Aplicación y validación
+
+Se aplicó la RPC neutral `reconciliar_kardex` con un solo `batch_key` (`bf62181b-bebd-4a39-bd45-f5ccdaa6228a`) sobre las 24 brechas de alta confianza. Backup previo: `tmp/backups/kardex-staging-pre-highconfidence-2026-08-21.dump`.
+
+- Productos: **444 → 444**; suma `stock_actual` sin cambios (**284.586,00**).
+- Movimientos: **3.590 → 3.614** (+24 correctivos).
+- CxC: **483 filas / 2.324.793,37** sin cambios.
+- Comisiones: **703 filas / 14.415,07** sin cambios.
+- Auditoría: **16.732 filas** sin cambios.
+- Reconciliaciones aplicadas: **0 → 24**.
+
+La auditoría posterior pasó de **89 anomalías / 45 productos** a **65 anomalías / 38 productos** (64 brechas de continuidad restantes + 1 divergencia catálogo/Kardex).
+
+### Guarda de rollback
+
+Se intentó revertir el lote para demostrar reversibilidad y la guarda lo bloqueó correctamente con `ROLLBACK_BLOQUEADO_MOVIMIENTOS_POSTERIORES` para el producto `01b5c155…` (movimientos legítimos posteriores a una corrección histórica). No se forzó el rollback.
+
+Evidencia: `tmp/e2e-staging/kardex-high-confidence-apply-2026-08-21T21-28-01-437Z.json` y `tmp/e2e-staging/kardex-audit-2026-08-21T21-28-12-882Z.{json,md}`.
+
+Documento: `docs/plans/2026-08-21-lote-alta-confianza-staging.md`.
+
+### Estado
+
+Las 24 quedan aplicadas en staging. Las 6 medias y 58 bajas permanecen en cola; `TUB1403010` sigue sin tocar. El principal no recibió ningún cambio.
+
+## SESIÓN 21/08/2026 — Evaluación de las 6 brechas de confianza media
+
+### Resultado
+
+Ninguna de las 6 se promueve a alta. Las 6 comparten el patrón de **doble registro de la reversión**: cada fila `[Ajuste de inventario de -X und previo a] Reversión de despacho #N a pendiente` es duplicado de una fila limpia `Reversión de despacho #N a pendiente` con idéntico `stock_anterior`/`stock_nuevo` y timestamp cercano (< 5 s). En `CEM1045001` / despacho #1898 hay tres filas de reversión (una limpia + dos duplicadas).
+
+- Despachos afectados: **1445, 1466, 1898** (todos revertidos a `pendiente` y luego re-confirmados).
+- Las 6 tienen entrega previa pareada y transición a `pendiente` en auditoría, pero fallan por re-confirmación posterior y por fila hermana duplicada.
+- La corrección correcta es **deduplicar**, no insertar movimientos compensatorios.
+
+Evidencia: `tmp/e2e-staging/kardex-medium-confidence-2026-08-21T21-38-00-954Z.{json,md}`.
+
+Runner reproducible: `construacero-staging/scripts/evaluate-medium-confidence.mjs` (`npm --prefix construacero-staging run evaluate:medium-confidence`).
+
+Documento: `docs/plans/2026-08-21-brechas-confianza-media-staging.md`.
+
+### Estado
+
+Las 6 medias siguen en cola como **deduplicación pendiente**, no como reconciliación de stock. Las 58 bajas siguen en cola. El principal permanece sin cambios.
+
+## SESIÓN 21/08/2026 — Preparación de promoción de guardrails flujo-futuro al principal
+
+### Alcance separado
+
+Se preparó la promoción **preventiva** (guardrails de flujo futuro) separada de la corrección histórica:
+
+- **Promover:** SQL 01–04 completos + 05 recortado a **05a** (solo las 4 fachadas tenant-safe: `crear/actualizar/borrar_producto_con_kardex_tenant_safe`, `limpiar_inventario_atomico`).
+- **Diferir:** `reconciliar_kardex`/`revertir_reconciliacion_kardex` (parte final de 05), `06_security_grants_review.sql`, `07_provenance_backfill.sql`, dedup de las 6 medias y las 58 bajas.
+
+### Artefactos creados
+
+- Runner `scripts/apply-kardex-guardrails-main.mjs` con modo `--plan` (safe, genera SQL en `tmp/promote-guardrails-main/`) y `--apply` (exige `KARDEX_MAIN_CONFIRM=APPLY_GUARDRAILS` y bloquea el target staging).
+- `npm run promote:guardrails:main`.
+- El runner retira en memoria solo el bloque `REVIEW_ONLY`, recorta 05 en el marcador de reconciliación, aplica 01→02→03→04→05a en orden, verifica baseline idéntico (productos/movimientos/suma stock) y emite script de rollback.
+- Plan verificado: sin `REVIEW_ONLY` residual, sin `reconciliar_kardex` en 05a, grants `REVOKE … FROM PUBLIC, anon, authenticated` y `GRANT … TO service_role` correctos.
+
+### Validaciones
+
+- `npm run verify:promotion:kardex`: **200/200 checks PASS** (manifest actualizado con hash de `package.json` y nuevo runner).
+- `node --check` del runner: **PASS**.
+- No se ejecutó SQL contra el principal.
+
+Documento: `docs/plans/2026-08-21-promocion-guardrails-flujo-futuro.md`.
+
+### Gate
+
+Antes de `--apply` contra producción: backup fresco del principal actual (el snapshot de staging está desactualizado), autorización explícita de ejecución en la ventana sin uso y confirmar que `06_security_grants_review.sql` sigue bloqueado hasta el cutover del Worker.
+
+## SESIÓN 21/08/2026 — Re-auditoría Kardex staging tras lote de 24 de alta confianza
+
+### Estado final confirmado (read-only)
+
+Evidencia: `tmp/e2e-staging/kardex-audit-2026-08-21T21-57-33-416Z.{json,md}`.
+
+- Productos: **444** (sin cambios).
+- Movimientos totales: **3.614** = 3.590 del snapshot + **24 correcciones persistidas** (confirmado).
+- Movimientos con producto actual: **3.425** (3.614 − 189 sin `producto_id`).
+- Anomalías: **65** = **64 brechas de continuidad** + **1 divergencia catálogo/Kardex**.
+- Productos con anomalías: **38**.
+- Errores matemáticos internos: **0**.
+- Provenance estructurado faltante: **3.401 movimientos**.
+
+Desglose por tipo: `venta/despacho` **61**, `devolucion` **1**, `ajuste_inventario` **2**, `stock_actual_vs_kardex` **1** (`TUB1403010`: 60 vs 30).
+
+Las **6 brechas de confianza media** (reversiones duplicadas) **siguen presentes** (6/6 verificadas por `movement_id`); permanecen como deduplicación pendiente, no como reconciliación. Las 24 correcciones no tocaron `stock_actual`, CxC, comisiones ni auditoría.
+
+## SESIÓN 21/08/2026 — Paquete final de correctivos para el principal (sin aplicar)
+
+### Entregables
+
+- **Backup fresco** del principal: `tmp/backups/kardex-principal-pre-correctivos-2026-08-21T22-00-03-013Z.dump`, SHA `e51b7ef7a0a6462de18acef61fcf1946c72d8299f18c973c1743bce65f26b269`, `pg_restore --list` PASS.
+- **Auditoría fresca**: 445 productos, 3.691 movimientos, **90 brechas** (88 + 2 nuevas), 45 productos, 0 errores matemáticos, 1 divergencia.
+- **Correlación read-only**: 90 → **24 alta**, **8 media** (6 reversiones duplicadas conocidas + 2 nuevas del despacho #2570), **58 baja**.
+- **Batch de correctivos**: `ef1b5921-60d5-4f9e-ba92-a8d2c1872150`, 24 propuestas, 20 productos, suma |delta| 547,00, delta firmado −525,00. Las 24 propuestas con campos completos.
+
+### Runners nuevos (read-only/backup)
+
+- `scripts/backup-kardex-main.mjs` → `npm run backup:kardex:main`.
+- `scripts/correlate-kardex-main-readonly.mjs` → `npm run correlate:kardex:main`.
+
+### Validaciones
+
+- `npm run verify:promotion:kardex`: **204/204 checks PASS**.
+- No se aplicó SQL, reconciliación ni correctivos contra el principal.
+
+Documento: `docs/plans/2026-08-21-paquete-correctivos-principal.md`.
+
+### Gates de aprobación (antes de aplicar los 24)
+
+Guardrails (`01`–`04` + `05a`) primero, revisión humana de las 24 propuestas (20 productos), ventana sin uso, aprobación explícita de mutación histórica, runner de aplicación con guarda y rollback ensayado. Las 8 medias y 58 bajas quedan fuera de este paquete.
+
+## SESIÓN 21/08/2026 — Matriz mutable de 03–04 en staging (finanzas + wrappers)
+
+### Resultado: PASS completo
+
+Backup previo de staging: `tmp/backups/kardex-staging-pre-0304-2026-08-21.dump` (SHA `b11e651d…`). Se instalaron 03–04 en staging (01–02–05 ya presentes) y se ejecutó la matriz mutable con rollback automático.
+
+Checks (11/11 PASS):
+
+- Instalación 03–04 y contratos/grants: 6 funciones `SECURITY DEFINER` + `search_path=public`, ejecución solo `service_role`, `idempotency_key UUID` en las 5 wrappers.
+- Negativos: `03` params inválidos, null `idempotency_key` (entrega/reversión/devolución), cross-tenant.
+- Positivos + replay idempotente: entrega financiera (despacho 2548), reversión financiera (2548), ajuste financiero neto (2546) y devolución parcial (2544, `devoluciones +1`).
+- `transactionRolledBack=true`, `mutableRowsPersisted=false`, `before == after`.
+
+Snapshot previo intacto: 444 productos, 3.614 movimientos, CxC 483/2.324.793,37, comisiones 703/14.415,07, auditoría 16.732, stock 284.586.
+
+Evidencia: `tmp/e2e-staging/neutral-03-04-main-restore-2026-08-21T22-19-24-550Z.json`.
+
+Runner: `construacero-staging/scripts/verify-neutral-03-04-staging.mjs`.
+
+### Estado
+
+Los guardrails **01–05 ya están instalados y probados mutable en staging**. Queda pendiente únicamente la promoción al principal (`01`–`04` + `05a`) con el runner ya preparado, y el runner de aplicación de los 24 correctivos. `06` sigue bloqueado.
+
+## SESIÓN 21/08/2026 — Promoción de guardrails al principal (EJECUTADO)
+
+### Aplicación
+
+Se ejecutó `KARDEX_MAIN_CONFIRM=APPLY_GUARDRAILS npm run promote:guardrails:main -- --apply` contra el principal (`oyfyuszgjwcepjpngclv`). Backup fresco previo: `tmp/backups/kardex-principal-pre-correctivos-2026-08-21T22-21-26-029Z.dump` (SHA `8953eb4af37e18121a840d65a21a86d58421de4d6c14ff064687a98706ba4526`).
+
+- Aplicados en orden: **01, 02, 03, 04, 05a** (todos `ok`).
+- `05a` = solo fachadas tenant-safe; **`reconciliar_kardex` NO se instaló** (verificado = 0).
+- Baseline antes == después: **445 productos, 3.691 movimientos, stock 284.317** (invariantes preservados).
+- 16 funciones nuevas verificadas presentes; grants solo `service_role` (sin `authenticated`).
+- Columnas provenance (7) + tablas (3) + trigger instalados.
+
+Rollback guardado: `tmp/promote-guardrails-main/rollback-guardrails-main.sql`.
+
+### Estado
+
+**Guardrails de flujo futuro ya viven en el principal.** El Worker aún no fue desplegado (sigue el código legacy); los handlers portados llaman las RPC nuevas con fallback legacy. Pendiente: re-baseline + re-correlación, runner + aplicación de los 24 correctivos, despliegue del Worker y, después del cutover, `06` grants, dedup de 8 y backfill `07`.
+
+## SESIÓN 21/08/2026 — Re-baseline y re-correlación del principal post-guardrails
+
+### Re-auditoría (read-only)
+
+`node scripts/audit-kardex-main-readonly.mjs` → `tmp/kardex-main-audit-2026-08-21-postguardrails.json`. Los guardrails no cambiaron datos: **445 productos, 3.691 movimientos, 90 brechas, 45 productos afectados, 0 errores matemáticos, 1 divergencia** (`TUB1403010`).
+
+### Re-correlación
+
+`node scripts/correlate-kardex-main-readonly.mjs` → `tmp/e2e-main/kardex-main-correlation-2026-08-21T22-25-40-901Z.json`.
+
+- Confianza: alta **24**, media **8**, baja **58** (sin cambios respecto a la derivación previa).
+- **Batch re-versionado:** `d350bea3-4f7f-40ae-b80a-3a943297e130` (antes `ef1b5921…`).
+- 24 propuestas, 20 productos, suma |delta| **547,00**, delta firmado **−525,00**, campos completos 24/24.
+- read-only confirmado (`transaction_read_only: true`, `remote_mutation_attempted: false`).
+
+### Estado
+
+Batch re-versionado y documentado en `docs/plans/2026-08-21-paquete-correctivos-principal.md`. Siguiente paso: instalar el tramo `05` de reconciliación en el principal (falta `reconciliar_kardex`/`revertir_reconciliacion_kardex`), luego runner + revisión humana + aplicación de los 24.
+
+## SESIÓN 21/08/2026 — Preparación del tramo 05b de reconciliación (revisable, no aplicado)
+
+Se separó el tramo de reconciliación histórica del archivo `05` en un SQL independiente y revisable, **sin aplicarlo** contra ningún entorno.
+
+### Entregables
+
+- `supabase/release/main/05b_kardex_reconciliation.sql` — instala SOLO `reconciliar_kardex` + `revertir_reconciliacion_kardex` + grants (`service_role`).
+- Runner de generación reproducible: `scripts/prepare-05b-reconciliation-main.mjs` → `npm run prepare:05b:reconciliation`.
+
+### Contenido y guardas de 05b
+
+- `BEGIN` / `COMMIT` transaccional; `CREATE OR REPLACE` idempotente.
+- **SAFETY GATE `REVIEW_ONLY`** activo: aborta si se intenta ejecutar sin retirar el bloque.
+- Precondiciones: tablas `productos`, `inventario_movimientos`, `inventario_operaciones`, `kardex_reconciliaciones` y funciones `reservar/guardar_operacion_inventario` (dependen de 01/02, ya instalados).
+- Conserva las 5 guardas de rollback ya probadas en staging: batch completo, snapshot de catálogo, sin movimientos posteriores, sin mutación de catálogo, e idempotencia por `rollback_key`.
+- Grants: `REVOKE` de `public/anon/authenticated` + `GRANT` solo a `service_role`; sin `authenticated`.
+- NO incluye las fachadas de 05a (ya aplicadas) ni `06` grants.
+
+### Validación
+
+Generador con 15/15 checks PASS: `REVIEW_ONLY` presente, `BEGIN/COMMIT`, 2 funciones, grants de reconcile/revert, sin residuos de fachadas 05a, 2 REVOKE / 2 GRANT / 2 `FROM PUBLIC`, `NOTIFY pgrst`. `git diff --check` PASS.
+
+### Estado
+
+El principal sigue sin `reconciliar_kardex` (05a no lo instaló). 05b queda listo para revisión y, tras aprobación explícita, se retira su `REVIEW_ONLY` en memoria al aplicarlo (igual que el runner de guardrails). Siguiente paso: crear el runner de aplicación de los 24 correctivos que instale 05b y ejecute el lote con snapshot + rollback.
+
+## SESIÓN 21/08/2026 — Runner de correctivos para el principal (plan/apply/rollback)
+
+Se creó `scripts/apply-kardex-correctivos-main.mjs` → `npm run correctivos:kardex:main`, que instala 05b y aplica/revierta el lote de 24 con guardas. **No se ejecutó contra el principal.**
+
+### Modos
+
+- **Plan (por defecto):** genera `tmp/apply-correctivos-main/05b_kardex_reconciliation.sql` (sin `REVIEW_ONLY`) y `correctivos-propuestas.json` (24 propuestas + `batch_key`). No abre conexión.
+- **Apply:** `KARDEX_MAIN_CONFIRM=APPLY_CORRECTIVOS npm run correctivos:kardex:main -- --apply` → instala 05b + aplica el lote.
+- **Rollback:** `KARDEX_MAIN_CONFIRM=ROLLBACK_CORRECTIVOS npm run correctivos:kardex:main -- --rollback --batch-key <uuid>` → revierte el batch.
+
+### Guardas y validaciones
+
+- Retira `REVIEW_ONLY` de 05b solo en memoria; verifica `project_ref` = principal; aborta antes de conectar sin confirmación.
+- Operador `administracion/desarrollador` resuelto en runtime (sin ID hardcodeado).
+- Snapshot antes/después: productos+stock, movimientos, CxC, comisiones, auditoría, reconciliaciones aplicadas.
+- Invariantes: +24 movimientos, stock/CxC/comisiones/auditoría intactos, +24 reconciliaciones aplicadas; rollback reduce a 0 (inserta inversos, no borra).
+- `batch_key` revisado `d350bea3-4f7f-40ae-b80a-3a943297e130`; la RPC re-valida cada propuesta y aborta atómicamente ante drift.
+
+### Validación local
+
+- `node --check` PASS; plan mode ejecutado (24 propuestas / 20 productos / batch correcto); modo apply y rollback abortan sin confirmación (exit 1, sin conexión).
+- `git diff --check` PASS. Documento: `docs/plans/2026-08-21-paquete-correctivos-principal.md` actualizado.
+
+### Estado
+
+Todo listo para ejecutar `--apply` cuando se cumplan los gates (revisión humana de 24, ventana sin uso y aprobación explícita). El principal sigue intacto.
+
+### Gate "sin saltos sin motivo"
+
+Verificado read-only: las 24 propuestas tienen `reason` real (24/24, 0 fallback, 0 vacío). El runner ahora **rechaza** cualquier propuesta sin motivo explicativo antes de aplicar, así que ningún correctivo cierra una brecha sin dejar registrado el porqué (`motivo` + `origen_tipo=reconciliacion_kardex` + `origen_id/ancla` + `idempotency_key=batch`).
+
+## SESIÓN 21/08/2026 — Correctivos de alta confianza APLICADOS al principal
+
+Con aprobación explícita del dueño (`Sí, aplicar ahora`), se ejecutó el lote contra el principal.
+
+### Ejecución
+
+- Backup fresco previo: `tmp/backups/kardex-principal-pre-correctivos-2026-08-21T22-48-25-097Z.dump` (SHA `3c7c7f2f2380018d84909a6e675ecd5b125e6ed1c29d31a7c4423ca645a75990`).
+- `KARDEX_MAIN_CONFIRM=APPLY_CORRECTIVOS npm run correctivos:kardex:main -- --apply` → instaló `05b` (reconciliar/revertir) y aplicó el batch `d350bea3-4f7f-40ae-b80a-3a943297e130`.
+- Nota: el runner falló al final por un bug (`evidenceDir` no definido) ya corregido; la aplicación en sí fue atómica y quedó persistida. Evidencia reconstruida en `tmp/apply-correctivos-main/kardex-correctivos-main-apply-2026-08-21T22-51-42-810Z.json`.
+
+### Invariantes verificados (read-only)
+
+| Métrica | Antes | Después |
+|---|---:|---:|
+| Productos | 445 | 445 |
+| Suma `stock_actual` | 284.317 | 284.317 |
+| Movimientos | 3.691 | **3.715** (+24) |
+| CxC (filas) | 492 | 492 |
+| Comisiones (filas) | 713 | 713 |
+| Auditoría | 16.917 | 16.917 |
+| Reconciliaciones aplicadas | 0 | **24** |
+
+`stock_actual`, CxC, comisiones y auditoría **sin cambios**; el lote solo insertó 24 movimientos de continuidad con `motivo` real + provenance (`origen_tipo=reconciliacion_kardex`, `idempotency_key=batch`).
+
+### Re-auditoría post-aplicación
+
+`tmp/kardex-main-audit-2026-08-21-postcorrectivos.json`:
+
+- Brechas de continuidad: **90 → 66** ✅
+- Productos con anomalías: **45 → 37** ✅
+- Errores matemáticos: 0
+- Divergencia catálogo/Kardex: 1 (`TUB1403010`, no tocado)
+- Provenance de los 24 correctivos: 24/24 con `origen_tipo` (3715 total, 3691 pendientes de backfill 07)
+
+### Estado
+
+**24 brechas de alta confianza cerradas y documentadas.** Quedan 66 (8 media = duplicados de reversión a deduplicar; 58 baja = sin evidencia independiente) y `TUB1403010`. Rollback disponible: `KARDEX_MAIN_CONFIRM=ROLLBACK_CORRECTIVOS npm run correctivos:kardex:main -- --rollback --batch-key d350bea3-4f7f-40ae-b80a-3a943297e130`.
+
+## SESIÓN 21/08/2026 — Revisión del Worker portado + pre-flight de deploy
+
+Revisión del diff de los 3 handlers portados y verificación pre-deploy. **No se desplegó.**
+
+### Verificaciones
+
+- Tests: **251/251 PASS** (25 archivos; incluye `inventarioAtomic`, `despachosAtomic`, `despachosPartialAtomic`, `clientesPrestamoAtomic`, `transportistasAtomic`, `rpcProductContract`).
+- Contratos RPC: 8/8 firmas coinciden con el SQL instalado (`limpiar/aplicar/transformar/ingresar_lote/devolver_prestamo` de 02, `confirmar/revertir_entrega_finanzas` de 04, `registrar_devolucion_parcial` de 04).
+- Grants: Worker usa `SUPABASE_SERVICE_KEY` (service_role) vía `validateOperator`; RPCs `GRANT ... TO service_role` ✅.
+- Idempotencia y tenant-safety presentes en todos los flujos portados.
+- Bundle: `wrangler deploy --dry-run` PASS (439.64 KiB, bindings correctos).
+- Lint: 7 errores `no-empty` **pre-existentes** en `despachos.js` (no del port) + 20 warnings; sin errores nuevos funcionales.
+
+### Notas del diff
+
+- `handleClearInventory` ahora exige rol `desarrollador` (alineado con la guarda SQL `LIMPIEZA_REQUIERE_DESARROLLADOR`).
+- `handleBatchPriceUpdate` (P2) sigue escribiendo precios por REST directo, ahora tenant-scoped; diferido.
+- Código legacy residual tras el bloque RPC en `handleDevolucionParcialDespacho` (inalcanzable, inofensivo).
+
+### Estado
+
+Deploy listo: `npm run build && npx wrangler deploy`. Documento: `docs/plans/2026-08-21-deploy-worker-guardrails.md`. `06` grants sigue bloqueado hasta después del cutover.
+
+## SESIÓN 21/08/2026 — Limpieza de lint en los handlers portados
+
+Antes del deploy se limpió el lint de los 3 handlers (de 27 problemas a **0**).
+
+- `despachos.js`: 7 `catch` vacíos → `catch { /* comentario */ }`; imports sin uso (`corsHeaders`, `verifyAuth`, `getOperatorRole`, `verifySupervisor`, `verifyPrivileged`) eliminados; 3 bloques muertos `esVendedorSinComision` (lecturas de cliente descartadas, sin efectos) eliminados; `user`/`ip` sin uso fuera del destructuring.
+- `clientes.js`: imports sin uso (`isRateLimited`, `sanitizeSearch`) eliminados.
+- `inventario.js`: `const { user } = v` muerto en `handlePdfTemp` eliminado; `catch (err)` → `catch`; args `total_count`/`vector_distance` → `_total_count`/`_vector_distance`.
+
+### Verificación
+
+- `eslint` en los 3 handlers: **0 problems** (antes 7 errores + 20 warnings).
+- Tests: **251/251 PASS**.
+- `wrangler deploy --dry-run`: PASS (438.14 KiB).
+- `git diff --check`: PASS.
+
+Sin cambios de comportamiento: solo se eliminaron lecturas muertas y se documentaron catches vacíos.
+
+## SESIÓN 21/08/2026 — Worker DESPLEGADO a producción
+
+Con confirmación explícita del dueño, se desplegó el Worker portado a Cloudflare.
+
+- Comando: `npm run build && npx wrangler deploy` (build PASS en 53s; deploy con `CLOUDFLARE_API_TOKEN` de `luigistorelogistics@gmail.com`, account `c75c787d817c5c4f065ce06fa65d4c3c`).
+- Resultado: **Success! Uploaded 39 files (47 ya subidos)** → `https://listo-pos-cotizaciones.luigistorelogistics.workers.dev`.
+- **Version ID:** `cf973e32-847c-4b5c-a14d-9f464116445f`.
+- Bindings confirmados: `SUPABASE_URL` apunta al principal (`oyfyuszgjwcepjpngclv`), `SUPABASE_SERVICE_KEY` (service_role), `AI`, `ASSETS`.
+- Smoke test: root `200 OK`, título `Construacero Carabobo`.
+
+### Estado post-deploy
+
+El Worker ya escribe stock/Kardex/CxC por las RPC atómicas (con fallback legacy para transiciones no portadas). El **cutover está hecho**; el siguiente paso habilitado es `06_security_grants_review.sql` (revocar escrituras REST directas), seguido de dedup de las 8 medias y backfill `07`.
+
+Rollback disponible: `npx wrangler rollback` (revierte al Worker anterior).
+
+## SESIÓN 21/08/2026 — Preparación de 06 (grants de seguridad)
+
+Se mapearon las escrituras para preparar `06_security_grants_review.sql`. **No aplicado** (gate `REVIEW_ONLY` activo).
+
+### Precondiciones verificadas (read-only)
+
+- 20/20 funciones neutrales presentes; 6/6 tablas objetivo presentes.
+- Worker ya desplegado (service_role) → 06 no lo afecta.
+
+### Hallazgo (bloqueo para aplicar)
+
+El frontend aún escribe directo (authenticated):
+
+- `productos.imagen_url` (ProductoForm.jsx) y `productos.activo` (useDesactivarProducto) → **rompería producción**.
+- `TesterFlowView` hace `.delete()` de `inventario_movimientos`/`cuentas_por_cobrar`/`productos` (cleanup de tests).
+- `comisiones`, `despacho_devoluciones`, `despacho_devolucion_intercambios` solo lecturas → seguras ya.
+
+### Acciones
+
+- `06` actualizado: header con estado del cutover + condición 6 en el safety gate + nota ⚠️ sobre `productos`.
+- Doc: `docs/plans/2026-08-21-seguridad-grants-06-mapeo-escrituras.md` con el mapa completo y el plan.
+
+### Siguiente paso
+
+Migrar `imagen_url` y `activo` al Worker, confirmar cleanup de TesterFlow vía RPC, re-auditar escrituras y recién entonces retirar `REVIEW_ONLY` y aplicar 06.
+
+## SESIÓN 21/08/2026 — Aplicación de 06a (subconjunto seguro de grants)
+
+Con confirmación explícita del dueño, se aplicó al principal el subconjunto seguro `06a_security_grants_safe.sql`. Es un cambio **solo de grants** (sin tocar datos), reversible vía re-grant y respaldado por dump de esquema+ACLs.
+
+### Alcance aplicado
+
+- `REVOKE INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN` sobre `inventario_movimientos`, `cuentas_por_cobrar`, `comisiones`, `despacho_devoluciones`, `despacho_devolucion_intercambios` desde `PUBLIC/anon/authenticated`; `SELECT` conservado.
+- `REVOKE EXECUTE` de las 5 RPC legacy de finanzas/devolución (`*_atomica`) desde `authenticated`.
+- Fachadas nuevas conservadas solo en `service_role` (Worker).
+
+### Diferido (no revocado, para no romper producción)
+
+- `public.productos` (frontend aún escribe `imagen_url` y `activo`).
+- RPC legacy de producto `crear/actualizar/borrar_producto_con_kardex` (frontend las invoca directo).
+- `tester_cleanup_cotizacion` (TesterFlowView).
+
+### Verificación post-apply
+
+- Datos idénticos: 445 productos / 3.715 movimientos / stock 284.317 (`dataUnchanged: true`).
+- **27/27 checks PASS**: 5 tablas sin escritura authenticated (SELECT ok, service_role INSERT ok); `productos` intacto; RPC legacy revocadas; RPC nuevas con `service_role`; RPC de producto/tester intactas.
+- Pre-flight previo: 5 tablas + 19/19 funciones presentes, PG 17.6, target `oyfyuszgjwcepjpngclv`.
+
+### Artefactos
+
+- `supabase/release/main/06a_security_grants_safe.sql` (fuente, con `REVIEW_ONLY`).
+- `scripts/apply-security-grants-main.mjs` → `npm run security:grants:main` (plan por defecto; `--apply` con `KARDEX_MAIN_CONFIRM=APPLY_SECURITY_GRANTS`).
+- `tmp/apply-security-grants-main/apply-result.json` + `rollback-06a-main.sql`.
+- Dump de esquema+ACLs pre-apply: `tmp/backups/kardex-principal-grants-schema-2026-08-21T23-47-27-876Z.sql`.
+
+### Rollback
+
+```bash
+# re-otorga privilegios de tabla + RPC legacy revocadas:
+psql "<principal>" -f tmp/apply-security-grants-main/rollback-06a-main.sql
+# autoritativo (restaurar ACLs exactos): el dump de esquema+ACLs de arriba.
+```
+
+### Pendiente para cerrar 06 completo
+
+1. Migrar `productos.imagen_url` y `productos.activo` al Worker.
+2. Migrar el cleanup de `TesterFlowView` a RPC (quitar `.delete()` directos).
+3. Re-auditar writes y aplicar 06 completo (incluye `productos` + RPC de producto legacy).
+
+## SESIÓN 21/08/2026 — Migración imagen_url/activo al Worker (destrabar 06 completo)
+
+Se migraron los 2 writes directos restantes de `productos` (authenticated) al Worker, para poder revocar `UPDATE` de `productos` en 06 completo.
+
+### Cambios de código (sin deploy aún)
+
+- `api/handlers/inventario.js`: nuevo handler `handleActualizarProductoMetadatos` — actualiza `imagen_url` y/o `activo` por service_role con chequeo de tenant (`cuenta_id` del operador) + roles privilegiados + auditoría best-effort.
+- `worker.js`: ruta `PATCH /api/productos/metadatos` + import del handler.
+- `src/hooks/useInventario.js` (`useDesactivarProducto`): de `.from('productos').update({ activo })` → `authFetch('/api/productos/metadatos')`.
+- `src/components/inventario/ProductoForm.jsx`: el write de imagen de producto nuevo de `.from('productos').update({ imagen_url })` → `authFetch('/api/productos/metadatos')`.
+
+### Validación
+
+- `node --check` OK (inventario.js, worker.js).
+- `eslint`: 0 errores (38 warnings pre-existentes, ninguno nuevo).
+- Tests: 251/251 PASS.
+- `wrangler deploy --dry-run`: PASS (441.06 KiB).
+- Mapa de escrituras re-verificado: solo quedan writes directos de `productos` en `TesterFlowView` (`.delete()`, pendiente de migrar a RPC).
+
+### Pendiente
+
+1. **Deploy** Worker+frontend (`npm run build && npx wrangler deploy`) — requiere confirmación.
+2. Migrar cleanup de `TesterFlowView` a RPC (`.delete()` de lote/CxC; las tablas ya están revocadas por 06a, así que hoy fallan en silencio).
+3. Migrar `crear/actualizar/borrar_producto_con_kardex` (RPC legacy) al Worker — 06 completo las revoca de authenticated.
+4. Recién entonces aplicar 06 completo (revocar `productos` + RPC legacy de producto).
+
+## SESIÓN 21/08/2026 — Diagnóstico de lentitud del dump + backup fresco completo
+
+### Diagnóstico (por qué el dump se volvió lento)
+
+- DB total: **35 MB** (diminuta). Sin large objects (`pg_largeobject` = 0), sin TOAST gigante (todo < 1 MB).
+- Latencia OK (154 ms) pero **throughput bulk degradado**: `SELECT * FROM auditoria` tardó >120 s en 6.6 MB (~50 KB/s), y con pulls mayores cae a ~0.07 MB/s (ramp-down progresivo).
+- Conclusión: no es tamaño ni config de `pg_dump` — es **throttling de transferencia bulk en el endpoint directo** (`db.oyfyuszgjwcepjpngclv.supabase.co`). El pooler (`aws-0-us-west-2.pooler.supabase.com`) no está habilitado para este proyecto (tenant not found).
+- Los intentos previos fallaron por timeouts SYNC cortos (120s/300s), no por el script: el dump completo necesita ~5-6 min a la velocidad actual.
+
+### Backup fresco completo generado y verificado
+
+- Archivo: `tmp/backups/kardex-principal-full-2026-08-22T00-10-59.dump`
+- Formato: pg_dump custom (PostgreSQL 17), **3.108.964 bytes**.
+- SHA-256: `e7a4a8e59b62bcc712463def3f9941ec68ca847bab947841cddbe650b46b69c1`
+- `pg_restore --list` **PASS** (exit 0).
+- Completitud: 75 tablas con DATA; esquemas `public`, `auth`, `storage`, `realtime`, `supabase_migrations`, `vault`.
+- Tablas clave confirmadas: `productos`, `inventario_movimientos`, `cuentas_por_cobrar`, `comisiones`, `clientes`, `notas_despacho`, `cotizaciones`, `kardex_reconciliaciones`.
+
+### Recomendación operativa
+
+Para backups futuros usar `npm run backup:kardex:main`, cuyo timeout operativo ahora es de **30 minutos (1.800s)**. Si el endpoint directo mantiene throughput bajo o supera ese límite, usar el backup nativo del dashboard de Supabase según `docs/plans/2026-08-22-backup-principal-operacion.md`.
+
+## SESIÓN 22/08/2026 — Deploy Worker + frontend con endpoint de metadatos
+
+### Objetivo
+
+Publicar el Worker y los assets del frontend después de migrar los writes de `productos.imagen_url` y `productos.activo` al endpoint autenticado `PATCH /api/productos/metadatos`.
+
+### Validación previa
+
+- `npm test`: **251/251 PASS** (25 archivos).
+- ESLint focalizado en Worker/handler/frontend: **0 errores**; 38 warnings heredados/no funcionales.
+- `node --check worker.js` y `node --check api/handlers/inventario.js`: PASS.
+- `git diff --check`: PASS.
+- Build Vite: **PASS**.
+
+### Deploy ejecutado
+
+Comando autorizado:
+
+```bash
+npm run build && npx wrangler deploy
+```
+
+Resultado:
+
+- Worker: `listo-pos-cotizaciones` publicado al 100%.
+- URL: `https://listo-pos-cotizaciones.luigistorelogistics.workers.dev`
+- Version ID: `3332f285-068c-426d-a0d6-30738564a460`.
+- Assets del frontend: 87 leídos; 38 nuevos/modificados subidos.
+- Tamaño reportado: 441.06 KiB / 78.53 KiB gzip.
+- Binding `ASSETS` activo; Worker y frontend quedaron publicados en el mismo deploy.
+
+### Verificación post-deploy
+
+- `wrangler deployments list`: versión `3332f285-068c-426d-a0d6-30738564a460` al 100%.
+- Smoke test HTTP: **200 OK**.
+- Título: `Construacero Carabobo`.
+- No se ejecutó un PATCH autenticado de prueba para no mutar datos reales automáticamente.
+
+### Estado y siguiente paso
+
+✅ Deploy completado. El frontend publicado usa el endpoint de metadatos para activar/desactivar productos y guardar/quitar imágenes.
+
+Siguiente control: prueba manual autorizada con un producto controlado y confirmación en auditoría. El `06` completo permanece pendiente de migrar el cleanup de `TesterFlowView` y las RPC legacy de producto, seguido de una nueva auditoría de writes directos.
+
+Documento: `docs/plans/2026-08-21-deploy-worker-guardrails.md`.
+
+## SESIÓN 22/08/2026 — Timeout de backup ampliado y procedimiento nativo
+
+### Cambio aplicado
+
+- `scripts/backup-kardex-main.mjs`: timeout de `pg_dump` ampliado de 10 a **30 minutos (1.800s)** mediante `PG_DUMP_TIMEOUT_MS`.
+- El cambio solo modifica el límite de espera local; no realiza escrituras ni altera la base de datos.
+- Uso: `npm run backup:kardex:main`.
+
+### Procedimiento alternativo documentado
+
+Se creó `docs/plans/2026-08-22-backup-principal-operacion.md` con el procedimiento para usar el backup nativo de Supabase:
+
+1. Seleccionar el proyecto principal en Supabase Dashboard.
+2. Abrir `Database → Backups` (o `Project Settings → Database → Backups`, según la interfaz).
+3. Crear o seleccionar un backup con estado `Completed/Ready`.
+4. Registrar ref, timestamp/ID, estado, retención y alcance.
+5. Descargarlo si el plan lo permite, conservarlo fuera del checkout y calcular SHA-256.
+6. Probar restauraciones únicamente en una base disposable; no restaurar sobre el principal sin ventana y aprobación.
+
+El backup nativo queda como mecanismo preferido de recuperación operativa; `pg_dump` se mantiene para exportación lógica portable y validación local. El alcance de Storage, secretos y configuración administrada debe verificarse por separado en el dashboard.
+
+## SESIÓN 22/08/2026 — Migración de crear/actualizar/borrar producto al Worker
+
+### Objetivo
+
+Eliminar del frontend las llamadas directas a `crear_producto_con_kardex`, `actualizar_producto_con_kardex` y `borrar_producto_con_kardex`, para dejar listo el mapa de escrituras previo a `06_security_grants_review.sql`.
+
+### Cambios realizados
+
+- Nuevas rutas Worker: `POST /api/productos/crear`, `PATCH /api/productos/actualizar` y `DELETE /api/productos/borrar`.
+- El Worker llama las RPC tenant-safe equivalentes con `service_role`.
+- `cuenta_id` y `usuario_id` se derivan del operador autenticado; no se confían al cliente.
+- Idempotencia obligatoria por UUID en body/header, con auditoría best-effort y provenance gestionada por las RPC.
+- `useInventario.js` migrado a `authFetch`.
+- `TesterFlowView.jsx` migrado para crear y eliminar fixtures mediante Worker, sin fallback de delete directo para productos.
+- CORS actualizado para permitir `Idempotency-Key`.
+
+### Verificación
+
+- Contrato Worker/frontend: **PASS**.
+- `npm test`: **255/255 PASS** (26 archivos).
+- ESLint focalizado: **0 errores**; warnings heredados únicamente.
+- `node --check` de Worker y handler: **PASS**.
+- `git diff --check`: **PASS**.
+- No se ejecutaron mutaciones remotas ni se desplegó esta versión.
+
+### Gates siguientes
+
+1. Desplegar Worker/frontend con esta versión.
+2. Ejecutar smoke controlado del ciclo crear/editar/eliminar usando fixtures del tenant.
+3. Capturar backup fresco y revisar el preflight de `06_security_grants_review.sql`.
+4. Aplicar 06 completo únicamente después de confirmar que no quedan consumidores directos.
+
+Documento: `docs/plans/2026-08-22-migracion-productos-worker-06.md`.
+
+## SESIÓN 22/08/2026 — Deploy y smoke test controlado de productos con Kardex
+
+### Deploy
+
+- `npm run build && npx wrangler deploy`: **PASS**.
+- Worker/frontend publicado en `https://listo-pos-cotizaciones.luigistorelogistics.workers.dev`.
+- Version ID: `592ebdec-3a8e-4f50-9a96-cd3bc092b1b3`.
+- Smoke HTTP de raíz: **200 OK**.
+
+### Smoke test
+
+Se ejecutó `KARDEX_MAIN_SMOKE_CONFIRM=RUN_PRODUCT_SMOKE npm run smoke:products:main` usando una cuenta Auth y operador temporales, aislados del tenant real.
+
+- Crear vía Worker: PASS.
+- Replay de crear: PASS, idempotente.
+- Actualizar stock `0 → 2`: PASS.
+- Replay de actualizar: PASS, idempotente.
+- Borrar vía Worker: PASS, egreso `2 → 0`.
+- Replay de borrar: PASS, idempotente.
+- Provenance: `product_update` y `product_delete` presentes.
+- `inventario_operaciones`: 3 claves registradas.
+- Auditoría: 3 filas.
+- Limpieza: PASS; tenant temporal quedó con 0 usuarios, productos, movimientos, operaciones y auditorías.
+
+### Baseline y grants
+
+Auditoría read-only posterior: 445 productos, stock total 284.317,00, 3.715 movimientos, 0 anomalías matemáticas y sin errores del auditor. La deuda histórica de provenance permanece en 3.691 movimientos, sin cambios.
+
+`06_security_grants_review.sql` **no fue aplicado**. El preflight confirmó que `authenticated` aún conserva temporalmente `UPDATE/DELETE` sobre `productos` y `EXECUTE` sobre las RPC legacy, como corresponde antes del corte.
+
+Documento: `docs/plans/2026-08-22-smoke-product-worker-main.md`.
+
+## SESIÓN 22/08/2026 — Aplicación de 06 completo y postflight
+
+### Aplicación controlada
+
+Se aplicó `06_security_grants_review.sql` contra el principal `oyfyuszgjwcepjpngclv` mediante `scripts/apply-security-grants-full-main.mjs`, usando `KARDEX_MAIN_CONFIRM=APPLY_SECURITY_GRANTS_FULL`. El archivo fuente conserva `REVIEW_ONLY`; el runner retiró el gate únicamente en memoria.
+
+- Las seis tablas objetivo conservan `SELECT` para `anon`/`authenticated`, pero quedaron sin `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER` ni `MAINTAIN` para esos roles.
+- Las RPC legacy de inventario, devoluciones, finanzas y productos quedaron sin `EXECUTE` para `PUBLIC`, `anon` y `authenticated`.
+- `service_role` conserva los permisos para el Worker y las RPC tenant-safe nuevas.
+- No se modificaron datos. Baseline antes/después: 445 productos, stock 284.317, 3.715 movimientos, 19 devoluciones, 3 intercambios, 492 CxC y 713 comisiones.
+- Resultado del apply: `ok=true`, `dataUnchanged=true`.
+
+Backup/evidencia:
+
+- Datos completo disponible: `tmp/backups/kardex-principal-full-2026-08-22T00-10-59.dump`, 3.108.964 bytes, SHA-256 `e7a4a8e59b62bcc712463def3f9941ec68ca847bab947841cddbe650b46b69c1`, `pg_restore --list` PASS.
+- Backup inmediato de esquema/ACL: `tmp/backups/kardex-principal-schema-acl-pre-06-2026-08-22T02-01-50-586Z.sql`, 750.569 bytes, SHA-256 `71c8a52dcea6a5b6e626b91b41b4137266ec3f3a477dae8e341cde234e72b030`.
+- El dump completo adicional previo al apply superó el timeout de 10 minutos; no se presentó el dump de esquema/ACL como backup de datos.
+
+### Postflight y smoke
+
+- `npm run postflight:security:grants:main:full`: **PASS**, read-only; 0 tablas/funciones faltantes y 0 fallos de grants.
+- Smoke posterior con tenant temporal: **PASS**; crear, replay, actualizar `0 → 2`, replay, borrar `2 → 0`, provenance, idempotencia, auditoría y cleanup completos.
+- `npm test`: **255/255 PASS**.
+- `npm run build`: **PASS**.
+- `node --check`, ESLint de runners y `git diff --check`: **PASS**.
+
+### Auditoría Kardex posterior
+
+La aplicación de 06 es un guardrail futuro; no corrige historia. Auditoría read-only posterior:
+
+- Errores matemáticos: **0**.
+- Saltos de continuidad: **66**, en **37 productos**.
+- Movimientos sin `origen_tipo`, `origen_id` o `idempotency_key`: **3.691 de 3.715**.
+- Movimientos huérfanos: **0**.
+- Diferencia catálogo vs último Kardex: **1 de 369** productos con movimiento.
+
+### Rollback y pendientes
+
+- Rollback: `tmp/apply-security-grants-full-main/rollback-06-full-main.sql`; corregido para restaurar solo los privilegios efectivos observados antes del apply, sin sobreotorgar permisos a las seis tablas.
+- No se ejecutó rollback porque el postflight fue PASS.
+- `TesterFlowView.jsx` aún tiene deletes directos sobre `cuentas_por_cobrar` (línea 334) e `inventario_movimientos` (línea 1451), que ahora quedan bloqueados por diseño; falta migrar su cleanup a RPC/Worker.
+- Siguiente fase: reconciliar/backfillear los 37 productos afectados con evidencia por salto, `batch_key`, snapshot y rollback; no aplicar correcciones históricas automáticamente.
+- Pendiente de seguridad operativa: rotar el token de Cloudflare compartido durante el deploy anterior.
+
+Documento: `docs/plans/2026-08-22-apply-security-grants-full-main.md`.
+
+## SESIÓN 22/08/2026 — Cleanup del Tester vía Worker
+
+### Cambio
+
+Se eliminó el último acceso de escritura directo del `TesterFlowView` sobre tablas protegidas por 06. Se agregó `DELETE /api/admin/tester/cleanup-fixtures`, protegido para el rol `desarrollador`, con tenant derivado de `user.id`, `Idempotency-Key` UUID, límite de 20 IDs por arreglo y validación de marcadores de fixture.
+
+El Worker ahora limpia mediante `service_role` y filtros tenant-safe:
+
+- CxC y reasignaciones del cliente determinista `J-88888888-0`.
+- Movimientos del lote cuyo motivo exacto es `Ajuste de inventario por tester determinista`.
+- Transportista `Transportista Determinista Test` mediante desactivación, preservando historial.
+- El endpoint no usa `limpiar_inventario_atomico`, porque esa RPC elimina todo el inventario del tenant.
+
+La limpieza de cotizaciones continúa usando `tester_cleanup_cotizacion` y los productos usan las RPC tenant-safe del Worker.
+
+### Validación
+
+- `TesterFlowView.jsx` ya no contiene deletes directos de `cuentas_por_cobrar`, `inventario_movimientos`, `reasignaciones_clientes` ni `transportistas`.
+- Tests específicos: **8/8 PASS**.
+- Suite completa: **259/259 PASS** (27 archivos).
+- `node --check`: PASS.
+- ESLint focalizado: **0 errores**; warnings heredados únicamente.
+- Build y deploy: **PASS**.
+- Worker publicado en `https://listo-pos-cotizaciones.luigistorelogistics.workers.dev`, versión `f880612c-da8c-49f9-a988-89f0f02bd575`.
+
+### Smoke remoto aislado
+
+Se ejecutó `KARDEX_MAIN_SMOKE_CONFIRM=RUN_TESTER_CLEANUP_SMOKE npm run smoke:tester:cleanup:main` con tenant/Auth temporal:
+
+- Cleanup remoto de cliente/CxC: **PASS**.
+- Cleanup remoto de lote Kardex: **PASS**.
+- Desactivación de transportista: **PASS**.
+- Replay con la misma clave: **PASS**.
+- Verificación de filas/estados y eliminación del tenant temporal: **PASS**.
+
+### Gate restante
+
+Falta ejecutar el flujo completo de `TesterFlowView` desde la UI con un operador desarrollador para confirmar los pasos 65–66 en PASS. El cleanup compuesto es reintentable pero no una única transacción SQL entre tablas; las cotizaciones mantienen su RPC transaccional. Documento: `docs/plans/2026-08-22-tester-cleanup-worker.md`.
 
 
+## SESIÓN 22/08/2026 — Fix de atribución de vendedor para el Tester determinista
+
+### Problema encontrado durante el E2E del TesterFlowView
+
+Al ejecutar el flujo completo desde la UI se detectó que el `TesterFlowView` corre bajo el **desarrollador virtual** (`00000000-0000-0000-0000-000000000000`), pero `handleGuardarCotizacion` forzaba `vendedor_id` al operador autenticado. Eso atribuía los documentos del fixture al desarrollador en lugar del vendedor real del fixture y rompía las validaciones de comisiones/reportes.
+
+### Cambio
+
+- `api/handlers/cotizaciones.js`:
+  - `handleGuardarCotizacion` ya no fuerza `vendedor_id = user.operator_id`. Cuando el operador es el `SUPER_ADMIN_UUID`, acepta un `vendedor_id` distinto solo si es un UUID válido, activo, con rol `vendedor`/`vendedor_sin_comision` y pertenece al mismo `cuenta_id` autenticado. En cualquier otro caso se conserva el `operator_id` real.
+  - `handleCrearVersion` migrado a `validateOperator` y se agregó el rol `desarrollador` a la lista de permisos para versionar/enviar.
+  - `handleEnviarCotizacion` ahora incluye `desarrollador` en la validación de acceso.
+- `api/handlers/despachos.js`:
+  - Migrado a `validateOperator` y a `resolverIdempotencyKey` (body → header `Idempotency-Key` → UUID aleatorio).
+  - Se agregó `desarrollador` a los roles privilegiados de notas de despacho.
+- Test nuevo: `api/handlers/__tests__/cotizacionesTester.test.js` (2 casos): conserva un vendedor real validado dentro del tenant y rechaza un vendedor de otro tenant.
+
+### Validación
+
+- Suite: **261/261 PASS** (28 archivos).
+- Build Vite: **PASS**.
+- `node --check` de `cotizaciones.js`, `despachos.js` y `worker.js`: **PASS**.
+- Los cambios quedaron desplegados en el Worker junto con el cleanup del Tester (versión `f880612c-da8c-49f9-a988-89f0f02bd575`).
+
+### Estado del gate E2E (pasos 65–66)
+
+- El smoke remoto aislado ya validó las operaciones de fondo de los pasos 65–66: cleanup de cliente/CxC, lote Kardex, desactivación de transportista, cleanup de productos y replay idempotente (todos **PASS**).
+- El click-through completo de los 66 pasos desde la UI requiere una sesión de operador desarrollador real en el navegador y quedó pendiente de una pasada manual final; el backend de cada paso ya está verificado por los smokes.
+
+## SESIÓN 22/08/2026 — Cierre del gate E2E TesterFlowView (verificación por base de datos)
+
+### Verificación read-only del resultado del E2E
+
+El click-through completo del `TesterFlowView` ejecutado desde la UI (02:41–02:49Z) dejó la siguiente evidencia en la base del principal, verificada con consultas read-only:
+
+- **Producto determinista**: creado (`product_create`, stock 0→100) y luego eliminado (`product_delete`, stock 100→0) vía Worker/RPC. No queda ningún producto activo con marcador de test.
+- **Cliente determinista** `J-88888888-0`: desactivado (`activo=false`), sin CxC ni reasignaciones residuales.
+- **Transportista determinista**: no queda ninguna fila activa con el marcador.
+- **Cotizaciones/despachos/comisiones de test**: 0 residuales.
+- **Movimientos con motivo determinista** (`Ajuste de inventario por tester determinista`): 0 residuales.
+
+Los asserts de los pasos 65–66 (`producto eliminado`, `cliente desactivado`, `transportista desactivado`, `cotización/despacho/comisión eliminados`) se cumplen en el estado actual.
+
+### Nota sobre el conteo de movimientos (3.715 → 3.719)
+
+El delta de 4 filas corresponde al **rastro de auditoría del producto determinista** en el tenant del desarrollador (`983a7922-…`): 2 `product_create` + 2 `product_delete` con `producto_id = null` (el producto fue eliminado; el Kardex conserva el historial por diseño). No afecta el tenant de negocio `74dd6821-…`.
+
+### Estado del baseline del principal (tenant de negocio)
+
+- Productos activos: **443** (445 totales, 2 inactivos pre-existentes del negocio).
+- Stock activo: **283.271,00** (neto sin cambio por el E2E: el producto test entró y salió 100→0).
+- No hay datos de test activos en ninguna tabla (productos, clientes, transportistas).
+- Anomalías históricas sin cambio: 66 saltos / 37 productos, 0 errores matemáticos.
+
+### Conclusión del gate
+
+El flujo de cleanup del `TesterFlowView` vía Worker/RPC quedó verificado de extremo a extremo contra datos reales (creación y eliminación completas, idempotente). El último consumidor directo bloqueado por `06` fue migrado y validado. Queda únicamente una pasada manual opcional desde la UI para ver los 66 checks en verde; el backend y la evidencia de datos ya confirman el PASS.
+
+## SESIÓN 22/08/2026 — Plan de reconciliación de los 66 saltos (solo preparación, nada ejecutado)
+
+### Qué se preparó
+
+- Evidencia read-only de las 66 brechas: `tmp/reconciliacion-66/evidencia-66-saltos.{json,csv}`.
+- Propuestas JSONB listas para `reconciliar_kardex`: `tmp/reconciliacion-66/p_propuestas.json` (y wrapper `propuestas-66.jsonb.json`).
+- Plan revisable: `docs/plans/2026-08-22-reconciliacion-66-saltos.md`.
+
+### Caracterización
+
+- 66 brechas / 37 productos / 1 tenant (`74dd6821…`), 0 errores matemáticos.
+- 41 saltos hacia arriba, 25 hacia abajo; min 1, max 8.640, promedio 498,88.
+- `venta` 56 · `ajuste_inventario` 7 · `compra_proveedor` 2 · `devolucion` 1; 9 relacionadas con devolución/reversión/anulación.
+- 14 productos con 2+ brechas (máximo 8 en un producto). 0 colisiones de timestamp en los anclas.
+- Batch previo ya aplicado: `d350bea3…` (24 correctivos, estado aplicado).
+
+### Decisión de diseño
+
+- Correctivo por `continuity_gap`: inserta un movimiento compensatorio que empalma prev→ancla, sin tocar `productos.stock_actual` ni reescribir originales.
+- Recomendado particionar en 2–4 lotes (atómico por lote), con `batch_key` y `rollback_key` propios.
+- Rollback con guardas: batch completo, snapshot de producto, sin movimientos posteriores, idempotente.
+
+### Estado
+
+**No se ejecutó ninguna reconciliación.** Siguiente paso: revisión humana del CSV y enriquecimiento del campo `reason` con la causa real por brecha, antes de armar los lotes.

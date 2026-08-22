@@ -5,6 +5,7 @@ import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X, 
 import { useCrearProducto, useActualizarProducto, useCategorias } from '../../hooks/useInventario'
 import { comprimirImagen, subirImagenProducto } from '../../utils/imageCompress'
 import supabase from '../../services/supabase/client'
+import { authFetch } from '../../services/authFetch'
 import CustomSelect from '../ui/CustomSelect'
 import useAuthStore from '../../store/useAuthStore'
 import { LINEAS, MATERIALES, FORMAS, RESTRICCIONES, obtenerCategoriaDesdeEstructura, calcularSiguienteCodigo, sugerirEstructuraDesdeNombre } from '../../utils/codigosHelper'
@@ -494,7 +495,16 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
         // Luego subimos la imagen si hay una
         if (imagenBlob && productoResult?.id) {
           const url = await subirImagenProducto(supabase, productoResult.id, imagenBlob)
-          await supabase.from('productos').update({ imagen_url: url }).eq('id', productoResult.id)
+          // Migrado a Worker/service_role: 06 revoca UPDATE de productos a authenticated.
+          const res = await authFetch('/api/productos/metadatos', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: productoResult.id, imagen_url: url }),
+          })
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            throw new Error(err.error || `Error ${res.status}`)
+          }
         }
       }
 

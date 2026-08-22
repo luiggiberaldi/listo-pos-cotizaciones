@@ -1,5 +1,5 @@
 import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
-import { verifyAuth, validateOperator, getOperatorRole, verifySupervisor } from '../lib/auth.js'
+import { verifyAuth, validateOperator, verifySupervisor, SUPER_ADMIN_UUID } from '../lib/auth.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 
 function errorReglaFlete(errorText, request, mensajeFallback) {
@@ -73,10 +73,26 @@ export async function handleGuardarCotizacion(request, env) {
     if (!it.nombre_snap) return jsonError(`Item ${i + 1}: nombre requerido`, 400, request);
     if (typeof it.cantidad !== 'number' || it.cantidad <= 0) return jsonError(`Item ${i + 1}: cantidad debe ser > 0`, 400, request);
     if (typeof it.precio_unit_usd !== 'number' || it.precio_unit_usd < 0) return jsonError(`Item ${i + 1}: precio inválido`, 400, request);
+  }  // Normalmente la cotización pertenece al operador autenticado. El Tester
+  // determinista corre bajo el desarrollador virtual, pero debe atribuir sus
+  // documentos al vendedor real del fixture para que comisiones y reportes
+  // ejerzan el mismo contrato que producción. Ese caso queda limitado al
+  // UUID virtual y validado dentro del tenant autenticado.
+  const requestedSellerId = headerData.vendedor_id
+  if (user.operator_id === SUPER_ADMIN_UUID && requestedSellerId && requestedSellerId !== SUPER_ADMIN_UUID) {
+    if (!isValidUuid(requestedSellerId)) return jsonError('vendedor_id inválido', 400, request)
+    const sellerRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${requestedSellerId}&cuenta_id=eq.${user.id}&activo=eq.true&rol=in.(vendedor,vendedor_sin_comision)&select=id`,
+      { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } }
+    )
+    if (!sellerRes.ok) return jsonError('No se pudo validar el vendedor del fixture', 500, request)
+    const [seller] = await sellerRes.json()
+    if (!seller) return jsonError('El vendedor no pertenece a la cuenta autenticada o está inactivo', 400, request)
+    headerData.vendedor_id = seller.id
+  } else {
+    headerData.vendedor_id = user.operator_id
   }
-
-  // Force vendedor_id to authenticated operator
-  headerData.vendedor_id = user.operator_id;
+;
 
   // Estampar canal_venta (interno o externo) — viene del frontend y se preserva para reportes
   if (!['interno', 'externo'].includes(headerData.canal_venta)) {
@@ -372,9 +388,9 @@ export async function handleReabrirCotizacion(request, env) {
 
 // ── Crear versión de cotización enviada/rechazada (bypass RLS) ──────────────
 export async function handleCrearVersion(request, env) {
-  const user = await verifyAuth(request, env);
-  if (!user?.id) return jsonError('No autenticado', 401, request);
-  if (!user.operator_id) return jsonError('No hay operador seleccionado', 400, request);
+  const v = await validateOperator(request, env)
+  if (v.error) return v.error
+  const { user, operador, headers: supaHeaders } = v
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -383,23 +399,8 @@ export async function handleCrearVersion(request, env) {
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
 
-  const supaHeaders = {
-    apikey: env.SUPABASE_SERVICE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-    Prefer: 'return=representation',
-  };
-
   try {
-    // 1. Obtener operador
-    const opRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true&select=id,nombre,rol`,
-      { headers: supaHeaders }
-    );
-    const [operador] = await opRes.json();
-    if (!operador) return jsonError('Operador no encontrado o inactivo', 400, request);
-
-    // 2. Obtener cotización original
+    // 1. Obtener cotización original
     const cotRes = await fetch(
       `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${cotizacionId}&select=*`,
       { headers: supaHeaders }
@@ -413,7 +414,7 @@ export async function handleCrearVersion(request, env) {
     }
 
     // 4. Validar acceso
-    if (cotOrig.vendedor_id !== user.operator_id && !['supervisor', 'jefe', 'administracion'].includes(operador.rol)) {
+    if (cotOrig.vendedor_id !== user.operator_id && !['supervisor', 'jefe', 'administracion', 'desarrollador'].includes(operador.rol)) {
       return jsonError('No tienes permiso para versionar esta cotización', 403, request);
     }
 
@@ -535,7 +536,7 @@ export async function handleEnviarCotizacion(request, env) {
     if (!cot) return jsonError('Cotización no encontrada', 404, request);
 
     // 2. Validar acceso
-    if (cot.vendedor_id !== user.operator_id && !['supervisor', 'jefe', 'administracion'].includes(operador.rol)) {
+    if (cot.vendedor_id !== user.operator_id && !['supervisor', 'jefe', 'administracion', 'desarrollador'].includes(operador.rol)) {
       return jsonError('No tienes permiso para enviar esta cotización', 403, request);
     }
 

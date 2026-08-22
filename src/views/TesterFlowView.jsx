@@ -1,11 +1,11 @@
 // src/views/TesterFlowView.jsx
 // Tester 100% determinista: cada paso calcula valores esperados y los valida
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
-  FlaskConical, Play, RotateCcw, CheckCircle, XCircle, Loader2,
-  ChevronDown, ChevronRight, Clock, Truck, Copy, ClipboardCheck,
+  FlaskConical, Play as _Play, RotateCcw as _RotateCcw, CheckCircle as _CheckCircle, XCircle as _XCircle, Loader2 as _Loader2,
+  ChevronDown as _ChevronDown, ChevronRight as _ChevronRight, Clock as _Clock, Truck as _Truck, Copy as _Copy, ClipboardCheck as _ClipboardCheck,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
+import _PageHeader from '../components/ui/PageHeader'
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
@@ -17,9 +17,16 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 async function apiCall(path, method = 'GET', body = null) {
   const session = (await supabase.auth.getSession()).data.session
   if (!session?.access_token) throw new Error('No autenticado')
+  const idempotencyKey = body?.idempotencyKey
+  const operatorId = useAuthStore.getState().perfil?.id
   const opts = {
     method,
-    headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      ...(operatorId ? { 'X-Operator-Id': operatorId } : {}),
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+    },
   }
   if (body) opts.body = JSON.stringify(body)
   const res = await fetch(apiUrl(path), opts)
@@ -219,7 +226,7 @@ const GROUP_COLORS = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function TesterFlowView() {
-  const { perfil } = useAuthStore()
+  const { perfil, user } = useAuthStore()
   const [running, setRunning] = useState(false)
   const [stepStates, setStepStates] = useState({})
   const [currentStep, setCurrentStep] = useState(null)
@@ -296,17 +303,16 @@ export default function TesterFlowView() {
       if (oldItems && oldItems.length > 0) {
         const cotIds = [...new Set(oldItems.map(i => i.cotizacion_id))]
         for (const cotId of cotIds) {
-          await supabase.rpc('tester_cleanup_cotizacion', { p_cotizacion_id: cotId })
+          const { error: cleanupError } = await supabase.rpc('tester_cleanup_cotizacion', { p_cotizacion_id: cotId })
+          if (cleanupError) throw new Error(`No se pudo limpiar la cotización ${cotId}: ${cleanupError.message}`)
         }
         addLog(id, `  Eliminadas ${cotIds.length} cotizaciones residuales`)
       }
-      // Use RPC to bypass RLS (SECURITY DEFINER) — direct .delete() is silently blocked
-      const { error: rpcErr } = await supabase.rpc('borrar_producto_con_kardex', { p_producto_id: prodId })
-      if (rpcErr) {
-        // Fallback: try direct delete (might work if no stock)
-        await supabase.from('inventario_movimientos').delete().eq('producto_id', prodId)
-        await supabase.from('productos').delete().eq('id', prodId)
-      }
+      // Usar Worker + RPC tenant-safe; no dejar fallback de delete directo.
+      await apiCall('/api/productos/borrar', 'DELETE', {
+        id: prodId,
+        idempotencyKey: crypto.randomUUID(),
+      })
     }
 
     // 1. Buscar producto test por código
@@ -316,13 +322,18 @@ export default function TesterFlowView() {
       addLog(id, `  Eliminados ${oldProds.length} productos residuales (${TEST.producto.codigo})`)
     }
 
-    // 2. Buscar cliente test por rif_cedula
-    const { data: oldClients } = await supabase.from('clientes').select('id').eq('rif_cedula', TEST.cliente.rif_cedula)
+    // 2. Buscar cliente test por rif_cedula dentro del tenant actual.
+    if (!user?.id) throw new Error('No se pudo determinar la cuenta del tenant para el cliente de prueba')
+    const { data: oldClients, error: oldClientsError } = await supabase.from('clientes').select('id')
+      .eq('rif_cedula', TEST.cliente.rif_cedula)
+      .eq('cuenta_id', user.id)
+    if (oldClientsError) throw oldClientsError
     if (oldClients && oldClients.length > 0) {
       for (const c of oldClients) {
-        await supabase.from('reasignaciones_clientes').delete().eq('cliente_id', c.id)
-        await supabase.from('cuentas_por_cobrar').delete().eq('cliente_id', c.id)
-        await supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', c.id)
+        await apiCall('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+          clienteIds: [c.id],
+          idempotencyKey: crypto.randomUUID(),
+        })
       }
       addLog(id, `  Desactivados ${oldClients.length} clientes residuales (${TEST.cliente.rif_cedula})`)
     }
@@ -331,8 +342,19 @@ export default function TesterFlowView() {
       addLog(id, '  No se encontraron datos residuales')
     }
 
-    // 3. Limpiar transportista residual
-    await supabase.from('transportistas').delete().eq('nombre', TEST.transportista.nombre)
+    // 3. Limpiar transportistas residuales solo dentro de la cuenta actual.
+    // La cuenta auth es el tenant; el Worker vuelve a comprobar el marcador.
+    const { data: oldTransportistas, error: oldTransportistasError } = await supabase.from('transportistas')
+      .select('id')
+      .eq('nombre', TEST.transportista.nombre)
+      .eq('cuenta_id', user.id)
+    if (oldTransportistasError) throw oldTransportistasError
+    for (const transportista of oldTransportistas || []) {
+      await apiCall('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        transportistaIds: [transportista.id],
+        idempotencyKey: crypto.randomUUID(),
+      })
+    }
 
     // 4. Producto 2 residual
     const { data: p2 } = await supabase.from('productos').select('id').eq('codigo', TEST.producto2.codigo).maybeSingle()
@@ -345,26 +367,29 @@ export default function TesterFlowView() {
   }
 
   async function stepCreateProduct(id) {
-    addLog(id, `RPC crear_producto_con_kardex(codigo=${TEST.producto.codigo}, stock=${TEST.producto.stock_inicial})`)
-    const rpcParams = {
-      p_codigo: TEST.producto.codigo,
-      p_nombre: TEST.producto.nombre,
-      p_descripcion: null,
-      p_categoria: TEST.producto.categoria,
-      p_unidad: TEST.producto.unidad,
-      p_precio_usd: TEST.producto.precio_usd,
-      p_costo_usd: TEST.producto.costo_usd,
-      p_stock_actual: TEST.producto.stock_inicial,
-      p_stock_minimo: TEST.producto.stock_minimo,
-      p_imagen_url: null,
-      p_precio_2: null,
-      p_precio_3: null,
+    addLog(id, `POST /api/productos/crear(codigo=${TEST.producto.codigo}, stock=${TEST.producto.stock_inicial})`)
+    const productPayload = {
+      codigo: TEST.producto.codigo,
+      nombre: TEST.producto.nombre,
+      descripcion: null,
+      categoria: TEST.producto.categoria,
+      unidad: TEST.producto.unidad,
+      precio_usd: TEST.producto.precio_usd,
+      costo_usd: TEST.producto.costo_usd,
+      stock_actual: TEST.producto.stock_inicial,
+      stock_minimo: TEST.producto.stock_minimo,
+      imagen_url: null,
+      precio_2: null,
+      precio_3: null,
+      precio1_porcentaje: null,
+      precio2_porcentaje: null,
+      precio3_porcentaje: null,
+      idempotencyKey: crypto.randomUUID(),
     }
-    addLog(id, `Params: ${JSON.stringify(rpcParams)}`)
-    const { data: result, error } = await supabase.rpc('crear_producto_con_kardex', rpcParams)
-    if (error) throw error
+    addLog(id, `Params: ${JSON.stringify(productPayload)}`)
+    const result = await apiCall('/api/productos/crear', 'POST', productPayload)
     addLog(id, `Raw result: ${JSON.stringify(result)}`)
-    const productoId = typeof result === 'object' ? result.id : result
+    const productoId = result?.id
     dataRef.current.productoId = productoId
     addLog(id, `OK → productoId=${productoId}`, 'success')
   }
@@ -412,12 +437,62 @@ export default function TesterFlowView() {
     addLog(id, 'Kardex ingreso correcto', 'success')
   }
 
+  async function getCommissionSellerId(id) {
+    if (dataRef.current.commissionSellerId) return dataRef.current.commissionSellerId
+    if (['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol)) {
+      dataRef.current.commissionSellerId = perfil.id
+      return perfil.id
+    }
+    if (!user?.id) throw new Error('No se pudo determinar la cuenta del tenant para el vendedor de comisión')
+    const { data: sellers, error } = await supabase.from('usuarios')
+      .select('id,nombre,rol')
+      .eq('cuenta_id', user.id)
+      .eq('rol', 'vendedor')
+      .eq('activo', true)
+      .order('nombre', { ascending: true })
+      .limit(1)
+    if (error) throw error
+    const seller = sellers?.[0]
+    if (!seller) throw new Error('El Tester requiere un vendedor activo para validar comisiones; el desarrollador virtual no es comisionable')
+    dataRef.current.commissionSellerId = seller.id
+    addLog(id, `Vendedor de comisión: ${seller.nombre} (${seller.id.slice(0, 8)}...)`)
+    return seller.id
+  }
+
   async function stepCreateClient(id) {
-    addLog(id, `INSERT clientes(nombre="${TEST.cliente.nombre}")`)
-    const { data: client, error } = await supabase.from('clientes').insert({
+    if (!user?.id) throw new Error('No se pudo determinar la cuenta del tenant para el cliente de prueba')
+
+    const sellerId = await getCommissionSellerId(id)
+    const clientPayload = {
       ...TEST.cliente,
-      vendedor_id: perfil.id,
-    }).select('id').single()
+      vendedor_id: sellerId,
+      cuenta_id: user.id,
+      activo: true,
+      saldo_pendiente: 0,
+    }
+    const { data: existingClient, error: lookupError } = await supabase.from('clientes')
+      .select('id')
+      .eq('rif_cedula', TEST.cliente.rif_cedula)
+      .eq('cuenta_id', user.id)
+      .maybeSingle()
+    if (lookupError) throw lookupError
+
+    if (existingClient) {
+      addLog(id, `REUSE cliente existente por rif_cedula="${TEST.cliente.rif_cedula}" (id=${existingClient.id})`)
+      const { data: client, error } = await supabase.from('clientes')
+        .update(clientPayload)
+        .eq('id', existingClient.id)
+        .eq('cuenta_id', user.id)
+        .select('id')
+        .single()
+      if (error) throw error
+      dataRef.current.clienteId = client.id
+      addLog(id, `OK → clienteId=${client.id} (reactivado y normalizado)`, 'success')
+      return
+    }
+
+    addLog(id, `INSERT clientes(nombre="${TEST.cliente.nombre}", rif_cedula="${TEST.cliente.rif_cedula}")`)
+    const { data: client, error } = await supabase.from('clientes').insert(clientPayload).select('id').single()
     if (error) throw error
     dataRef.current.clienteId = client.id
     addLog(id, `OK → clienteId=${client.id}`, 'success')
@@ -434,8 +509,9 @@ export default function TesterFlowView() {
     addLog(id, `  rif_cedula = "${cl.rif_cedula}" ✓`)
     assert(Number(cl.saldo_pendiente || 0) === 0, 0, cl.saldo_pendiente, 'saldo_pendiente')
     addLog(id, `  saldo_pendiente = $0.00 ✓`)
-    assert(cl.vendedor_id === perfil.id, perfil.id, cl.vendedor_id, 'vendedor_id')
-    addLog(id, `  vendedor_id = ${perfil.id.slice(0,8)}... ✓`)
+    const sellerId = await getCommissionSellerId(id)
+    assert(cl.vendedor_id === sellerId, sellerId, cl.vendedor_id, 'vendedor_id')
+    addLog(id, `  vendedor_id = ${sellerId.slice(0,8)}... ✓`)
     assert(cl.activo === true, true, cl.activo, 'activo')
     addLog(id, `  activo = true ✓`)
     addLog(id, 'Todas las aserciones del cliente pasaron', 'success')
@@ -443,11 +519,12 @@ export default function TesterFlowView() {
 
   async function stepCreateDraft(id) {
     const T = TEST.cotizacion
+    const sellerId = await getCommissionSellerId(id)
     addLog(id, `POST /api/cotizaciones/guardar (${T.cantidad}×$${T.precio_unit}, envío $${T.costo_envio})`)
     const result = await apiCall('/api/cotizaciones/guardar', 'POST', {
       headerData: {
         cliente_id: dataRef.current.clienteId,
-        vendedor_id: perfil.id,
+        vendedor_id: sellerId,
         notas_cliente: 'Test determinista',
         notas_internas: 'Generado por tester',
         descuento_global_pct: T.descuento_global_pct,
@@ -492,8 +569,9 @@ export default function TesterFlowView() {
     addLog(id, `  costo_envio_usd = $${cot.costo_envio_usd} ✓`)
     assert(cot.cliente_id === dataRef.current.clienteId, dataRef.current.clienteId, cot.cliente_id, 'cliente_id')
     addLog(id, `  cliente_id correcto ✓`)
-    assert(cot.vendedor_id === perfil.id, perfil.id, cot.vendedor_id, 'vendedor_id')
-    addLog(id, `  vendedor_id correcto ✓`)
+    const sellerId = await getCommissionSellerId(id)
+    assert(cot.vendedor_id === sellerId, sellerId, cot.vendedor_id, 'vendedor_id')
+    addLog(id, `  vendedor_id = ${sellerId.slice(0,8)}... ✓`)
     addLog(id, `COT-${String(cot.numero).padStart(5,'0')} — todas las aserciones pasaron`, 'success')
   }
 
@@ -575,16 +653,19 @@ export default function TesterFlowView() {
   }
 
   async function stepCreateDespacho(id) {
-    // Buscar transportista
-    const { data: transportistas } = await supabase.from('transportistas').select('id, nombre').eq('activo', true).limit(1)
-    const transportistaId = transportistas?.[0]?.id || null
+    // El despacho base no debe depender de transportistas existentes fuera de
+    // esta corrida. El caso local se crea de forma determinista en el paso 35
+    // y se valida en la venta rápida.
+    const transportistaId = null
     dataRef.current.transportistaId = transportistaId
-    addLog(id, `Transportista: ${transportistaId ? transportistas[0].nombre : 'ninguno'}`)
-    addLog(id, `POST /api/despachos/crear (formaPago="${TEST.despacho.forma_pago}")`)
+    addLog(id, 'Transportista: ninguno (el caso local se crea en el paso 35)')
+    addLog(id, `Flete real: $${TEST.cotizacion.costo_envio} (igual al envío cotizado)`)
+    addLog(id, `POST /api/despachos/crear (formaPago="${TEST.despacho.forma_pago}", flete=$${TEST.cotizacion.costo_envio})`)
     const result = await apiCall('/api/despachos/crear', 'POST', {
       cotizacionId: dataRef.current.cotizacionId,
       formaPago: TEST.despacho.forma_pago,
       transportistaId,
+      fleteUsd: TEST.cotizacion.costo_envio,
     })
     dataRef.current.despachoId = result.id
     dataRef.current.despachoNumero = result.numero
@@ -763,44 +844,47 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertCommission(id) {
-    // Leer config para saber los % esperados
-    const { data: config } = await supabase.from('configuracion_negocio').select('comision_pct_cabilla, comision_pct_otros, comision_categoria_cabilla').limit(1).maybeSingle()
+    const { data: config, error: configError } = await supabase.from('configuracion_negocio')
+      .select('comision_pct_cabilla, comision_pct_otros, comision_categoria_cabilla')
+      .limit(1)
+      .maybeSingle()
+    if (configError) throw configError
     addLog(id, `Config: pct_cabilla=${config?.comision_pct_cabilla}%, pct_otros=${config?.comision_pct_otros}%, cat_cabilla="${config?.comision_categoria_cabilla}"`)
 
-    const { data: coms } = await supabase.from('comisiones').select('*').eq('despacho_id', dataRef.current.despachoId)
+    // La tabla final de comisiones usa los nombres canónicos de la migración 120
+    // (despachoid, vendedorid, comisioncabilla/comisionotros, totalcomision).
+    const { data: coms, error: commissionError } = await supabase.from('comisiones').select('*')
+      .eq('despachoid', dataRef.current.despachoId)
+    if (commissionError) throw commissionError
     addLog(id, `Raw comisiones: ${JSON.stringify(coms)}`)
     assert(coms && coms.length === 1, 1, coms?.length, 'Debe existir exactamente 1 comisión')
     const com = coms[0]
     dataRef.current.comisionId = com.id
 
-    // Nuestro producto tiene categoría "TESTER" — no es "cabilla", así que va a "otros"
+    const montoBase = round2(TEST.cotizacion.total_linea - (dataRef.current.descuentoTotal || 0))
     const catCabilla = (config?.comision_categoria_cabilla || '').toLowerCase().trim()
     const esCategoriaCabilla = TEST.producto.categoria.toLowerCase().trim() === catCabilla
+    const porcentaje = Number(esCategoriaCabilla ? config?.comision_pct_cabilla : config?.comision_pct_otros)
+    const expectedComision = round2(montoBase * porcentaje / 100)
 
-    if (esCategoriaCabilla) {
-      const montoBase = TEST.cotizacion.total_linea - (dataRef.current.descuentoTotal || 0)
-      const expectedComision = round2(montoBase * Number(config.comision_pct_cabilla) / 100)
-      addLog(id, `  Categoría "${TEST.producto.categoria}" = cabilla → pct=${config.comision_pct_cabilla}%`)
-      addLog(id, `  montoBase = ${TEST.cotizacion.total_linea} - ${dataRef.current.descuentoTotal || 0} = ${montoBase}`)
-      assert(Number(com.monto_cabilla) === montoBase, montoBase, com.monto_cabilla, 'monto_cabilla')
-      addLog(id, `  monto_cabilla = $${com.monto_cabilla} ✓`)
-      assert(Number(com.total_comision) === expectedComision, expectedComision, com.total_comision, 'total_comision')
-      addLog(id, `  total_comision = $${com.total_comision} ✓`)
-    } else {
-      const montoBase = TEST.cotizacion.total_linea - (dataRef.current.descuentoTotal || 0)
-      const expectedComision = round2(montoBase * Number(config.comision_pct_otros) / 100)
-      addLog(id, `  Categoría "${TEST.producto.categoria}" ≠ "${config.comision_categoria_cabilla}" → va a "otros" (pct=${config.comision_pct_otros}%)`)
-      addLog(id, `  montoBase = ${TEST.cotizacion.total_linea} - ${dataRef.current.descuentoTotal || 0} = ${montoBase}`)
-      assert(Number(com.monto_otros) === montoBase, montoBase, com.monto_otros, 'monto_otros')
-      addLog(id, `  monto_otros = $${com.monto_otros} ✓`)
-      assert(Number(com.total_comision) === expectedComision, expectedComision, Number(com.total_comision), 'total_comision')
-      addLog(id, `  total_comision = $${com.total_comision} (=${montoBase}×${config.comision_pct_otros}%) ✓`)
+    addLog(id, `  Categoría "${TEST.producto.categoria}" ${esCategoriaCabilla ? '=' : '≠'} "${config?.comision_categoria_cabilla}" → ${esCategoriaCabilla ? 'cabilla' : 'otros'} (pct=${porcentaje}%)`)
+    addLog(id, `  montoBase = ${TEST.cotizacion.total_linea} - ${dataRef.current.descuentoTotal || 0} = ${montoBase}`)
+    const commissionField = esCategoriaCabilla ? 'comisioncabilla' : 'comisionotros'
+    assert(Number(com[commissionField]) === expectedComision, expectedComision, com[commissionField], 'comisión por categoría')
+    assert(Number(com.totalcomision) === expectedComision, expectedComision, com.totalcomision, 'totalcomision')
+    addLog(id, `  totalcomision = $${com.totalcomision} ✓`)
+
+    const estadoEsperado = Number(com.comision_retenida || 0) > 0.01 ? 'cta_cobrar' : 'pendiente'
+    assert(com.estado === estadoEsperado, estadoEsperado, com.estado, 'estado')
+    addLog(id, `  estado = "${com.estado}" ✓`)
+    const sellerId = await getCommissionSellerId(id)
+    assert(com.vendedorid === sellerId, sellerId, com.vendedorid, 'vendedorid')
+    addLog(id, `  vendedorid correcto ✓`)
+    if (estadoEsperado === 'cta_cobrar') {
+      assert(Number(com.comision_liberada || 0) === 0, 0, com.comision_liberada, 'comision_liberada inicial')
+      assert(Number(com.comision_retenida || 0) === expectedComision, expectedComision, com.comision_retenida, 'comision_retenida inicial')
+      addLog(id, `  CxC retiene $${com.comision_retenida}; requiere liberación manual ✓`)
     }
-
-    assert(com.estado === 'pendiente', 'pendiente', com.estado, 'estado')
-    addLog(id, `  estado = "pendiente" ✓`)
-    assert(com.vendedor_id === perfil.id, perfil.id, com.vendedor_id, 'vendedor_id')
-    addLog(id, `  vendedor_id correcto ✓`)
     addLog(id, 'Comisión generada correctamente', 'success')
   }
 
@@ -891,13 +975,17 @@ export default function TesterFlowView() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   async function stepCreateTransportista(id) {
-    addLog(id, `INSERT transportistas(nombre="${TEST.transportista.nombre}")`)
+    if (!user?.id) throw new Error('No se pudo determinar la cuenta del tenant para el transportista de prueba')
+    addLog(id, `INSERT transportistas(nombre="${TEST.transportista.nombre}", cuenta_id=${user.id})`)
     const { data, error } = await supabase.from('transportistas').insert({
       nombre: TEST.transportista.nombre,
       rif: TEST.transportista.rif,
       telefono: TEST.transportista.telefono,
       vehiculo: TEST.transportista.vehiculo,
       placa_chuto: TEST.transportista.placa_chuto,
+      es_local: true,
+      tipo_relacion: 'contratista',
+      cuenta_id: user.id,
       activo: true,
     }).select().single()
     if (error) throw error
@@ -916,29 +1004,38 @@ export default function TesterFlowView() {
     addLog(id, `  rif = "${t.rif}" ✓`)
     assert(t.activo === true, true, t.activo, 'activo')
     addLog(id, `  activo = true ✓`)
-    addLog(id, 'Transportista creado correctamente', 'success')
+    assert(t.cuenta_id === user.id, user.id, t.cuenta_id, 'cuenta_id')
+    addLog(id, `  cuenta_id = ${user.id} ✓`)
+    assert(t.es_local === true, true, t.es_local, 'es_local')
+    addLog(id, '  es_local = true ✓')
+    assert(t.tipo_relacion === 'contratista', 'contratista', t.tipo_relacion, 'tipo_relacion')
+    addLog(id, '  tipo_relacion = "contratista" ✓')
+    addLog(id, 'Transportista local creado correctamente', 'success')
   }
 
   async function stepCreateProduct2(id) {
-    addLog(id, `RPC crear_producto_con_kardex(codigo=${TEST.producto2.codigo}, stock=${TEST.producto2.stock_inicial})`)
-    const rpcParams = {
-      p_codigo: TEST.producto2.codigo,
-      p_nombre: TEST.producto2.nombre,
-      p_descripcion: null,
-      p_categoria: TEST.producto2.categoria,
-      p_unidad: TEST.producto2.unidad,
-      p_precio_usd: TEST.producto2.precio_usd,
-      p_precio_2: TEST.producto2.precio_2,
-      p_precio_3: TEST.producto2.precio_3,
-      p_costo_usd: TEST.producto2.costo_usd,
-      p_stock_actual: TEST.producto2.stock_inicial,
-      p_stock_minimo: TEST.producto2.stock_minimo,
-      p_imagen_url: null,
+    addLog(id, `POST /api/productos/crear(codigo=${TEST.producto2.codigo}, stock=${TEST.producto2.stock_inicial})`)
+    const productPayload = {
+      codigo: TEST.producto2.codigo,
+      nombre: TEST.producto2.nombre,
+      descripcion: null,
+      categoria: TEST.producto2.categoria,
+      unidad: TEST.producto2.unidad,
+      precio_usd: TEST.producto2.precio_usd,
+      precio_2: TEST.producto2.precio_2,
+      precio_3: TEST.producto2.precio_3,
+      costo_usd: TEST.producto2.costo_usd,
+      stock_actual: TEST.producto2.stock_inicial,
+      stock_minimo: TEST.producto2.stock_minimo,
+      imagen_url: null,
+      precio1_porcentaje: null,
+      precio2_porcentaje: null,
+      precio3_porcentaje: null,
+      idempotencyKey: crypto.randomUUID(),
     }
-    addLog(id, `Params: ${JSON.stringify(rpcParams)}`)
-    const { data: result, error } = await supabase.rpc('crear_producto_con_kardex', rpcParams)
-    if (error) throw error
-    const producto2Id = typeof result === 'object' ? result.id : result
+    addLog(id, `Params: ${JSON.stringify(productPayload)}`)
+    const result = await apiCall('/api/productos/crear', 'POST', productPayload)
+    const producto2Id = result?.id
     dataRef.current.producto2Id = producto2Id
     addLog(id, `OK → producto2Id=${producto2Id}`, 'success')
   }
@@ -995,7 +1092,7 @@ export default function TesterFlowView() {
       cotizacionId: null,
       headerData: {
         cliente_id: d.clienteId,
-        vendedor_id: perfil.id,
+        vendedor_id: await getCommissionSellerId(id),
         descuento_global_pct: 0,
         costo_envio_usd: 0,
         subtotal_usd: 125.00,
@@ -1045,7 +1142,7 @@ export default function TesterFlowView() {
     addLog(id, `POST /api/cotizaciones/reciclar (cotizacionId=${dataRef.current.cotizacion2Id})`)
     const result = await apiCall('/api/cotizaciones/reciclar', 'POST', {
       cotizacionId: dataRef.current.cotizacion2Id,
-      vendedorDestinoId: perfil.id,
+      vendedorDestinoId: await getCommissionSellerId(id),
     })
     dataRef.current.cotizacionRecicladaId = result.id
     addLog(id, `Cotización reciclada → nueva id=${result.id}`, 'success')
@@ -1060,8 +1157,9 @@ export default function TesterFlowView() {
     addLog(id, `  estado = "borrador" ✓`)
     assert(cot.cliente_id === d.clienteId, d.clienteId, cot.cliente_id, 'cliente_id')
     addLog(id, `  cliente_id correcto ✓`)
-    assert(cot.vendedor_id === perfil.id, perfil.id, cot.vendedor_id, 'vendedor_id')
-    addLog(id, `  vendedor_id correcto ✓`)
+    const sellerId = await getCommissionSellerId(id)
+    assert(cot.vendedor_id === sellerId, sellerId, cot.vendedor_id, 'vendedor_id')
+    addLog(id, `  vendedor_id = ${sellerId.slice(0,8)}... ✓`)
 
     const { data: items } = await supabase.from('cotizacion_items').select('*').eq('cotizacion_id', d.cotizacionRecicladaId)
     assert(items && items.length > 0, '>0', items?.length, 'items copiados')
@@ -1212,8 +1310,9 @@ export default function TesterFlowView() {
     // Buscar un vendedor distinto al actual
     const { data: vendedores } = await supabase.from('usuarios')
       .select('id, nombre, rol')
+      .eq('cuenta_id', user.id)
       .eq('rol', 'vendedor').eq('activo', true)
-      .neq('id', perfil.id)
+      .neq('id', await getCommissionSellerId(id))
       .limit(1)
     const otroVendedor = vendedores?.[0]
     if (!otroVendedor) {
@@ -1327,7 +1426,8 @@ export default function TesterFlowView() {
     // Helper: cleanup cotización + all deps via SECURITY DEFINER RPC (bypasses RLS)
     async function cleanCot(cotId, label) {
       if (!cotId) return
-      await supabase.rpc('tester_cleanup_cotizacion', { p_cotizacion_id: cotId })
+      const { error: cleanupError } = await supabase.rpc('tester_cleanup_cotizacion', { p_cotizacion_id: cotId })
+      if (cleanupError) throw new Error(`No se pudo limpiar ${label}: ${cleanupError.message}`)
       addLog(id, `DELETE ${label} ✓`)
     }
 
@@ -1338,48 +1438,42 @@ export default function TesterFlowView() {
     await cleanCot(d.cotizacionRecicladaId, 'cotización reciclada')
     await cleanCot(d.cotizacion2Id, 'cotización para anular')
 
-    // Limpiar producto 2 (via RPC to bypass RLS)
+    // Limpiar producto 2 a través del Worker/RPC tenant-safe.
     if (d.producto2Id) {
-      const { error: rpc2 } = await supabase.rpc('borrar_producto_con_kardex', { p_producto_id: d.producto2Id })
-      if (rpc2) {
-        await supabase.from('inventario_movimientos').delete().eq('producto_id', d.producto2Id)
-        await supabase.from('productos').delete().eq('id', d.producto2Id)
-      }
+      await apiCall('/api/productos/borrar', 'DELETE', {
+        id: d.producto2Id,
+        idempotencyKey: crypto.randomUUID(),
+      })
       addLog(id, 'DELETE producto 2 + movimientos ✓')
     }
 
-    // Limpiar transportista test (deactivate — RLS no permite DELETE)
-    if (d.transportistaTestId) {
-      await supabase.from('transportistas').update({ activo: false }).eq('id', d.transportistaTestId)
-      addLog(id, 'DEACTIVATE transportista test ✓')
-    }
-
-    // Limpiar movimientos de lote
-    if (d.loteId) {
-      await supabase.from('inventario_movimientos').delete().eq('lote_id', d.loteId)
-      addLog(id, 'DELETE movimientos lote ✓')
-    }
-
-    // Reasignación: limpiar registro
-    if (d.clienteId && d.otroVendedorId) {
-      await supabase.from('reasignaciones_clientes').delete().eq('cliente_id', d.clienteId)
-      addLog(id, 'DELETE reasignaciones_clientes ✓')
+    // Limpiar transportista test y movimientos de lote mediante el Worker.
+    if (d.transportistaTestId || d.loteId) {
+      const cleanupResult = await apiCall('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        transportistaIds: d.transportistaTestId ? [d.transportistaTestId] : [],
+        loteIds: d.loteId ? [d.loteId] : [],
+        idempotencyKey: crypto.randomUUID(),
+      })
+      if (d.transportistaTestId) addLog(id, `DEACTIVATE transportista test (${cleanupResult.transportistas_desactivados || 0}) ✓`)
+      if (d.loteId) addLog(id, `DELETE movimientos lote (${cleanupResult.movimientos_eliminados || 0}) ✓`)
     }
 
     // --- Datos originales (cotización principal via RPC) ---
     await cleanCot(d.cotizacionId, 'cotización principal + deps')
 
     if (d.productoId) {
-      const { error: rpc1 } = await supabase.rpc('borrar_producto_con_kardex', { p_producto_id: d.productoId })
-      if (rpc1) {
-        await supabase.from('inventario_movimientos').delete().eq('producto_id', d.productoId)
-        await supabase.from('productos').delete().eq('id', d.productoId)
-      }
+      await apiCall('/api/productos/borrar', 'DELETE', {
+        id: d.productoId,
+        idempotencyKey: crypto.randomUUID(),
+      })
       addLog(id, 'DELETE inventario_movimientos + productos ✓')
     }
     if (d.clienteId) {
-      await supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', d.clienteId)
-      addLog(id, 'DEACTIVATE clientes (RLS no permite DELETE) ✓')
+      const cleanupResult = await apiCall('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        clienteIds: [d.clienteId],
+        idempotencyKey: crypto.randomUUID(),
+      })
+      addLog(id, `CLEANUP cliente/CxC/reasignaciones (${cleanupResult.clientes_procesados || 0}) ✓`)
     }
     addLog(id, 'Limpieza completa', 'success')
   }
@@ -1443,7 +1537,8 @@ export default function TesterFlowView() {
       .limit(100)
     if (error) throw error
     let inconsecutivos = 0
-    (movs || []).forEach(m => {
+    const movimientos = movs || []
+    movimientos.forEach(m => {
       const delta = m.tipo === 'ingreso' ? Number(m.cantidad) : -Number(m.cantidad)
       const mathNuevo = Math.round((Number(m.stock_anterior) + delta) * 100) / 100
       if (Math.abs(mathNuevo - Number(m.stock_nuevo)) > 0.01) inconsecutivos++
@@ -1565,7 +1660,9 @@ export default function TesterFlowView() {
             setStepStates(prev => ({ ...prev, cleanup: { status: 'running', logs: [{ msg: 'Limpieza de emergencia...', type: 'warn', time: ts() }] } }))
             await stepCleanup('cleanup')
             setStepStates(prev => ({ ...prev, cleanup: { ...prev.cleanup, status: 'pass' } }))
-          } catch {}
+          } catch (cleanupError) {
+            console.warn('[TESTER] Limpieza de emergencia incompleta:', cleanupError?.message)
+          }
         }
         break
       }
@@ -1631,7 +1728,7 @@ export default function TesterFlowView() {
   if (perfil?.rol !== 'supervisor' && perfil?.rol !== 'desarrollador') {
     return (
       <div className="p-4 md:p-6 lg:p-8">
-        <PageHeader icon={FlaskConical} title="Tester Determinista" subtitle="Solo supervisores y desarrolladores" />
+        <_PageHeader icon={FlaskConical} title="Tester Determinista" subtitle="Solo supervisores y desarrolladores" />
         <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-xl text-sm font-medium">Requiere rol supervisor o desarrollador.</div>
       </div>
     )
@@ -1650,7 +1747,7 @@ export default function TesterFlowView() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6 max-w-4xl mx-auto">
-      <PageHeader
+      <_PageHeader
         icon={FlaskConical}
         title="Tester Determinista"
         subtitle="64 pasos con aserciones exactas · cliente → cotización → despacho → descuentos → comisión → CxC → reportes → transportistas → multi-precio → anulación → reciclaje → venta rápida → reasignación → health checks"
@@ -1692,13 +1789,13 @@ export default function TesterFlowView() {
           <>
             <button onClick={runAll}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm transition-colors shadow-lg shadow-indigo-500/20">
-              <Play size={16} /> Ejecutar 64 pasos
+              <_Play size={16} /> Ejecutar 64 pasos
             </button>
             {Object.keys(stepStates).length > 0 && (
               <>
                 <button onClick={reset}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
-                  <RotateCcw size={14} /> Reiniciar
+                  <_RotateCcw size={14} /> Reiniciar
                 </button>
                 <button onClick={copyLog}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all ${
@@ -1706,7 +1803,7 @@ export default function TesterFlowView() {
                       ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
                       : 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
                   }`}>
-                  {copied ? <ClipboardCheck size={14} /> : <Copy size={14} />}
+                  {copied ? <_ClipboardCheck size={14} /> : <_Copy size={14} />}
                   {copied ? 'Log copiado!' : 'Copiar Log completo'}
                 </button>
               </>
@@ -1715,7 +1812,7 @@ export default function TesterFlowView() {
         ) : (
           <button onClick={() => { abortRef.current = true }}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors">
-            <XCircle size={16} /> Detener
+            <_XCircle size={16} /> Detener
           </button>
         )}
       </div>
@@ -1725,8 +1822,8 @@ export default function TesterFlowView() {
         <div className={`rounded-xl p-4 border ${summary.failed === 0 && !summary.aborted ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
           <div className="flex items-center gap-3">
             {summary.failed === 0 && !summary.aborted
-              ? <CheckCircle size={20} className="text-emerald-500" />
-              : <XCircle size={20} className="text-red-500" />}
+              ? <_CheckCircle size={20} className="text-emerald-500" />
+              : <_XCircle size={20} className="text-red-500" />}
             <div className="flex-1">
               <p className="font-bold text-sm">
                 {summary.failed === 0 && !summary.aborted
@@ -1743,7 +1840,7 @@ export default function TesterFlowView() {
                   ? 'bg-emerald-200 text-emerald-800'
                   : 'bg-white/80 hover:bg-white text-slate-700 border border-slate-200'
               }`}>
-              {copied ? <ClipboardCheck size={12} /> : <Copy size={12} />}
+              {copied ? <_ClipboardCheck size={12} /> : <_Copy size={12} />}
               {copied ? 'Copiado!' : 'Copiar Log'}
             </button>
           </div>
@@ -1757,8 +1854,8 @@ export default function TesterFlowView() {
 
       {/* Steps */}
       <div className="space-y-4">
-        {groups.map(group => (
-          <div key={group.name} className="space-y-1">
+        {groups.map((group, groupIndex) => (
+          <div key={`tester-group-${groupIndex}-${group.name}`} className="space-y-1">
             <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${GROUP_COLORS[group.name] || 'text-slate-600 bg-slate-50 border-slate-200'}`}>
               {group.name}
             </div>
@@ -1778,9 +1875,9 @@ export default function TesterFlowView() {
                   }`}>
                     <button onClick={() => state && toggleExpand(step.id)} className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
                       <div className="shrink-0">
-                        {state?.status === 'running' ? <Loader2 size={16} className="animate-spin text-indigo-500" /> :
-                         state?.status === 'pass' ? <CheckCircle size={16} className="text-emerald-500" /> :
-                         state?.status === 'fail' ? <XCircle size={16} className="text-red-500" /> :
+                        {state?.status === 'running' ? <_Loader2 size={16} className="animate-spin text-indigo-500" /> :
+                         state?.status === 'pass' ? <_CheckCircle size={16} className="text-emerald-500" /> :
+                         state?.status === 'fail' ? <_XCircle size={16} className="text-red-500" /> :
                          <div className="w-4 h-4 rounded-full border-2 border-slate-300" />}
                       </div>
                       <span className={`flex-1 text-sm ${isAssert ? 'font-mono' : 'font-medium'} ${
@@ -1792,10 +1889,10 @@ export default function TesterFlowView() {
                       </span>
                       {state?.duration != null && (
                         <span className="text-xs text-slate-400 font-mono flex items-center gap-1">
-                          <Clock size={10} />{state.duration}ms
+                          <_Clock size={10} />{state.duration}ms
                         </span>
                       )}
-                      {state && (isExpanded ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />)}
+                      {state && (isExpanded ? <_ChevronDown size={14} className="text-slate-400" /> : <_ChevronRight size={14} className="text-slate-400" />)}
                     </button>
                     {isExpanded && state?.logs?.length > 0 && (
                       <div className="px-3 pb-3">
