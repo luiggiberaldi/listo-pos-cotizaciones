@@ -80,6 +80,220 @@ export function getComisionPctForItem(item, config = {}, perfil = null) {
   return extra ? Number(extra.pct) : pctOtros;
 }
 
+export function isCommissionExcludedProduct(product = {}) {
+  if (product?.es_prestamo || product?.esPrestamo) return true
+  const name = String(product?.nombre_snap || product?.nombre || '').trim().toLowerCase()
+  return name.startsWith('corte')
+}
+
+export function isCabillaCommissionProduct(product = {}, perfil = null, config = {}) {
+  const configuredCategory = String(config?.comision_categoria_cabilla || 'cabilla').trim().toLowerCase()
+  const category = String(product?.producto?.categoria || product?.categoria || '').trim().toLowerCase()
+  const name = String(product?.nombre_snap || product?.nombre || '').trim().toLowerCase()
+  const matchesCategory = category.length > 0 && (
+    category === configuredCategory
+    || category.includes(configuredCategory)
+    || configuredCategory.includes(category)
+  )
+  const matchesName = name.includes(configuredCategory)
+  const externalCement = !!perfil?.es_externo && (category === 'cemento' || name.includes('cemento'))
+  return matchesCategory || matchesName || externalCement
+}
+
+function commissionProductValue(product = {}) {
+  return Math.max(0, Number(
+    product?.total_linea_usd
+      ?? product?.total_linea_neto
+      ?? product?.total
+      ?? (Number(product?.cantidad || 0) * Number(product?.precio_unit_usd || product?.precioUnitUsd || 0)),
+  ) || 0)
+}
+
+/**
+ * Removes the commission share of loan/corte products from a legacy stored
+ * commission without reallocating it to the remaining products.
+ */
+export function adjustLegacyCommissionForExcludedProducts({
+  products = [],
+  comisioncabilla = 0,
+  comisionotros = 0,
+  perfil = null,
+  config = {},
+} = {}) {
+  const normalizedProducts = Array.isArray(products) ? products : []
+  const baseCabilla = round2(comisioncabilla)
+  const baseOtros = round2(comisionotros)
+  const baseTotal = round2(baseCabilla + baseOtros)
+  const excludedProducts = normalizedProducts.filter(isCommissionExcludedProduct)
+  if (normalizedProducts.length === 0 || excludedProducts.length === 0) {
+    return { cabilla: baseCabilla, otros: baseOtros, total: baseTotal, applied: false }
+  }
+
+  const eligibleExpected = { cabilla: 0, otros: 0 }
+  const allExpected = { cabilla: 0, otros: 0 }
+  const categoryPresent = { cabilla: false, otros: false }
+
+  normalizedProducts.forEach(product => {
+    const value = commissionProductValue(product)
+    if (value <= 0) return
+    const key = isCabillaCommissionProduct(product, perfil, config) ? 'cabilla' : 'otros'
+    categoryPresent[key] = true
+    const pct = Number(getComisionPctForItem(product, config, perfil)) || 0
+    const expected = value * pct / 100
+    allExpected[key] += expected
+    if (!isCommissionExcludedProduct(product)) eligibleExpected[key] += expected
+  })
+
+  const adjusted = { cabilla: baseCabilla, otros: baseOtros }
+  for (const key of ['cabilla', 'otros']) {
+    if (!categoryPresent[key]) continue
+    adjusted[key] = allExpected[key] > 0
+      ? round2((key === 'cabilla' ? baseCabilla : baseOtros) * eligibleExpected[key] / allExpected[key])
+      : 0
+  }
+
+  adjusted.cabilla = round2(adjusted.cabilla)
+  adjusted.otros = round2(adjusted.otros)
+  adjusted.total = round2(adjusted.cabilla + adjusted.otros)
+  adjusted.applied = true
+  return adjusted
+}
+
+const PAYMENT_NESTED_KEYS = ['metodos_pagados', 'metodo_propuesto', 'formas_pago', 'pagos', 'payments']
+
+function stripAccents(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+/**
+ * Convierte formas de pago JSON/string legacy en una lista plana.
+ * Si un método contenedor trae métodos definitivos, solo se consideran estos.
+ */
+export function parsePaymentMethods(value) {
+  if (value == null || value === '') return []
+
+  if (Array.isArray(value)) {
+    return value.flatMap(parsePaymentMethods)
+  }
+
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return []
+    if (text.startsWith('[') || text.startsWith('{')) {
+      try {
+        return parsePaymentMethods(JSON.parse(text))
+      } catch {
+        // Texto legacy no JSON: se conserva como método simple.
+      }
+    }
+    return [{ metodo: text, monto: null }]
+  }
+
+  if (typeof value !== 'object') return []
+
+  for (const key of PAYMENT_NESTED_KEYS) {
+    if (value[key] != null) {
+      const nested = parsePaymentMethods(value[key])
+      if (nested.length > 0) return nested
+    }
+  }
+
+  return [{
+    ...value,
+    metodo: value.metodo || value.metodo_pago || value.method || value.formaPago || '',
+    monto: value.monto ?? value.amount ?? value.valor ?? null,
+  }]
+}
+
+export function isCxcPaymentMethod(method) {
+  const normalized = stripAccents(method).toLowerCase().trim()
+  return normalized === 'cxc'
+    || normalized.includes('cta por cobrar')
+    || normalized.includes('cuenta por cobrar')
+    || normalized.includes('credito')
+    || normalized.includes('credit')
+}
+
+export function isDonationPayment(value) {
+  return parsePaymentMethods(value).some(payment =>
+    stripAccents(payment.metodo).toLowerCase().includes('donacion')
+  )
+}
+
+export function isLoanPayment(value) {
+  return parsePaymentMethods(value).some(payment =>
+    stripAccents(payment.metodo).toLowerCase().includes('prestamo')
+  )
+}
+
+export function getCommissionablePaymentSplit({ totalUsd = 0, formaPagoCliente, formaPago } = {}) {
+  const total = Math.max(0, Number(totalUsd) || 0)
+  const source = formaPagoCliente != null && formaPagoCliente !== '' ? formaPagoCliente : formaPago
+  const methods = parsePaymentMethods(source)
+  const cxcMethods = methods.filter(payment => isCxcPaymentMethod(payment.metodo))
+  const explicitCxc = cxcMethods.reduce((sum, payment) => {
+    const amount = Number(payment.monto)
+    return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0)
+  }, 0)
+
+  // Un método de crédito sin monto representa el total en el formato legacy.
+  const nonCxcMethods = methods.filter(payment => !isCxcPaymentMethod(payment.metodo))
+  const explicitNonCxc = nonCxcMethods.reduce((sum, payment) => {
+    const amount = Number(payment.monto)
+    return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0)
+  }, 0)
+  const inferredCxc = Math.max(0, total - explicitNonCxc)
+  const cxcAmount = cxcMethods.length === 0
+    ? 0
+    : explicitCxc > 0
+      ? Math.min(total, explicitCxc)
+      : (nonCxcMethods.length === 0 ? total : inferredCxc)
+  const nonCxcAmount = Math.max(0, total - cxcAmount)
+
+  return {
+    methods,
+    cxcAmount,
+    nonCxcAmount,
+    fraction: total > 0 ? nonCxcAmount / total : 1,
+  }
+}
+
+export function getNonCxcFraction(despacho = {}) {
+  return getCommissionablePaymentSplit({
+    totalUsd: despacho.total_usd ?? despacho.totalUsd ?? despacho.totalusd,
+    formaPagoCliente: despacho.forma_pago_cliente,
+    formaPago: despacho.forma_pago,
+  })
+}
+
+/**
+ * Returns the stable identity used to count dispatches in commission reports.
+ * Product-expanded PDF rows must not inflate this count.
+ */
+export function getCommissionDispatchKey(row = {}) {
+  const despacho = row?.despacho || row?.comisiones?.despacho || {}
+  return row?.despachoid
+    || despacho?.id
+    || row?.despacho_id
+    || despacho?.numero
+    || row?.despachonumero
+    || row?.despacho_numero
+    || row?.id
+    || null
+}
+
+export function countUniqueDispatches(rows = []) {
+  return new Set(
+    rows
+      .map(getCommissionDispatchKey)
+      .filter(value => value !== null && value !== undefined && value !== ''),
+  ).size
+}
+
+export function calcularTotalCorte(generadaUsd, cxcManualUsd = 0, descuentoCarroUsd = 0) {
+  return round2((Number(generadaUsd) || 0) + (Number(cxcManualUsd) || 0) - (Number(descuentoCarroUsd) || 0))
+}
+
 /**
  * Calcula la estimación de comisión de un conjunto de ítems.
  * @param {Array} items 

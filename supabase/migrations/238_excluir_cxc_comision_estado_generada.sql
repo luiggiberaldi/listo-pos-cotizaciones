@@ -40,9 +40,12 @@ DECLARE
   -- Variables para el cálculo de CxC (se calculan antes de las comisiones)
   v_total_usd     NUMERIC(12,2);
   v_monto_cxc     NUMERIC(12,2) := 0;
+  v_monto_no_cxc  NUMERIC(12,2) := 0;
   v_fp_text       TEXT;
   v_fp            JSONB;
   v_fraccion_no_cxc NUMERIC;
+  v_tiene_metodo_cxc BOOLEAN := FALSE;
+  v_excluida_por_pago BOOLEAN := FALSE;
 BEGIN
   -- Si ya tiene registro de comisión calculado, omitir
   IF EXISTS (SELECT 1 FROM public.comisiones WHERE despachoid = p_despachoid) THEN
@@ -83,24 +86,129 @@ BEGIN
 
   BEGIN
     v_fp := v_fp_text::jsonb;
-    IF v_fp IS NOT NULL AND jsonb_typeof(v_fp) = 'array' THEN
-      SELECT COALESCE(SUM((elem->>'monto')::numeric), 0)
+    IF v_fp IS NOT NULL AND jsonb_typeof(v_fp) IN ('array', 'object') THEN
+      IF jsonb_typeof(v_fp) = 'object' THEN
+        IF v_fp ? 'metodos_pagados' THEN
+          v_fp := v_fp->'metodos_pagados';
+        ELSE
+          v_fp := jsonb_build_array(v_fp);
+        END IF;
+      END IF;
+
+      IF jsonb_typeof(v_fp) <> 'array' THEN
+        v_fp := '[]'::jsonb;
+      END IF;
+
+      -- Aplanar metodos definitivos de formatos COD/legacy sin contar el
+      -- metodo contenedor como un pago adicional.
+      SELECT COALESCE(jsonb_agg(flattened.value), '[]'::jsonb)
+        INTO v_fp
+      FROM (
+        SELECT source.elem AS value
+        FROM jsonb_array_elements(v_fp) AS source(elem)
+        WHERE NOT (
+          jsonb_typeof(source.elem) = 'object'
+          AND source.elem ?| ARRAY['metodos_pagados', 'metodo_propuesto', 'formas_pago', 'pagos', 'payments']::TEXT[]
+        )
+        UNION ALL
+        SELECT nested.value
+        FROM jsonb_array_elements(v_fp) AS source(elem)
+        CROSS JOIN LATERAL jsonb_each(
+          CASE WHEN jsonb_typeof(source.elem) = 'object' THEN source.elem ELSE '{}'::jsonb END
+        ) AS wrapper(key, value)
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(wrapper.value) = 'array' THEN wrapper.value ELSE '[]'::jsonb END
+        ) AS nested(value)
+        WHERE wrapper.key = ANY (ARRAY['metodos_pagados', 'metodo_propuesto', 'formas_pago', 'pagos', 'payments']::TEXT[])
+      ) AS flattened;
+
+      SELECT COALESCE(SUM(CASE
+        WHEN COALESCE(elem->>'monto', elem->>'amount', elem->>'valor', '') ~ '^-?[0-9]+([.][0-9]+)?$' THEN COALESCE(elem->>'monto', elem->>'amount', elem->>'valor')::numeric
+        ELSE 0
+      END), 0)
         INTO v_monto_cxc
       FROM jsonb_array_elements(v_fp) elem
-      WHERE elem->>'metodo' = 'Cta por cobrar';
+      WHERE lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) = 'cxc'
+         OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cta por cobrar%'
+         OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cuenta por cobrar%'
+         OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credito%'
+         OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credit%';
+
+      SELECT EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(v_fp) elem
+        WHERE lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE 'donac%'
+           OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE 'prestam%'
+      ) INTO v_excluida_por_pago;
+
+      SELECT EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(v_fp) elem
+        WHERE jsonb_typeof(elem) = 'object'
+          AND (
+            lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) = 'cxc'
+            OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cta por cobrar%'
+            OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cuenta por cobrar%'
+            OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credito%'
+            OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credit%'
+          )
+      ) INTO v_tiene_metodo_cxc;
+
+      IF v_tiene_metodo_cxc AND v_monto_cxc <= 0 THEN
+        SELECT COALESCE(SUM(CASE
+          WHEN NOT (
+            lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) = 'cxc'
+            OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cta por cobrar%'
+            OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cuenta por cobrar%'
+            OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credito%'
+            OR lower(translate(trim(COALESCE(elem->>'metodo', elem->>'metodo_pago', elem->>'method', elem->>'formaPago', '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credit%'
+          )
+          THEN CASE
+            WHEN COALESCE(elem->>'monto', elem->>'amount', elem->>'valor', '') ~ '^-?[0-9]+([.][0-9]+)?$' THEN COALESCE(elem->>'monto', elem->>'amount', elem->>'valor')::numeric
+            ELSE 0
+          END
+          ELSE 0
+        END), 0)
+          INTO v_monto_no_cxc
+        FROM jsonb_array_elements(v_fp) elem
+        WHERE jsonb_typeof(elem) = 'object';
+
+        v_monto_cxc := CASE
+          WHEN v_monto_no_cxc > 0 THEN GREATEST(0, v_total_usd - v_monto_no_cxc)
+          ELSE v_total_usd
+        END;
+      END IF;
+    END IF;
+    IF v_fp IS NULL OR jsonb_typeof(v_fp) NOT IN ('array', 'object') THEN
+      IF lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) = 'cxc'
+         OR lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cta por cobrar%'
+         OR lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cuenta por cobrar%'
+         OR lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credito%'
+         OR lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credit%' THEN
+        v_tiene_metodo_cxc := TRUE;
+        v_monto_cxc := v_total_usd;
+      END IF;
     END IF;
   EXCEPTION WHEN others THEN
-    IF v_fp_text = 'Cta por cobrar' THEN
+    IF lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) = 'cxc'
+       OR lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cta por cobrar%'
+       OR lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%cuenta por cobrar%'
+       OR lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credito%'
+       OR lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%credit%' THEN
       v_monto_cxc := v_total_usd;
     ELSE
       v_monto_cxc := 0;
     END IF;
+    v_excluida_por_pago := lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%donac%'
+      OR lower(translate(trim(COALESCE(v_fp_text, '')), 'áéíóúüÁÉÍÓÚÜ', 'aeiouuAEIOUU')) LIKE '%prestam%';
   END;
 
   IF v_monto_cxc < 0 THEN v_monto_cxc := 0; END IF;
   IF v_monto_cxc > v_total_usd THEN v_monto_cxc := v_total_usd; END IF;
 
-  IF v_total_usd > 0 THEN
+  IF v_excluida_por_pago THEN
+    v_fraccion_no_cxc := 0;
+  ELSIF v_total_usd > 0 THEN
     v_fraccion_no_cxc := LEAST(1, GREATEST(0, (v_total_usd - v_monto_cxc) / v_total_usd));
   ELSE
     v_fraccion_no_cxc := 1;
@@ -164,12 +272,15 @@ BEGIN
   IF v_tiene_items_despacho THEN
     SELECT
       COALESCE(SUM(CASE
+        WHEN COALESCE(ndi.es_prestamo, FALSE) THEN 0
+        WHEN lower(trim(COALESCE(ndi.nombre_snap, ''))) LIKE 'corte%' THEN 0
         WHEN ndi.origen = 'externo' THEN 0
         WHEN COALESCE(v_despacho.vendedor_es_externo, FALSE) AND (lower(trim(COALESCE(p.categoria,''))) = 'cemento' OR lower(trim(ndi.nombre_snap)) LIKE '%cemento%') THEN ndi.total_linea_usd
         WHEN lower(trim(COALESCE(p.categoria,''))) = v_cat_cabilla THEN ndi.total_linea_usd
         ELSE 0
       END), 0),
       COALESCE(SUM(CASE
+        WHEN COALESCE(ndi.es_prestamo, FALSE) THEN 0
         WHEN lower(trim(ndi.nombre_snap)) LIKE 'corte%' THEN 0
         WHEN ndi.origen = 'externo' THEN 0
         WHEN COALESCE(v_despacho.vendedor_es_externo, FALSE) AND (lower(trim(COALESCE(p.categoria,''))) = 'cemento' OR lower(trim(ndi.nombre_snap)) LIKE '%cemento%') THEN 0
@@ -177,6 +288,7 @@ BEGIN
         ELSE ndi.total_linea_usd
       END), 0),
       COALESCE(SUM(CASE
+        WHEN COALESCE(ndi.es_prestamo, FALSE) THEN 0
         WHEN lower(trim(ndi.nombre_snap)) LIKE 'corte%' THEN 0
         WHEN ndi.origen = 'externo' THEN ndi.total_linea_usd
         ELSE 0
@@ -188,13 +300,14 @@ BEGIN
   ELSE
     SELECT
       COALESCE(SUM(CASE
+        WHEN lower(trim(COALESCE(ci.nombre_snap, ''))) LIKE 'corte%' THEN 0
         WHEN ci.origen = 'externo' THEN 0
         WHEN COALESCE(v_despacho.vendedor_es_externo, FALSE) AND (lower(trim(COALESCE(p.categoria,''))) = 'cemento' OR lower(trim(ci.nombre_snap)) LIKE '%cemento%') THEN ci.total_linea_usd
         WHEN lower(trim(COALESCE(p.categoria,''))) = v_cat_cabilla THEN ci.total_linea_usd
         ELSE 0
       END), 0),
       COALESCE(SUM(CASE
-        WHEN lower(trim(ci.nombre_snap)) LIKE 'corte%' THEN 0
+        WHEN lower(trim(COALESCE(ci.nombre_snap, ''))) LIKE 'corte%' THEN 0
         WHEN ci.origen = 'externo' THEN 0
         WHEN COALESCE(v_despacho.vendedor_es_externo, FALSE) AND (lower(trim(COALESCE(p.categoria,''))) = 'cemento' OR lower(trim(ci.nombre_snap)) LIKE '%cemento%') THEN 0
         WHEN lower(trim(COALESCE(p.categoria,''))) = v_cat_cabilla THEN 0
@@ -269,41 +382,29 @@ DECLARE
   v_uuid_nulo CONSTANT UUID := '00000000-0000-0000-0000-000000000000';
 BEGIN
   RETURN QUERY
-  WITH period_liberations AS (
-    SELECT
-      cl.comision_id,
-      SUM(cl.monto) AS monto_liberado_periodo
-    FROM public.comision_liberaciones cl
-    WHERE
-      (p_fecha_inicio IS NULL OR cl.creado_en >= p_fecha_inicio)
-      AND (p_fecha_fin IS NULL OR cl.creado_en <= p_fecha_fin)
-    GROUP BY cl.comision_id
-  ),
-  period_comisiones AS (
-    SELECT c.id, c.totalcomision, c.estado, pl.monto_liberado_periodo
-    FROM public.comisiones c
-    INNER JOIN period_liberations pl ON pl.comision_id = c.id
-    WHERE c.cuentaid = p_cuenta_id
-      AND (
-        p_vendedor_id IS NULL
-        OR (p_vendedor_id = v_uuid_nulo AND c.vendedorid IS NULL)
-        OR (c.vendedorid = p_vendedor_id)
-      )
-      AND (
-        p_estado IS NULL
-        OR c.estado = p_estado
-      )
-  )
   SELECT
-    COALESCE(SUM(pc.monto_liberado_periodo), 0)::NUMERIC AS totalAcumulado,
+    COALESCE(SUM(c.totalcomision), 0)::NUMERIC AS totalAcumulado,
     0::NUMERIC AS pendientePago,   -- sin ciclo de pago
     0::NUMERIC AS yaPagado,        -- sin ciclo de pago
     0::BIGINT AS numPendientes,    -- sin ciclo de pago
     0::BIGINT AS numPagadas,       -- sin ciclo de pago
-    COUNT(DISTINCT pc.id) AS total,
+    COUNT(DISTINCT c.id)::BIGINT AS total,
     0::NUMERIC AS pendienteRegular, -- sin ciclo de pago
     0::NUMERIC AS pendienteCxc      -- sin ciclo de pago
-  FROM period_comisiones pc;
+  FROM public.comisiones c
+  JOIN public.notas_despacho nd ON nd.id = c.despachoid
+  WHERE c.cuentaid = p_cuenta_id
+    AND (
+      p_vendedor_id IS NULL
+      OR (p_vendedor_id = v_uuid_nulo AND c.vendedorid IS NULL)
+      OR (c.vendedorid = p_vendedor_id)
+    )
+    AND (p_fecha_inicio IS NULL OR nd.creado_en >= p_fecha_inicio)
+    AND (p_fecha_fin IS NULL OR nd.creado_en <= p_fecha_fin)
+    AND (
+      (p_estado IS NULL AND c.estado = 'generada')
+      OR (p_estado IS NOT NULL AND c.estado = p_estado)
+    );
 END;
 $$;
 

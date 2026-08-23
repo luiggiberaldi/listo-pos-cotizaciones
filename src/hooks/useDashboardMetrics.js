@@ -141,7 +141,7 @@ export function useDashboardMetrics() {
             porVendedor[vid] = {
               nombre: c.vendedor?.nombre || '—',
               color: c.vendedor?.color || '#1B365D',
-              total: 0, pendiente: 0, pagado: 0, count: 0,
+              total: 0, generado: 0, count: 0,
             }
           }
           const monto = Number(c.totalcomision || 0)

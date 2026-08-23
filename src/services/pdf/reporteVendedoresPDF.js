@@ -504,10 +504,10 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     // Bloque derecho: Comisiones
     const bx2 = MARGIN + col2W + 4
     doc.setFillColor(250, 251, 255)
-    doc.roundedRect(bx2, y, col2W, 38, 1.5, 1.5, 'F')
+    doc.roundedRect(bx2, y, col2W, 30, 1.5, 1.5, 'F')
     doc.setDrawColor(235, 240, 248)
     doc.setLineWidth(0.2)
-    doc.roundedRect(bx2, y, col2W, 38, 1.5, 1.5, 'D')
+    doc.roundedRect(bx2, y, col2W, 30, 1.5, 1.5, 'D')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
@@ -516,12 +516,10 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     const catPrincipal = config.comision_categoria_cabilla || 'Cabilla'
     const labelPrincipal = esExterno ? `${catPrincipal}/Cem` : catPrincipal
     const comData = [
-      { label: 'Total generado', value: fmtUsd(v.comisionTotal), color: C_DARK },
-      { label: 'Pagado',         value: fmtUsd(v.comisionPagada), color: C_EMERALD },
-      { label: 'Pendiente',      value: fmtUsd(v.comisionPendiente), color: C_AMBER },
-      { label: `${labelPrincipal} 2%`,     value: fmtUsd(v.comisionCabilla2 || 0), color: C_DARK },
-      { label: `${labelPrincipal} 3%`,     value: fmtUsd(v.comisionCabilla3 || 0), color: C_DARK },
-      { label: 'Otros productos',value: fmtUsd(v.comisionOtros || 0), color: C_DARK },
+      { label: 'Comisión generada', value: fmtUsd(v.comisionGenerada ?? v.comisionTotal ?? 0), color: C_EMERALD },
+      { label: `${labelPrincipal} 2%`, value: fmtUsd(v.comisionCabilla2 || 0), color: C_DARK },
+      { label: `${labelPrincipal} 3%`, value: fmtUsd(v.comisionCabilla3 || 0), color: C_DARK },
+      { label: 'Otros productos', value: fmtUsd(v.comisionOtros || 0), color: C_DARK },
     ]
     comData.forEach((c, ci) => {
       const cy = y + 10 + ci * 4.8
@@ -534,7 +532,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       doc.setTextColor(c.color[0], c.color[1], c.color[2])
       doc.text(c.value, bx2 + col2W - 3, cy, { align: 'right' })
     })
-    y += 42
+    y += 34
 
     // ── Top Clientes + Top Productos ──────────────────────────────────────────
     const col3W = (CONTENT_W - 4) / 2

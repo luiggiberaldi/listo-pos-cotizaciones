@@ -1,9 +1,15 @@
 // api/handlers/clientes.js
-import { json, jsonError, corsHeaders, isRateLimited, sanitizeSearch, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
 import { rankSearch } from '../lib/entitySearch.js'
 import { verifyAuth, validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
+
+function resolverIdempotencyKey(request, body) {
+  const fromBody = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : ''
+  const fromHeader = (request.headers.get('Idempotency-Key') || '').trim()
+  return fromBody || fromHeader || crypto.randomUUID()
+}
 
 export async function handleCheckRif(request, env) {
   const user = await verifyAuth(request, env);
@@ -647,112 +653,69 @@ export async function handleDevolverPrestamo(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { prestamoId, cantidad } = body;
+  const { prestamoId, cantidad } = body || {};
+  const idempotencyKey = resolverIdempotencyKey(request, body);
   const cant = Number(cantidad);
-  if (!prestamoId || !isValidUuid(prestamoId)) return jsonError('prestamoId inválido', 400, request);
-  if (isNaN(cant) || cant <= 0) return jsonError('Cantidad a devolver inválida', 400, request);
+  if (!isValidUuid(prestamoId)) return jsonError('prestamoId inválido', 400, request);
+  if (!Number.isFinite(cant) || cant <= 0) return jsonError('Cantidad a devolver inválida', 400, request);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
 
   try {
     // 1. Obtener registro de préstamo actual
     const lpRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}&select=*,producto:productos(id,stock_actual,nombre,unidad),despacho:notas_despacho(numero)`,
+      `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}&select=*,producto:productos(id,nombre,unidad),despacho:notas_despacho(numero)`,
       { headers }
     );
     const [prestamo] = await lpRes.json();
     if (!prestamo) return jsonError('Préstamo no encontrado', 404, request);
 
-    const cantPrestada = Number(prestamo.cantidad_prestada);
-    const cantDevueltaActual = Number(prestamo.cantidad_devuelta || 0);
-    const cantFacturada = Number(prestamo.cantidad_facturada || 0);
-    const restante = Math.max(0, cantPrestada - cantDevueltaActual - cantFacturada);
+    const tenantRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${prestamo.cliente_id}&cuenta_id=eq.${operador.cuenta_id}&select=id`,
+      { headers }
+    )
+    if (!tenantRes.ok) return jsonError(`Error al validar el tenant del préstamo: ${await tenantRes.text()}`, 500, request)
+    const [tenantClient] = await tenantRes.json()
+    if (!tenantClient) return jsonError('Préstamo no encontrado', 404, request)
 
-    if (cant > restante + 0.0001) {
-      return jsonError(`La cantidad ingresada (${cant}) supera el saldo pendiente del préstamo (${restante})`, 400, request);
-    }
-
-    const nuevaCantDevuelta = cantDevueltaActual + cant;
-    let nuevoEstado = 'pendiente';
-    if (nuevaCantDevuelta + cantFacturada >= cantPrestada - 0.0001) {
-      nuevoEstado = 'devuelto';
-    } else if (nuevaCantDevuelta > 0) {
-      nuevoEstado = 'devuelto_parcial';
-    }
-
-    // 2. Transacción: Actualizar préstamo
-    const patchLp = await fetch(`${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=minimal' },
+    const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/devolver_prestamo_inventario_atomico`, {
+      method: 'POST',
+      headers,
       body: JSON.stringify({
-        cantidad_devuelta: nuevaCantDevuelta,
-        estado: nuevoEstado
-      })
-    });
-    if (!patchLp.ok) {
-      const err = await patchLp.text();
-      return jsonError(`Error al actualizar préstamo: ${err}`, 500, request);
+        p_cuenta_id: operador.cuenta_id,
+        p_prestamo_id: prestamoId,
+        p_cantidad: cant,
+        p_usuario_id: user.operator_id,
+        p_usuario_nombre: operador.nombre,
+        p_usuario_color: operador.color || null,
+        p_idempotency_key: idempotencyKey,
+      }),
+    })
+    const rpcText = await rpcRes.text()
+    let result = null
+    try { result = rpcText ? JSON.parse(rpcText) : null } catch { result = null }
+    if (!rpcRes.ok) {
+      return jsonError(`No se pudo registrar la devolución atómica: ${result?.message || rpcText || `HTTP ${rpcRes.status}`}`, 400, request)
     }
+    if (!result?.ok) return jsonError('La RPC no confirmó la devolución atómica', 500, request)
 
-    // 3. Transacción: Regresar stock al inventario
-    if (prestamo.producto_id && prestamo.producto) {
-      const stockAnterior = Number(prestamo.producto.stock_actual);
-      const nuevoStock = stockAnterior + cant;
-      const patchProd = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${prestamo.producto_id}`, {
-        method: 'PATCH',
-        headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ stock_actual: nuevoStock })
-      });
+    const nuevaCantDevuelta = result.cantidad_devuelta
+    const nuevoEstado = result.nuevo_estado || result.nuevoEstado || 'pendiente'
 
-      if (patchProd.ok) {
-        try {
-          const loteId = crypto.randomUUID();
-          const despachoNum = prestamo.despacho?.numero ? `DES-${String(prestamo.despacho.numero).padStart(5, '0')}` : 'Préstamo';
-          
-          // Buscar el nombre del cliente para el motivo del Kardex
-          const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${prestamo.cliente_id}&select=nombre`, { headers });
-          let clienteNombre = 'Cliente';
-          if (cliRes.ok) {
-            const cliData = await cliRes.json();
-            if (cliData && cliData[0]) clienteNombre = cliData[0].nombre;
-          }
-
-          const movPayload = {
-            lote_id: loteId,
-            tipo: 'ingreso',
-            motivo: `Devolución de préstamo (${despachoNum}) - Cliente: ${clienteNombre}`,
-            motivo_tipo: 'devolucion',
-            producto_id: prestamo.producto_id,
-            producto_nombre: prestamo.producto.nombre,
-            cantidad: cant,
-            stock_anterior: stockAnterior,
-            stock_nuevo: nuevoStock,
-            usuario_id: operador.id,
-            usuario_nombre: operador.nombre,
-            usuario_color: operador.color || null
-          };
-
-          await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
-            method: 'POST',
-            headers: { ...headers, Prefer: 'return=minimal' },
-            body: JSON.stringify(movPayload)
-          });
-        } catch (movErr) {
-          console.error('[DEVOLVER-PRESTAMO] Error al registrar movimiento en inventario_movimientos:', movErr?.message);
-        }
-      }
-    }
-
-    // 4. Registrar en seguimiento_operativo
-    const timelinesPayload = {
-      cliente_id: prestamo.cliente_id,
-      despacho_id: prestamo.despacho_id,
-      usuario_id: operador.id,
-      tipo: 'seguimiento',
+    if (result.idempotent !== true) {
+      // Los efectos auxiliares se ejecutan solo en la primera aplicación; un
+      // replay devuelve el resultado persistido sin duplicar timeline/auditoría.
+      // 4. Registrar en seguimiento_operativo
+      const timelinesPayload = {
+        cliente_id: prestamo.cliente_id,
+        despacho_id: prestamo.despacho_id,
+        usuario_id: user.operator_id,
+        tipo: 'seguimiento',
       prioridad: 'informativa',
       titulo: 'Devolución de préstamo',
       contenido: `Se registraron de vuelta ${cant} ${prestamo.producto?.unidad || 'und'} de "${prestamo.producto?.nombre || 'Producto'}". Estado del préstamo: ${nuevoEstado.toUpperCase()}.`,
       imagenes: [],
       fijada: false,
-      cuenta_id: user.id
+      cuenta_id: operador.cuenta_id
     };
     await fetch(`${env.SUPABASE_URL}/rest/v1/seguimiento_operativo`, {
       method: 'POST',
@@ -762,14 +725,31 @@ export async function handleDevolverPrestamo(request, env) {
 
     // 5. Auditoría
     await registrarAuditoria(env, headers, {
-      usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
       categoria: 'FINANZAS', accion: 'DEVOLVER_PRESTAMO',
       descripcion: `Devolución de préstamo #${prestamoId}: ${cant} und de ${prestamo.producto?.nombre}`,
       entidadTipo: 'cliente', entidadId: prestamo.cliente_id,
-      meta: { prestamo_id: prestamoId, cantidad: cant, estado_nuevo: nuevoEstado }, ip
+      meta: {
+        prestamo_id: prestamoId,
+        cantidad: cant,
+        estado_nuevo: nuevoEstado,
+        lote_id: result.lote_id,
+        numero: result.numero,
+        idempotency_key: idempotencyKey,
+      },
+      ip,
     });
+    }
 
-    return json({ ok: true, nuevoEstado, cantidad_devuelta: nuevaCantDevuelta }, 200, request);
+    return json({
+      ok: true,
+      nuevoEstado,
+      cantidad_devuelta: nuevaCantDevuelta,
+      lote_id: result.lote_id,
+      numero: result.numero,
+      idempotency_key: idempotencyKey,
+      idempotent: result.idempotent === true,
+    }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error en devolución', 500, request);
   }
@@ -779,7 +759,7 @@ export async function handleDevolverPrestamo(request, env) {
 export async function handleFacturarPrestamo(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, operador, headers, ip } = v;
+  const { operador, headers, ip } = v;
 
   // Permitido para administración, jefes y desarrolladores
   const rolesAbil = ['administracion', 'jefe', 'desarrollador'];
@@ -881,7 +861,7 @@ export async function handleFacturarPrestamo(request, env) {
       contenido: `Se facturaron y cargaron a cuenta ${cant} ${prestamo.producto?.unidad || 'und'} de "${prestamo.producto?.nombre || 'Producto'}" por un total de $${totalCargo.toFixed(2)} USD.`,
       imagenes: [],
       fijada: false,
-      cuenta_id: user.id
+      cuenta_id: operador.cuenta_id
     };
     await fetch(`${env.SUPABASE_URL}/rest/v1/seguimiento_operativo`, {
       method: 'POST',

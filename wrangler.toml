@@ -22,4 +22,4 @@ SUPABASE_URL = "https://oyfyuszgjwcepjpngclv.supabase.co"
 # - SUPABASE_ANON_KEY: Cloudflare secret or protected environment binding.
 # - SUPABASE_SERVICE_KEY: Cloudflare secret; never commit it as a plain-text var.
 # - DEV_SUPER_CODE: Cloudflare secret; never commit it as a plain-text var.
-# See the deployment documentation for secret setup.
+# See docs/plans/2026-08-23-paquete-release-principal-comisiones.md.

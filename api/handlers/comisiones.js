@@ -1,324 +1,341 @@
 // api/handlers/comisiones.js
-import { json, jsonError, isValidUuid } from '../lib/utils.js'
-import { verifyAuth, validateOperator } from '../lib/auth.js'
-import { registrarAuditoria } from '../lib/audit.js'
+import { json, jsonError } from '../lib/utils.js'
+import { validateOperator, verifyAuth } from '../lib/auth.js'
+import {
+  adjustLegacyCommissionForExcludedProducts,
+  countUniqueDispatches,
+  getCommissionablePaymentSplit,
+  isDonationPayment,
+  isLoanPayment,
+} from '../../src/utils/comisionUtils.js'
 
-async function obtenerVendedoresConRol(env, headers, cuentaId, roles) {
-  const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/usuarios?cuenta_id=eq.${cuentaId}&rol=in.(${roles.join(',')})&select=id`,
-    { headers }
-  );
-  if (!res.ok) return '00000000-0000-0000-0000-000000000000';
-  const rows = await res.json();
-  if (!rows.length) return '00000000-0000-0000-0000-000000000000';
-  return rows.map(r => r.id).join(',');
+const PRIVILEGED_ROLES = new Set(['supervisor', 'administracion', 'desarrollador', 'jefe'])
+const EMPTY_UUID = '00000000-0000-0000-0000-000000000000'
+
+function getCommissionPolicy(despacho = {}) {
+  const paymentSource = despacho?.forma_pago_cliente != null && despacho.forma_pago_cliente !== ''
+    ? despacho.forma_pago_cliente
+    : despacho?.forma_pago
+  const split = getCommissionablePaymentSplit({
+    totalUsd: despacho?.total_usd ?? despacho?.totalUsd ?? despacho?.totalusd,
+    formaPagoCliente: paymentSource,
+  })
+  const excludedByPayment = isDonationPayment(paymentSource) || isLoanPayment(paymentSource)
+  const products = Array.isArray(despacho?.productos) ? despacho.productos : []
+  const excludedByProducts = products.length > 0 && products.every(product => {
+    const name = String(product?.nombre_snap || product?.nombre || '').trim().toLowerCase()
+    return product?.es_prestamo || product?.esPrestamo || name.startsWith('corte')
+  })
+
+  return {
+    ...split,
+    paymentFraction: split.fraction,
+    fraction: excludedByPayment || excludedByProducts ? 0 : split.fraction,
+    excludedByPayment,
+    excludedByProducts,
+  }
 }
 
-function safeParam(val) {
-  if (!val || val === 'null' || val === 'undefined' || val.trim() === '') return null;
-  return val.trim();
+function round2(value) {
+  return Math.round((Number(value) || 0) * 100) / 100
 }
 
-// Helper interno para unificar la lógica de filtros entre Lista y Resumen
-function aplicarFiltrosComisiones(query, urlParams, user) {
-  const vendedorId = safeParam(urlParams.get('vendedorId'))
-  const estado = safeParam(urlParams.get('estado'))
-  const desde = safeParam(urlParams.get('desde'))
-  const hasta = safeParam(urlParams.get('hasta'))
-  const despachoId = safeParam(urlParams.get('despachoId') || urlParams.get('despachoid'))
+function safeParam(value) {
+  if (!value || value === 'null' || value === 'undefined' || value.trim() === '') return null
+  return value.trim()
+}
 
-  const operatorRol = user.operator_rol
-  const operatorId = user.operator_id
-  const esSupervisor = ['supervisor', 'administracion', 'desarrollador', 'jefe'].includes(operatorRol)
+function serviceHeaders(env, includeContentType = false) {
+  return {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    ...(includeContentType ? { 'Content-Type': 'application/json' } : {}),
+  }
+}
 
-  // 1. Aislamiento por Cuenta/Tenant
+function addCommissionFilters(query, params, user, operador) {
+  const vendedorId = safeParam(params.get('vendedorId'))
+  const desde = safeParam(params.get('desde'))
+  const hasta = safeParam(params.get('hasta'))
+  const despachoId = safeParam(params.get('despachoId') || params.get('despachoid'))
+  const isPrivileged = PRIVILEGED_ROLES.has(operador.rol)
+  const selectedSeller = isPrivileged ? vendedorId : operador.id
+
   query += `&cuentaid=eq.${user.id}`
-
-  // 2. Filtro por Vendedor (según Rol)
-  const filtroVendedor = esSupervisor ? (vendedorId || null) : operatorId
-  if (filtroVendedor) {
-    if (filtroVendedor === '00000000-0000-0000-0000-000000000000') {
-      query += `&vendedorid=is.null`
-    } else {
-      query += `&vendedorid=eq.${filtroVendedor}`
-    }
+  if (selectedSeller) {
+    query += selectedSeller === EMPTY_UUID
+      ? '&vendedorid=is.null'
+      : `&vendedorid=eq.${selectedSeller}`
   }
-  // 3. Filtro por Estado
-  if (estado) {
-    query += `&estado=eq.${estado}`
-  }
-
-  // 4. Filtro por Fechas (Día Completo - Zona Horaria Venezuela UTC-4)
-  // Se filtra por la fecha del DESPACHO (notas_despacho.creado_en), igual que el PDF
   if (desde) query += `&despacho.creado_en=gte.${desde}T00:00:00-04:00`
   if (hasta) query += `&despacho.creado_en=lte.${hasta}T23:59:59-04:00`
-
-  // 5. Filtro por Despacho ID
-  if (despachoId) {
-    query += `&despachoid=eq.${despachoId}`
-  }
-
+  if (despachoId) query += `&despachoid=eq.${despachoId}`
   return query
 }
 
-function csvIds(ids) {
-  return [...new Set(ids.filter(Boolean))].join(',')
+function baseCommissionQuery(env) {
+  return `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en)&order=creadoen.desc`
 }
 
 async function fetchByIds(env, headers, table, ids, select) {
-  const idsCsv = csvIds(ids)
-  if (!idsCsv) return {}
-
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?id=in.(${idsCsv})&select=${select}`, { headers })
-  if (!res.ok) return {}
-
-  const rows = await res.json()
+  const uniqueIds = [...new Set(ids.filter(Boolean))]
+  if (!uniqueIds.length) return {}
+  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?id=in.(${uniqueIds.join(',')})&select=${select}`, { headers })
+  if (!response.ok) return {}
+  const rows = await response.json()
   return Object.fromEntries(rows.map(row => [row.id, row]))
 }
 
-export async function handleGetComisionesConfig(request, env) {
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
-  const user = await verifyAuth(request, env);
-  if (!user?.id) return jsonError('No autenticado', 401, request);
-
-  // Consultar todas las columnas que existan sin select explícito
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1`, {
-    headers: {
-      apikey: env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    },
-  });
-  if (!res.ok) return jsonError('Error al leer config comisiones', res.status, request);
-  const rows = await res.json();
-  return json(rows[0] || {}, 200, request);
+async function fetchCommissionConfig(env, headers, cuentaId) {
+  if (!cuentaId) return {}
+  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${cuentaId}&select=*&limit=1`, { headers })
+  if (!response.ok) return {}
+  const rows = await response.json()
+  return rows[0] || {}
 }
 
-export async function handleGetComisiones(request, env) {
-  const v = await validateOperator(request, env);
-  if (v.error) return v.error;
-  const { user, operador, headers } = v;
+async function enrichCommissions(env, headers, rows, cuentaId) {
+  const despachos = await fetchByIds(
+    env,
+    headers,
+    'notas_despacho',
+    rows.map(row => row.despachoid),
+    'id,numero,total_usd,creado_en,tasa_snapshot,forma_pago,forma_pago_cliente,cliente_id,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre,tipo_cliente),productos:notas_despacho_items(nombre_snap,codigo_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,origen,es_prestamo,producto_id,producto:productos(categoria))',
+  )
+  const cotizaciones = await fetchByIds(
+    env,
+    headers,
+    'cotizaciones',
+    rows.map(row => row.cotizacionid),
+    'id,numero,tasa_bcv_snapshot,cliente_id,cliente:clientes(id,nombre)',
+  )
+  const vendedores = await fetchByIds(
+    env,
+    headers,
+    'usuarios',
+    rows.map(row => row.vendedorid),
+    'id,nombre,color,markup_pct,rol,es_externo',
+  )
+  const config = await fetchCommissionConfig(env, headers, cuentaId)
 
-  const url = new URL(request.url)
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
-  const pageSize = Math.max(1, Math.min(500, parseInt(url.searchParams.get('pageSize') || '100')));
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  const vista = url.searchParams.get('vista');
-  const vendedorId = safeParam(url.searchParams.get('vendedorId'));
-  const estado = safeParam(url.searchParams.get('estado'));
-  const desde = safeParam(url.searchParams.get('desde'));
-  const hasta = safeParam(url.searchParams.get('hasta'));
-
-  const esSupervisor = ['supervisor', 'administracion', 'desarrollador', 'jefe'].includes(operador.rol);
-  const operatorId = operador.id;
-
-  if (vista === 'eventos') {
-    let baseUrl = `${env.SUPABASE_URL}/rest/v1/comision_liberaciones?select=id,comision_id,despacho_id,vendedor_id,cuenta_id,monto,tipo,cxc_id,creado_en,comisiones:comisiones!inner(id,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,montopagado,cotizacionid,despacho:notas_despacho(id,numero,total_usd,tasa_snapshot,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre,tipo_cliente),productos:notas_despacho_items(nombre_snap,codigo_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,origen,producto_id,producto:productos(categoria)))),vendedor:usuarios(id,nombre,color,markup_pct,rol,es_externo)&order=creado_en.desc`
-    
-    let query = baseUrl + `&cuenta_id=eq.${user.id}`
-
-    const filtroVendedor = esSupervisor ? (vendedorId || null) : operatorId;
-    if (filtroVendedor) {
-      if (filtroVendedor === '00000000-0000-0000-0000-000000000000') {
-        query += `&vendedor_id=is.null`
-      } else {
-        query += `&vendedor_id=eq.${filtroVendedor}`
-      }
-    }
-
-    if (desde) query += `&creado_en=gte.${desde}T00:00:00-04:00`
-    if (hasta) query += `&creado_en=lte.${hasta}T23:59:59-04:00`
-
-    const res = await fetch(query, {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        'Range': `${from}-${to}`,
-        'Prefer': 'count=exact'
-      },
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      return jsonError(`Error al obtener eventos de comision: ${err}`, 500, request);
-    }
-
-    const rows = await res.json();
-    const cotizacionIds = rows.map(r => r.comisiones?.cotizacionid).filter(Boolean);
-    const cotizaciones = await fetchByIds(env, headers, 'cotizaciones', cotizacionIds, 'id,numero,tasa_bcv_snapshot,cliente_id,cliente:clientes(id,nombre)');
-
-  const data = rows.map(r => {
-      const com = r.comisiones || {};
-      const desp = com.despacho || {};
-      const cot = cotizaciones[com.cotizacionid];
-      return {
-        id: r.id,
-        monto: Number(r.monto || 0),
-        tipo: r.tipo,
-        creado_en: r.creado_en,
-        comisiones: {
-          id: com.id,
-          totalcomision: Number(com.totalcomision || 0),
-          comisioncabilla: Number(com.comisioncabilla || 0),
-          comisionotros: Number(com.comisionotros || 0),
-          pctcabilla: Number(com.pctcabilla || 0),
-          pctotros: Number(com.pctotros || 0),
-          estado: com.estado || 'generada',
-          despacho: desp ? {
-            id: desp.id,
-            numero: desp.numero,
-            totalusd: desp.total_usd,
-            tasa_snapshot: desp.tasa_snapshot,
-            cliente: desp.cliente,
-            productos: desp.productos
-          } : null,
-          cotizacion: cot ? {
-            id: cot.id,
-            numero: cot.numero,
-            tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
-            cliente_nombre: cot.cliente?.nombre || null
-          } : null
-        },
-        vendedor: r.vendedor
-      };
-    });
-
-    const contentRange = res.headers.get('content-range') || '';
-    const total = parseInt(contentRange.split('/')[1] || '0');
-
-    return json({
-      data,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize)
-    }, 200, request);
-  }
-
-  // Se incluye despacho:notas_despacho!inner(creado_en) para poder filtrar por fecha del despacho
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en)&order=creadoen.desc`
-  
-  const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
-  let query = aplicarFiltrosComisiones(baseUrl, url.searchParams, userContext)
-
-  const res = await fetch(query, {
-    headers: {
-      apikey: env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      'Range': `${from}-${to}`,
-      'Prefer': 'count=exact'
-    },
-  })
-
-  if (!res.ok) {
-    const err = await res.text()
-    return jsonError(`Error al obtener comisiones: ${err}`, 500, request)
-  }
-
-  const rows = await res.json()
-  const despachos = await fetchByIds(env, headers, 'notas_despacho', rows.map(c => c.despachoid), 'id,numero,total_usd,tasa_snapshot,cliente_id,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre),productos:notas_despacho_items(nombre_snap,codigo_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,origen,producto_id,producto:productos(categoria))')
-  const cotizaciones = await fetchByIds(env, headers, 'cotizaciones', rows.map(c => c.cotizacionid), 'id,numero,tasa_bcv_snapshot,cliente_id,cliente:clientes(id,nombre)')
-  const vendedores = await fetchByIds(env, headers, 'usuarios', rows.map(c => c.vendedorid), 'id,nombre,color,markup_pct,rol,es_externo')
-  const data = rows.map(c => {
-    const despacho = despachos[c.despachoid]
-    const cotizacion = cotizaciones[c.cotizacionid]
+  return rows.map(row => {
+    const despacho = despachos[row.despachoid]
+    const cotizacion = cotizaciones[row.cotizacionid]
+    const policy = getCommissionPolicy(despacho)
+    const storedAlreadyNet = String(row.estado || '').toLowerCase() === 'generada'
+    const storedTotal = Number(row.totalcomision || 0)
+    // 238 stores totalcomision already net of CxC. Older rows need the
+    // defensive read-time fraction until they are reconciled separately.
+    const effectiveFactor = storedAlreadyNet ? 1 : policy.fraction
+    const effectiveTotal = round2(storedTotal * effectiveFactor)
+    const storedCabilla = Number(row.comisioncabilla || 0)
+    const storedOtros = Number(row.comisionotros || 0)
+    const baseCabilla = round2(storedCabilla * effectiveFactor)
+    const baseOtros = round2(storedOtros * effectiveFactor)
+    const productAdjustment = storedAlreadyNet
+      ? { cabilla: baseCabilla, otros: baseOtros, total: effectiveTotal, applied: false }
+      : adjustLegacyCommissionForExcludedProducts({
+        products: despacho?.productos || [],
+        comisioncabilla: baseCabilla,
+        comisionotros: baseOtros,
+        perfil: vendedores[row.vendedorid],
+        config,
+      })
+    const effectiveCabilla = round2(productAdjustment.cabilla)
+    const effectiveOtros = round2(productAdjustment.otros)
+    const effectiveTotalWithProducts = round2(effectiveCabilla + effectiveOtros)
+    const cxcExcluded = storedAlreadyNet ? 0 : round2(storedTotal * (1 - policy.paymentFraction))
+    const otherExcluded = storedAlreadyNet
+      ? 0
+      : round2(storedTotal - effectiveTotalWithProducts - cxcExcluded)
     return {
-      id: c.id,
-      despachoid: c.despachoid,
-      vendedorid: c.vendedorid,
-      cotizacionid: c.cotizacionid,
-      cuentaid: c.cuentaid,
-      totalcomision: c.totalcomision,
-      comisioncabilla: c.comisioncabilla,
-      comisionotros: c.comisionotros,
-      pctcabilla: c.pctcabilla,
-      pctotros: c.pctotros,
-      estado: c.estado || 'generada',
-      creadoen: c.creadoen,
-      vendedor: vendedores[c.vendedorid] || { id: null, nombre: 'Sin vendedor asignado', color: '#94a3b8' },
-      despacho: despacho ? { 
-        id: despacho.id, 
-        numero: despacho.numero, 
-        totalusd: despacho.total_usd, 
+      id: row.id,
+      despachoid: row.despachoid,
+      vendedorid: row.vendedorid,
+      cotizacionid: row.cotizacionid,
+      cuentaid: row.cuentaid,
+      totalcomision: effectiveTotalWithProducts,
+      comisioncabilla: effectiveCabilla,
+      comisionotros: effectiveOtros,
+      totalcomision_bruta: storedAlreadyNet ? null : round2(storedTotal),
+      comision_cxc_excluida: cxcExcluded,
+      comision_otras_exclusiones: otherExcluded,
+      fraccion_no_cxc: policy.paymentFraction,
+      fraccion_comision_aplicada: effectiveFactor,
+      fraccion_productos_aplicada: storedAlreadyNet || !productAdjustment.applied || storedTotal <= 0
+        ? 1
+        : round2(effectiveTotalWithProducts / Math.max(effectiveTotal, 0.0001)),
+      productos_exclusion_aplicada: !storedAlreadyNet && productAdjustment.applied,
+      comision_no_cxc_aplicada: true,
+      fuente_calculo: storedAlreadyNet
+        ? 'stored_net_238'
+        : productAdjustment.applied
+          ? 'legacy_read_prorated_products'
+          : 'legacy_read_prorated',
+      sourceLegacy: !storedAlreadyNet,
+      excluida_por_pago: policy.excludedByPayment,
+      excluida_por_productos: policy.excludedByProducts,
+      politica_comision: 'fecha_despacho_no_cxc',
+      pctcabilla: Number(row.pctcabilla || 0),
+      pctotros: Number(row.pctotros || 0),
+      estado: 'generada',
+      creadoen: row.creadoen,
+      actualizadoen: row.actualizadoen,
+      vendedor: vendedores[row.vendedorid] || { id: row.vendedorid || null, nombre: 'Sin vendedor asignado', color: '#94a3b8' },
+      despacho: despacho ? {
+        id: despacho.id,
+        numero: despacho.numero,
+        totalusd: despacho.total_usd,
+        creado_en: despacho.creado_en,
         tasa_snapshot: despacho.tasa_snapshot,
+        fraccion_no_cxc: policy.paymentFraction,
+        fraccion_comision_aplicada: effectiveFactor,
+        fraccion_productos_aplicada: storedAlreadyNet || !productAdjustment.applied || storedTotal <= 0
+          ? 1
+          : round2(effectiveTotalWithProducts / Math.max(effectiveTotal, 0.0001)),
+        productos_exclusion_aplicada: !storedAlreadyNet && productAdjustment.applied,
+        totalcomision_bruta: storedAlreadyNet ? null : round2(storedTotal),
+        comision_cxc_excluida: cxcExcluded,
+        comision_otras_exclusiones: otherExcluded,
+        comision_no_cxc_aplicada: true,
+        fuente_calculo: storedAlreadyNet
+          ? 'stored_net_238'
+          : productAdjustment.applied
+            ? 'legacy_read_prorated_products'
+            : 'legacy_read_prorated',
+        sourceLegacy: !storedAlreadyNet,
+        excluida_por_pago: policy.excludedByPayment,
+        excluida_por_productos: policy.excludedByProducts,
+        politica_comision: 'fecha_despacho_no_cxc',
+        forma_pago: despacho.forma_pago,
+        forma_pago_cliente: despacho.forma_pago_cliente,
         cliente_nombre: despacho.cliente?.nombre || null,
-        productos: despacho.productos
+        cliente_tipo_cliente: despacho.cliente?.tipo_cliente || null,
+        productos: despacho.productos || [],
       } : null,
       cotizacion: cotizacion ? {
         id: cotizacion.id,
         numero: cotizacion.numero,
         tasa_bcv_snapshot: cotizacion.tasa_bcv_snapshot,
-        cliente_nombre: cotizacion.cliente?.nombre || null
-      } : null
+        cliente_nombre: cotizacion.cliente?.nombre || null,
+      } : null,
     }
   })
-  
-  // Extraer el total de filas del header Content-Range (ej: "0-99/1250")
-  const contentRange = res.headers.get('content-range') || '';
-  const total = parseInt(contentRange.split('/')[1] || '0');
+}
+
+function toEvent(row) {
+  return {
+    id: row.id,
+    despachoid: row.despachoid,
+    sourceLegacy: row.sourceLegacy === true,
+    monto: row.totalcomision,
+    tipo: 'generada',
+    creado_en: row.creadoen,
+    comisiones: {
+      id: row.id,
+      totalcomision: row.totalcomision,
+      comisioncabilla: row.comisioncabilla,
+      comisionotros: row.comisionotros,
+      totalcomision_bruta: row.totalcomision_bruta,
+      comision_cxc_excluida: row.comision_cxc_excluida,
+      comision_otras_exclusiones: row.comision_otras_exclusiones,
+      fraccion_no_cxc: row.fraccion_no_cxc,
+      fraccion_comision_aplicada: row.fraccion_comision_aplicada,
+      fraccion_productos_aplicada: row.fraccion_productos_aplicada,
+      productos_exclusion_aplicada: row.productos_exclusion_aplicada === true,
+      comision_no_cxc_aplicada: true,
+      sourceLegacy: row.sourceLegacy === true,
+      excluida_por_pago: row.excluida_por_pago,
+      excluida_por_productos: row.excluida_por_productos,
+      politica_comision: row.politica_comision,
+      fuente_calculo: row.fuente_calculo,
+      pctcabilla: row.pctcabilla,
+      pctotros: row.pctotros,
+      estado: 'generada',
+      cotizacionid: row.cotizacionid,
+      despacho: row.despacho,
+      cotizacion: row.cotizacion,
+    },
+    vendedor: row.vendedor,
+  }
+}
+
+export async function handleGetComisionesConfig(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request)
+  const user = await verifyAuth(request, env)
+  if (!user?.id) return jsonError('No autenticado', 401, request)
+
+  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1`, {
+    headers: serviceHeaders(env),
+  })
+  if (!response.ok) return jsonError('Error al leer config comisiones', response.status, request)
+  const rows = await response.json()
+  return json(rows[0] || {}, 200, request)
+}
+
+export async function handleGetComisiones(request, env) {
+  const validation = await validateOperator(request, env)
+  if (validation.error) return validation.error
+  const { user, operador } = validation
+  const headers = serviceHeaders(env)
+  const url = new URL(request.url)
+  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10))
+  const pageSize = Math.max(1, Math.min(1000, parseInt(url.searchParams.get('pageSize') || '100', 10)))
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  let query = addCommissionFilters(baseCommissionQuery(env), url.searchParams, user, operador)
+  const response = await fetch(query, {
+    headers: { ...headers, Range: `${from}-${to}`, Prefer: 'count=exact' },
+  })
+  if (!response.ok) {
+    return jsonError(`Error al obtener comisiones: ${await response.text()}`, 500, request)
+  }
+
+  const rows = await response.json()
+  const enriched = await enrichCommissions(env, headers, rows, user.id)
+  const includeExcluded = url.searchParams.get('incluirExcluidas') === 'true'
+  const visible = includeExcluded ? enriched : enriched.filter(row => row.totalcomision > 0)
+  const total = visible.length
+  const data = url.searchParams.get('vista') === 'eventos'
+    ? visible.map(toEvent)
+    : visible
 
   return json({
     data,
     total,
+    totalDespachos: countUniqueDispatches(visible),
     page,
     pageSize,
-    totalPages: Math.ceil(total / pageSize)
+    totalPages: Math.ceil(total / pageSize),
   }, 200, request)
 }
 
 export async function handleGetComisionesResumen(request, env) {
-  const v = await validateOperator(request, env);
-  if (v.error) return v.error;
-  const { user, operador } = v;
+  const validation = await validateOperator(request, env)
+  if (validation.error) return validation.error
+  const { user, operador } = validation
+  const url = new URL(request.url)
+  const headers = serviceHeaders(env)
 
-  const url = new URL(request.url);
+  let query = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en)&order=creadoen.desc`
+  query = addCommissionFilters(query, url.searchParams, user, operador)
 
   try {
-    const headers = {
-      apikey: env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    };
-    const vendedorId = safeParam(url.searchParams.get('vendedorId'));
-    const estado = safeParam(url.searchParams.get('estado'));
-    const desde = safeParam(url.searchParams.get('desde'));
-    const hasta = safeParam(url.searchParams.get('hasta'));
-
-    const esSupervisor = ['supervisor', 'administracion', 'desarrollador', 'jefe'].includes(operador.rol);
-    const filtroVendedor = esSupervisor ? (vendedorId || null) : operador.id;
-
-    const rpcBody = {
-      p_cuenta_id: user.id,
-      p_vendedor_id: filtroVendedor,
-      p_estado: estado,
-      p_fecha_inicio: desde ? `${desde}T00:00:00-04:00` : null,
-      p_fecha_fin: hasta ? `${hasta}T23:59:59-04:00` : null
-    };
-
-    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/obtener_resumen_comisiones_v2`, {
-      method: 'POST',
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(rpcBody)
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      return jsonError(`Error al obtener resumen de comisiones: ${err}`, 500, request);
-    }
-
-    const rows = await res.json();
-    const r = rows[0] || {};
-
+    const response = await fetch(query, { headers })
+    if (!response.ok) return jsonError(`Error al obtener resumen de comisiones: ${await response.text()}`, 500, request)
+    const rows = await response.json()
+    const enriched = await enrichCommissions(env, headers, rows, user.id)
+    const visible = enriched.filter(row => row.totalcomision > 0)
+    const totalAcumulado = visible.reduce((sum, row) => sum + Number(row.totalcomision || 0), 0)
+    const totalDespachos = countUniqueDispatches(visible)
     return json({
-      totalAcumulado: Number(r.totalacumulado || 0),
-      total: Number(r.total || 0),
-    }, 200, request);
-
-  } catch (e) {
-    return jsonError(`Error en agregación: ${e.message}`, 500, request);
+      totalAcumulado: round2(totalAcumulado),
+      total: totalDespachos,
+      totalRegistros: totalDespachos,
+      totalFilas: visible.length,
+    }, 200, request)
+  } catch (error) {
+    return jsonError(`Error en agregación: ${error.message}`, 500, request)
   }
 }

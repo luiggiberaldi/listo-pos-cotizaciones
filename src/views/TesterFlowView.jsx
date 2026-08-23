@@ -147,8 +147,6 @@ const STEPS = [
   { id: 'mark_delivered', label: '25. Marcar entregada', group: 'Despachos' },
   { id: 'assert_delivered', label: '26. Assert: estado=entregada, entregada_en≠null', group: 'Despachos' },
   { id: 'assert_commission', label: '27. Assert: comisión generada con % config', group: 'Comisiones' },
-  { id: 'pay_commission', label: '28. Pagar comisión', group: 'Comisiones' },
-  { id: 'assert_commission_paid', label: '29. Assert: comisión estado=pagada', group: 'Comisiones' },
   { id: 'register_payment', label: '30. Registrar abono CxC ($100)', group: 'Cuentas por Cobrar' },
   { id: 'assert_cxc_abono', label: '31. Assert: saldo=$140.00 (240-100)', group: 'Cuentas por Cobrar' },
   { id: 'assert_report_ventas', label: '32. Assert: reporte ventas incluye despacho', group: 'Reportes' },
@@ -874,35 +872,13 @@ export default function TesterFlowView() {
     assert(Number(com.totalcomision) === expectedComision, expectedComision, com.totalcomision, 'totalcomision')
     addLog(id, `  totalcomision = $${com.totalcomision} ✓`)
 
-    const estadoEsperado = Number(com.comision_retenida || 0) > 0.01 ? 'cta_cobrar' : 'pendiente'
+    const estadoEsperado = 'generada'
     assert(com.estado === estadoEsperado, estadoEsperado, com.estado, 'estado')
     addLog(id, `  estado = "${com.estado}" ✓`)
     const sellerId = await getCommissionSellerId(id)
     assert(com.vendedorid === sellerId, sellerId, com.vendedorid, 'vendedorid')
     addLog(id, `  vendedorid correcto ✓`)
-    if (estadoEsperado === 'cta_cobrar') {
-      assert(Number(com.comision_liberada || 0) === 0, 0, com.comision_liberada, 'comision_liberada inicial')
-      assert(Number(com.comision_retenida || 0) === expectedComision, expectedComision, com.comision_retenida, 'comision_retenida inicial')
-      addLog(id, `  CxC retiene $${com.comision_retenida}; requiere liberación manual ✓`)
-    }
     addLog(id, 'Comisión generada correctamente', 'success')
-  }
-
-  async function stepPayCommission(id) {
-    if (!dataRef.current.comisionId) throw new Error('No hay comisión para pagar')
-    addLog(id, `POST /api/comisiones/pagar (comisionId=${dataRef.current.comisionId})`)
-    await apiCall('/api/comisiones/pagar', 'POST', { comisionId: dataRef.current.comisionId })
-    addLog(id, 'OK', 'success')
-  }
-
-  async function stepAssertCommissionPaid(id) {
-    const { data: com } = await supabase.from('comisiones').select('*').eq('id', dataRef.current.comisionId).single()
-    addLog(id, `Raw comisión post-pago: ${JSON.stringify(com)}`)
-    assert(com.estado === 'pagada', 'pagada', com.estado, 'estado')
-    addLog(id, `  estado = "pagada" ✓`)
-    assert(com.pagada_en !== null, 'no null', com.pagada_en, 'pagada_en')
-    addLog(id, `  pagada_en = ${com.pagada_en} ✓`)
-    addLog(id, 'Comisión pagada correctamente', 'success')
   }
 
   async function stepRegisterPayment(id) {
@@ -1591,8 +1567,6 @@ export default function TesterFlowView() {
     mark_delivered: stepMarkDelivered,
     assert_delivered: stepAssertDelivered,
     assert_commission: stepAssertCommission,
-    pay_commission: stepPayCommission,
-    assert_commission_paid: stepAssertCommissionPaid,
     register_payment: stepRegisterPayment,
     assert_cxc_abono: stepAssertCxCAbono,
     assert_report_ventas: stepAssertReportVentas,

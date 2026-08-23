@@ -203,12 +203,8 @@ function VendedorDetalle({ v, onExport, isExporting, config }) {
 
         <div className="mt-3 pt-3 border-t border-slate-100 space-y-1">
           <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Comisión pagada</span>
-            <span className="font-bold text-emerald-600">{fmtUsd(v.comisionPagada)}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Comisión pendiente</span>
-            <span className="font-bold text-amber-600">{fmtUsd(v.comisionPendiente)}</span>
+            <span className="text-slate-400">Comisión generada</span>
+            <span className="font-bold text-emerald-600">{fmtUsd(v.comisionGenerada ?? v.comisionTotal ?? 0)}</span>
           </div>
           <div className="flex justify-between text-[11px] pt-1 border-t border-dashed border-slate-100">
             <span className="text-slate-400">{labelPrincipal} al 2%</span>

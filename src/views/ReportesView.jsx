@@ -32,8 +32,47 @@ import TabTransportistas from '../components/reportes/TabTransportistas'
 import SeccionTransportistasVentas from '../components/reportes/SeccionTransportistasVentas'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { countUniqueDispatches } from '../utils/comisionUtils'
 
 // Helper para formatear forma_pago_abono (que puede venir como JSON array o string)
+const round2 = value => Math.round((Number(value) || 0) * 100) / 100
+
+function prepararComisionParaPDF(evento, cotizacion = null, vendedorFallback = null) {
+  const event = evento || {}
+  const com = event.comisiones || {}
+  const despacho = com.despacho || event.despacho || null
+  const cot = cotizacion || com.cotizacion || event.cotizacion || null
+  const vendedor = event.vendedor || com.vendedor || vendedorFallback || null
+
+  return {
+    ...event,
+    monto: Number(event.monto ?? com.totalcomision ?? 0),
+    creado_en: event.creado_en || event.creadoen || null,
+    comisiones: {
+      ...com,
+      id: com.id || event.id,
+      totalcomision: Number(com.totalcomision ?? event.monto ?? 0),
+      comisioncabilla: Number(com.comisioncabilla || 0),
+      comisionotros: Number(com.comisionotros || 0),
+      pctcabilla: Number(com.pctcabilla || 0),
+      pctotros: Number(com.pctotros || 0),
+      estado: 'generada',
+      despacho: despacho ? {
+        ...despacho,
+        totalusd: despacho.totalusd !== undefined ? despacho.totalusd : despacho.total_usd,
+        creado_en: despacho.creado_en || despacho.creadoEn || null,
+        cliente_nombre: despacho.cliente_nombre || despacho.clienteNombre || despacho.cliente?.nombre || null,
+        productos: despacho.productos || [],
+      } : null,
+      cotizacion: cot ? {
+        ...cot,
+        cliente_nombre: cot.cliente_nombre || cot.cliente?.nombre || null,
+      } : null,
+    },
+    vendedor,
+  }
+}
+
 function formatMetodoPago(val, fallback = '—') {
   if (!val) return fallback
   try {
@@ -1034,7 +1073,7 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
     }
     setExportando(true)
     try {
-      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
+      const { generarComisionesPDF } = await import('../services/pdf/comisionesGeneradasPDF')
 
       // Usar el Worker, igual que el reporte general, para respetar el tenant
       // y el rol de la sesión. La consulta directa desde el navegador queda
@@ -1074,49 +1113,17 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
         }
       }
 
-      const comisionesParaPDF = rawEvents.map(r => {
-        const com = r.comisiones || {};
-        const desp = com.despacho || {};
-        const cot = cotizacionesMap[com.cotizacionid] || com.cotizacion;
-        return {
-          id: r.id,
-          monto: Number(r.monto || 0),
-          tipo: r.tipo,
-          creado_en: r.creado_en,
-          comisiones: {
-            id: com.id,
-            totalcomision: Number(com.totalcomision || 0),
-            comisioncabilla: Number(com.comisioncabilla || 0),
-            comisionotros: Number(com.comisionotros || 0),
-            pctcabilla: Number(com.pctcabilla || 0),
-            pctotros: Number(com.pctotros || 0),
-            estado: com.estado,
-            montopagado: Number(com.montopagado || 0),
-            cotizacionid: com.cotizacionid,
-            despacho: desp ? {
-              id: desp.id,
-              numero: desp.numero,
-              totalusd: desp.total_usd,
-              tasa_snapshot: desp.tasa_snapshot,
-              cliente: desp.cliente,
-              productos: desp.productos || []
-            } : null,
-            cotizacion: cot ? {
-              id: cot.id,
-              numero: cot.numero,
-              tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
-              cliente_nombre: cot.cliente?.nombre || null
-            } : null
-          },
-          vendedor: r.vendedor || com.vendedor || {
-            id: vendedor?.id,
-            nombre: vendedor?.nombre,
-            color: vendedor?.color,
-            markup_pct: vendedor?.markup_pct,
-            es_externo: vendedor?.es_externo
-          }
-        };
-      });
+      const comisionesParaPDF = rawEvents.map(r => prepararComisionParaPDF(
+        r,
+        r.comisiones?.cotizacion || cotizacionesMap[r.comisiones?.cotizacionid],
+        vendedor ? {
+          id: vendedor.id,
+          nombre: vendedor.nombre,
+          color: vendedor.color,
+          markup_pct: vendedor.markup_pct,
+          es_externo: vendedor.es_externo,
+        } : null,
+      ));
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
@@ -1302,13 +1309,10 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
 function TabComisiones({ configNeg }) {
   const { perfil } = useAuthStore()
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
-  const esDev = perfil?.rol === 'desarrollador'
-
   const [rango, setRango] = useState(() => {
     const r = getCorteSemanalRange(0)
     return { from: r.from, to: r.to }
   })
-  const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
   const { tasaEuro, tasaUsdt } = useTasaCambio()
@@ -1333,7 +1337,6 @@ function TabComisiones({ configNeg }) {
   }
 
   const { data: comisionesRes, isLoading: comisionesLoading, isError, refetch } = useComisiones({
-    estado: filtroEstado,
     vendedorId: filtroVendedor,
     desde: rango.from,
     hasta: rango.to,
@@ -1353,8 +1356,7 @@ function TabComisiones({ configNeg }) {
   const { data: resumen, isLoading: resumenLoading } = useComisionesResumen({
     vendedorId: filtroVendedor,
     desde: rango.from,
-    hasta: rango.to,
-    estado: filtroEstado
+    hasta: rango.to
   })
 
   // Agrupar por vendedor para la vista Maestro (Resumen)
@@ -1373,19 +1375,27 @@ function TabComisiones({ configNeg }) {
           rol: c.vendedor?.rol,
           totalUsd: 0,
           totalBs: 0,
-          cantidad: 0
+          cantidad: 0,
+          rows: []
         }
       }
-      // Sin ciclo pagada/pendiente/cta_cobrar — totalcomision directo
+      // La comisión se suma por fila, pero el indicador cuenta despachos únicos.
       const m = Number(c.totalcomision || 0)
-      const tasa = Number(tasaSeleccionada || 0)
-      const mBs = m * tasa
-
       map[vId].totalUsd += m
-      map[vId].totalBs += mBs
-      map[vId].cantidad++
+      map[vId].rows.push(c)
     })
     return Object.values(map)
+      .map(v => {
+        const totalUsd = round2(v.totalUsd)
+        const totalBs = round2(totalUsd * Number(tasaSeleccionada || 0))
+        return {
+          ...v,
+          totalUsd,
+          totalBs,
+          cantidad: countUniqueDispatches(v.rows),
+          rows: undefined,
+        }
+      })
       .filter(v => v.rol !== 'desarrollador' && v.rol !== 'administracion' && v.rol !== 'logistica')
       .sort((a, b) => b.totalUsd - a.totalUsd)
   }, [comisiones, tasaSeleccionada])
@@ -1413,7 +1423,7 @@ function TabComisiones({ configNeg }) {
     }
     setExportando(true)
     try {
-      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
+      const { generarComisionesPDF } = await import('../services/pdf/comisionesGeneradasPDF')
 
       const params = new URLSearchParams()
       params.set('vista', 'eventos')
@@ -1475,49 +1485,11 @@ function TabComisiones({ configNeg }) {
         ? vendedoresAgrupados.find(v => v.id === filtroVendedor)
         : null
 
-      const comisionesParaPDF = filteredEvents.map(r => {
-        const com = r.comisiones || {};
-        const desp = com.despacho || {};
-        const cot = cotizacionesMap[com.cotizacionid] || com.cotizacion;
-        return {
-          id: r.id,
-          monto: Number(r.monto || 0),
-          tipo: r.tipo,
-          creado_en: r.creado_en,
-          comisiones: {
-            id: com.id,
-            totalcomision: Number(com.totalcomision || 0),
-            comisioncabilla: Number(com.comisioncabilla || 0),
-            comisionotros: Number(com.comisionotros || 0),
-            pctcabilla: Number(com.pctcabilla || 0),
-            pctotros: Number(com.pctotros || 0),
-            estado: com.estado,
-            montopagado: Number(com.montopagado || 0),
-            cotizacionid: com.cotizacionid,
-            despacho: desp ? {
-              id: desp.id,
-              numero: desp.numero,
-              totalusd: desp.totalusd !== undefined ? desp.totalusd : desp.total_usd,
-              tasa_snapshot: desp.tasa_snapshot,
-              cliente: desp.cliente,
-              productos: desp.productos || []
-            } : null,
-            cotizacion: cot ? {
-              id: cot.id,
-              numero: cot.numero,
-              tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
-              cliente_nombre: cot.cliente_nombre || cot.cliente?.nombre || null
-            } : null
-          },
-          vendedor: r.vendedor || com.vendedor || (vendedorInfo ? {
-            id: vendedorInfo.id,
-            nombre: vendedorInfo.nombre,
-            color: vendedorInfo.color,
-            markup_pct: vendedorInfo.markup_pct,
-            es_externo: vendedorInfo.es_externo
-          } : null)
-        };
-      });
+      const comisionesParaPDF = filteredEvents.map(r => prepararComisionParaPDF(
+        r,
+        r.comisiones?.cotizacion || cotizacionesMap[r.comisiones?.cotizacionid],
+        vendedorInfo,
+      ));
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
@@ -1550,7 +1522,7 @@ function TabComisiones({ configNeg }) {
     }
     setExportando(true)
     try {
-      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
+      const { generarComisionesPDF } = await import('../services/pdf/comisionesGeneradasPDF')
 
       // Usar el Worker, igual que el reporte general, para respetar el tenant
       // y el rol de la sesión. La consulta directa desde el navegador queda
@@ -1590,49 +1562,11 @@ function TabComisiones({ configNeg }) {
         }
       }
 
-      const comisionesParaPDF = rawEvents.map(r => {
-        const com = r.comisiones || {};
-        const desp = com.despacho || {};
-        const cot = cotizacionesMap[com.cotizacionid] || com.cotizacion;
-        return {
-          id: r.id,
-          monto: Number(r.monto || 0),
-          tipo: r.tipo,
-          creado_en: r.creado_en,
-          comisiones: {
-            id: com.id,
-            totalcomision: Number(com.totalcomision || 0),
-            comisioncabilla: Number(com.comisioncabilla || 0),
-            comisionotros: Number(com.comisionotros || 0),
-            pctcabilla: Number(com.pctcabilla || 0),
-            pctotros: Number(com.pctotros || 0),
-            estado: com.estado,
-            montopagado: Number(com.montopagado || 0),
-            cotizacionid: com.cotizacionid,
-            despacho: desp ? {
-              id: desp.id,
-              numero: desp.numero,
-              totalusd: desp.total_usd,
-              tasa_snapshot: desp.tasa_snapshot,
-              cliente: desp.cliente,
-              productos: desp.productos || []
-            } : null,
-            cotizacion: cot ? {
-              id: cot.id,
-              numero: cot.numero,
-              tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
-              cliente_nombre: cot.cliente?.nombre || null
-            } : null
-          },
-          vendedor: r.vendedor || com.vendedor || {
-            id: vendedor.id,
-            nombre: vendedor.nombre,
-            color: vendedor.color,
-            markup_pct: vendedor.markup_pct,
-            es_externo: vendedor.es_externo
-          }
-        };
-      });
+      const comisionesParaPDF = rawEvents.map(r => prepararComisionParaPDF(
+        r,
+        r.comisiones?.cotizacion || cotizacionesMap[r.comisiones?.cotizacionid],
+        vendedor,
+      ));
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
@@ -1661,12 +1595,6 @@ function TabComisiones({ configNeg }) {
 
   return (
     <div className="space-y-4">
-      {esDev && (
-        <div className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-[11px] text-violet-800">
-          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-violet-600" />
-          <p><strong>Modo desarrollador:</strong> los controles internos de pago solo son visibles para este perfil. Administración y Jefatura trabajan con el corte PDF y no ven estas acciones.</p>
-        </div>
-      )}
       {/* Filtros */}
       <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-3.5">
@@ -1694,24 +1622,6 @@ function TabComisiones({ configNeg }) {
                   />
                 </div>
               )}
-
-              <div className="w-60">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Estado de Comisión</label>
-                <div className="flex p-0.5 bg-slate-100/80 rounded-xl h-9">
-                  <button
-                    onClick={() => setFiltroEstado('')}
-                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${!filtroEstado ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                  >Todas</button>
-                  <button
-                    onClick={() => setFiltroEstado('pendiente')}
-                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${filtroEstado === 'pendiente' ? 'bg-white shadow-md text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
-                  >Pendientes</button>
-                  <button
-                    onClick={() => setFiltroEstado('pagada')}
-                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${filtroEstado === 'pagada' ? 'bg-white shadow-md text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
-                  >Pagadas</button>
-                </div>
-              </div>
 
               <div className="w-44">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Formato Reporte</label>
@@ -1783,36 +1693,36 @@ function TabComisiones({ configNeg }) {
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
                           <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                            <button
-                              onClick={() => {
-                                setShowPrintMenu(false)
-                                exportarPDF('todos', 'imprimir')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-                            >
-                              <FileText size={13} className="text-slate-400" />
-                              Imprimir PDF Completo
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowPrintMenu(false)
-                                exportarPDF('internos', 'imprimir')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
-                            >
-                              <UserCheck size={13} className="text-indigo-500" />
-                              Imprimir Solo Internos
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowPrintMenu(false)
-                                exportarPDF('externos', 'imprimir')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
-                            >
-                              <Globe size={13} className="text-amber-500" />
-                              Imprimir Solo Externos
-                            </button>
+<button
+  onClick={() => {
+    setShowPrintMenu(false)
+    exportarPDF('todos', 'imprimir')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+>
+  <FileText size={13} className="text-slate-400" />
+  Imprimir PDF Completo
+</button>
+<button
+  onClick={() => {
+    setShowPrintMenu(false)
+    exportarPDF('internos', 'imprimir')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+>
+  <UserCheck size={13} className="text-indigo-500" />
+  Imprimir Solo Internos
+</button>
+<button
+  onClick={() => {
+    setShowPrintMenu(false)
+    exportarPDF('externos', 'imprimir')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+>
+  <Globe size={13} className="text-amber-500" />
+  Imprimir Solo Externos
+</button>
                           </div>
                         </>
                       )}
@@ -1849,36 +1759,36 @@ function TabComisiones({ configNeg }) {
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
                           <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                            <button
-                              onClick={() => {
-                                setShowExportMenu(false)
-                                exportarPDF('todos', 'descargar')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-                            >
-                              <FileText size={13} className="text-slate-400" />
-                              Descargar PDF Completo
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowExportMenu(false)
-                                exportarPDF('internos', 'descargar')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
-                            >
-                              <UserCheck size={13} className="text-indigo-500" />
-                              Descargar Solo Internos
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowExportMenu(false)
-                                exportarPDF('externos', 'descargar')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
-                            >
-                              <Globe size={13} className="text-amber-500" />
-                              Descargar Solo Externos
-                            </button>
+<button
+  onClick={() => {
+    setShowExportMenu(false)
+    exportarPDF('todos', 'descargar')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+>
+  <FileText size={13} className="text-slate-400" />
+  Descargar PDF Completo
+</button>
+<button
+  onClick={() => {
+    setShowExportMenu(false)
+    exportarPDF('internos', 'descargar')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+>
+  <UserCheck size={13} className="text-indigo-500" />
+  Descargar Solo Internos
+</button>
+<button
+  onClick={() => {
+    setShowExportMenu(false)
+    exportarPDF('externos', 'descargar')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+>
+  <Globe size={13} className="text-amber-500" />
+  Descargar Solo Externos
+</button>
                           </div>
                         </>
                       )}
@@ -1975,14 +1885,14 @@ function TabComisiones({ configNeg }) {
         <>
           {/* KPIs (Fuente de verdad SQL) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <KpiCard icon={DollarSign} label="Total Periodo" value={fmtUsd(resumen?.total || 0)}
-              sub="Bruto histórico"
+            <KpiCard icon={DollarSign} label="Comisión generada" value={fmtUsd(resumen?.totalAcumulado || 0)}
+              sub={`${resumen?.totalDespachos || 0} despachos únicos`}
               gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
-            <KpiCard icon={Clock} label="Pendiente USD" value={fmtUsd(resumen?.pendiente || 0)}
-              sub={`${resumen?.countPendiente || 0} comisiones`}
+            <KpiCard icon={Percent} label="Comisión CxC manual" value="Se registra aparte"
+              sub="No se calcula en el sistema"
               gradient="linear-gradient(135deg, #92400e, #78350f)" border="rgba(255,255,255,0.05)" />
-            <KpiCard icon={ArrowUpCircle} label="Total Pagado" value={fmtUsd(resumen?.pagado || 0)}
-              sub={`${resumen?.countPagado || 0} liquidadas`}
+            <KpiCard icon={ArrowUpCircle} label="Estado" value="Generada"
+              sub="Sin flujo de pago interno"
               gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
           </div>
 
@@ -2007,52 +1917,43 @@ function TabComisiones({ configNeg }) {
                           className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-400 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col gap-3 group"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: v.color }}>
-                              {v.nombre.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{v.nombre}</h4>
-                              <p className="text-xs text-slate-500 font-medium">{v.cantidad} despachos procesados</p>
-                            </div>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
-                              title="Descargar reporte individual"
-                              className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all active:scale-95 duration-200"
-                            >
-                              <Download size={14} />
-                            </button>
+<div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: v.color }}>
+  {v.nombre.charAt(0).toUpperCase()}
+</div>
+<div className="flex-1 min-w-0">
+  <h4 className="font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{v.nombre}</h4>
+  <p className="text-xs text-slate-500 font-medium">{v.cantidad} despachos únicos</p>
+</div>
+<button
+  onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
+  title="Descargar reporte individual"
+  className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all active:scale-95 duration-200"
+>
+  <Download size={14} />
+</button>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 mt-2">
-                            <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
-                              <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
-                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
-                            </div>
-                            <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
-                              <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
-                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
-                            </div>
+<div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
+  <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
+  <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+</div>
+<div className="bg-emerald-50/50 rounded-xl p-2.5 text-center border border-emerald-100/50">
+  <p className="text-[10px] text-emerald-600/70 font-bold uppercase mb-0.5">Generada</p>
+  <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+</div>
                           </div>
 
                           <div className="flex justify-between items-center px-1 pt-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
-                            <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
+<span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
+<span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
 
 
-                            <div className="flex flex-col gap-2 mt-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
+
     
-                                }}
-                                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                              >
-                                <CheckCircle size={14} className="text-white" />
-                                <span>Pagar Todo ({fmtUsd(0)})</span>
-                              </button>
-                            </div>
-                          )}
+
+
                         </div>
                       ))}
                     </div>
@@ -2074,57 +1975,48 @@ function TabComisiones({ configNeg }) {
                           className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm cursor-pointer hover:border-amber-400 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col gap-3 group bg-amber-50/5"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: '#D97706' }}>
-                              {v.nombre.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-slate-800 truncate group-hover:text-amber-600 transition-colors">{v.nombre}</h4>
-                              <div className="flex flex-col gap-0.5 mt-0.5">
-                                <span className="text-xs text-slate-500 font-medium">{v.cantidad} despachos procesados</span>
-                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5 w-fit">
-                                  💼 Externo (+{v.markup_pct}%)
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
-                              title="Descargar reporte individual"
-                              className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all active:scale-95 duration-200"
-                            >
-                              <Download size={14} />
-                            </button>
+<div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: '#D97706' }}>
+  {v.nombre.charAt(0).toUpperCase()}
+</div>
+<div className="flex-1 min-w-0">
+  <h4 className="font-bold text-slate-800 truncate group-hover:text-amber-600 transition-colors">{v.nombre}</h4>
+  <div className="flex flex-col gap-0.5 mt-0.5">
+    <span className="text-xs text-slate-500 font-medium">{v.cantidad} despachos únicos</span>
+    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5 w-fit">
+      💼 Externo (+{v.markup_pct}%)
+    </span>
+  </div>
+</div>
+<button
+  onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
+  title="Descargar reporte individual"
+  className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all active:scale-95 duration-200"
+>
+  <Download size={14} />
+</button>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 mt-2">
-                            <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
-                              <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
-                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
-                            </div>
-                            <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
-                              <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
-                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
-                            </div>
+<div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
+  <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
+  <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+</div>
+<div className="bg-emerald-50/50 rounded-xl p-2.5 text-center border border-emerald-100/50">
+  <p className="text-[10px] text-emerald-600/70 font-bold uppercase mb-0.5">Generada</p>
+  <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+</div>
                           </div>
 
                           <div className="flex justify-between items-center px-1 pt-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
-                            <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
+<span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
+<span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
 
 
-                            <div className="flex flex-col gap-2 mt-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
+
     
-                                }}
-                                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                              >
-                                <CheckCircle size={14} className="text-white" />
-                                <span>Pagar Todo ({fmtUsd(0)})</span>
-                              </button>
-                            </div>
-                          )}
+
+
                         </div>
                       ))}
                     </div>
@@ -2146,39 +2038,6 @@ function TabComisiones({ configNeg }) {
           {comisiones.length === 0 && (
             <EmptyState icon={Percent} title="Sin comisiones" description="No hay comisiones en el periodo seleccionado." />
           )}
-
-          {/* Confirmar Pago Masivo desde Tarjeta del Dashboard */}
-          <ConfirmModal
-            isOpen={!!pagoMasivoData}
-            onConfirm={async () => {
-              if (!pagoMasivoData) return
-              setPagandoMasivo(true)
-              const { pendientes: items } = pagoMasivoData
-              for (const c of items) {
-                const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-                const saldo = Math.max(0, m - Number(c.montopagado || 0))
-                if (saldo > 0) {
-                  try {
-                    await marcar.mutateAsync({ comisionid: c.id, montopagado: saldo })
-                  } catch (e) {
-                    console.error('Error pagando comisión', c.id, e)
-                  }
-                }
-              }
-              setPagandoMasivo(false)
-              setPagoMasivoData(null)
-              refetch() // Refrescar los datos para actualizar el pendUsd en las tarjetas
-            }}
-            onClose={() => setPagoMasivoData(null)}
-            title={pagoMasivoData?.title || "Pagar Todas las Comisiones"}
-            message={
-              pagoMasivoData 
-                ? `Se registrará el pago de ${pagoMasivoData.pendientes.length} comisiones (${pagoMasivoData.desc || 'pendientes'}) de ${pagoMasivoData.vendedor?.nombre || 'este vendedor'} por un total de ${fmtUsd(pagoMasivoData.montoPendiente)}. Esta acción es secuencial y final.` 
-                : ''
-            }
-            confirmText={pagoMasivoData?.confirmText || "Confirmar Pago Total"}
-            variant="success"
-          />
         </>
       )}
     </div>
@@ -2599,7 +2458,7 @@ function TabCredito() {
                         {/* Días Restantes */}
                         <td className="px-3 py-3 text-center">
                           {c.diasRestantes === null ? (
-                            <span className="text-slate-300">—</span>
+<span className="text-slate-300">—</span>
                           ) : c.diasRestantes < 0 ? (
                             <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-black bg-red-100 text-red-700">
                               Vencido ({Math.abs(c.diasRestantes)}d)
@@ -2631,7 +2490,7 @@ function TabCredito() {
                         {/* Saldo */}
                         <td className="px-3 py-3 text-right">
                           <span className={`font-black text-sm ${saldo > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                            {fmtUsd(saldo)}
+{fmtUsd(saldo)}
                           </span>
                         </td>
                       </tr>

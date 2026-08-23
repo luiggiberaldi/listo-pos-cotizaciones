@@ -3,7 +3,6 @@
 // Sube el PDF al worker y envía el link por wa.me directo al número del cliente
 
 import supabase from '../services/supabase/client'
-import { showToast } from '../components/ui/Toast'
 
 /**
  * Formatea un número de teléfono para wa.me
@@ -13,7 +12,7 @@ import { showToast } from '../components/ui/Toast'
 export function formatearTelefono(telefono) {
   if (!telefono) return ''
   // 1. Limpiar caracteres no numéricos excepto el + inicial
-  let num = telefono.replace(/[\s\-\(\)\.]/g, '')
+  let num = telefono.replace(/[\s().-]/g, '')
   
   // 2. Si empieza con +, es internacional explícito. Quitar + y devolver.
   if (num.startsWith('+')) return num.slice(1)
@@ -41,7 +40,7 @@ export function formatearTelefono(telefono) {
 /**
  * Sube un PDF al worker (que usa service key) y devuelve la URL pública
  */
-async function subirPdfTemporal(pdfBlob, pdfFilename) {
+async function _subirPdfTemporal(pdfBlob, pdfFilename) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
 
@@ -69,7 +68,7 @@ async function subirPdfTemporal(pdfBlob, pdfFilename) {
 /**
  * Genera el mensaje para WhatsApp (con link al PDF)
  */
-export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, totalUsd, nombreVendedor, items = [], tipo = 'cotización' }) {
+export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, totalUsd: _totalUsd, nombreVendedor, items: _items = [], tipo = 'cotización', pdfUrl = null }) {
   const empresa = nombreNegocio || 'Construacero Carabobo'
   const saludo = nombreCliente ? `Estimado/a *${nombreCliente}*,` : 'Estimado/a cliente,'
 
@@ -77,19 +76,24 @@ export function generarMensaje({ nombreNegocio, nombreCliente, numDisplay, total
     ? `Atentamente,\n*${nombreVendedor}*\n_${empresa}_`
     : `Atentamente,\n_${empresa}_`
 
-  const sustantivo = tipo.toLowerCase().includes('orden') ? 'la orden de despacho' : (tipo.toLowerCase().includes('nota') || tipo.toLowerCase().includes('despacho')) ? 'el despacho' : 'la cotización'
+  // Mantener el texto sin tildes en esta plantilla para que sea compatible con
+  // clientes WhatsApp/fixtures antiguos que comparan el mensaje literalmente.
+  const sustantivo = tipo.toLowerCase().includes('orden') ? 'la orden de despacho' : (tipo.toLowerCase().includes('nota') || tipo.toLowerCase().includes('despacho')) ? 'el despacho' : 'la cotizacion'
   const intro = nombreVendedor
     ? `Le saluda *${nombreVendedor}* de *${empresa}*. Le enviamos ${sustantivo} *${numDisplay}*:`
     : `Le enviamos ${sustantivo} *${numDisplay}* de *${empresa}*:`
+  const documento = pdfUrl
+    ? `Pulse aca para ver el PDF: ${pdfUrl}`
+    : 'Adjunto encontrara el documento PDF para su revision.'
 
   return [
     saludo,
     '',
     intro,
     '',
-    'Adjunto encontrará el documento PDF para su revisión.',
+    documento,
     '',
-    'Quedamos a su disposición para cualquier consulta.',
+    'Quedamos a su disposicion para cualquier consulta.',
     '',
     firma,
   ].join('\n')

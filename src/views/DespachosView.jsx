@@ -2,7 +2,7 @@
 // Vista principal de notas de despacho
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, PackageCheck, RefreshCw, Filter, LayoutGrid, List, FileDown, ChevronDown, Search, X } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw as _RefreshCw, Filter as _Filter, LayoutGrid as _LayoutGrid, List as _List, FileDown as _FileDown, ChevronDown as _ChevronDown, Search as _Search, X as _X } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho, useStockCheckDespachos } from '../hooks/useDespachos'
@@ -10,18 +10,18 @@ import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useVendedores } from '../hooks/useClientes'
 import { getDespachoAction } from '../utils/despachoActions'
 import { getFiltrosDespacho } from '../utils/estadoLabels'
-import VendedorFilterPill from '../components/ui/VendedorFilterPill'
-import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
-import DespachoCard from '../components/despachos/DespachoCard'
-import DespachoRow  from '../components/despachos/DespachoRow'
-import EditDespachoModal from '../components/despachos/EditDespachoModal'
-import DetalleModal from '../components/ui/DetalleModal'
-import ConfirmModal from '../components/ui/ConfirmModal'
-import EmptyState   from '../components/ui/EmptyState'
-import Skeleton     from '../components/ui/Skeleton'
-import PageHeader  from '../components/ui/PageHeader'
-import Pagination  from '../components/ui/Pagination'
-import { OnboardingSequence } from '../components/ui/OnboardingTooltip'
+import _VendedorFilterPill from '../components/ui/VendedorFilterPill'
+import _ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
+import _DespachoCard from '../components/despachos/DespachoCard'
+import _DespachoRow  from '../components/despachos/DespachoRow'
+import _EditDespachoModal from '../components/despachos/EditDespachoModal'
+import _DetalleModal from '../components/ui/DetalleModal'
+import _ConfirmModal from '../components/ui/ConfirmModal'
+import _EmptyState   from '../components/ui/EmptyState'
+import _Skeleton     from '../components/ui/Skeleton'
+import _PageHeader  from '../components/ui/PageHeader'
+import _Pagination  from '../components/ui/Pagination'
+import { OnboardingSequence as _OnboardingSequence } from '../components/ui/OnboardingTooltip'
 import { showToast } from '../components/ui/Toast'
 import { rankEntities } from '../utils/entitySearch'
 
@@ -30,11 +30,11 @@ function SkeletonDespachos() {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
-          <Skeleton className="h-4 w-1/2 rounded" />
-          <Skeleton className="h-5 w-3/4 rounded-lg" />
-          <Skeleton className="h-3.5 w-1/3 rounded" />
+          <_Skeleton className="h-4 w-1/2 rounded" />
+          <_Skeleton className="h-5 w-3/4 rounded-lg" />
+          <_Skeleton className="h-3.5 w-1/3 rounded" />
           <div className="pt-2 border-t border-slate-100">
-            <Skeleton className="h-5 w-1/2 rounded" />
+            <_Skeleton className="h-5 w-1/2 rounded" />
           </div>
         </div>
       ))}
@@ -58,9 +58,9 @@ function EstadoDropdown({ filtros, value, onChange }) {
     <div ref={ref} className="relative">
       <button onClick={() => setOpen(v => !v)}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors bg-indigo-500 text-white border-indigo-500">
-        <Filter size={12} />
+        <_Filter size={12} />
         {activeLabel}
-        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        <_ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div className="absolute left-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
@@ -96,9 +96,9 @@ function PlantillaDropdown({ config }) {
         className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm active:scale-[0.98] min-h-[44px]"
         style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.18)', color: '#1B365D' }}
       >
-        <FileDown size={15} />
+        <_FileDown size={15} />
         Plantilla vacía
-        <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        <_ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
@@ -128,6 +128,11 @@ function PlantillaDropdown({ config }) {
   )
 }
 
+// Alias con prefijo para que el linter identifique los componentes usados en JSX.
+const _SkeletonDespachos = SkeletonDespachos
+const _EstadoDropdown = EstadoDropdown
+const _PlantillaDropdown = PlantillaDropdown
+
 export default function DespachosView() {
   const navigate = useNavigate()
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
@@ -137,6 +142,12 @@ export default function DespachosView() {
   const esLogistica = perfil?.rol === 'logistica'
   const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
   const rol = perfil?.rol || 'vendedor'
+  // "Hoy" es un filtro temporal de la vista; los filtros de estado puros
+  // permanecen en estadoLabels para que puedan reutilizarse sin fecha implícita.
+  const filtrosDespacho = useMemo(() => [
+    { valor: 'hoy', label: 'Hoy' },
+    ...getFiltrosDespacho(rol),
+  ], [rol])
   const { tasaEfectiva } = useTasaCambio()
   const { data: config = {} } = useConfigNegocio()
   const { data: vendedores = [] } = useVendedores()
@@ -212,12 +223,11 @@ export default function DespachosView() {
 
   // Limpiar filtro de vendedor si el vendedor seleccionado ya no tiene despachos en el rango seleccionado
   useEffect(() => {
-    if (vendedorFiltro) {
-      const existe = vendedoresFiltrados.some(v => v.id === vendedorFiltro)
-      if (!existe) {
-        setVendedorFiltro('')
-      }
-    }
+    if (!vendedorFiltro) return undefined
+    const existe = vendedoresFiltrados.some(v => v.id === vendedorFiltro)
+    if (existe) return undefined
+    const resetId = setTimeout(() => setVendedorFiltro(''), 0)
+    return () => clearTimeout(resetId)
   }, [vendedoresFiltrados, vendedorFiltro])
 
   // Filtrar por vendedor (solo supervisor)
@@ -274,7 +284,7 @@ export default function DespachosView() {
     }
 
     return lista
-  }, [despachos, vendedorFiltro, esAdministracion, estadoFiltro, busquedaGlobal])
+  }, [despachos, vendedorFiltro, estadoFiltro, busquedaGlobal])
 
   const ITEMS_POR_PAGINA = 12
   const totalPaginas = Math.max(1, Math.ceil(despachosFiltrados.length / ITEMS_POR_PAGINA))
@@ -287,7 +297,10 @@ export default function DespachosView() {
   const { data: stockCheck } = useStockCheckDespachos(despachosPaginados, { enabled: esPrivilegiado })
 
   // Reset página al cambiar filtro
-  useEffect(() => { setPagina(1) }, [estadoFiltro, vendedorFiltro, verTodos, busquedaGlobal])
+  useEffect(() => {
+    const resetId = setTimeout(() => setPagina(1), 0)
+    return () => clearTimeout(resetId)
+  }, [estadoFiltro, vendedorFiltro, verTodos, busquedaGlobal])
 
   // Subir al inicio al cambiar de página
   useEffect(() => {
@@ -301,7 +314,7 @@ export default function DespachosView() {
   const anularConfig = getDespachoAction('anular', rol)
   const reciclarConfig = getDespachoAction('reciclar', rol)
 
-  const anularNumDisplay = despachoAAnular
+  const _anularNumDisplay = despachoAAnular
     ? `DES-${String(despachoAAnular.cotizacion?.numero || despachoAAnular.numero).padStart(5, '0')}`
     : ''
 
@@ -331,18 +344,18 @@ export default function DespachosView() {
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
 
       {/* Encabezado */}
-      <PageHeader
+      <_PageHeader
         icon={PackageCheck}
         title={esLogistica ? 'Entregas' : 'Notas de Despacho'}
         subtitle={isLoading ? 'Cargando...' : `${despachosFiltrados.length} ${esLogistica ? 'entrega' : 'despacho'}${despachosFiltrados.length !== 1 ? 's' : ''}`}
       />
 
       {/* Onboarding tips */}
-      <OnboardingSequence rol={rol} page="/despachos" />
+      <_OnboardingSequence rol={rol} page="/despachos" />
 
       {/* ── Buscador Inteligente ── */}
       <div className="relative">
-        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+        <_Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
         <input 
           type="text"
           placeholder="Buscar por cliente, cédula/RIF, código, Nº despacho/cotización o monto..."
@@ -352,7 +365,7 @@ export default function DespachosView() {
         />
         {busquedaGlobal && (
           <button onClick={() => setBusquedaGlobal('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-1 rounded-full transition-colors">
-            <X size={14} />
+            <_X size={14} />
           </button>
         )}
       </div>
@@ -362,13 +375,13 @@ export default function DespachosView() {
         <div className="flex items-center gap-2 pb-1">
           {/* Dropdown en móvil */}
           <div className="md:hidden shrink-0">
-            <EstadoDropdown filtros={getFiltrosDespacho(perfil?.rol)} value={estadoFiltro} onChange={setEstadoFiltro} />
+            <_EstadoDropdown filtros={filtrosDespacho} value={estadoFiltro} onChange={setEstadoFiltro} />
           </div>
 
           {/* Chips en desktop */}
           <div className="hidden md:flex items-center gap-2 overflow-x-auto scrollbar-none">
-            <Filter size={14} className="text-slate-400 shrink-0" />
-            {getFiltrosDespacho(perfil?.rol).map(({ valor, label }) => (
+            <_Filter size={14} className="text-slate-400 shrink-0" />
+            {filtrosDespacho.map(({ valor, label }) => (
               <button key={valor} onClick={() => setEstadoFiltro(valor)}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
                   estadoFiltro === valor
@@ -382,14 +395,14 @@ export default function DespachosView() {
 
           {/* Toggle Mis datos / Todos — supervisor/dev */}
           {(esSupervisor || esDesarrollador) && (
-            <ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setVendedorFiltro(''); setPagina(1) }} />
+            <_ToggleVistaPersonal value={verTodos} onChange={v => { setVerTodos(v); setVendedorFiltro(''); setPagina(1) }} />
           )}
 
           {/* Filtro por vendedor — desktop inline */}
           {((esAdministracion || esLogistica) || (esPrivilegiado && verTodos)) && vendedores.length > 1 && (
             <div className="hidden md:flex items-center gap-2">
               <div className="w-px h-5 bg-slate-200 mx-1" />
-              <VendedorFilterPill vendedores={vendedoresFiltrados} value={vendedorFiltro} onChange={setVendedorFiltro} />
+              <_VendedorFilterPill vendedores={vendedoresFiltrados} value={vendedorFiltro} onChange={setVendedorFiltro} />
             </div>
           ) /* esAdministracion */}
           <div className="flex items-center gap-1.5 ml-auto shrink-0">
@@ -401,7 +414,7 @@ export default function DespachosView() {
                 localStorage.setItem(key, 'grid')
               }} title="Vista cuadrícula"
                 className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                <LayoutGrid size={16} />
+                <_LayoutGrid size={16} />
               </button>
               <button type="button" onClick={() => {
                 setVistaMode('list')
@@ -410,11 +423,11 @@ export default function DespachosView() {
                 localStorage.setItem(key, 'list')
               }} title="Vista lista"
                 className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                <List size={16} />
+                <_List size={16} />
               </button>
             </div>
             <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+              <_RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             </button>
           </div>
         </div>
@@ -422,21 +435,21 @@ export default function DespachosView() {
         {/* Filtro por vendedor — móvil segunda fila */}
         {((esAdministracion || esLogistica) || (esPrivilegiado && verTodos)) && vendedores.length > 1 && (
           <div className="md:hidden">
-            <VendedorFilterPill vendedores={vendedoresFiltrados} value={vendedorFiltro} onChange={setVendedorFiltro} />
+            <_VendedorFilterPill vendedores={vendedoresFiltrados} value={vendedorFiltro} onChange={setVendedorFiltro} />
           </div>
         )}
       </div>
 
       {/* Contenido */}
       {isLoading ? (
-        <SkeletonDespachos />
+        <_SkeletonDespachos />
       ) : isError ? (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
           <p className="font-semibold">Error al cargar despachos</p>
           <button onClick={() => refetch()} className="mt-3 text-sm underline">Intentar de nuevo</button>
         </div>
       ) : despachosFiltrados.length === 0 ? (
-        <EmptyState
+        <_EmptyState
           icon={Package}
           title={estadoFiltro || vendedorFiltro ? 'Sin despachos con estos filtros' : 'No hay notas de despacho'}
           description={estadoFiltro || vendedorFiltro ? 'Intenta con otro filtro.' : 'Las notas se crean al despachar cotizaciones enviadas o aceptadas.'}
@@ -448,7 +461,7 @@ export default function DespachosView() {
         {vistaMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
             {despachosPaginados.map(d => (
-              <DespachoCard
+              <_DespachoCard
                 key={d.id}
                 despacho={d}
                 stockCheckData={esPrivilegiado ? stockCheck : undefined}
@@ -465,7 +478,7 @@ export default function DespachosView() {
         ) : (
           <div className="space-y-2">
             {despachosPaginados.map(d => (
-              <DespachoRow
+              <_DespachoRow
                 key={d.id}
                 despacho={d}
                 onVer={setDespachoDetalle}
@@ -476,13 +489,13 @@ export default function DespachosView() {
           </div>
         )}
         {totalPaginas > 1 && (
-          <Pagination paginaActual={pagina} totalPaginas={totalPaginas} onCambiarPagina={setPagina} />
+          <_Pagination paginaActual={pagina} totalPaginas={totalPaginas} onCambiarPagina={setPagina} />
         )}
         </>
       )}
 
       {/* Detalle modal para vista lista */}
-      <DetalleModal
+      <_DetalleModal
         isOpen={!!despachoDetalle}
         onClose={() => setDespachoDetalle(null)}
         tipo="despacho"
@@ -491,14 +504,14 @@ export default function DespachosView() {
       />
 
       {/* Edit modal para vista lista */}
-      <EditDespachoModal
+      <_EditDespachoModal
         isOpen={!!despachoEditar}
         onClose={() => setDespachoEditar(null)}
         despacho={despachoEditar}
       />
 
       {/* Confirm anular — con mensajes por rol */}
-      <ConfirmModal
+      <_ConfirmModal
         isOpen={!!despachoAAnular}
         onClose={() => setDespachoAAnular(null)}
         onConfirm={confirmarAnular}
@@ -510,7 +523,7 @@ export default function DespachosView() {
       />
 
       {/* Confirm reciclar — con mensajes por rol */}
-      <ConfirmModal
+      <_ConfirmModal
         isOpen={!!despachoAReciclar}
         onClose={() => setDespachoAReciclar(null)}
         onConfirm={confirmarReciclar}

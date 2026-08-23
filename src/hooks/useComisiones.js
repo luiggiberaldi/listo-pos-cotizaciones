@@ -59,18 +59,14 @@ export function useComisiones({
         
         const data = JSON.parse(text)
 
-        // ── DEBUG TEMPORAL ──────────────────────────────────────────────
         const items = data?.data ?? []
-        console.log('[useComisiones] WORKER RESPONSE total:', data?.total, '| items count:', items.length)
-        console.log('[useComisiones] PRIMER ITEM RAW:', JSON.stringify(items?.[0] ?? null))
-        // ───────────────────────────────────────────────────────────────
-        
         const mappedItems = items.map(c => {
           if (c.comisiones && c.monto !== undefined) {
             // Si es un objeto de tipo evento de liberación
             return c
           }
           return {
+            ...c,
             id: c.id,
             despachoid: c.despachoid,
             vendedorid: c.vendedorid,
@@ -79,9 +75,22 @@ export function useComisiones({
             totalcomision: Number(c.totalcomision || 0),
             comisioncabilla: Number(c.comisioncabilla || 0),
             comisionotros: Number(c.comisionotros || 0),
+            totalcomision_bruta: c.totalcomision_bruta == null ? null : Number(c.totalcomision_bruta),
+            comision_cxc_excluida: Number(c.comision_cxc_excluida || 0),
+            comision_otras_exclusiones: Number(c.comision_otras_exclusiones || 0),
+            fraccion_no_cxc: Number(c.fraccion_no_cxc ?? 1),
+            fraccion_comision_aplicada: Number(c.fraccion_comision_aplicada ?? 1),
+            fraccion_productos_aplicada: Number(c.fraccion_productos_aplicada ?? 1),
+            productos_exclusion_aplicada: c.productos_exclusion_aplicada === true,
+            comision_no_cxc_aplicada: c.comision_no_cxc_aplicada !== false,
+            excluida_por_pago: !!c.excluida_por_pago,
+            excluida_por_productos: !!c.excluida_por_productos,
+            politica_comision: c.politica_comision || 'fecha_despacho_no_cxc',
+            fuente_calculo: c.fuente_calculo || null,
+            sourceLegacy: c.sourceLegacy === true,
             pctcabilla: Number(c.pctcabilla || 0),
             pctotros: Number(c.pctotros || 0),
-            estado: c.estado || 'generada',
+            estado: 'generada',
             creadoen: c.creadoen,
             vendedor: c.vendedor,
             despacho: c.despacho,
@@ -136,9 +145,13 @@ export function useComisionesResumen({ vendedorId = '', desde = '', hasta = '', 
         }
         
         const data = JSON.parse(text)
+        const totalDespachos = Number(data.totalDespachos ?? data.total ?? 0)
         return {
           totalAcumulado: Number(data.totalAcumulado || 0),
-          totalRegistros: Number(data.total || 0),
+          totalDespachos,
+          // Alias temporal para consumidores antiguos; la UI muestra despachos.
+          totalRegistros: totalDespachos,
+          totalFilas: Number(data.totalFilas ?? 0),
         }
       } catch (e) {
         console.error('Error useComisionesResumen:', e.message)

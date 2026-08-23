@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
-import { getComisionPctForItem } from '../utils/comisionUtils'
+import { getComisionPctForItem, getNonCxcFraction, isDonationPayment, isLoanPayment } from '../utils/comisionUtils'
 
 export const REPORTE_VENDEDORES_KEY = ['reporte-vendedores']
 
@@ -243,18 +243,18 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       const calcularComisionDespachoJS = (d, comList) => {
         let esDonacion = false
         const fp = Array.isArray(d.forma_pago) ? d.forma_pago : []
-        if (fp.some(f => f.metodo === 'Donación') || d.forma_pago === 'Donación') {
+        if (fp.some(f => f.metodo === 'Donación') || d.forma_pago === 'Donación' || isDonationPayment(d.forma_pago_cliente)) {
           esDonacion = true
         }
 
-        if (esDonacion) {
+        if (esDonacion || isLoanPayment(d.forma_pago_cliente || d.forma_pago)) {
           return {
             totalcomision: 0,
             comisioncabilla: 0,
             comisionotros: 0,
             pctcabilla: 0,
             pctotros: 0,
-            estado: 'pagada'
+            estado: 'generada'
           }
         }
 
@@ -291,7 +291,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
 
         const processItem = (it, totalNeto) => {
           const nameLower = (it.nombre_snap || '').toLowerCase().trim()
-          if (nameLower.startsWith('corte')) return
+          if (it.es_prestamo || nameLower.startsWith('corte')) return
 
           const pct = getComisionPctForItem(
             {
@@ -335,7 +335,10 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           })
         }
 
-        const totalComision = comisionCabilla + comisionOtros
+        const paymentSplit = getNonCxcFraction(d)
+        const totalComision = Number(((comisionCabilla + comisionOtros) * paymentSplit.fraction).toFixed(2))
+        comisionCabilla = Number((comisionCabilla * paymentSplit.fraction).toFixed(2))
+        comisionOtros = Number((comisionOtros * paymentSplit.fraction).toFixed(2))
         const pctCabilla = seller.es_externo
           ? Number(config.comision_ext_pct_cabilla ?? 2)
           : (seller.comision_pct_cabilla != null ? Number(seller.comision_pct_cabilla) : Number(config.comision_pct_cabilla ?? 2))
@@ -349,7 +352,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           comisionotros: comisionOtros,
           pctcabilla: pctCabilla,
           pctotros: pctOtros,
-          estado: 'pendiente'
+          estado: 'generada'
         }
       }
 

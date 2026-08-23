@@ -25,7 +25,8 @@
     "security:grants:main:full": "node scripts/apply-security-grants-full-main.mjs",
     "postflight:security:grants:main:full": "node scripts/postflight-security-grants-full-main.mjs",
     "smoke:products:main": "node scripts/smoke-product-worker-main.mjs",
-    "smoke:tester:cleanup:main": "node scripts/smoke-tester-cleanup-worker-main.mjs"
+    "smoke:tester:cleanup:main": "node scripts/smoke-tester-cleanup-worker-main.mjs",
+    "validate:238b:review": "node scripts/validate-238b-review-package.mjs"
 },
   "dependencies": {
     "@honcho-ai/sdk": "^2.1.1",

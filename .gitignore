@@ -75,3 +75,21 @@ __tests__/
 !ARQUITECTURA.md
 !ROADMAP.md
 !BITACORA.md
+
+# Release evidence and selected commission regressions
+!docs/plans/2026-08-23-paquete-release-principal-comisiones.md
+!docs/plans/2026-08-22-auditoria-pdfs-comisiones.md
+!docs/plans/2026-08-22-fix-e2e-comisiones-pago-legacy.md
+!docs/plans/2026-08-22-quitar-pago-comisiones.md
+!src/utils/__tests__/
+!src/utils/__tests__/comisionUtils.test.js
+!src/utils/__tests__/comisionesGeneradasPDF.test.js
+!src/utils/__tests__/pdfSharedHeader.test.js
+!src/utils/__tests__/comisionesTasa.test.js
+
+# Revisión SQL 238b del proyecto principal
+!scripts/
+scripts/*
+!scripts/validate-238b-review-package.mjs
+!docs/plans/2026-08-23-plan-reconciliacion-comisiones-238b.md
+!docs/plans/2026-08-23-validacion-migracion-238.md

@@ -3180,3 +3180,79 @@ Las tres llamadas ahora derivan el modo corte del formato:
 - Aplicar migración 238 en staging → validar → principal.
 - Smoke test post-migración.
 - Columnas legacy (`montopagado`, `pagadaen`, `pagadapor`, `comision_liberada`, `comision_retenida`) conservadas en BD; datos históricos intactos.
+
+## SESIÓN 22/08/2026 — Deploy post-commit comisiones
+
+- `npm run build`: **PASS**
+- Worker + frontend desplegados: `https://listo-pos-cotizaciones.luigistorelogistics.workers.dev`
+- Version ID: `aa86d0e5-a639-4a00-a1db-e6965c0089d8`
+- HTTP 200 OK.
+- La nueva RPC (`calcularcomisiondespacho` de la migración 238) **aún no se aplicó en BD**. Hasta que no se ejecute la migración, las comisiones nuevas se seguirán generando con la lógica vieja (CxC incluida en totalcomision, estados pagada/pendiente/cta_cobrar). El deploy actual es el código frontend/Worker sin referencias a pago, pero la BD todavía usa la función de la migración 200.
+
+## SESIÓN 22/08/2026 — Plan de fixeo E2E de comisiones y flujo de pago legacy
+
+### Contexto
+
+La auditoría E2E de `Reportes → Comisiones` confirmó que el bundle publicado todavía mostraba `Pagar Todo ($0.00)`, conservaba filtros y KPIs de pago, y contenía cierres JSX inválidos. `ComisionesView`, `TabLiquidacion` y `TesterFlowView` también mantenían consumidores del flujo de pago retirado.
+
+La fuente local y los bundles publicados fueron comparados y resultaron idénticos; por eso el problema no es únicamente caché. El Worker sí devuelve 404 para las rutas retiradas `/api/comisiones/pagar`, `/api/comisiones/liberar-cxc` y `/api/comisiones/estado`, mientras el frontend todavía intenta exponer algunas de esas capacidades.
+
+### Documento preparado
+
+- `docs/plans/2026-08-22-fix-e2e-comisiones-pago-legacy.md`
+
+El plan define 8 fases:
+
+1. Baseline y congelamiento del estado actual.
+2. Contrato único de comisión generada y fórmula de ajustes manuales.
+3. Reparación de `ReportesView` y del JSX sobrante.
+4. Limpieza de `ComisionesView`.
+5. Limpieza de `TabLiquidacion`, `TesterFlowView`, dashboards, auditoría y PDF.
+6. Verificación de API/Worker.
+7. Tests unitarios, lint, build y E2E autenticado.
+8. Promoción controlada y aplicación posterior de la migración 238.
+
+### Reglas preservadas
+
+- Se elimina el pago únicamente del dominio de comisiones.
+- `pendiente` de despachos, clientes, órdenes y seguimiento operativo se conserva.
+- Las columnas legacy de la base y los datos históricos no se borran ni recalculan en este paquete.
+- La migración 238 queda después de la corrección y validación del código.
+
+### Estado
+
+**Solo documentación. No se modificó código, no se ejecutó SQL remoto y no se desplegó.**
+
+Siguiente paso: ejecutar la Fase 0 y la Fase 1 del plan en el proyecto principal, manteniendo separados los cambios no relacionados que ya están en el checkout.
+
+## SESIÓN 23/08/2026 — Cierre del paquete de release principal
+
+- Se inventariaron los cambios del checkout y se separaron conceptualmente el candidato principal, staging, nomina, temporales y artefactos locales.
+- Se preparo `docs/plans/2026-08-23-paquete-release-principal-comisiones.md` con archivos incluidos, exclusiones, pruebas y gates.
+- `wrangler.toml` ya no contiene `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` ni `DEV_SUPER_CODE` en texto plano; deben existir como bindings/secretos configurados fuera del repositorio antes del deploy.
+- Se hicieron visibles en Git solo las regresiones de comisiones/PDF y el reporte de este paquete; no se habilitaron todos los tests ignorados del proyecto.
+- No se hizo stage, commit, migracion, backup remoto ni deploy.
+- Estado del paquete: `NO-GO` hasta completar backup/baseline del principal, rotacion/verificacion de secretos, reconciliacion de migraciones, smoke post-deploy y aprobacion de ventana.
+
+## SESION 23/08/2026 - Validacion local del paquete 238b
+
+- Se reconstruyeron `scripts/validate-238b-review-package.mjs`, `docs/plans/2026-08-23-plan-reconciliacion-comisiones-238b.md` y `docs/plans/2026-08-23-validacion-migracion-238.md`, que habian quedado incompletos durante interrupciones anteriores.
+- Se corrigio el dry-run historico para incluir metadata legacy completa, evidencia por item y `GROUP BY` alineado con todas las columnas seleccionadas.
+- El registro del snapshot ahora compara tambien `detalle_extras`, version, politica, fuente y evidencia antes de aceptar una propuesta.
+- `npm run validate:238b:review`: PASS (`ok: true`, 4 archivos, sin errores ni warnings, `remote_execution: false`).
+- `node --check` del validador, API de comisiones y PDF: PASS.
+- `npm test`: PASS, 31 archivos y 281 pruebas.
+- `npm run build`: PASS; queda solo el warning existente de chunks mayores a 500 kB.
+- Lint focalizado del paquete: PASS con 0 errores y 112 warnings heredados de imports, variables y hooks no usados. El lint global no es concluyente porque recorre artefactos generados y proyectos auxiliares.
+- `git diff --check` sobre los artefactos: PASS.
+- No se ejecuto SQL remoto, no se retiro `REVIEW_ONLY` de los archivos fuente, no se creo batch real y no se hizo commit.
+- El preflight guardado en `tmp/e2e-main/` y algunos reportes historicos estan incompletos; el conteo documentado de 725 filas debe regenerarse en disposable/staging antes de aplicar.
+- Estado: `NO-GO`; siguiente paso unico: obtener backup/clon disposable verificable, baseline read-only reproducible y compilar el paquete en PostgreSQL real.
+
+## SESION 23/08/2026 - Preparacion de push del proyecto principal
+
+- Se reescribieron únicamente los dos commits locales no publicados sobre `origin/main` para retirar valores sensibles de `wrangler.toml` y `wrangler.dev.jsonc`.
+- Los commits saneados actuales son `6b4beb9` (guardrails/Worker) y `f3c4ac8` (comisiones/CxC).
+- Se conservaron sin stage los cambios posteriores del proyecto raíz para preparar commits selectivos de código, PDF, SQL y documentación.
+- Se excluyen explícitamente `construacero-staging/`, `nomina-construacero/`, `supabase/staging/`, workflows de staging, `.freebuff/`, `tmp/`, `.env`, backups y builds.
+- No se ejecutó push, SQL remoto, backup remoto ni deploy durante esta preparación.

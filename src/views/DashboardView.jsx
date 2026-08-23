@@ -159,7 +159,7 @@ export default function DashboardView() {
 
   const variacionMes = useMemo(() => m && m.totalMesAntUsd > 0
     ? Math.round(((m.totalMesUsd - m.totalMesAntUsd) / m.totalMesAntUsd) * 100)
-    : null, [m?.totalMesUsd, m?.totalMesAntUsd])
+    : null, [m])
 
   // Subtítulo según rol
   const subtitle = esLogistica
@@ -245,9 +245,9 @@ export default function DashboardView() {
               />
               <MetricCard
                 icon={DollarSign}
-                label="Comisiones pendientes"
-                value={fmtUsd(comResumen?.pendiente ?? 0)}
-                sub={comResumen?.countPendiente ? `${comResumen.countPendiente} por pagar` : undefined}
+                label="Comisiones generadas"
+                value={fmtUsd(comResumen?.totalAcumulado ?? 0)}
+                sub={comResumen?.totalRegistros ? `${comResumen.totalRegistros} registros` : undefined}
                 color="primary"
                 onClick={() => navigate('/comisiones')}
               />
@@ -676,18 +676,14 @@ export default function DashboardView() {
           ) : (
             <>
               {/* Totalizador */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div className="bg-slate-50 rounded-xl p-2.5 text-center">
-                  <p className="text-[10px] text-slate-400 font-medium">Total semana</p>
+                  <p className="text-[10px] text-slate-400 font-medium">Comisión generada</p>
                   <p className="text-sm font-black text-slate-800">{fmtUsd(dm.comisionesSemana.total)}</p>
                 </div>
-                <div className="bg-amber-50 rounded-xl p-2.5 text-center">
-                  <p className="text-[10px] text-amber-600 font-medium">Pendiente</p>
-                  <p className="text-sm font-black text-amber-700">{fmtUsd(dm.comisionesSemana.vendedores.reduce((s,v) => s+v.pendiente,0))}</p>
-                </div>
                 <div className="bg-emerald-50 rounded-xl p-2.5 text-center">
-                  <p className="text-[10px] text-emerald-600 font-medium">Pagado</p>
-                  <p className="text-sm font-black text-emerald-700">{fmtUsd(dm.comisionesSemana.vendedores.reduce((s,v) => s+v.pagado,0))}</p>
+                  <p className="text-[10px] text-emerald-600 font-medium">Registros generados</p>
+                  <p className="text-sm font-black text-emerald-700">{dm.comisionesSemana.vendedores.reduce((sum, seller) => sum + seller.count, 0)}</p>
                 </div>
               </div>
 
@@ -697,10 +693,8 @@ export default function DashboardView() {
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="text-left px-3 py-2 text-slate-500 font-semibold">Vendedor</th>
-                      <th className="text-center px-2 py-2 text-slate-500 font-semibold">Coms.</th>
-                      <th className="text-right px-3 py-2 text-amber-600 font-semibold">Pendiente</th>
-                      <th className="text-right px-3 py-2 text-emerald-600 font-semibold">Pagado</th>
-                      <th className="text-right px-3 py-2 text-slate-700 font-semibold">Total</th>
+                      <th className="text-center px-2 py-2 text-slate-500 font-semibold">Registros</th>
+                      <th className="text-right px-3 py-2 text-emerald-600 font-semibold">Generada</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -713,9 +707,7 @@ export default function DashboardView() {
                           </div>
                         </td>
                         <td className="px-2 py-2 text-center text-slate-500">{v.count}</td>
-                        <td className="px-3 py-2 text-right text-amber-600 font-medium">{fmtUsd(v.pendiente)}</td>
-                        <td className="px-3 py-2 text-right text-emerald-600 font-medium">{fmtUsd(v.pagado)}</td>
-                        <td className="px-3 py-2 text-right font-bold text-slate-800">{fmtUsd(v.total)}</td>
+                        <td className="px-3 py-2 text-right text-emerald-600 font-medium">{fmtUsd(v.generado)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -858,20 +850,11 @@ export default function DashboardView() {
               Ver todas <ArrowRight size={12} />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="grid grid-cols-1 gap-2 sm:gap-3">
             <div className="bg-slate-50 rounded-xl p-2.5 sm:p-3">
-              <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Acumulado</p>
-              <p className="text-base sm:text-lg font-black text-slate-800">{fmtUsd(comResumen.total)}</p>
-            </div>
-            <div className="bg-amber-50 rounded-xl p-2.5 sm:p-3">
-              <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Pendiente</p>
-              <p className="text-base sm:text-lg font-black text-amber-700">{fmtUsd(comResumen.pendiente)}</p>
-              <p className="text-[10px] sm:text-xs text-amber-500">{comResumen.countPendiente} por pagar</p>
-            </div>
-            <div className="bg-emerald-50 rounded-xl p-2.5 sm:p-3">
-              <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Pagado</p>
-              <p className="text-base sm:text-lg font-black text-emerald-700">{fmtUsd(comResumen.pagado)}</p>
-              <p className="text-[10px] sm:text-xs text-emerald-500">{comResumen.countPagado} pagadas</p>
+              <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Comisión generada</p>
+              <p className="text-base sm:text-lg font-black text-slate-800">{fmtUsd(comResumen.totalAcumulado ?? 0)}</p>
+              <p className="text-[10px] sm:text-xs text-slate-500">{comResumen.totalRegistros ?? 0} registros · sin flujo de pago interno</p>
             </div>
           </div>
         </div>

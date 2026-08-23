@@ -62,14 +62,12 @@ export function getCotizacionLabel(estado) {
 export function getFiltrosDespacho(rol) {
   if (rol === 'logistica') {
     return [
-      { valor: 'hoy',        label: 'Hoy' },
       { valor: '',           label: 'Todas' },
       { valor: 'despachada', label: 'Por entregar' },
       { valor: 'entregada',  label: 'Entregadas' },
     ]
   }
   return [
-    { valor: 'hoy',        label: 'Hoy' },
     { valor: '',           label: 'Todos' },
     { valor: 'pendiente',  label: getDespachoLabel('pendiente', rol) },
     { valor: 'despachada', label: getDespachoLabel('despachada', rol) },
