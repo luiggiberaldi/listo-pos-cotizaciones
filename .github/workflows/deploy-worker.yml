@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: "npm"
 
       - name: Instalar dependencias
         run: npm install
@@ -24,6 +24,25 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Configurar secretos runtime del Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DEV_SUPER_CODE: ${{ secrets.DEV_SUPER_CODE }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Falta CF_API_TOKEN"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Falta CF_ACCOUNT_ID"; exit 1; }
+          test -n "$SUPABASE_ANON_KEY" || { echo "Falta VITE_SUPABASE_ANON_KEY para validar JWT en el Worker"; exit 1; }
+          test -n "$SUPABASE_SERVICE_KEY" || { echo "Falta SUPABASE_SERVICE_KEY para operaciones administrativas del Worker"; exit 1; }
+          test -n "$DEV_SUPER_CODE" || { echo "Falta DEV_SUPER_CODE para el acceso de desarrollador"; exit 1; }
+
+          printf '%s' "$SUPABASE_ANON_KEY" | npx wrangler secret put SUPABASE_ANON_KEY
+          printf '%s' "$SUPABASE_SERVICE_KEY" | npx wrangler secret put SUPABASE_SERVICE_KEY
+          printf '%s' "$DEV_SUPER_CODE" | npx wrangler secret put DEV_SUPER_CODE
 
       - name: Deploy a Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
