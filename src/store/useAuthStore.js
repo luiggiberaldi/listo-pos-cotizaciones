@@ -230,6 +230,14 @@ const useAuthStore = create((set, get) => ({
     console.log('[AUTH] registrando onAuthStateChange...')
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // SIGNED_IN puede emitirse varias veces durante el arranque, al
+        // recuperar el foco de la pestaña o por múltiples reintentos. Si el
+        // usuario ya está inicializado, no hay nada que reprocesar.
+        if (event === 'SIGNED_IN' && session?.user) {
+          const currentUser = get().user
+          if (get().initialized && currentUser?.id === session.user.id) return
+        }
+
         console.log('[AUTH] evento:', event, 'session:', !!session, 'user:', session?.user?.email)
         // Mantener el canal Realtime autenticado con el token actual —
         // necesario para que postgres_changes sobre tablas con RLS entregue eventos
