@@ -522,6 +522,11 @@ const useAuthStore = create((set, get) => ({
         if (res.status === 500) {
           throw new Error('worker_unavailable')
         }
+        // Un 401 aquí puede ser una sesión/token rechazado por el Worker;
+        // no mostrarlo como PIN incorrecto salvo que la API lo confirme.
+        if (res.status === 401 && result.error === 'No autenticado') {
+          throw new Error('auth_session_invalid')
+        }
         set({ loading: false, error: result.error || 'PIN incorrecto' })
         return { ok: false }
       }
@@ -600,9 +605,11 @@ const useAuthStore = create((set, get) => ({
       // No hay cache de operadores — no se puede validar offline
       set({
         loading: false,
-        error: !navigator.onLine
-          ? 'Sin conexión. Conecta a internet la primera vez para habilitar el modo offline.'
-          : 'Error de conexión. Verifica tu internet e intenta de nuevo.',
+        error: err.message === 'auth_session_invalid'
+          ? 'La sesión no fue aceptada por el servidor local. Reinicia el Worker con las claves del mismo proyecto Supabase y vuelve a iniciar sesión.'
+          : !navigator.onLine
+            ? 'Sin conexión. Conecta a internet la primera vez para habilitar el modo offline.'
+            : 'Error de conexión. Verifica tu internet e intenta de nuevo.',
       })
       return { ok: false }
     }

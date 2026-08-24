@@ -1021,15 +1021,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             </div>
           ) : null
         )}
-        {isCtaPorCobrar && (
-          <div className="flex items-center gap-1.5 text-[11px] text-amber-600 font-medium mt-0.5">
-            <CreditCard size={11} className="shrink-0" />
+        {metodosPagoList.length > 0 && (
+          <div className="flex items-start gap-1.5 text-[11px] text-slate-600 font-medium mt-0.5">
+            <CreditCard size={11} className="shrink-0 mt-0.5 text-slate-400" />
             <span>
-              {isMixtoCxc 
-                ? `Mixto (${metodosPagoList.join(' + ')})` 
-                : 'Cta. por cobrar'
-              }
-              {textVencimiento ? ` - ${textVencimiento}` : ''}
+              <span className="text-slate-400">Pago: </span>
+              {metodosPagoList.join(' + ')}
+              {isCtaPorCobrar && textVencimiento ? ` - ${textVencimiento}` : ''}
             </span>
           </div>
         )}
