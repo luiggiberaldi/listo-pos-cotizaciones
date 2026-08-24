@@ -1426,9 +1426,11 @@ export async function handleEditarItemsDespacho(request, env) {
   if (v.error) return v.error;
   const { user, operador, headers } = v;
 
-  // ── 1. Solo administración o jefes pueden editar ítems de despacho ──────────
-  if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
-    return jsonError('Solo administración puede editar ítems del despacho', 403, request);
+  // ── 1. Roles autorizados para edición profunda ─────────────────────────────
+  // El supervisor tiene alcance global dentro de su cuenta, no solo sobre sus
+  // propios despachos. El estado se valida nuevamente abajo y en el RPC.
+  if (!['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
+    return jsonError('No tienes permiso para editar profundamente el despacho', 403, request);
   }
 
   let body;
@@ -1444,12 +1446,15 @@ export async function handleEditarItemsDespacho(request, env) {
 
   try {
     const despachoRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=total_usd,flete_usd,corte_usd,descuento_total_usd,forma_pago,forma_pago_cliente`,
+      `${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=id,cuenta_id,estado,total_usd,flete_usd,corte_usd,descuento_total_usd,forma_pago,forma_pago_cliente`,
       { headers },
     )
     if (!despachoRes.ok) return jsonError('Error al verificar despacho', 500, request)
     const [despachoActual] = await despachoRes.json()
     if (!despachoActual) return jsonError('Despacho no encontrado', 404, request)
+    if (despachoActual.estado !== 'pendiente') {
+      return jsonError('La edición profunda solo está permitida para despachos pendientes', 400, request)
+    }
 
     const comisionAntes = await obtenerComisionExistente(despachoId, headers, env)
     const totalItemsPosterior = items.reduce((sum, item) => {
@@ -1509,7 +1514,9 @@ export async function handleEditarItemsDespacho(request, env) {
       return jsonError(msg, 400, request);
     }
 
-    // ── 2b. Sincronizar Cuentas por Cobrar (CxC) si el despacho ya está aprobado ('despachada') ──
+    // ── 2b. Sincronizar Cuentas por Cobrar ────────────────────────────────────
+    // La edición profunda solo llega aquí para despachos pendientes. Esta rama
+    // conserva la compatibilidad de pagos, pero no habilita edición post-aprobación.
     try {
       const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=estado,cliente_id,cliente_factura_id,cotizacion_id,total_usd,forma_pago,forma_pago_cliente`, { headers });
       const despList = await dRes.json();
