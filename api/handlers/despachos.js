@@ -2,6 +2,7 @@ import { json, jsonError, isValidUuid } from '../lib/utils.js'
 import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
+import { getCommissionablePaymentSplit, isDonationPayment } from '../../src/utils/comisionUtils.js'
 
 function resolverIdempotencyKey(request, body) {
   const fromBody = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : ''
@@ -60,6 +61,36 @@ async function validarDestinoFleteLocal({ env, headers, cuentaId, transportistaI
     return jsonError('Debe indicar el estado de destino para calcular la comisión del chofer local.', 400, request)
   }
   return null
+}
+
+async function obtenerComisionExistente(despachoId, headers, env) {
+  const response = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id,calculo_version,fuente_calculo&limit=1`,
+    { headers },
+  )
+  if (!response.ok) return null
+  const [row] = await response.json()
+  return row || null
+}
+
+function esComisionNueva238b(comision) {
+  return comision?.calculo_version === '238b'
+}
+
+function pagoMixtoRequiereRevision(totalUsd, formaPagoCliente, formaPago) {
+  return getCommissionablePaymentSplit({ totalUsd, formaPagoCliente, formaPago }).requiresManualReview === true
+}
+
+function pagoEsDonacion(formaPagoCliente, formaPago) {
+  return isDonationPayment(formaPagoCliente) || isDonationPayment(formaPago)
+}
+
+async function recalcularComision238b(despachoId, headers, env) {
+  return fetch(`${env.SUPABASE_URL}/rest/v1/rpc/recalcularcomisiondespacho_238b`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify({ p_despachoid: despachoId }),
+  })
 }
 
 async function obtenerVendedorComisionId(despacho, headers, env) {
@@ -290,11 +321,28 @@ export async function handleEditarPagoDespacho(request, env) {
   if (!despachoId) return jsonError('Falta despachoId', 400, request);
   if (!isValidUuid(operador.cuenta_id)) return jsonError('Cuenta del operador no disponible', 403, request);
 
-  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id,cliente_id,transportista_id,direccion_envio_estado,flete_pagado`, { headers: h });
+  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id,cliente_id,transportista_id,direccion_envio_estado,flete_pagado,forma_pago,forma_pago_cliente`, { headers: h });
   if (!checkRes.ok) return jsonError('Error al verificar despacho', 500, request);
   const despachos = await checkRes.json();
   if (!despachos.length) return jsonError('Despacho no encontrado', 404, request);
   const despacho = despachos[0];
+  const comisionAntes = await obtenerComisionExistente(despachoId, h, env)
+
+  const totalPosterior = (fleteUsd !== undefined || corteUsd !== undefined)
+    ? Number(despacho.total_usd || 0)
+      - Number(despacho.flete_usd || 0)
+      - Number(despacho.corte_usd || 0)
+      + (fleteUsd !== undefined ? Number(fleteUsd || 0) : Number(despacho.flete_usd || 0))
+      + (corteUsd !== undefined ? Number(corteUsd || 0) : Number(despacho.corte_usd || 0))
+    : Number(despacho.total_usd || 0)
+  if (esComisionNueva238b(comisionAntes)
+    && pagoMixtoRequiereRevision(
+      totalPosterior,
+      formaPagoCliente !== undefined ? formaPagoCliente : despacho.forma_pago_cliente,
+      formaPago !== undefined ? formaPago : despacho.forma_pago,
+    )) {
+    return jsonError('Pago mixto sin montos explícitos: complete los montos de CxC y del método no-CxC antes de recalcular la comisión.', 400, request)
+  }
 
   const camposFinancierosFlete = transportistaId !== undefined
     || fleteUsd !== undefined
@@ -433,10 +481,8 @@ export async function handleEditarPagoDespacho(request, env) {
     return errorReglaFlete(err, request, 'Error al actualizar despacho')
   }
 
-  // Recalcular comision si ya existe (porque pudo cambiar el total o forma de pago)
-  const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`, { headers: h });
-  const comEntries = await comRes.json();
-  if (Array.isArray(comEntries) && comEntries.length > 0) {
+  // Recalcular únicamente una comisión nueva 238b; las legacy no se modifican.
+  if (esComisionNueva238b(comisionAntes)) {
     const vendedorIdComision = await obtenerVendedorComisionId(despacho, h, env);
     const vendRolRes2 = await fetch(
       `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendedorIdComision}&select=rol,markup_pct`,
@@ -445,32 +491,19 @@ export async function handleEditarPagoDespacho(request, env) {
     const [vendRol2] = await vendRolRes2.json();
     console.log('[COMISION][EDITAR_PAGO] rol vendedor:', vendRol2?.rol, 'markup:', vendRol2?.markup_pct);
 
-    let esDonacion = false;
-    const fpToCheck = formaPago !== undefined ? formaPago : despacho.forma_pago;
-    if (fpToCheck) {
-      try {
-        const fps = typeof fpToCheck === 'string' ? JSON.parse(fpToCheck) : fpToCheck;
-        if (Array.isArray(fps)) {
-          esDonacion = fps.some(f => f.metodo === 'Donación');
-        } else if (typeof fps === 'string') {
-          esDonacion = fps === 'Donación';
-        }
-      } catch { /* forma de pago malformada */ }
-    }
+    const esDonacion = pagoEsDonacion(
+      formaPagoCliente !== undefined ? formaPagoCliente : despacho.forma_pago_cliente,
+      formaPago !== undefined ? formaPago : despacho.forma_pago,
+    )
 
     if (esDonacion || ['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol2?.rol) || (vendRol2?.rol === 'vendedor_sin_comision' && parseFloat(vendRol2?.markup_pct || 0) <= 0)) {
-      await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionAntes.id}`, {
         method: 'DELETE', headers: h,
       });
-      console.log('[COMISION][EDITAR_PAGO] Comisión eliminada por ser método Donación o rol exento.');
+      console.log('[COMISION][EDITAR_PAGO] Comisión 238b eliminada por método Donación o rol exento.');
     } else {
-      await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
-        method: 'DELETE', headers: h,
-      });
-      await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
-        method: 'POST', headers: { ...h, Prefer: 'return=representation' },
-        body: JSON.stringify({ p_despachoid: despachoId }),
-      });
+      const recalcRes = await recalcularComision238b(despachoId, h, env)
+      if (!recalcRes.ok) console.error('[COMISION][EDITAR_PAGO] Error al recalcular 238b:', await recalcRes.text())
     }
   }
 
@@ -511,6 +544,16 @@ export async function handleActualizarEstadoDespacho(request, env) {
     const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=*`, { headers });
     const [desp] = await dRes.json();
     if (!desp) return jsonError('Despacho no encontrado', 404, request);
+
+    // La política 238b se valida antes de registrar CxC, cambiar estado o
+    // descontar inventario. Un despacho legacy existente no se reinterpreta.
+    const comisionInicial = await obtenerComisionExistente(despachoId, headers, env)
+    const flujoComision238b = !comisionInicial || esComisionNueva238b(comisionInicial)
+    if (flujoComision238b
+      && ['despachada', 'entregada'].includes(nuevoEstado)
+      && pagoMixtoRequiereRevision(desp.total_usd, desp.forma_pago_cliente, desp.forma_pago)) {
+      return jsonError('Pago mixto sin montos explícitos: complete los montos de CxC y del método no-CxC antes de aprobar o entregar el despacho.', 400, request)
+    }
 
     // 2. Validar transición
     const valid = (desp.estado === 'pendiente' && ['despachada', 'entregada', 'anulada'].includes(nuevoEstado))
@@ -1034,15 +1077,21 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // 4c. Revertir/Eliminar comisión si pasa de aprobada/entregada a pendiente o anulada
+    // 4c. Solo las comisiones 238b se eliminan al revertir el despacho.
+    // Las filas legacy se conservan exactamente como fueron registradas.
     if (!reversaAtomica && ['despachada', 'entregada'].includes(desp.estado) && ['pendiente', 'anulada'].includes(nuevoEstado)) {
       try {
-        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
-          method: 'DELETE', headers,
-        });
-        console.log('[COMISION] Comisión eliminada por reversión de despacho.');
+        const comisionActual = await obtenerComisionExistente(despachoId, headers, env)
+        if (esComisionNueva238b(comisionActual)) {
+          await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comisionActual.id}`, {
+            method: 'DELETE', headers,
+          })
+          console.log('[COMISION] Comisión 238b eliminada por reversión de despacho.')
+        } else if (comisionActual) {
+          console.log('[COMISION] Comisión legacy preservada durante reversión.')
+        }
       } catch (comRevErr) {
-        console.error('[COMISION] Error al revertir comisión:', comRevErr?.message);
+        console.error('[COMISION] Error al revertir comisión:', comRevErr?.message)
       }
     }
 
@@ -1249,29 +1298,23 @@ export async function handleActualizarEstadoDespacho(request, env) {
         const [vendRol] = await vendRolRes.json();
         console.log('[COMISION] rol vendedor:', vendRol?.rol, 'markup:', vendRol?.markup_pct);
 
-        let esDonacion = false;
-        if (desp.forma_pago) {
-          try {
-            const fps = typeof desp.forma_pago === 'string' ? JSON.parse(desp.forma_pago) : desp.forma_pago;
-            if (Array.isArray(fps)) {
-              esDonacion = fps.some(f => f.metodo === 'Donación');
-            } else if (typeof fps === 'string') {
-              esDonacion = fps === 'Donación';
-            }
-          } catch { /* forma de pago malformada */ }
-        }
+        const esDonacion = pagoEsDonacion(desp.forma_pago_cliente, desp.forma_pago)
 
         if (!esDonacion && !['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol?.rol) && (vendRol?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol?.markup_pct || 0) > 0)) {
-          const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
-            method: 'POST', headers,
-            body: JSON.stringify({ p_despachoid: despachoId }),
-          });
-          if (!comRes.ok) {
-            const comErr = await comRes.text();
-            console.error('[COMISION] Error al calcular:', comErr);
+          if (pagoMixtoRequiereRevision(desp.total_usd, desp.forma_pago_cliente, desp.forma_pago)) {
+            console.warn('[COMISION] Pago mixto sin montos explícitos; queda para revisión manual.', { despachoId })
           } else {
-            const comisionId = await comRes.json();
-            console.log('[COMISION] Creada con id:', comisionId);
+            const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho_238b`, {
+              method: 'POST', headers,
+              body: JSON.stringify({ p_despachoid: despachoId }),
+            });
+            if (!comRes.ok) {
+              const comErr = await comRes.text();
+              console.error('[COMISION] Error al calcular:', comErr);
+            } else {
+              const comisionId = await comRes.json();
+              console.log('[COMISION] Creada con id:', comisionId);
+            }
           }
         } else {
           console.log('[COMISION] Vendedor sin comisión, rol administrativo o donación, se omite el cálculo.');
@@ -1400,6 +1443,35 @@ export async function handleEditarItemsDespacho(request, env) {
   if (!Array.isArray(items) || items.length === 0) return jsonError('items no puede estar vacío', 400, request);
 
   try {
+    const despachoRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=total_usd,flete_usd,corte_usd,descuento_total_usd,forma_pago,forma_pago_cliente`,
+      { headers },
+    )
+    if (!despachoRes.ok) return jsonError('Error al verificar despacho', 500, request)
+    const [despachoActual] = await despachoRes.json()
+    if (!despachoActual) return jsonError('Despacho no encontrado', 404, request)
+
+    const comisionAntes = await obtenerComisionExistente(despachoId, headers, env)
+    const totalItemsPosterior = items.reduce((sum, item) => {
+      if (item?.es_prestamo || item?.esPrestamo) return sum
+      const cantidad = Number(item?.cantidad || 0)
+      const precio = Number(item?.precio_unit_usd ?? item?.precioUnitUsd ?? 0)
+      const descuento = Number(item?.descuento_pct || 0)
+      return sum + Math.max(0, cantidad * precio * (1 - descuento / 100))
+    }, 0)
+    const totalPosterior = totalItemsPosterior
+      + Number(despachoActual.flete_usd || 0)
+      + Number(despachoActual.corte_usd || 0)
+      - Number(despachoActual.descuento_total_usd || 0)
+    if (esComisionNueva238b(comisionAntes)
+      && pagoMixtoRequiereRevision(
+        totalPosterior,
+        pagos !== undefined ? pagos : despachoActual.forma_pago_cliente,
+        pagos !== undefined ? pagos : despachoActual.forma_pago,
+      )) {
+      return jsonError('Pago mixto sin montos explícitos: complete los montos de CxC y del método no-CxC antes de editar el despacho.', 400, request)
+    }
+
     if (pagos) {
       try {
         const fps = typeof pagos === 'string' ? JSON.parse(pagos) : pagos;
@@ -1666,10 +1738,10 @@ export async function handleEditarItemsDespacho(request, env) {
     }
 
 
-    // Recalcular comision si ya existe
-    const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`, { headers });
+    // Recalcular solo comisiones nuevas 238b; el histórico legacy queda intacto.
+    const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id,calculo_version`, { headers });
     const comEntries = await comRes.json();
-    if (Array.isArray(comEntries) && comEntries.length > 0) {
+    if (Array.isArray(comEntries) && comEntries.some(row => row.calculo_version === '238b')) {
       const dResCheck = await fetch(
         `${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=vendedor_id,cliente_id`,
         { headers }
@@ -1684,13 +1756,8 @@ export async function handleEditarItemsDespacho(request, env) {
       console.log('[COMISION][EDITAR_ITEMS] rol vendedor:', vendRol4?.rol, 'markup:', vendRol4?.markup_pct);
 
       if (!['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendRol4?.rol) && (vendRol4?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol4?.markup_pct || 0) > 0)) {
-        await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
-          method: 'DELETE', headers,
-        });
-        await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
-          method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
-          body: JSON.stringify({ p_despachoid: despachoId }),
-        });
+        const recalcRes = await recalcularComision238b(despachoId, headers, env)
+        if (!recalcRes.ok) console.error('[COMISION] Error al recalcular 238b:', await recalcRes.text())
       }
     }
 
@@ -1819,13 +1886,10 @@ export async function handleGuardarDescuentos(request, env) {
         await recalcularSaldoPendienteCliente(cxc.cliente_id, env, headers);
       }
 
-      // 8. Si ya existe comisión, eliminarla para recalcular con descuentos
-      const comRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`,
-        { headers }
-      );
+        // 8. Si existe una comisión 238b, recalcularla; las legacy no se tocan.
+      const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id,calculo_version`, { headers });
       const comEntries = await comRes.json();
-      if (Array.isArray(comEntries) && comEntries.length > 0) {
+      if (Array.isArray(comEntries) && comEntries.some(row => row.calculo_version === '238b')) {
         const vendedorIdComision = await obtenerVendedorComisionId(desp, headers, env);
         const vendRolRes3 = await fetch(
           `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendedorIdComision}&select=rol,markup_pct`,
@@ -1835,15 +1899,12 @@ export async function handleGuardarDescuentos(request, env) {
         console.log('[COMISION][DESCUENTOS] rol vendedor:', vendRol3?.rol, 'markup:', vendRol3?.markup_pct);
 
         if (!['jefe'].includes(vendRol3?.rol) && (vendRol3?.rol !== 'vendedor_sin_comision' || parseFloat(vendRol3?.markup_pct || 0) > 0)) {
-          // Eliminar comisión existente para que se recalcule
-          await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}`, {
+          const row238b = comEntries.find(row => row.calculo_version === '238b')
+          await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${row238b.id}`, {
             method: 'DELETE', headers,
           });
-          // Recalcular comisión con descuentos aplicados
-          await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
-            method: 'POST', headers: { ...headers, Prefer: 'return=representation' },
-            body: JSON.stringify({ p_despachoid: despachoId }),
-          });
+          const recalcRes = await recalcularComision238b(despachoId, headers, env)
+          if (!recalcRes.ok) console.error('[COMISION][DESCUENTOS] Error al recalcular 238b:', await recalcRes.text())
         }
       }
     }
@@ -2479,32 +2540,20 @@ export async function handleDevolucionParcialDespacho(request, env) {
       }
     }
 
-    // 9.5 Ajustar comisión del vendedor proporcionalmente al nuevo total neto
+    // Las comisiones 238b no se ajustan proporcionalmente por REST. La RPC
+    // futura debe recomputar el despacho con sus líneas netas y preservar la
+    // política no-CxC/exclusiones. Las filas legacy se dejan intactas.
     try {
-      const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id,totalcomision,comisioncabilla,comisionotros`, { headers });
+      const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id,calculo_version`, { headers });
       if (comRes.ok) {
         const [comRow] = await comRes.json();
-        if (comRow && totalOriginalCabecera > 0) {
-          const factor = nuevoTotalUsd / totalOriginalCabecera;
-          const nTotalCom = Math.round(Number(comRow.totalcomision || 0) * factor * 100) / 100;
-          const nComCab = Math.round(Number(comRow.comisioncabilla || 0) * factor * 100) / 100;
-          const nComOtr = Math.round(Number(comRow.comisionotros || 0) * factor * 100) / 100;
-
-          await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?id=eq.${comRow.id}`, {
-            method: 'PATCH',
-            headers: { ...headers, Prefer: 'return=minimal' },
-            body: JSON.stringify({
-              totalcomision: nTotalCom,
-              comisioncabilla: nComCab,
-              comisionotros: nComOtr,
-              actualizadoen: new Date().toISOString()
-            })
-          });
-          console.log(`[DEVOLUCION] Comisión de despacho ${despachoId} ajustada a $${nTotalCom} (factor: ${factor.toFixed(4)})`);
+        if (comRow?.calculo_version === '238b') {
+          const recalcRes = await recalcularComision238b(despachoId, headers, env)
+          if (!recalcRes.ok) console.error('[DEVOLUCION] Error recalculando comisión 238b:', await recalcRes.text());
         }
       }
     } catch (comErr) {
-      console.error('[DEVOLUCION] Error al ajustar comisión del despacho:', comErr.message);
+      console.error('[DEVOLUCION] Error al recalcular comisión 238b:', comErr.message);
     }
 
     // 10. Auditoría

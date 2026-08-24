@@ -51,6 +51,16 @@ describe('contrato de comisiones', () => {
     expect(split.nonCxcAmount).toBe(100)
   })
 
+  it('marca para revisión un pago mixto sin montos explícitos', () => {
+    const split = getCommissionablePaymentSplit({
+      totalUsd: 100,
+      formaPago: [{ metodo: 'Efectivo $' }, { metodo: 'Cta por cobrar' }],
+    })
+
+    expect(split.requiresManualReview).toBe(true)
+    expect(split.fraction).toBe(0)
+  })
+
   it('soporta JSON legacy y credito sin monto', () => {
     const split = getCommissionablePaymentSplit({
       totalUsd: 240,

@@ -243,6 +243,10 @@ export function getCommissionablePaymentSplit({ totalUsd = 0, formaPagoCliente, 
     return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0)
   }, 0)
   const inferredCxc = Math.max(0, total - explicitNonCxc)
+  const hasAmbiguousMixedPayment = cxcMethods.length > 0
+    && nonCxcMethods.length > 0
+    && explicitCxc <= 0
+    && explicitNonCxc <= 0
   const cxcAmount = cxcMethods.length === 0
     ? 0
     : explicitCxc > 0
@@ -254,7 +258,8 @@ export function getCommissionablePaymentSplit({ totalUsd = 0, formaPagoCliente, 
     methods,
     cxcAmount,
     nonCxcAmount,
-    fraction: total > 0 ? nonCxcAmount / total : 1,
+    fraction: hasAmbiguousMixedPayment ? 0 : (total > 0 ? nonCxcAmount / total : 1),
+    requiresManualReview: hasAmbiguousMixedPayment,
   }
 }
 
