@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Truck, DollarSign, Pencil, AlertTriangle, Clock, MessageSquare, Handshake } from 'lucide-react'
+import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Truck, DollarSign, Pencil, AlertTriangle, Clock, MessageSquare, Handshake, LockKeyhole } from 'lucide-react'
 import EditarItemsDespachoModal from '../despachos/EditarItemsDespachoModal'
 import supabase from '../../services/supabase/client'
 import { fetchDespachoConsolidado } from '../../services/despachoItemsService'
@@ -302,6 +302,9 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
 
   const tieneChofer = !esCot && registro.transportista?.nombre
   const tienePago = !esCot && (formasDisplay.length > 0 || registro.referencia_pago)
+  const puedeEditarProfundamente = tipo === 'despacho' && ['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const edicionBloqueadaPorEstado = puedeEditarProfundamente && !['pendiente', 'anulada'].includes(registro.estado)
+  const estadoEdicionLabel = registro.estado === 'entregada' ? 'entregado' : registro.estado === 'despachada' ? 'aprobado' : registro.estado
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
@@ -481,9 +484,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <Package size={12} />Productos
             </p>
-            {tipo === 'despacho' &&
-              ['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) &&
-              registro.estado === 'pendiente' && (
+            {puedeEditarProfundamente && registro.estado === 'pendiente' && (
               <button
                 onClick={() => setShowEditItems(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg text-[11px] font-bold transition-colors">
@@ -492,6 +493,18 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
               </button>
             )}
           </div>
+
+          {edicionBloqueadaPorEstado && (
+            <div className="mb-3 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-800">
+              <LockKeyhole size={15} className="mt-0.5 shrink-0 text-amber-600" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold">Edición de productos bloqueada</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-amber-700">
+                  Este despacho está {estadoEdicionLabel}. Para modificar sus productos, primero debes devolverlo a <strong>Por aprobar</strong> desde el menú de acciones.
+                </p>
+              </div>
+            </div>
+          )}
 
           {cargando ? (
             <div className="flex items-center justify-center py-10 text-slate-400">

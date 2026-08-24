@@ -847,16 +847,16 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   }
 
   const moreActions = getMoreActions()
-  const bottomActions = moreActions.filter(act => 
-    act.label !== 'Reabrir despacho' && 
-    act.label !== 'No entregado' && 
-    act.label !== 'No entregado / Devolver' &&
-    act.label !== 'Cambiar Transportista' &&
-    act.label !== 'Agregar Transportista' &&
-    act.label !== 'Marcar COD como pagado' &&
-    act.label !== 'Devolución Parcial' &&
-    !act.label.includes('observación')
-  )
+  const bottomActions = moreActions.filter(act => {
+    const label = String(act.label || '').toLowerCase()
+    return !label.includes('reabrir') &&
+      !label.includes('devolver') &&
+      !label.includes('cambiar transportista') &&
+      !label.includes('agregar transportista') &&
+      !label.includes('marcar cod como pagado') &&
+      !label.includes('devolución parcial') &&
+      !label.includes('observación')
+  })
 
   // Resolver config del confirm modal
   const confirmConfig = accionPendiente?.actionConfig || {}
