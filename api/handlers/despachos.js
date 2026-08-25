@@ -1427,9 +1427,9 @@ export async function handleEditarItemsDespacho(request, env) {
   const { user, operador, headers } = v;
 
   // ── 1. Roles autorizados para edición profunda ─────────────────────────────
-  // El supervisor tiene alcance global dentro de su cuenta, no solo sobre sus
-  // propios despachos. El estado se valida nuevamente abajo y en el RPC.
-  if (!['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
+  // La edición profunda queda reservada a administración, jefatura y desarrollo.
+  // El estado se valida nuevamente abajo y en el RPC.
+  if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
     return jsonError('No tienes permiso para editar profundamente el despacho', 403, request);
   }
 
@@ -1443,6 +1443,30 @@ export async function handleEditarItemsDespacho(request, env) {
 
   if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
   if (!Array.isArray(items) || items.length === 0) return jsonError('items no puede estar vacío', 400, request);
+
+  // Rechazar duplicados comerciales antes de tocar Supabase. Dos líneas del
+  // mismo producto solo son válidas si difieren en precio, descuento, origen o
+  // modalidad venta/préstamo.
+  const clavesItems = new Set()
+  for (const item of items) {
+    if (!Number.isFinite(Number(item?.cantidad)) || Number(item.cantidad) <= 0) {
+      return jsonError('Cantidad inválida en los ítems del despacho', 400, request)
+    }
+    if (!Number.isFinite(Number(item?.precio_unit_usd)) || Number(item.precio_unit_usd) < 0) {
+      return jsonError('Precio inválido en los ítems del despacho', 400, request)
+    }
+    const clave = [
+      item?.producto_id ?? '',
+      Number(item?.precio_unit_usd ?? 0).toFixed(4),
+      Number(item?.descuento_pct ?? 0).toFixed(4),
+      item?.origen || 'inventario',
+      item?.es_prestamo || item?.esPrestamo ? 'prestamo' : 'venta',
+    ].join('|')
+    if (clavesItems.has(clave)) {
+      return jsonError('El despacho contiene líneas duplicadas. Actualiza el modal y deja una sola línea por producto y condición comercial.', 400, request)
+    }
+    clavesItems.add(clave)
+  }
 
   try {
     const despachoRes = await fetch(
@@ -1493,6 +1517,14 @@ export async function handleEditarItemsDespacho(request, env) {
     }
 
     // ── 2. Llamar al RPC que maneja la transacción e inventario ────────────────
+    console.log('[DEEP_EDIT][WORKER_BEFORE_RPC]', {
+      despachoId,
+      workerItemCount: items.length,
+      workerItems: items,
+      operadorId: operador.id,
+      operadorRol: operador.rol,
+      supabaseUrl: env.SUPABASE_URL
+    })
     const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/editar_despacho_profundidad`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=minimal' },
@@ -1508,11 +1540,14 @@ export async function handleEditarItemsDespacho(request, env) {
 
     if (!res.ok) {
       const err = await res.text();
+      console.error('[DEEP_EDIT][WORKER_RPC_ERROR]', { status: res.status, body: err, despachoId })
       let msg = 'Error al editar despacho';
       if (err.includes('STOCK_INSUFICIENTE')) msg = err.split(': ')[1] || err;
       if (err.includes('ESTADO_INVALIDO')) msg = 'El despacho no se puede editar en su estado actual';
       return jsonError(msg, 400, request);
     }
+
+    console.log('[DEEP_EDIT][WORKER_AFTER_RPC]', { despachoId, status: res.status, sentItemCount: items.length })
 
     // ── 2b. Sincronizar Cuentas por Cobrar ────────────────────────────────────
     // La edición profunda solo llega aquí para despachos pendientes. Esta rama

@@ -474,17 +474,21 @@ export function useEditarItemsDespacho() {
 
   return useMutation({
     mutationFn: async ({ despachoId, items, pagos }) => {
+      console.group('[DEEP_EDIT][NETWORK_TRACE]')
+      console.log('Request body at mutation boundary', { despachoId, itemCount: Array.isArray(items) ? items.length : null, items, pagos })
+      const body = JSON.stringify({ despachoId, items, pagos })
+      console.log('Serialized request body', JSON.parse(body))
       const res = await authFetch('/api/despachos/editar-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ despachoId, items, pagos }),
+        body,
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al editar ítems del despacho')
       return result
     },
     onSuccess: async () => {
-      showToast('Ítems del despacho actualizados con éxito', 'success')
+      showToast('Ítems del despacho actualizados con éxito', 'success', 5000)
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
       qc.invalidateQueries({ queryKey: ['stock_comprometido'] })

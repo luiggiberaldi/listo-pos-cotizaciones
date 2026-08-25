@@ -1,5 +1,5 @@
 // src/components/despachos/EditarItemsDespachoModal.jsx
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { X, Search, Plus, Minus, Trash2, Loader2, Package, Save, AlertCircle, CreditCard, CheckCircle, Edit2, DollarSign, Copy, Truck, Handshake } from 'lucide-react'
 import { useLineItems } from '../../hooks/useLineItems'
 import { useInventario } from '../../hooks/useInventario'
@@ -15,7 +15,7 @@ import { round4, round2 } from '../../utils/dinero'
 import { showToast } from '../ui/Toast'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 
-export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) {
+export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, onSaved }) {
   const { perfil } = useAuthStore()
   const esDesarrollador = perfil?.rol === 'desarrollador'
 
@@ -28,26 +28,79 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const editarItems = useEditarItemsDespacho()
   const { data: config = {} } = useConfigNegocio()
-  const { items, setItems, agregarItem: _agregarItem, eliminarPorId, cambiarCantidad, setCantidadDirecta, cambiarPrecio: _cambiarPrecio, togglePrestamo, setStockMap } = useLineItems({ checkStock: true })
+  const { items, setItems, agregarItem: _agregarItem, eliminarPorKey, cambiarCantidadPorKey, setCantidadDirectaPorKey, cambiarPrecioPorKey, togglePrestamoPorKey, setStockMap } = useLineItems({ checkStock: true })
+  const despachoCargadoRef = useRef(null)
+  const cargaEnCursoRef = useRef(null)
 
   const [seccionMovil, setSeccionMovil] = useState('catalogo')
 
   const agregarItem = (p) => {
     const precioBase = Number(p.precio_usd ?? p.precioUnitUsd ?? 0)
-
-    _agregarItem({
-      ...p,
-      precio_usd: precioBase,
-      precioOriginalUsd: precioBase
+    console.debug('[DEEP_EDIT][CATALOG_ADD] click', {
+      despachoId: despacho?.id,
+      productoId: p?.id,
+      codigo: p?.codigo,
+      nombre: p?.nombre,
+      precioBase,
+      origen: p?.origen ?? 'inventario',
+      esPrestamo: Boolean(p?.esPrestamo ?? p?.es_prestamo ?? false),
+      itemsAntes: items.map(it => ({ _key: it._key, productoId: it.productoId, cantidad: it.cantidad, precio: it.precioUnitUsd, origen: it.origen, esPrestamo: it.esPrestamo }))
     })
+    const origen = p.origen ?? 'inventario'
+    const esPrestamo = Boolean(p.esPrestamo ?? p.es_prestamo ?? false)
+
+    // La edición profunda comparte la misma regla comercial del despacho:
+    // agregar el mismo producto/precio/origen/modalidad incrementa su línea,
+    // no crea una segunda fila. Condiciones distintas sí crean otra línea.
+    const existente = items.find(it =>
+      it.productoId === p.id &&
+      Number(it.precioUnitUsd ?? 0) === precioBase &&
+      (it.origen ?? 'inventario') === origen &&
+      Boolean(it.esPrestamo ?? it.es_prestamo ?? false) === esPrestamo
+    )
+    if (existente) {
+      console.debug('[DEEP_EDIT][CATALOG_ADD] increment existing line', { _key: existente._key, cantidadAntes: existente.cantidad, cantidadDespues: existente.cantidad + 1 })
+      cambiarCantidadPorKey(existente._key, 1)
+    } else {
+      console.debug('[DEEP_EDIT][CATALOG_ADD] create new line', { productoId: p?.id, precioBase, origen, esPrestamo })
+      _agregarItem({
+        ...p,
+        precio_usd: precioBase,
+        precioOriginalUsd: precioBase,
+        origen,
+        esPrestamo
+      })
+    }
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       setSeccionMovil('carrito')
     }
   }
 
-  const cambiarPrecio = (productoId, precio) => {
+  const cambiarCantidadLog = (key, cantidad, origen) => {
+    console.debug('[DEEP_EDIT][QTY_CHANGE]', {
+      despachoId: despacho?.id,
+      key,
+      cantidadRecibida: cantidad,
+      origen,
+      itemsAntes: items.map(it => ({ _key: it._key, productoId: it.productoId, cantidad: it.cantidad }))
+    })
+    setCantidadDirectaPorKey(key, cantidad)
+  }
+
+  const cambiarCantidadDeltaLog = (key, delta, origen) => {
+    console.debug('[DEEP_EDIT][QTY_DELTA]', {
+      despachoId: despacho?.id,
+      key,
+      delta,
+      origen,
+      itemsAntes: items.map(it => ({ _key: it._key, productoId: it.productoId, cantidad: it.cantidad }))
+    })
+    cambiarCantidadPorKey(key, delta)
+  }
+
+  const cambiarPrecio = (key, precio) => {
     const precioUnit = parseFloat(String(precio)) || 0
-    _cambiarPrecio(productoId, precioUnit, precioUnit)
+    cambiarPrecioPorKey(key, precioUnit, precioUnit)
   }
 
     const [busqueda, setBusqueda] = useState('')
@@ -72,6 +125,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
   
     // Edición de producto externo
     const [editItemIdx, setEditItemIdx] = useState(null)
+  const [itemsNormalizados, setItemsNormalizados] = useState(false)
   
     function agregarComoExterno(p) {
       const randomId = Math.floor(1000000 + Math.random() * 9000000)
@@ -135,8 +189,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
       const flete = Number(despacho?.flete_usd || 0)
       const corte = Number(despacho?.corte_usd || 0)
       const descTotal = Number(despacho?.descuento_total_usd || 0)
-      return Math.max(0, subtotalConDescuento + flete + corte - descTotal)
-    }, [items, despacho, billingCliente, config])
+      return Math.max(0, subtotalConDescuento + flete + corte - descTotal)    }, [items, despacho, billingCliente, config])
 
     // 1. Hook para pagos inmediatos (adelantos / seña)
     const {
@@ -225,7 +278,16 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
 
     // 1. Cargar items actuales del despacho
     useEffect(() => {
-      if (!isOpen || !despacho?.id) return
+      if (!isOpen || !despacho?.id) {
+        despachoCargadoRef.current = null
+        cargaEnCursoRef.current = null
+        return
+      }
+      let activo = true
+      const cargaId = `${despacho.id}:${isOpen}`
+      if (despachoCargadoRef.current === cargaId || cargaEnCursoRef.current === cargaId) return
+      cargaEnCursoRef.current = cargaId
+      despachoCargadoRef.current = cargaId
 
       async function fetchItems() {
         setCargandoItems(true)
@@ -260,12 +322,46 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
               orden: it.orden
             }
           })
-          setItems(mapped)
+          // Corregir duplicados históricos del mismo producto y condición
+          // comercial. Se conserva la primera línea y se suman cantidades;
+          // precios/origen/préstamo diferentes permanecen separados.
+          if (activo) {
+            const groups = new Map()
+            for (const item of mapped) {
+              const key = [
+                item.productoId ?? '',
+                Number(item.precioUnitUsd || 0).toFixed(4),
+                Number(item.descuentoPct || 0).toFixed(4),
+                item.origen || 'inventario',
+                item.esPrestamo ? 'prestamo' : 'venta',
+              ].join('|')
+              const existing = groups.get(key)
+              if (existing) {
+                existing.cantidad += item.cantidad
+              } else {
+                groups.set(key, { ...item })
+              }
+            }
+            const normalizedItems = Array.from(groups.values()).map((item, index) => ({
+              ...item,
+              _key: `normalized-${despacho.id}-${index}`,
+              orden: index,
+            }))
+            if (normalizedItems.length !== mapped.length) {
+              showToast(`Se unificaron ${mapped.length - normalizedItems.length} líneas duplicadas`, 'warning')
+            }
+            console.debug('[DEEP_EDIT][LOAD] rows from Supabase', { despachoId: despacho.id, rows: mapped.length, normalizedRows: normalizedItems.length, mapped, normalizedItems })
+            setItems(normalizedItems)
+            setItemsNormalizados(normalizedItems.length < mapped.length)
+          }
         } catch (err) {
-          console.error('Error fetching items:', err)
-          setError('No se pudieron cargar los productos del despacho')
+          if (activo) {
+            console.error('Error fetching items:', err)
+            setError('No se pudieron cargar los productos del despacho')
+          }
         } finally {
-          setCargandoItems(false)
+          if (activo) setCargandoItems(false)
+          if (cargaEnCursoRef.current === cargaId) cargaEnCursoRef.current = null
         }
       }
 
@@ -309,6 +405,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         setPropuestaCod([])
         setTabActiva('inmediato')
       }
+
+      return () => { activo = false }
     }, [isOpen, despacho?.id, despacho?.forma_pago, despacho?.forma_pago_cliente, despacho?.total_usd, setItems, setPagosInmediatos, setPropuestaCod])
   
     // 2. Sincronizar stock map
@@ -391,6 +489,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
       }
       const esPersonal = billingCliente?.tipo_cliente === 'personal'
       const descPct = config.descuento_personal_pct ?? 10.00
+      // El estado normalizado del modal es la fuente de verdad. Cada línea
+      // visible se envía una sola vez.
       const itemsApi = items.map((it, idx) => {
         const esExterno = it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-') || String(it.productoId).startsWith('ext-')
         const precioUnit = Number(it.precioUnitUsd)
@@ -408,12 +508,52 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
           es_prestamo: it.esPrestamo || false
         }
       })
-      try {
-        await editarItems.mutateAsync({ 
+      const clavesPayload = new Set()
+      for (const item of itemsApi) {
+        const clave = [
+          item.producto_id ?? '',
+          Number(item.precio_unit_usd || 0).toFixed(4),
+          Number(item.descuento_pct || 0).toFixed(4),
+          item.origen || 'inventario',
+          item.es_prestamo ? 'prestamo' : 'venta'
+        ].join('|')
+        if (clavesPayload.has(clave)) {
+          showToast('Hay productos duplicados con la misma condición comercial. Déjalos en una sola línea antes de guardar.', 'error')
+          return
+        }
+        clavesPayload.add(clave)
+      }
+
+      if (itemsNormalizados) {
+        showToast('Revisa las cantidades consolidadas antes de guardar', 'warning')
+      }      console.debug('[DEEP_EDIT][SAVE] payload', {
+        despachoId: despacho.id,
+        visibleItems: items,
+        itemsApi,
+        itemCount: itemsApi.length,
+        totalUnits: itemsApi.reduce((sum, item) => sum + Number(item.cantidad || 0), 0),
+        pagos: formasPagoFinales
+      })
+
+      try {        console.group('[DEEP_EDIT][SAVE_TRACE]')
+        console.log('A. React state before save', { despachoId: despacho.id, stateItemCount: items.length, stateItems: items })
+        console.log('B. API payload', { payloadItemCount: itemsApi.length, payloadItems: itemsApi })
+        console.log('C. Payload identity groups', itemsApi.reduce((acc, item) => {
+          const key = [item.producto_id ?? '', Number(item.precio_unit_usd || 0).toFixed(4), Number(item.descuento_pct || 0).toFixed(4), item.origen || 'inventario', item.es_prestamo ? 'prestamo' : 'venta'].join('|')
+          acc[key] = (acc[key] || 0) + 1
+          return acc
+        }, {}))
+        console.time('[DEEP_EDIT][SAVE_TRACE] HTTP request')
+        const saveResult = await editarItems.mutateAsync({
           despachoId: despacho.id, 
           items: itemsApi, 
           pagos: JSON.stringify(formasPagoFinales)
         })
+        console.timeEnd('[DEEP_EDIT][SAVE_TRACE] HTTP request')
+        console.log('D. Mutation result', { result: saveResult, sentItemCount: itemsApi.length })
+        console.log('E. IMPORTANT: now query Supabase directly for this despacho and compare physical rows with payload')
+        console.groupEnd()
+        onSaved?.({ despachoId: despacho.id, items: itemsApi })
         onClose()
       } catch {
         // El hook ya muestra el toast
@@ -423,6 +563,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
   // Memoizar conjunto de IDs en cesta para evitar re-renderizar el catálogo al cambiar cantidades (+ / -)
   const itemIdsInCartKey = useMemo(() => items.map(it => it.productoId).join(','), [items])
   const inCartSet = useMemo(() => new Set(items.map(it => it.productoId)), [itemIdsInCartKey])
+  const itemsCount = useMemo(() => items.length, [items])
 
   // 4.5. Memoizar el catálogo izquierdo para evitar re-renderizados pesados en cada pulsación o cambio de pagos
   const catalogoIzquierdo = useMemo(() => {
@@ -672,7 +813,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                           <div className="flex items-center gap-1 mt-1.5 bg-slate-100 p-0.5 rounded-full w-fit">
                             <button
                               type="button"
-                              onClick={() => (it.esPrestamo || it.es_prestamo) && togglePrestamo(it.productoId)}
+                              onClick={() => (it.esPrestamo || it.es_prestamo) && togglePrestamoPorKey(it._key)}
                               className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full transition-all ${
                                 !(it.esPrestamo || it.es_prestamo)
                                   ? 'bg-white text-slate-800 shadow-sm'
@@ -683,7 +824,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                             </button>
                             <button
                               type="button"
-                              onClick={() => !(it.esPrestamo || it.es_prestamo) && togglePrestamo(it.productoId)}
+                              onClick={() => !(it.esPrestamo || it.es_prestamo) && togglePrestamoPorKey(it._key)}
                               className={`px-2.5 py-0.5 text-[10px] font-black rounded-full transition-all flex items-center gap-0.5 ${
                                 (it.esPrestamo || it.es_prestamo)
                                   ? 'bg-emerald-600 text-white shadow-sm'
@@ -706,11 +847,11 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                           </button>
                         )}
                         {(it.origen === 'externo' || !it.productoId || String(it.productoId).startsWith('manual-')) && (
-                          <button onClick={() => setEditItemIdx(items.findIndex(x => x.productoId === it.productoId))} className="text-amber-500 hover:text-amber-600 p-1.5 hover:bg-amber-50 rounded-lg transition-colors shrink-0 w-8 h-8 flex items-center justify-center" title="Editar detalles">
+                          <button onClick={() => setEditItemIdx(items.findIndex(x => x._key === it._key))} className="text-amber-500 hover:text-amber-600 p-1.5 hover:bg-amber-50 rounded-lg transition-colors shrink-0 w-8 h-8 flex items-center justify-center" title="Editar detalles">
                             <Edit2 size={14} />
                           </button>
                         )}
-                        <button onClick={() => eliminarPorId(it.productoId)} className="text-slate-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors shrink-0 w-8 h-8 flex items-center justify-center">
+                        <button onClick={() => eliminarPorKey(it._key)} className="text-slate-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors shrink-0 w-8 h-8 flex items-center justify-center">
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -720,17 +861,17 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                     <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                       {/* Cantidad */}
                       <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
-                        <button onClick={() => cambiarCantidad(it.productoId, -1)} className="w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center bg-white rounded-md shadow-sm text-slate-600 active:scale-90 transition-transform touch-manipulation">
+                        <button type="button" onClick={() => { console.warn('[DEEP_EDIT][UI_CLICK] minus', { key: it._key, item: it }); cambiarCantidadDeltaLog(it._key, -1, 'minus-button') }} className="w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center bg-white rounded-md shadow-sm text-slate-600 active:scale-90 transition-transform touch-manipulation">
                           <Minus size={13} />
                         </button>
                         <input
                           type="number"
                           value={it.cantidad}
-                          onChange={e => setCantidadDirecta(it.productoId, e.target.value)}
-                          onBlur={e => { if (!e.target.value || Number(e.target.value) <= 0) setCantidadDirecta(it.productoId, 1) }}
+                          onChange={e => { console.warn('[DEEP_EDIT][UI_CHANGE] quantity input', { key: it._key, value: e.target.value, item: it }); cambiarCantidadLog(it._key, e.target.value, 'input') }}
+                          onBlur={e => { if (!e.target.value || Number(e.target.value) <= 0) cambiarCantidadLog(it._key, 1, 'input-blur-normalize') }}
                           className="w-10 text-center bg-transparent text-xs font-black text-slate-800 focus:outline-none"
                         />
-                        <button onClick={() => cambiarCantidad(it.productoId, 1)} className="w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center bg-white rounded-md shadow-sm text-slate-600 active:scale-90 transition-transform touch-manipulation">
+                        <button type="button" onClick={() => { console.warn('[DEEP_EDIT][UI_CLICK] plus', { key: it._key, item: it }); cambiarCantidadDeltaLog(it._key, 1, 'plus-button') }} className="w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center bg-white rounded-md shadow-sm text-slate-600 active:scale-90 transition-transform touch-manipulation">
                           <Plus size={13} />
                         </button>
                       </div>
@@ -741,7 +882,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                           type="number"
                           step="0.01"
                           value={it.precioUnitUsd}
-                          onChange={e => cambiarPrecio(it.productoId, e.target.value)}
+                          onChange={e => cambiarPrecio(it._key, e.target.value)}
                           className="w-full pl-5 pr-2 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-right text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-400 transition-all"
                         />
                       </div>
@@ -839,7 +980,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
           </div>
 
           {/* Área de la grilla de pagos (intercambiable) */}
-          <div className="px-4 sm:px-6 py-3 sm:py-4 max-h-[35vh] sm:max-h-none overflow-y-auto">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 min-h-[150px] max-h-[35vh] sm:max-h-none overflow-y-auto">
+            <div className="min-h-[110px]">
             {(!esCod || tabActiva === 'inmediato') ? (
               // VISTA: PAGO INMEDIATO (ADELANTO)
               <div className="space-y-2">
@@ -1136,6 +1278,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                 )}
               </div>
             )}
+            </div>
           </div>
         </div>
 

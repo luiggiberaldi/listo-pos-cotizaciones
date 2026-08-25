@@ -27,7 +27,7 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil })
   const descMonto = calcDescMonto(descuento, total, cant)
   const totalFinal = total - descMonto
   const esExterno = item.origen === 'externo' || !item.producto_id || String(item.producto_id).startsWith('manual-') || String(item.codigo_snap).startsWith('EXT')
-  const sinStock = !item.cotizacion_id && !esExterno && cant > (item.producto?.stock_actual || 0)
+  const sinStock = !item.cotizacion_id && !esExterno && item.producto?.stock_actual != null && cant > Number(item.producto.stock_actual)
 
   const showComision = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
   // Usar el perfil del vendedor dueño del cliente (no el usuario logueado) para detectar es_externo
@@ -93,7 +93,7 @@ function ItemCard({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }
   const descMonto = calcDescMonto(descuento, total, cant)
   const totalFinal = total - descMonto
   const esExterno = item.origen === 'externo' || !item.producto_id || String(item.producto_id).startsWith('manual-') || String(item.codigo_snap).startsWith('EXT')
-  const sinStock = !item.cotizacion_id && !esExterno && cant > (item.producto?.stock_actual || 0)
+  const sinStock = !item.cotizacion_id && !esExterno && item.producto?.stock_actual != null && cant > Number(item.producto.stock_actual)
 
   const showComision = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
   // Usar el perfil del vendedor dueño del cliente (no el usuario logueado) para detectar es_externo
@@ -153,6 +153,18 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
   const [showEditItems, setShowEditItems] = useState(false)
   const [cargando, setCargando] = useState(false)
   const [descuentos, setDescuentos] = useState({}) // { item_id: { tipo, valor } }
+
+  const aplicarItemsEditados = ({ items: nuevosItems = [] } = {}) => {
+    if (tipo !== 'despacho') return
+    const esCorte = (it) => it.nombre_snap?.toLowerCase().startsWith('corte')
+    const cortes = nuevosItems.filter(esCorte)
+    setCorteDesdeItems(cortes.reduce((sum, it) => sum + (Number(it.total_linea_usd) || Number(it.cantidad || 0) * Number(it.precio_unit_usd || 0)), 0))
+    setItems(nuevosItems.filter(it => !esCorte(it)).map((it, index) => ({
+      ...it,
+      id: it.id || `local-${registro?.id}-${index}`,
+      total_linea_usd: Number(it.total_linea_usd ?? Number(it.cantidad || 0) * Number(it.precio_unit_usd || 0)),
+    })))
+  }
   const { perfil } = useAuthStore()
   const { tasaBcv, tasaUsdt } = useTasaCambio()
   const { data: config = {} } = useConfigNegocio()
@@ -210,29 +222,28 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         }
 
         // Si el usuario tiene RLS restrictivo (vendedor), obtener el stock real mediante la RPC segura
-        const productIds = allItems.map(it => it.producto_id).filter(Boolean)
+        const productIds = [...new Set(allItems.map(it => it.producto_id).filter(Boolean))]
         if (productIds.length > 0) {
           try {
-            const { data: stockData } = await supabase.rpc('obtener_stock_productos', { p_ids: productIds })
-            if (stockData) {
-              const stockMap = {}
-              stockData.forEach(s => { stockMap[s.id] = Number(s.stock_actual) })
+            const { data: stockData, error: stockError } = await supabase.rpc('obtener_stock_productos', { p_ids: productIds })
+            if (stockError) throw stockError
+            if (Array.isArray(stockData)) {
+              const stockMap = Object.fromEntries(stockData.map(s => [s.id, Number(s.stock_actual)]))
               allItems = allItems.map(it => {
-                if (it.producto_id && stockMap[it.producto_id] !== undefined) {
-                  return {
-                    ...it,
-                    producto: {
-                      ...it.producto,
-                      id: it.producto_id,
-                      stock_actual: stockMap[it.producto_id]
-                    }
+                if (!it.producto_id || stockMap[it.producto_id] === undefined) return it
+                return {
+                  ...it,
+                  producto: {
+                    ...it.producto,
+                    id: it.producto_id,
+                    stock_actual: stockMap[it.producto_id]
                   }
                 }
-                return it
               })
             }
           } catch (err) {
-            console.error('Error fetching stock via RPC:', err)
+            // No reemplazar un stock válido por cero si la RPC falla o no tiene RLS.
+            console.warn('No se pudo actualizar stock mediante RPC; se conserva el stock de la relación:', err?.message || err)
           }
         }
 
@@ -302,7 +313,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
 
   const tieneChofer = !esCot && registro.transportista?.nombre
   const tienePago = !esCot && (formasDisplay.length > 0 || registro.referencia_pago)
-  const puedeEditarProfundamente = tipo === 'despacho' && ['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const puedeEditarProfundamente = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const edicionBloqueadaPorEstado = puedeEditarProfundamente && !['pendiente', 'anulada'].includes(registro.estado)
   const estadoEdicionLabel = registro.estado === 'entregada' ? 'entregado' : registro.estado === 'despachada' ? 'aprobado' : registro.estado
 
@@ -500,7 +511,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
               <div className="min-w-0">
                 <p className="text-xs font-bold">Edición de productos bloqueada</p>
                 <p className="mt-0.5 text-[11px] leading-snug text-amber-700">
-                  Este despacho está {estadoEdicionLabel}. Para modificar sus productos, primero debes devolverlo a <strong>Por aprobar</strong> desde el menú de acciones.
+                  Este despacho está {estadoEdicionLabel}. Para modificar sus productos, un usuario de administración o jefatura debe devolverlo a <strong>Por aprobar</strong> desde el menú de acciones.
                 </p>
               </div>
             </div>
@@ -669,6 +680,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         <EditarItemsDespachoModal 
           isOpen={showEditItems}
           onClose={() => setShowEditItems(false)}
+          onSaved={aplicarItemsEditados}
           despacho={registro}
         />
       )}

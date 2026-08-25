@@ -59,22 +59,19 @@ export function ToastProvider({ children }) {
 
   const addToast = useCallback((message, type = 'info', duration = 3500) => {
     const now = Date.now()
-    let isDuplicate = false
+    const id = now + Math.random()
+    let shouldScheduleRemoval = true
 
     setToasts(prev => {
       const last = prev[prev.length - 1]
       if (last && last.message === message && last.type === type && (now - (last.timestamp || 0)) < 500) {
-        isDuplicate = true
+        shouldScheduleRemoval = false
         return prev
       }
-      const id = now + Math.random()
       return [...prev.slice(-4), { id, message, type, timestamp: now }]
     })
 
-    if (isDuplicate) return
-
-    const id = now + Math.random()
-    if (duration > 0) {
+    if (shouldScheduleRemoval && duration > 0) {
       const timer = setTimeout(() => {
         setToasts(prev => prev.filter(t => t.id !== id))
         timersRef.current.delete(id)

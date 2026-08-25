@@ -29,21 +29,35 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
 
   const agregarItem = useCallback((producto) => {
     const stock = Number(producto.stock_actual) || 0
-
-    if (checkStock) {
-      const itemExistente = items.find(it => it.productoId === producto.id)
-      if (itemExistente && itemExistente.cantidad >= stock) {
-        showToast(`Stock excedido: ${stock} disp.`, 'warning')
-      }
-    }
+    const precioBase = Number(producto.precio_usd ?? producto.preciousd ?? 0)
+    const origen = producto.origen ?? 'inventario'
+    const esPrestamo = Boolean(producto.esPrestamo ?? producto.es_prestamo ?? false)
 
     setItems(prev => {
-      const idx = prev.findIndex(it => it.productoId === producto.id)
+      console.debug('[LINE_ITEMS][ADD] functional update', {
+        productoId: producto?.id,
+        precioBase,
+        origen,
+        esPrestamo,
+        before: prev.map(it => ({ _key: it._key, productoId: it.productoId, cantidad: it.cantidad, precio: it.precioUnitUsd, origen: it.origen, esPrestamo: it.esPrestamo }))
+      })
+      const idx = prev.findIndex(it =>
+        it.productoId === producto.id &&
+        Number(it.precioUnitUsd ?? 0) === precioBase &&
+        (it.origen ?? 'inventario') === origen &&
+        Boolean(it.esPrestamo ?? it.es_prestamo ?? false) === esPrestamo
+      )
+      const itemExistente = idx >= 0 ? prev[idx] : null
+
+      if (checkStock && itemExistente && itemExistente.cantidad >= stock) {
+        showToast(`Stock excedido: ${stock} disp.`, 'warning')
+      }
       if (idx !== -1) {
         // Ya existe → incrementar cantidad
-        return prev.map((it, i) => i === idx ? { ...it, cantidad: it.cantidad + 1 } : it)
+        const next = prev.map((it, i) => i === idx ? { ...it, cantidad: it.cantidad + 1 } : it)
+        console.debug('[LINE_ITEMS][ADD] increment', { key: prev[idx]._key, before: prev[idx].cantidad, after: next[idx].cantidad })
+        return next
       }
-      const precioBase = Number(producto.precio_usd ?? producto.preciousd ?? 0)
       const item = {
         _key: `item-${++_itemCounter}`,
         productoId: producto.id,
@@ -58,6 +72,7 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
         esPrestamo: producto.esPrestamo ?? producto.es_prestamo ?? false,
       }
       if (withDescuento) item.descuentoPct = 0
+      console.debug('[LINE_ITEMS][ADD] append', { item })
       return [...prev, item]
     })
   }, [checkStock, withDescuento, items])
@@ -72,6 +87,31 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
 
   const eliminarPorId = useCallback((productoId) => {
     setItems(prev => prev.filter(it => it.productoId !== productoId))
+  }, [])
+
+  const eliminarPorKey = useCallback((key) => {
+    setItems(prev => prev.filter(it => it._key !== key))
+  }, [])
+
+  const cambiarCantidadPorKey = useCallback((key, delta) => {
+    console.warn('[LINE_ITEMS][QTY_DELTA_CALL]', { key, delta })
+    setItems(prev => {
+      const before = prev.find(it => it._key === key)
+      const next = prev.map(it => {
+        if (it._key !== key) return it
+        return { ...it, cantidad: Math.max(1, it.cantidad + delta) }
+      })
+      const after = next.find(it => it._key === key)
+      console.debug('[LINE_ITEMS][QTY_DELTA]', {
+        key,
+        delta,
+        before: before ? { productoId: before.productoId, cantidad: before.cantidad } : null,
+        after: after ? { productoId: after.productoId, cantidad: after.cantidad } : null,
+        itemCountBefore: prev.length,
+        itemCountAfter: next.length
+      })
+      return next
+    })
   }, [])
 
   const cambiarCantidad = useCallback((productoId, delta) => {
@@ -94,6 +134,26 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
     }))
   }, [checkStock, items])
 
+  const setCantidadDirectaPorKey = useCallback((key, cantidad) => {
+    console.warn('[LINE_ITEMS][QTY_DIRECT_CALL]', { key, cantidad })
+    const n = Math.max(1, Math.floor(Number(cantidad) || 1))
+    setItems(prev => {
+      const before = prev.find(it => it._key === key)
+      const next = prev.map(x => x._key === key ? { ...x, cantidad: n } : x)
+      const after = next.find(it => it._key === key)
+      console.debug('[LINE_ITEMS][QTY_DIRECT]', {
+        key,
+        received: cantidad,
+        normalized: n,
+        before: before ? { productoId: before.productoId, cantidad: before.cantidad } : null,
+        after: after ? { productoId: after.productoId, cantidad: after.cantidad } : null,
+        itemCountBefore: prev.length,
+        itemCountAfter: next.length
+      })
+      return next
+    })
+  }, [])
+
   const setCantidadDirecta = useCallback((productoId, cantidad) => {
     let n = Math.max(1, Math.floor(Number(cantidad) || 1))
     if (checkStock) {
@@ -109,6 +169,15 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
     setItems(prev => prev.map(x => x.productoId === productoId ? { ...x, cantidad: n } : x))
   }, [checkStock, items])
 
+  const cambiarPrecioPorKey = useCallback((key, precio, precioOriginal) => {
+    setItems(prev => prev.map(it => {
+      if (it._key !== key) return it
+      const pUnit = Math.max(0, Number(precio) || 0)
+      const pOrig = precioOriginal !== undefined ? precioOriginal : pUnit
+      return { ...it, precioUnitUsd: pUnit, precioOriginalUsd: pOrig }
+    }))
+  }, [])
+
   const cambiarPrecio = useCallback((productoId, precio, precioOriginal) => {
     setItems(prev => prev.map(it => {
       if (it.productoId !== productoId) return it
@@ -116,6 +185,12 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
       const pOrig = precioOriginal !== undefined ? precioOriginal : pUnit
       return { ...it, precioUnitUsd: pUnit, precioOriginalUsd: pOrig }
     }))
+  }, [])
+
+  const togglePrestamoPorKey = useCallback((key) => {
+    setItems(prev => prev.map(it =>
+      it._key === key ? { ...it, esPrestamo: !it.esPrestamo } : it
+    ))
   }, [])
 
   const togglePrestamo = useCallback((productoId) => {
@@ -133,10 +208,15 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
     editarItem,
     eliminarItem,
     eliminarPorId,
+    eliminarPorKey,
     cambiarCantidad,
+    cambiarCantidadPorKey,
     setCantidadDirecta,
+    setCantidadDirectaPorKey,
     cambiarPrecio,
+    cambiarPrecioPorKey,
     togglePrestamo,
+    togglePrestamoPorKey,
     limpiar,
     setStockMap,
   }
