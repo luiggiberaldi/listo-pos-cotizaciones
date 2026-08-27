@@ -14,6 +14,29 @@ export function apiUrl(path) {
   return `${WORKER_ORIGIN}${path}`
 }
 
+/**
+ * fetch con timeout duro vía AbortController.
+ * Sin esto, una conexión estancada (red móvil inestable) deja la promesa
+ * colgada minutos y la UI se congela en estado de carga.
+ * Lanza Error con name 'TimeoutError' al expirar.
+ */
+export async function fetchConTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      const e = new Error('timeout_red')
+      e.name = 'TimeoutError'
+      throw e
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** Returns auth headers including X-Operator-Id to avoid JWT refresh delay issues */
 export async function getAuthHeaders(extra = {}) {
   const { data: { session } } = await supabase.auth.getSession()

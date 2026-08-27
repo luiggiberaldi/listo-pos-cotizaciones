@@ -10,13 +10,14 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
   const [pin,     setPin]     = useState('')
   const [error,   setError]   = useState(false)
   const [working, setWorking] = useState(false)
+  const [msg,     setMsg]     = useState(null)
 
   const inputRef = useRef(null)
   const isTactil = () => window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
   useEffect(() => {
     if (isOpen) {
-      setPin(''); setError(false)
+      setPin(''); setError(false); setMsg(null)
       if (!isTactil()) setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [isOpen])
@@ -28,11 +29,45 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
   async function submit() {
     if (pin.length !== PIN_LEN || working) return
     setWorking(true)
-    const ok = await onSubmit(pin)
-    if (!ok) {
-      setError(true); setPin(''); setWorking(false)
-      setTimeout(() => setError(false), 600)
+
+    // Watchdog: si la verificación no resuelve en 20s, liberar la UI.
+    // Garantiza que el spinner "Verificando…" NUNCA quede congelado,
+    // aunque alguna promesa de abajo se cuelgue (red estancada, etc.).
+    let cancelado = false
+    const vigilante = setTimeout(() => {
+      cancelado = true
+      setWorking(false)
+      setError(true)
+      setPin('')
+      setMsg('La verificación tardó demasiado. Revisa tu conexión e intenta de nuevo.')
       if (!isTactil()) setTimeout(() => inputRef.current?.focus(), 100)
+      setTimeout(() => { setError(false); setMsg(null) }, 3000)
+    }, 20000)
+
+    try {
+      const res = await onSubmit(pin)
+      const ok = res === true || res?.ok === true
+      if (cancelado) return // el fondo terminó tarde; la UI ya fue liberada
+      if (!ok) {
+        // Verificación anterior aún en curso — explicar el shake en vez de
+        // hacer parecer un PIN incorrecto
+        if (res?.busy) {
+          setMsg('La verificación anterior sigue en curso. Espera unos segundos…')
+          setTimeout(() => setMsg(null), 4000)
+        }
+        setError(true); setPin('')
+        setTimeout(() => setError(false), 600)
+        if (!isTactil()) setTimeout(() => inputRef.current?.focus(), 100)
+      }
+    } catch (err) {
+      console.error('[AUTH] Error procesando PIN:', err)
+      if (cancelado) return
+      setError(true)
+      setPin('')
+      setTimeout(() => setError(false), 600)
+    } finally {
+      clearTimeout(vigilante)
+      if (!cancelado) setWorking(false)
     }
   }
 
@@ -119,6 +154,13 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
               Ingresa tu PIN de {PIN_LEN} dígitos
             </p>
           </div>
+
+          {/* Mensaje de estado (timeout, etc.) */}
+          {msg && (
+            <p className="text-[11px] font-semibold text-center -mt-3 mb-3 sm:-mt-4 sm:mb-4" style={{ color: '#fbbf24' }}>
+              {msg}
+            </p>
+          )}
 
           {/* Puntos indicadores */}
           <div className={`flex justify-center gap-3 sm:gap-3.5 mb-5 sm:mb-8 ${error ? 'animate-shake' : ''}`}>

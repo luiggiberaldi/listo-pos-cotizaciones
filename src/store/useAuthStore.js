@@ -4,7 +4,7 @@
 // El JWT lleva operator_id y operator_rol en app_metadata
 import { create } from 'zustand'
 import supabase from '../services/supabase/client'
-import { apiUrl } from '../services/apiBase'
+import { apiUrl, fetchConTimeout } from '../services/apiBase'
 import queryClient from '../lib/queryClient'
 import { indexedDbPersister } from '../lib/queryPersister'
 
@@ -208,6 +208,15 @@ const useAuthStore = create((set, get) => ({
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
 
+    // Precalentar token al recuperar foco: en producción el tab/tablet queda
+    // suspendida horas, el token expira y el refresh terminaba DENTRO del
+    // camino crítico del PIN (causa del cuelgue "Verificando…"). Aquí ocurre
+    // apenas la app vuelve a ser visible, antes de que el usuario llegue al PIN.
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') get().precalentarToken()
+    }
+    document.addEventListener('visibilitychange', handleVisible)
+
     const timeoutId = setTimeout(() => {
       const state = get()
       console.log('[AUTH] timeout principal disparado — initialized:', state.initialized, 'user:', !!state.user, 'perfil:', !!state.perfil)
@@ -328,6 +337,7 @@ const useAuthStore = create((set, get) => ({
       if (onlineDebounceId) clearTimeout(onlineDebounceId)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      document.removeEventListener('visibilitychange', handleVisible)
       subscription.unsubscribe()
     }
   },
@@ -469,20 +479,30 @@ const useAuthStore = create((set, get) => ({
 
   // ─── Seleccionar operador con PIN ─────────────────────────────────────────
   switchOperator: async (operatorId, pin) => {
-    if (get().loading) return { ok: false }
+    // Intento anterior aún en curso (red lentísima): avisar en vez de fallar en silencio
+    if (get().loading) return { ok: false, busy: true }
 
     set({ loading: true, error: null })
 
-    // Helper para hacer la llamada al worker
+    // Helper: acotar cualquier promesa con un timeout duro.
+    // Sin esto, un fetch estancado en red inestable deja el modal
+    // "Verificando…" congelado indefinidamente.
+    const conLimite = (promesa, ms, etiqueta) =>
+      Promise.race([
+        promesa,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(etiqueta)), ms)),
+      ])
+
+    // Helper para hacer la llamada al worker (con timeout duro de 15s)
     const callWorker = async (token) => {
-      return fetch(apiUrl('/api/auth/switch-operator'), {
+      return fetchConTimeout(apiUrl('/api/auth/switch-operator'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ operator_id: operatorId, pin }),
-      })
+      }, 15000)
     }
 
     // Vite/Wrangler puede devolver una respuesta 500 vacía cuando el Worker
@@ -494,7 +514,9 @@ const useAuthStore = create((set, get) => ({
     }
 
     try {
-      let token = await getAccessToken()
+      // Tope de 8s para obtener/refrescar el token: si Supabase no responde,
+      // caemos al catch donde el fallback offline con PBKDF2 puede resolver.
+      let token = await conLimite(getAccessToken(), 8000, 'token_timeout')
       if (!token) {
         set({ loading: false, error: 'No hay sesión activa. Inicia sesión primero.' })
         return { ok: false }
@@ -508,7 +530,7 @@ const useAuthStore = create((set, get) => ({
       if (!res.ok && res.status === 401 && result.error?.includes('autenticado')) {
         console.log('[AUTH] switchOperator: sesión expirada, intentando refresh...')
         try {
-          const { data: refreshData } = await supabase.auth.refreshSession()
+          const { data: refreshData } = await conLimite(supabase.auth.refreshSession(), 8000, 'refresh_timeout')
           const freshToken = refreshData?.session?.access_token
           if (freshToken) {
             set({ user: refreshData.user })
@@ -611,13 +633,16 @@ const useAuthStore = create((set, get) => ({
       }
 
       // No hay cache de operadores — no se puede validar offline
+      const esTimeout = ['timeout_red', 'token_timeout', 'refresh_timeout'].includes(err.message)
       set({
         loading: false,
         error: err.message === 'auth_session_invalid'
           ? 'La sesión no fue aceptada por el servidor local. Reinicia el Worker con las claves del mismo proyecto Supabase y vuelve a iniciar sesión.'
-          : !navigator.onLine
-            ? 'Sin conexión. Conecta a internet la primera vez para habilitar el modo offline.'
-            : 'Error de conexión. Verifica tu internet e intenta de nuevo.',
+          : esTimeout
+            ? 'La conexión tardó demasiado. Verifica tu internet e intenta de nuevo.'
+            : !navigator.onLine
+              ? 'Sin conexión. Conecta a internet la primera vez para habilitar el modo offline.'
+              : 'Error de conexión. Verifica tu internet e intenta de nuevo.',
       })
       return { ok: false }
     }
@@ -680,6 +705,17 @@ const useAuthStore = create((set, get) => ({
     indexedDbPersister.removeClient().catch(() => {})
     guardarPerfilCache(null, userId)
     set({ user: null, perfil: null, error: null, _logoutManual: false })
+  },
+
+  // ─── Precalentar token en background ──────────────────────────────────
+  // Refresca el JWT si está por vencer SIN bloquear la UI. Se invoca al abrir
+  // el modal de PIN y al recuperar foco, para que switchOperator nunca espere
+  // un refresh síncrono (la causa del cuelgue "Verificando…" en producción).
+  precalentarToken: async () => {
+    try {
+      if (!get().user) return
+      await getAccessToken()
+    } catch { /* no crítico — switchOperator tiene tope propio + fallback offline */ }
   },
 
   // ─── Limpiar error manualmente ─────────────────────────────────────────────

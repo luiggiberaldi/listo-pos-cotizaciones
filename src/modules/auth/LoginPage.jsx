@@ -479,11 +479,18 @@ function UserSelectStep({ onLogout }) {
     return () => clearTimeout(t)
   }, [])
 
+  function seleccionarUsuario(u) {
+    setSeleccionado(u)
+    // Precalentar el token MIENTRAS se teclea el PIN — saca el refresh del JWT
+    // del camino crítico (causa del cuelgue "Verificando…" en producción)
+    useAuthStore.getState().precalentarToken()
+  }
+
   async function handlePin(pin) {
     if (!seleccionado) return false
-    const { ok } = await switchOperator(seleccionado.id, pin)
-    if (ok) navigate('/', { replace: true })
-    return ok
+    const res = await switchOperator(seleccionado.id, pin)
+    if (res.ok) navigate('/', { replace: true })
+    return res
   }
 
   return (
@@ -636,7 +643,7 @@ function UserSelectStep({ onLogout }) {
                   return (orden[a.rol] ?? 4) - (orden[b.rol] ?? 4)
                 }).map((u, i) => (
                   <div key={u.id} className="min-w-0">
-                    <UserCard user={u} onClick={setSeleccionado} index={i} />
+                    <UserCard user={u} onClick={seleccionarUsuario} index={i} />
                   </div>
                 ))}
               </div>
