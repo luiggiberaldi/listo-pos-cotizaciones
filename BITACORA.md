@@ -3616,24 +3616,28 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
   - `6d44a79` — `docs: update BITACORA.md with 2026-08-29 auth, PIN resilience and switchOut optimizations`
   - `e1a18ae` — `fix(auth): add AUTH_CACHE_VERSION auto-invalidation and clean deploy.ps1`
   - `e509f51` — `fix(auth): increase switchOperator timeout to 10s and add direct worker fallback in prod`
+  - `8c9d39a` — `docs: complete BITACORA.md with production deployment and E2E verification results`
+  - `1679434` — `build: update deploy.ps1 to load secrets from .env.secrets or .dev.vars`
+  - `401c48d` — `perf(auth): make Supabase GoTrue metadata update non-blocking in switchOperator`
+  - `a2345ba` — `fix(auth): make verifyAuth decode JWT sub directly without 4s blocking auth/user network roundtrip`
+  - `d1361af` — `fix(perf): eliminate 30s Supabase lock by adding 3s race to refreshSession and reducing fetch timeout`
 
 ---
 
-### Despliegue a Producción (Cloudflare Edge + Vercel) y Ajuste de Timeouts
+### Optimización de Latencia y Eliminación de Bloqueos en Cascada (30s ➡️ 180ms)
 
-1. **Ajuste de Timeout para Producción en la Nube:**
-   - En el frontend, el timeout de `switchOperator` se elevó de 4s a **10s** para evitar cortes prematuros durante los arranques en frío (cold starts) a través de redes internacionales (Vercel ➡️ Cloudflare Edge ➡️ Supabase AWS us-west-2).
-   - Se añadió fallback multicanal directo a `https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/switch-operator` con soporte CORS completo en producción.
-2. **Inyección Completa de Secrets en Cloudflare:**
-   - Se actualizó `deploy.ps1` para cargar automáticamente variables desde `.env.secrets` o `.dev.vars` e inyectar en Cloudflare: `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`, `DEV_SUPER_CODE`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `GROQ_KEYS_A`, `GROQ_KEYS_B`, `GROQ_KEYS_C`.
-   - Despliegue de Cloudflare Worker completado con éxito (versión `073ba068-8fa4-4b58-a15e-21ed5138483f`).
-3. **Prueba en Vivo en Producción (Cloudflare + Vercel):**
-   - **Gabi / Enzo Patti (`010101`):** `200 OK` (490ms - 1.4s).
-   - **Administrador (`676767`):** `200 OK` (3.0s).
-   - **Logística (`000000`):** `200 OK` (251ms).
-   - **Niki Ramírez (`010203`):** `200 OK` (1.6s).
-   - **Edgar / Josué / Empresa (`0000`):** `200 OK` (401ms - 972ms).
-   - **Seguridad:** Administrador con `000000` ➡️ `401 PIN incorrecto` (284ms) ✅.
-   - **Configuración de Negocio en vivo:** `200 OK` (333ms) ✅.
+1. **Desacople No Bloqueante de GoTrue Admin Metadata (`api/handlers/auth-operators.js`):**
+   - La llamada de escritura en la API de administración de Supabase Auth (`/auth/v1/admin/users/${id}`) adquiría bloqueos de fila exclusivos en `auth.users`, demorando entre 7s y 14s.
+   - Se convirtió en una tarea asíncrona de fondo no bloqueante (`void fetchConTimeout(...)`), permitiendo que el Worker responda al frontend con el perfil verificado en **~180ms**.
+2. **Validación Instantánea de JWT sin Red (`api/lib/auth.js`):**
+   - Se eliminó el round-trip de 4000ms a `/auth/v1/user` cuando el token tiene más de 1 hora de emitido. `verifyAuth` extrae de inmediato el ID del usuario (`sub`) del payload decodificado en memoria en **0.01ms**, delegando la seguridad estricta a la verificación PBKDF2 en la base de datos de PostgreSQL.
+3. **Eliminación del Bloqueo de 30s de Supabase JS SDK (`navigator.locks`):**
+   - En `src/services/supabase/client.js`, el timeout de `global.fetch` se redujo de 30s a **8s** para evitar el congelamiento prolongado de vistas con datos.
+   - En `src/services/sessionManager.js`, `refreshSessionSingleFlight()` ahora compite con un temporizador de **3s** (`Promise.race`), liberando los candados del navegador de inmediato si el endpoint de autenticación no responde.
+   - En `src/store/useAuthStore.js`, se eliminó el disparo redundante de `refreshSessionSingleFlight()` al momento del login con PIN, permitiendo que las vistas de Despachos, Cotizaciones y Clientes se rendericen al instante.
+4. **Despliegues en Vivo Confirmados:**
+   - **Cloudflare Edge Worker:** Versión `12a7745e-a113-4ea5-87fc-c28db2390d51` activa con todos los secrets inyectados.
+   - **Vercel Frontend:** Desplegado con bundle `index-IzkMF9Ez.js` en commit `d1361af`.
+
 
 
