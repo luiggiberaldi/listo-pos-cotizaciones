@@ -32,8 +32,6 @@ backup_*.json
 *.dump.partial.*
 staging_before_*.dump
 tmp/e2e-staging/
-tmp/
-.freebuff/
 
 # Capturas y videos de trabajo
 *.mp4 *.mov
@@ -77,25 +75,20 @@ __tests__/
 !ARQUITECTURA.md
 !ROADMAP.md
 !BITACORA.md
+!docs/plans/PLAN_SALIDA_PRODUCCION.md
 
-# Release evidence and selected commission regressions
-!docs/plans/2026-08-23-paquete-release-principal-comisiones.md
-!docs/plans/2026-08-22-auditoria-pdfs-comisiones.md
-!docs/plans/2026-08-22-fix-e2e-comisiones-pago-legacy.md
-!docs/plans/2026-08-22-quitar-pago-comisiones.md
-!src/utils/__tests__/
-!src/utils/__tests__/comisionUtils.test.js
-!src/utils/__tests__/comisionesGeneradasPDF.test.js
-!src/utils/__tests__/pdfSharedHeader.test.js
-!src/utils/__tests__/comisionesTasa.test.js
-
-# Revisión SQL 238b del proyecto principal
+# Automatización E2E segura: estos dos scripts sí deben viajar con staging.
 !scripts/
 scripts/*
-!scripts/validate-238b-review-package.mjs
-!scripts/run-238b-historical-contract-staging-v4.mjs
-!scripts/fix-despacho-2697-cxc.mjs
-!docs/plans/2026-08-23-plan-reconciliacion-comisiones-238b.md
-!docs/plans/2026-08-24-staging-238b-contract-test.md
-!docs/plans/2026-08-23-validacion-migracion-238.md
-!docs/plans/2026-08-28-runbook-promocion-04-consumo-credito.md
+!scripts/test-e2e-staging.mjs
+!scripts/provision-staging-e2e.mjs
+!scripts/audit-kardex-staging.mjs
+!scripts/reconcile-kardex-staging.mjs
+!scripts/monitor-kardex-staging.mjs
+!scripts/test-consumo-credito-staging.mjs
+!scripts/detect-double-credit-cxc-staging.mjs
+
+# Keep the regression test that protects the nightly E2E guards.
+!api/lib/__tests__/
+!api/lib/__tests__/e2eRunnerConfig.test.js
+!api/lib/__tests__/kardexAudit.test.js

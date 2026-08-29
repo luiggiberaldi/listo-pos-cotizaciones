@@ -1,2 +1,21 @@
 # Ignorar la carpeta del API backend ya que se despliega en Cloudflare Workers
-api/
+# (patrones anclados a la raíz: sin "/" inicial, excluirían copias anidadas
+#  como src/services/supabase y romperían el build en Linux)
+/api/
+
+# Proyecto staging paralelo (tiene su propio deploy)
+/construacero-staging/
+
+# SQL, migraciones y releases (solo se aplican directo a la DB)
+/supabase/
+
+# Backups, evidencia de E2E y scripts temporales de despliegue
+/tmp/
+
+# Documentación y scripts de auditoría (no los usa el build)
+/docs/
+/scripts/
+/.github/
+
+# Datos locales de la herramienta
+/.freebuff/
