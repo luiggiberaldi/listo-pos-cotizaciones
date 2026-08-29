@@ -249,13 +249,21 @@ function RutaSoloVendedor() {
 }
 
 // ─── App raíz ─────────────────────────────────────────────────────────────────
+let authInitializationPromise = null
+
 function AppRoutes() {
   const initialize = useAuthStore((s) => s.initialize)
 
-  // Inicializar listener de auth una sola vez al montar la app
+  // StrictMode desmonta/remonta efectos en desarrollo. Reutilizar la misma
+  // inicialización evita listeners concurrentes y locks de Supabase huérfanos.
   useEffect(() => {
-    const cleanup = initialize()
-    return cleanup
+    if (!authInitializationPromise) {
+      authInitializationPromise = Promise.resolve(initialize())
+    }
+    return () => {
+      // No desuscribir durante el remount de StrictMode; el singleton vive con
+      // la aplicación y se limpia solo al recargar la página.
+    }
   }, [initialize])
 
   const perfil = useAuthStore(s => s.perfil)
