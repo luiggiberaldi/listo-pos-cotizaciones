@@ -171,11 +171,20 @@ export async function handleRevertirAbono(request, env) {
       return jsonError('La transacción no existe', 404, request);
     }
     const abono = abonos[0];
-    if (abono.tipo !== 'abono' && abono.tipo !== 'credito' && abono.tipo !== 'devolucion_credito') {
-      return jsonError('Solo se pueden revertir transacciones de tipo abono, crédito (saldo a favor) o devolución de crédito', 400, request);
+    if (abono.tipo !== 'abono' && abono.tipo !== 'credito' && abono.tipo !== 'devolucion_credito' && abono.tipo !== 'consumo_credito') {
+      return jsonError('Solo se pueden revertir transacciones de tipo abono, crédito, consumo de crédito o devolución de crédito', 400, request);
     }
 
     const { cliente_id: clienteId, monto_usd: montoMov, tipo } = abono;
+
+    if (tipo === 'consumo_credito' && abono.despacho_id) {
+      const paidRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${abono.despacho_id}&tipo=eq.abono&select=monto_usd`, { headers });
+      if (paidRes.ok) {
+        const paidRows = await paidRes.json();
+        const paid = (paidRows || []).reduce((sum, row) => sum + Number(row.monto_usd || 0), 0);
+        if (paid > 0) return jsonError('CONSUMO_CONCILIADO: no se puede revertir el consumo de saldo a favor después de conciliar el despacho', 400, request);
+      }
+    }
 
     if (tipo === 'credito') {
       // Validar si el cliente tiene suficiente saldo_a_favor disponible para ser revertido (es decir, no ha sido consumido)
@@ -208,12 +217,12 @@ export async function handleRevertirAbono(request, env) {
 
     // 4. Auditoría
     try {
-      const accionAuditoria = tipo === 'credito' ? 'REVERTIR_CREDITO' : tipo === 'devolucion_credito' ? 'REVERTIR_DEVOLUCION_CREDITO' : 'REVERTIR_ABONO';
+      const accionAuditoria = tipo === 'credito' ? 'REVERTIR_CREDITO' : tipo === 'devolucion_credito' ? 'REVERTIR_DEVOLUCION_CREDITO' : tipo === 'consumo_credito' ? 'REVERTIR_CONSUMO_CREDITO' : 'REVERTIR_ABONO';
       const descAuditoria = tipo === 'credito' 
         ? `Carga de crédito (saldo a favor) de $${montoMov} revertida para cliente ${clienteId}` 
         : tipo === 'devolucion_credito'
         ? `Devolución de saldo a favor de $${montoMov} revertida para cliente ${clienteId}`
-        : `Abono de $${montoMov} revertido para cliente ${clienteId}`;
+        : tipo === 'consumo_credito' ? `Consumo de saldo a favor de $${montoMov} revertido para cliente ${clienteId}` : `Abono de $${montoMov} revertido para cliente ${clienteId}`;
       await registrarAuditoria(env, headers, {
         usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
         categoria: 'FINANZAS', accion: accionAuditoria,

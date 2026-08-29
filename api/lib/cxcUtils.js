@@ -33,7 +33,7 @@ export async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
           }
         } else if (item.tipo === 'credito') {
           saldoFavor += monto;
-        } else if (item.tipo === 'devolucion_credito') {
+        } else if (item.tipo === 'devolucion_credito' || item.tipo === 'consumo_credito') {
           saldoFavor -= monto;
         }
       });

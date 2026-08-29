@@ -1039,6 +1039,8 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                           ? 'bg-blue-50 border-blue-100'
                           : mov.tipo === 'devolucion_credito'
                           ? 'bg-amber-50 border-amber-100'
+                          : mov.tipo === 'consumo_credito'
+                          ? 'bg-purple-50 border-purple-100'
                           : 'bg-emerald-50 border-emerald-100'
                       }`}>
                         {mov.tipo === 'cargo' ? (
@@ -1047,6 +1049,8 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                           <ArrowDownCircle size={18} className="text-blue-500 shrink-0" />
                         ) : mov.tipo === 'devolucion_credito' ? (
                           <ArrowUpCircle size={18} className="text-amber-500 shrink-0" />
+                        ) : mov.tipo === 'consumo_credito' ? (
+                          <ArrowDownCircle size={18} className="text-purple-500 shrink-0" />
                         ) : (
                           <ArrowDownCircle size={18} className="text-emerald-500 shrink-0" />
                         )}
@@ -1056,6 +1060,11 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                             {mov.metodo_pago === 'cod' && (
                               <span className="bg-blue-100 text-blue-800 text-[8.5px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 border border-blue-200">
                                 COD
+                              </span>
+                            )}
+                            {mov.tipo === 'consumo_credito' && (
+                              <span className="bg-purple-100 text-purple-800 text-[8.5px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 border border-purple-200">
+                                Consumo saldo a favor
                               </span>
                             )}
                             {mov.tipo === 'abono' && mov.forma_pago_abono === 'Saldo a favor' && (
@@ -1080,20 +1089,22 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                                 ? 'text-blue-600' 
                                 : mov.tipo === 'devolucion_credito'
                                 ? 'text-amber-600'
+                                : mov.tipo === 'consumo_credito'
+                                ? 'text-purple-600'
                                 : 'text-emerald-600'
                             }`}>
                               {mov.tipo === 'cargo' || mov.tipo === 'devolucion_credito' ? '+' : '-'}{fmtUsd(mov.monto_usd)}
                             </p>
                             <p className="text-[10px] text-slate-400">
-                              {(mov.tipo === 'credito' || mov.tipo === 'devolucion_credito') ? 'Crédito' : 'Saldo'}: {fmtUsd(mov.saldo_usd)}
+                              {mov.tipo === 'consumo_credito' ? 'Favor restante' : (mov.tipo === 'credito' || mov.tipo === 'devolucion_credito') ? 'Crédito' : 'Saldo'}: {fmtUsd(mov.saldo_usd)}
                             </p>
                           </div>
-                          {(mov.tipo === 'abono' || mov.tipo === 'credito' || mov.tipo === 'devolucion_credito') && puedeRevertirAbono && (
+                          {(mov.tipo === 'abono' || mov.tipo === 'credito' || mov.tipo === 'devolucion_credito' || mov.tipo === 'consumo_credito') && puedeRevertirAbono && (
                             <button
                               type="button"
                               onClick={() => setAbonoARevertir(mov)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
-                              title={mov.tipo === 'credito' ? "Revertir saldo a favor" : mov.tipo === 'devolucion_credito' ? "Revertir devolución" : "Revertir abono"}
+                              title={mov.tipo === 'credito' ? "Revertir saldo a favor" : mov.tipo === 'devolucion_credito' ? "Revertir devolución" : mov.tipo === 'consumo_credito' ? "Revertir consumo de saldo a favor" : "Revertir abono"}
                             >
                               <RotateCcw size={14} />
                             </button>

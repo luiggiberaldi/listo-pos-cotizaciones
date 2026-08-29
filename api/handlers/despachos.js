@@ -1213,27 +1213,27 @@ export async function handleActualizarEstadoDespacho(request, env) {
           // 5.b. Registrar abono por Saldo a Favor
           if (abonoSaldoFavor) {
             const abonoExistRes = await fetch(
-              `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.abono&forma_pago_abono=eq.Saldo%20a%20favor&select=id`,
+              `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.consumo_credito&select=id`,
               { headers }
             );
             const abonoExist = await abonoExistRes.json();
             if (!Array.isArray(abonoExist) || abonoExist.length === 0) {
               const saldoRes = await fetch(
-                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
+                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente,saldo_a_favor`,
                 { headers }
               );
               const [clienteSaldo] = await saldoRes.json();
-              const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-              const nuevoSaldo = Math.max(0, saldoActual - abonoSaldoFavor.monto);
+              const saldoFavorActual = Number(clienteSaldo?.saldo_a_favor || 0);
+              const nuevoSaldoFavor = Math.max(0, saldoFavorActual - abonoSaldoFavor.monto);
 
               await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
                 method: 'POST', headers,
                 body: JSON.stringify({
                   cliente_id: clienteCxCId,
                   despacho_id: despachoId,
-                  tipo: 'abono',
+                  tipo: 'consumo_credito',
                   monto_usd: abonoSaldoFavor.monto,
-                  saldo_usd: nuevoSaldo,
+                  saldo_usd: nuevoSaldoFavor,
                   forma_pago_abono: 'Saldo a favor',
                   referencia: `Despacho #${cot ? cot.numero : despachoId}`,
                   descripcion: `Pago con Saldo a Favor (${abonoSaldoFavor.origen.toUpperCase()})`,
