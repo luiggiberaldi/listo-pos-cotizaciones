@@ -667,6 +667,13 @@ export default function AppLayout() {
               </>
             )}
           </button>
+          {!collapsed && (
+            <div className="pt-2 pb-1 text-center">
+              <span className="text-[10px] font-mono font-medium text-white/20 tracking-wider">
+                v1.0.0
+              </span>
+            </div>
+          )}
         </div>
         </div>
       </aside>

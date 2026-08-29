@@ -812,18 +812,29 @@ export default function LoginPage() {
     )
   }
 
-  // Si no hay sesión de negocio o se cerró sesión → pedir email/contraseña
-  if (!gatePassed || !user) {
-    return <GateStep onPass={() => setGatePassed(true)} />
-  }
-
-  // Sesión activa → selección de operador + PIN
   return (
-    <UserSelectStep
-      onLogout={() => {
-        setGatePassed(false)
-        useAuthStore.getState().logout()
-      }}
-    />
+    <>
+      {/* ── Badge de Versión (Superior Izquierda en Desktop y Móvil) ── */}
+      <div className="fixed top-3 left-3 sm:top-5 sm:left-5 z-50 pointer-events-none select-none">
+        <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.06] border border-white/[0.1] backdrop-blur-md shadow-lg shadow-black/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-[10px] sm:text-xs font-semibold tracking-wider text-slate-300 font-mono">
+            v1.0.0
+          </span>
+        </div>
+      </div>
+
+      {/* Si no hay sesión de negocio o se cerró sesión → pedir email/contraseña */}
+      {!gatePassed || !user ? (
+        <GateStep onPass={() => setGatePassed(true)} />
+      ) : (
+        <UserSelectStep
+          onLogout={() => {
+            setGatePassed(false)
+            useAuthStore.getState().logout()
+          }}
+        />
+      )}
+    </>
   )
 }
