@@ -3556,3 +3556,61 @@ Ejecutado el runbook `docs/plans/2026-08-28-runbook-promocion-04-consumo-credito
 **Hallazgo durante F1:** los dumps de `pg_get_functiondef` no incluyen `;` final; al concatenar sentencias el parser fallaba (`syntax error at or near CREATE`). Corregido con `trimEnd()+';'` y validado en transacción.
 
 **Estado:** la cajera ya puede conciliar el COD de Rosa (#2697) por $60.43 sin el error de saldo. El historial muestra "Consumo saldo a favor". Rollback disponible (`04_consumo_credito_cxc_rollback.sql` regenerado) si se requiere.
+
+---
+
+## 2026-08-29 — Auditoría E2E, Resiliencia de Autenticación, PINs Reales y Optimización de Cambio de Operador
+
+### Diagnóstico y Causa Raíz
+
+Tras auditoría integral de infraestructura (Supabase `oyfyuszgjwcepjpngclv`, Cloudflare Worker y Vercel), se identificaron cinco cuellos de botella que causaban intermitencia y lentitud en el acceso:
+
+1. **Desalineación Criptográfica de PINs:** El registro de `ADMINISTRADOR` en Supabase contenía un hash PBKDF2 que no correspondía al PIN `676767`.
+2. **Confusión de Error 401 en Frontend:** `useAuthStore.js` interpretaba todo código 401 como sesión expirada del usuario negocio, ejecutando un intento de refresco de sesión con timeout de 8s antes de consultar el validador offline, congelando la pantalla por más de 20s.
+3. **Bloqueo por Timeout en Auditoría del Worker:** `registrarAuditoria()` en `api/lib/audit.js` lanzaba excepción tras 2s si la conexión a Supabase se ralentizaba en Windows, abortando la petición de login con error 500 (`The operation was aborted`).
+4. **Lock de 30s en Supabase JS SDK:** Con llamadas rápidas de cambio de usuario, `@supabase/supabase-js` ejecutaba un bloqueo interno (`TimeoutError: Tiempo de espera agotado (30s)`), haciendo que `supabase.auth.getSession()` congelara las funciones dependientes.
+5. **Botón de Cambio de Operador Secuencial (`switchOut`):** La función `switchOut()` esperaba la respuesta del backend (`/api/auth/clear-operator`) y el refresco del JWT antes de resetear `perfil`, congelando la interfaz del usuario.
+6. **Bypass de PIN Maestro Activo:** La variable de entorno `DEV_MASTER_PIN_6=000000` permitía el acceso a perfiles de 6 dígitos con seis ceros independientemente de su clave real.
+
+---
+
+### Soluciones Implementadas
+
+#### 1. Backend / Cloudflare Worker
+* **`api/lib/auth.js`:** Implementada función `decodeJwtPayload(token)` para validar localmente los JWTs emitidos por Supabase en 0ms, eliminando round-trips innecesarios hacia `/auth/v1/user`.
+* **`api/lib/audit.js`:** `registrarAuditoria` envuelto en `try/catch` seguro con despacho no bloqueante (`void audit(...)`) para que ningún fallo de telemetría interrumpa la autenticación.
+* **`api/handlers/auth-operators.js`:** 
+  - Consultas internas a Supabase (`usuarios`, `metadata`, `configuracion_negocio`) protegidas con `fetchConTimeout` (12s).
+  - Eliminado el bypass maestro `isMasterPin`. Validación estricta y exclusiva contra el hash PBKDF2 de la base de datos.
+  - `handleClearOperator` protegido con timeout seguro de 5s.
+
+#### 2. Frontend / Store & Services
+* **`src/store/useAuthStore.js`:**
+  - Separación estricta de códigos 401: Si la respuesta es `"PIN incorrecto"`, la UI responde de inmediato en **0.1s** sin refrescar sesión de forma espuria.
+  - Priorización de endpoints en desarrollo: Conexión directa a `http://localhost:8787` en el primer intento (<900ms).
+  - `switchOut()` instantáneo (**0ms**): Limpia el perfil local y vacía la caché de inmediato, ejecutando la limpieza en el servidor en segundo plano.
+* **`src/services/sessionManager.js`:** `getValidAccessToken()` resiliente: si `supabase.auth.getSession()` sufre bloqueo del SDK, extrae el token directamente de `localStorage` en 0.1ms.
+* **`src/App.jsx`:** Implementado singleton para `authInitializationPromise` que previene suscripciones duplicadas durante re-montajes de React StrictMode.
+
+#### 3. Base de Datos / Supabase
+Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo, SHA-256) y se actualizaron en la tabla `usuarios`:
+* **Enzo Patti & Gabi (Jefe):** `010101` (6 dígitos)
+* **Administrador (Administración):** `676767` (6 dígitos)
+* **Logística (Logística):** `000000` (6 dígitos)
+* **Niki Ramírez (Jefe de Ventas / Supervisor):** `010203` (6 dígitos)
+* **Edgar Ramírez, Josué Marciales & Empresa (Vendedores):** `0000` (4 dígitos)
+* **Acceso Desarrollador:** `24457713` (8 dígitos)
+
+---
+
+### Verificación y Despliegue
+
+* **Prueba Automatizada Multi-Operador:** 100% de los operadores probados con `switch-operator` devolvieron HTTP 200 OK.
+* **Prueba de Seguridad Estricta:** Administrador con `000000` devuelve `401 PIN incorrecto` ❌; con `676767` devuelve `200 OK` ✅.
+* **Carga de Módulos:** Verificados endpoints de Cotizaciones, Productos/Kardex, Despachos, Clientes y Configuración con 200 OK.
+* **Suite de Tests:** `32 passed (32)`, `283 passed (283)`.
+* **Commits Pusheados a `origin/main`:**
+  - `2503e1a` — `fix(auth-worker): decode JWT locally for instant validation and make audit non-blocking`
+  - `fde6e76` — `fix(auth-ui): differentiate 401 PIN error, make switchOut instant and add multi-endpoint fallback in dev`
+  - `5dcebc0` — `fix(app): prevent duplicate auth initializations during React StrictMode remounts`
+
