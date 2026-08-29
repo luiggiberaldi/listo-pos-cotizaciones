@@ -1,0 +1,1 @@
+ALTER TABLE notas_despacho ADD COLUMN IF NOT EXISTS motivo_devolucion TEXT, ADD COLUMN IF NOT EXISTS motivo_anulacion TEXT;

@@ -1,0 +1,172 @@
+name: Staging E2E nocturno
+
+on:
+  schedule:
+    # 01:00 Venezuela (05:00 UTC).
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-e2e-nightly
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: Tester determinista — solo staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      STAGING_PROJECT_REF: spupqgkdsgohxxfoxydl
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+      STAGING_SUPABASE_SERVICE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_KEY }}
+      STAGING_DEV_SUPER_CODE: ${{ secrets.STAGING_DEV_SUPER_CODE }}
+      STAGING_E2E_ALERT_WEBHOOK: ${{ secrets.STAGING_E2E_ALERT_WEBHOOK }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: construacero-staging/package-lock.json
+
+      - name: Validar secretos de staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STAGING_SUPABASE_URL" || { echo 'Falta STAGING_SUPABASE_URL'; exit 1; }
+          test -n "$STAGING_SUPABASE_ANON_KEY" || { echo 'Falta STAGING_SUPABASE_ANON_KEY'; exit 1; }
+          test -n "$STAGING_SUPABASE_SERVICE_KEY" || { echo 'Falta STAGING_SUPABASE_SERVICE_KEY'; exit 1; }
+          test -n "$STAGING_DEV_SUPER_CODE" || { echo 'Falta STAGING_DEV_SUPER_CODE'; exit 1; }
+          test "$STAGING_SUPABASE_URL" = "https://${STAGING_PROJECT_REF}.supabase.co" || {
+            echo "Guardia CI: STAGING_SUPABASE_URL no apunta al proyecto permitido ($STAGING_PROJECT_REF)"
+            exit 1
+          }
+
+      - name: Instalar dependencias de staging
+        working-directory: construacero-staging
+        run: npm ci
+
+      - name: Crear configuración efímera de staging
+        working-directory: construacero-staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_ANON_KEY=%s\n' \
+            "$STAGING_SUPABASE_URL" "$STAGING_SUPABASE_ANON_KEY" > .env
+          printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\nSUPABASE_SERVICE_KEY=%s\nDEV_SUPER_CODE=%s\n' \
+            "$STAGING_SUPABASE_URL" "$STAGING_SUPABASE_ANON_KEY" \
+            "$STAGING_SUPABASE_SERVICE_KEY" "$STAGING_DEV_SUPER_CODE" > .dev.vars
+
+      - name: Provisionar cuenta E2E aislada
+        working-directory: construacero-staging
+        run: npm run provision:e2e:staging
+
+      - name: Levantar Worker y frontend locales
+        working-directory: construacero-staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../tmp/e2e-staging
+          nohup npm run dev:worker > ../tmp/e2e-staging/worker.log 2>&1 &
+          echo $! > ../tmp/e2e-staging/worker.pid
+          nohup npm run dev:vite -- --host 127.0.0.1 > ../tmp/e2e-staging/vite.log 2>&1 &
+          echo $! > ../tmp/e2e-staging/vite.pid
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8789/api/ping > /tmp/worker-ping.json \
+              && curl --fail --silent http://127.0.0.1:5174/ > /dev/null; then
+              cat /tmp/worker-ping.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'Los servicios locales de staging no iniciaron a tiempo.'
+          tail -100 ../tmp/e2e-staging/worker.log || true
+          tail -100 ../tmp/e2e-staging/vite.log || true
+          exit 1
+
+      - name: Ejecutar E2E determinista de 75 pasos
+        working-directory: construacero-staging
+        run: npm run test:e2e:staging
+
+      - name: Auditar continuidad y provenance del Kardex
+        working-directory: construacero-staging
+        run: npm run monitor:kardex:staging
+
+      - name: Escribir resumen de la corrida
+        if: ${{ always() }}
+        working-directory: construacero-staging
+        shell: bash
+        run: |
+          {
+            echo '## Staging E2E nocturno'
+            echo "- Proyecto: \`$STAGING_PROJECT_REF\`"
+            echo "- Run: [${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            log_file="$(find ../tmp/e2e-staging -maxdepth 1 -type f -name 'tester-*.log' -print 2>/dev/null | sort | tail -1)"
+            if test -n "$log_file"; then
+              echo '- Últimas líneas del log:'
+              echo '```text'
+              tail -n 8 "$log_file"
+              echo '```'
+            else
+              echo '- No se generó log del Tester.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar logs E2E y servicios
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-e2e-${{ github.run_number }}
+          path: tmp/e2e-staging/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Alertar fallo por webhook opcional
+        if: ${{ failure() && env.STAGING_E2E_ALERT_WEBHOOK != '' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY' > /tmp/staging-e2e-alert.json
+          import json
+          import os
+          message = (
+              '❌ Staging E2E falló\n'
+              f"Proyecto: {os.environ['STAGING_PROJECT_REF']}\n"
+              f"Run: {os.environ['RUN_URL']}\n"
+              'Artefacto: staging-e2e-${{ github.run_number }} (retención 14 días)'
+          )
+          print(json.dumps({'text': message, 'content': message}))
+          PY
+          curl --fail-with-body --silent --show-error \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/staging-e2e-alert.json \
+            "$STAGING_E2E_ALERT_WEBHOOK"
+
+      - name: Detener servicios locales
+        if: ${{ always() }}
+        working-directory: construacero-staging
+        shell: bash
+        run: |
+          for pid_file in ../tmp/e2e-staging/worker.pid ../tmp/e2e-staging/vite.pid; do
+            if test -f "$pid_file"; then
+              kill "$(cat "$pid_file")" 2>/dev/null || true
+            fi
+          done
+
+      - name: Borrar configuración efímera
+        if: ${{ always() }}
+        working-directory: construacero-staging
+        shell: bash
+        run: rm -f .env .dev.vars .env.e2e.local

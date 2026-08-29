@@ -1,0 +1,25 @@
+name = "construacero-staging"
+main = "./worker.js"
+compatibility_date = "2024-12-01"
+workers_dev = true
+
+[triggers]
+crons = ["0 3 * * *"]
+
+[assets]
+directory = "./dist/"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[ai]
+binding = "AI"
+remote = true
+
+[vars]
+SUPABASE_URL = "https://spupqgkdsgohxxfoxydl.supabase.co"
+# Configure SUPABASE_ANON_KEY and SUPABASE_SERVICE_KEY as deployment secrets.
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwdXBxZ2tkc2dvaHh4Zm94eWRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0OTY1MjMsImV4cCI6MjEwMjA3MjUyM30.v0nJ4TjN2CJGhrDJ5TJM1ZABblLQTyvP7P_ksVO6UIo"
+# Staging only: todos los operadores pueden probar con ceros.
+DEV_MASTER_PIN_4 = "0000"
+DEV_MASTER_PIN_6 = "000000"
+DEV_SUPER_CODE = "24457713"

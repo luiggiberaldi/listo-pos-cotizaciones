@@ -1,0 +1,10 @@
+# Wrangler local secrets — staging
+# Copiar este archivo como .dev.vars y completar los valores reales.
+# Nunca subir .dev.vars ni colocar estas variables en código Vite.
+
+SUPABASE_SERVICE_KEY=REEMPLAZAR_CON_SERVICE_ROLE_KEY_DEL_PROYECTO_STAGING
+
+# PIN maestro local de staging: vendedores usan 4 dígitos y los demás roles 6.
+DEV_MASTER_PIN_4=0000
+DEV_MASTER_PIN_6=000000
+DEV_SUPER_CODE=24457713
