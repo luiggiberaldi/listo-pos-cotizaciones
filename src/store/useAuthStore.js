@@ -47,8 +47,9 @@ function getStorageKeys(userId) {
   }
 }
 
+const AUTH_CACHE_VERSION = 'v2_20260829_pins'
 const CACHE_MAX_AGE_PERFIL = 1000 * 60 * 60 * 24 // 24h
-const CACHE_MAX_AGE_OPERATORS = 1000 * 60 * 60 * 24 * 7 // 7 días
+const CACHE_MAX_AGE_OPERATORS = 1000 * 60 * 60 * 12 // 12h
 
 function guardarPerfilCache(perfil, userId) {
   try {
@@ -80,7 +81,11 @@ function guardarOperadoresCache(operators, userId) {
   try {
     const { operatorsKey } = getStorageKeys(userId)
     if (Array.isArray(operators) && operators.length > 0) {
-      localStorage.setItem(operatorsKey, JSON.stringify({ operators, _cachedAt: Date.now() }))
+      localStorage.setItem(operatorsKey, JSON.stringify({
+        version: AUTH_CACHE_VERSION,
+        operators,
+        _cachedAt: Date.now()
+      }))
     }
   } catch { /* ignorar */ }
 }
@@ -91,6 +96,11 @@ function leerOperadoresCache(userId) {
     const raw = localStorage.getItem(operatorsKey)
     if (!raw) return null
     const cached = JSON.parse(raw)
+    // Invalidar automáticamente si la caché es de una versión anterior
+    if (cached.version !== AUTH_CACHE_VERSION) {
+      localStorage.removeItem(operatorsKey)
+      return null
+    }
     if (cached._cachedAt && Date.now() - cached._cachedAt > CACHE_MAX_AGE_OPERATORS) {
       localStorage.removeItem(operatorsKey)
       return null
@@ -123,14 +133,25 @@ async function verifyPinLocal(pin, storedHash, storedSalt) {
 // ─── Descargar y cachear operadores en background ────────────────────────────
 async function fetchAndCacheOperators(token, userId) {
   try {
-    const res = await fetch(apiUrl('/api/auth/operators'), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) return
-    const { operators } = await res.json()
-    if (Array.isArray(operators) && operators.length > 0) {
-      guardarOperadoresCache(operators, userId)
-      console.log('[AUTH] operadores cacheados para uso offline:', operators.length)
+    const endpoints = import.meta.env.DEV
+      ? ['http://localhost:8787/api/auth/operators', apiUrl('/api/auth/operators')]
+      : [apiUrl('/api/auth/operators')]
+    for (const url of endpoints) {
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 4000)
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timer))
+        if (!res.ok) continue
+        const { operators } = await res.json()
+        if (Array.isArray(operators) && operators.length > 0) {
+          guardarOperadoresCache(operators, userId)
+          console.log('[AUTH] Operadores cacheados para uso offline (v2):', operators.length)
+          return
+        }
+      } catch { /* intentar siguiente */ }
     }
   } catch { /* ignorar — no crítico */ }
 }
