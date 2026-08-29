@@ -39,6 +39,21 @@ export function getWeekRange(offset = 0) {
 }
 
 /**
+ * Rango de un solo día: el sábado más reciente (hoy si es sábado).
+ * Alineado con la regla de comisión por cliente ajeno (aplica los sábados).
+ * @param {number} offset 0 = último sábado, -1 = sábado anterior, etc.
+ */
+export function getUltimoSabadoRange(offset = 0) {
+    const now = new Date();
+    const day = now.getDay(); // 0=dom ... 6=sab
+    const daysBackToSaturday = day === 6 ? 0 : (day - 6 + 7) % 7;
+    const d = new Date(now);
+    d.setDate(now.getDate() - daysBackToSaturday + offset * 7);
+    const dStr = getLocalISODate(d);
+    return { from: dStr, to: dStr };
+}
+
+/**
  * Corte semanal de comisiones: viernes a jueves.
  * En viernes toma el último período completo (viernes anterior → jueves).
  * @param {number} offset 0 = último corte completo, -1 = corte anterior

@@ -1081,7 +1081,8 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
       const params = new URLSearchParams()
       params.set('vista', 'eventos')
       params.set('page', '1')
-      params.set('pageSize', '500')
+      // El Worker admite hasta 1000 filas; debe cubrir el lote completo de staging.
+      params.set('pageSize', '1000')
       if (rango?.from) params.set('desde', rango.from)
       if (rango?.to) params.set('hasta', rango.to)
       if (vendedor?.id) params.set('vendedorId', vendedor.id)
@@ -1428,7 +1429,8 @@ function TabComisiones({ configNeg }) {
       const params = new URLSearchParams()
       params.set('vista', 'eventos')
       params.set('page', '1')
-      params.set('pageSize', '500')
+      // El Worker admite hasta 1000 filas; debe cubrir el lote completo de staging.
+      params.set('pageSize', '1000')
       if (rango.from) params.set('desde', rango.from)
       if (rango.to) params.set('hasta', rango.to)
       if (filtroVendedor) params.set('vendedorId', filtroVendedor)
@@ -1530,7 +1532,8 @@ function TabComisiones({ configNeg }) {
       const params = new URLSearchParams()
       params.set('vista', 'eventos')
       params.set('page', '1')
-      params.set('pageSize', '500')
+      // El Worker admite hasta 1000 filas; debe cubrir el lote completo de staging.
+      params.set('pageSize', '1000')
       if (rango?.from) params.set('desde', rango.from)
       if (rango?.to) params.set('hasta', rango.to)
       if (vendedor?.id) params.set('vendedorId', vendedor.id)

@@ -1,13 +1,13 @@
 // src/components/reportes/DateRangeSelector.jsx
 import { useState, useEffect } from 'react'
 import { Calendar } from 'lucide-react'
-import { getDayRange, getWeekRange, getCorteSemanalRange, getMonthRange, getLocalISODate } from '../../utils/dateHelpers'
+import { getDayRange, getWeekRange, getUltimoSabadoRange, getCorteSemanalRange, getMonthRange, getLocalISODate } from '../../utils/dateHelpers'
 
 const PRESETS = [
   { id: 'today',     label: 'Hoy',           short: 'Hoy',       getRango: () => getDayRange(0),   getPrev: () => getDayRange(-1) },
   { id: 'yesterday', label: 'Ayer',          short: 'Ayer',      getRango: () => getDayRange(-1),  getPrev: () => getDayRange(-2) },
   { id: 'thisWeek',  label: 'Esta semana',   short: 'Semana',    getRango: () => getWeekRange(0),  getPrev: () => getWeekRange(-1) },
-  { id: 'lastWeek',  label: 'Semana pasada', short: 'Anterior',  getRango: () => getWeekRange(-1), getPrev: () => getWeekRange(-2) },
+  { id: 'sabado',    label: 'Sábado',         short: 'Sáb',       getRango: () => getUltimoSabadoRange(0), getPrev: () => getUltimoSabadoRange(-1) },
   { id: 'commissionCut', label: 'Corte viernes–jueves', short: 'Corte', getRango: () => getCorteSemanalRange(0), getPrev: () => getCorteSemanalRange(-1) },
   { id: 'thisMonth', label: 'Este mes',      short: 'Mes',       getRango: () => getMonthRange(0), getPrev: () => getMonthRange(-1) },
   { id: 'lastMonth', label: 'Mes pasado',    short: 'Mes ant.',  getRango: () => getMonthRange(-1),getPrev: () => getMonthRange(-2) },
