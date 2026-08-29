@@ -2197,7 +2197,50 @@ export async function handleDevolucionParcialDespacho(request, env) {
       })),
     } : null;
 
-    const atomicRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_devolucion_parcial_idempotente`, {
+    // Cobro de la diferencia en intercambio (Opción A): el cliente puede pagar
+    // parte o toda la diferencia con uno o varios métodos. Sin pagos, el
+    // comportamiento es el histórico: el cargo completo queda como deuda.
+    const balanceNetoParaCobro = Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000;
+    let pagosDiferencia = null;
+    let pagadoDiferenciaUsd = 0;
+    if (Array.isArray(body.pagosDiferencia) && body.pagosDiferencia.length > 0) {
+      if (balanceNetoParaCobro <= 0) {
+        return jsonError('pagosDiferencia solo aplica cuando el intercambio supera lo devuelto', 400, request);
+      }
+      if (!(desp.cliente_factura_id || desp.cliente_id)) {
+        return jsonError('El despacho no tiene cliente de facturación para registrar el cobro de la diferencia', 400, request);
+      }
+      const METODOS_COBRO_DIFERENCIA = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT', 'Cruce'];
+      const pagosLimpios = [];
+      let sumaPagos = 0;
+      for (const p of body.pagosDiferencia) {
+        if (!p || typeof p !== 'object') return jsonError('Pago de diferencia inválido', 400, request);
+        const metodo = String(p.metodo || '').trim();
+        if (!METODOS_COBRO_DIFERENCIA.includes(metodo)) {
+          return jsonError(`Método de pago no permitido para la diferencia: ${metodo || '(vacío)'}`, 400, request);
+        }
+        const monto = Math.round(Number(p.monto) * 10000) / 10000;
+        if (!Number.isFinite(monto) || monto <= 0) {
+          return jsonError(`Monto inválido para el pago ${metodo}`, 400, request);
+        }
+        let referencia = p.referencia === undefined || p.referencia === null ? '' : String(p.referencia).trim();
+        if (metodo === 'Transf. / Pago Móvil' && !referencia) {
+          return jsonError('La referencia es obligatoria para Transf. / Pago Móvil', 400, request);
+        }
+        if (referencia.length > 160) return jsonError('Referencia demasiado larga', 400, request);
+        sumaPagos += monto;
+        pagosLimpios.push({ metodo, monto, referencia: referencia || null });
+      }
+      if (pagosLimpios.length > 12) return jsonError('Máximo 12 pagos por diferencia', 400, request);
+      sumaPagos = Math.round(sumaPagos * 10000) / 10000;
+      if (sumaPagos > balanceNetoParaCobro + 0.01) {
+        return jsonError(`La suma de los pagos ($${sumaPagos.toFixed(2)}) supera la diferencia a cobrar ($${balanceNetoParaCobro.toFixed(2)})`, 400, request);
+      }
+      pagosDiferencia = pagosLimpios;
+      pagadoDiferenciaUsd = sumaPagos;
+    }
+
+    const atomicRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_devolucion_parcial_cobro_idempotente`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -2214,6 +2257,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
         p_total_devuelto_usd: totalDevueltoUsd,
         p_total_intercambio_usd: totalIntercambioUsd,
         p_reemplazo: reemplazoPayload,
+        p_pagos_diferencia: pagosDiferencia,
       }),
     });
     const atomicText = await atomicRes.text();
@@ -2252,6 +2296,8 @@ export async function handleDevolucionParcialDespacho(request, env) {
           cotizacion_reemplazo_id: atomicResult.cotizacion_reemplazo_id || null,
           total_devuelto_usd: totalDevueltoUsd,
           total_intercambio_usd: totalIntercambioUsd,
+          pagos_diferencia: Array.isArray(pagosDiferencia) ? pagosDiferencia.length : 0,
+          pagado_diferencia_usd: pagadoDiferenciaUsd,
         },
         ip,
       });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Modal } from '../ui/Modal'
 import { AlertCircle, RotateCcw, CheckCircle, Package, Trash2, Plus } from 'lucide-react'
 import CustomSelect from '../ui/CustomSelect'
@@ -7,6 +7,11 @@ import { useDevolucionParcialDespacho } from '../../hooks/useDespachos'
 import { useInventario } from '../../hooks/useInventario'
 import ProductoAutocomplete from '../cotizaciones/ProductoAutocomplete'
 import { showToast } from '../ui/Toast'
+
+// Métodos permitidos para cobrar la diferencia. Se excluyen 'Donación' y
+// 'Cta por cobrar': no cobrar ya deja el cargo completo como deuda en CxC.
+const METODOS_COBRO_DIFERENCIA = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT', 'Cruce']
+const REFERENCIA_REQUERIDA = ['Transf. / Pago Móvil']
 
 export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const [loading, setLoading] = useState(false)
@@ -20,6 +25,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const [realizarIntercambio, setRealizarIntercambio] = useState(false)
   const [exchangeItems, setExchangeItems] = useState([])
   const [clienteInfo, setClienteInfo] = useState(null)
+  const [pagosDiferencia, setPagosDiferencia] = useState([])
 
   const lastValuesRef = useRef({})
   const mutation = useDevolucionParcialDespacho()
@@ -38,6 +44,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
       setRealizarIntercambio(false)
       setExchangeItems([])
       setClienteInfo(null)
+      setPagosDiferencia([])
       lastValuesRef.current = {}
       fetchItemsAndDevoluciones()
     }
@@ -226,6 +233,63 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const roundedTotalIntercambioUsd = Math.round(totalIntercambioUsd * 100) / 100
   const balanceNetoUsd = Math.round((totalIntercambioUsd - totalDevolverUsd) * 100) / 100
 
+  // ─── Cobro de la diferencia (solo cuando el intercambio supera lo devuelto) ───
+  const metodosPagoOriginal = useMemo(() => {
+    try {
+      const raw = despacho?.forma_pago_cliente ?? despacho?.forma_pago
+      const arr = typeof raw === 'string' ? JSON.parse(raw) : raw
+      if (!Array.isArray(arr)) return []
+      return [...new Set(arr.map(p => String(p?.metodo || '').trim()).filter(m => METODOS_COBRO_DIFERENCIA.includes(m)))]
+    } catch { return [] }
+  }, [despacho?.forma_pago, despacho?.forma_pago_cliente])
+
+  const cobradoDiferencia = Math.round(pagosDiferencia.reduce((s, p) => s + (Number(p.monto) || 0), 0) * 100) / 100
+  const pendienteDiferencia = Math.round((balanceNetoUsd - cobradoDiferencia) * 100) / 100
+  const cobroDiferenciaValido = !(balanceNetoUsd > 0) || (
+    pagosDiferencia.length <= 12 &&
+    pagosDiferencia.every(p =>
+      METODOS_COBRO_DIFERENCIA.includes(p.metodo) &&
+      Number(p.monto) > 0 &&
+      (!REFERENCIA_REQUERIDA.includes(p.metodo) || String(p.referencia || '').trim() !== '')
+    ) &&
+    cobradoDiferencia <= balanceNetoUsd + 0.011
+  )
+
+  const handleAddPagoDiferencia = () => {
+    setPagosDiferencia(prev => [...prev, { metodo: '', monto: '', referencia: '' }])
+  }
+  const handleUpdatePagoDiferencia = (idx, field, value) => {
+    setPagosDiferencia(prev => prev.map((p, i) => {
+      if (i !== idx) return p
+      // Al cambiar a un método que no requiere referencia, se limpia la obsoleta
+      if (field === 'metodo' && !REFERENCIA_REQUERIDA.includes(value)) return { ...p, metodo: value, referencia: '' }
+      return { ...p, [field]: value }
+    }))
+  }
+  const handleRemovePagoDiferencia = (idx) => {
+    setPagosDiferencia(prev => prev.filter((_, i) => i !== idx))
+  }
+  // Completa el monto de la fila con el saldo pendiente de la diferencia
+  const handleMontoTotal = (idx) => {
+    const pendiente = Math.max(0, pendienteDiferencia)
+    setPagosDiferencia(prev => prev.map((p, i) => (i === idx ? { ...p, monto: pendiente.toFixed(2) } : p)))
+  }
+  const handleUsarMismosMetodos = () => {
+    if (metodosPagoOriginal.length === 0) {
+      showToast('El despacho no registra métodos de pago reutilizables', 'info')
+      return
+    }
+    const cantidad = metodosPagoOriginal.length
+    const montoBase = Math.floor((balanceNetoUsd / cantidad) * 100) / 100
+    setPagosDiferencia(metodosPagoOriginal.map((m, i) => ({
+      metodo: m,
+      monto: i === cantidad - 1
+        ? Math.round((balanceNetoUsd - montoBase * (cantidad - 1)) * 100) / 100
+        : montoBase,
+      referencia: '',
+    })))
+  }
+
   // Validaciones
   const hasSelectedItems = selectedItems.length > 0
   const allQtyValid = selectedItems.every(item => {
@@ -243,7 +307,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     })
   )
 
-  const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid
+  const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid && cobroDiferenciaValido
 
   const handleConfirm = async () => {
     if (!isFormValid) return
@@ -270,6 +334,15 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
               cantidad: Number(it.cantidad),
               precio_unit_usd: Number(it.precio_unit_usd)
             }))
+          : [],
+        pagosDiferencia: balanceNetoUsd > 0
+          ? pagosDiferencia
+              .filter(p => METODOS_COBRO_DIFERENCIA.includes(p.metodo) && Number(p.monto) > 0)
+              .map(p => ({
+                metodo: p.metodo,
+                monto: Math.round(Number(p.monto) * 100) / 100,
+                referencia: String(p.referencia || '').trim() || null,
+              }))
           : []
       })
       onClose()
@@ -713,6 +786,113 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 )}
               </div>
             </div>
+
+            {/* Cobro de la diferencia: métodos con que paga el cliente el restante */}
+            {balanceNetoUsd > 0 && (
+              <div className="border border-amber-200 rounded-xl bg-amber-50/40 p-3 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h5 className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">Cobro de la diferencia</h5>
+                  {metodosPagoOriginal.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-slate-500">Pagó originalmente con:</span>
+                      {metodosPagoOriginal.map(m => (
+                        <span key={m} className="px-1.5 py-0.5 text-[9px] font-bold text-slate-600 bg-white border border-slate-200 rounded">{m}</span>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={handleUsarMismosMetodos}
+                        className="px-2 py-0.5 text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded hover:bg-amber-200 transition-colors"
+                      >
+                        Usar mismos métodos
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {pagosDiferencia.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 italic">Sin pagos registrados: los ${balanceNetoUsd.toFixed(2)} quedarán como deuda en CxC.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {pagosDiferencia.map((pago, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+                        {/* Método — selector redondeado consistente con el modal */}
+                        <div className="w-[150px] shrink-0">
+                          <CustomSelect
+                            options={METODOS_COBRO_DIFERENCIA.map(m => ({ value: m, label: m }))}
+                            value={pago.metodo}
+                            onChange={val => handleUpdatePagoDiferencia(idx, 'metodo', val)}
+                            placeholder="Método..."
+                            searchable={false}
+                          />
+                        </div>
+                        {/* Monto + acceso rápido TOTAL (completa el pendiente) */}
+                        <div className="flex items-center border border-slate-200 rounded-xl bg-white overflow-hidden focus-within:ring-1 focus-within:ring-amber-500 focus-within:border-amber-500 shrink-0">
+                          <span className="pl-2.5 pr-1 text-[10px] text-slate-400 font-bold select-none">$</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={pago.monto}
+                            onChange={e => handleUpdatePagoDiferencia(idx, 'monto', e.target.value)}
+                            placeholder="0.00"
+                            className="w-[68px] text-right py-2.5 pr-2 text-xs font-bold focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleMontoTotal(idx)}
+                            disabled={pendienteDiferencia <= 0.011}
+                            title="Completar con el saldo pendiente de la diferencia"
+                            className="mr-1.5 ml-0.5 px-1.5 py-0.5 text-[9px] font-black text-amber-800 bg-amber-100 border border-amber-300 rounded-md hover:bg-amber-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all select-none shrink-0"
+                          >
+                            TOTAL
+                          </button>
+                        </div>
+                        {/* Referencia — solo para métodos que la requieren */}
+                        {REFERENCIA_REQUERIDA.includes(pago.metodo) && (
+                          <input
+                            type="text"
+                            value={pago.referencia || ''}
+                            onChange={e => handleUpdatePagoDiferencia(idx, 'referencia', e.target.value)}
+                            placeholder="Referencia *"
+                            className={`flex-1 min-w-[110px] px-2.5 py-2.5 text-xs border rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 ${!String(pago.referencia || '').trim() ? 'border-red-300' : 'border-slate-200'}`}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePagoDiferencia(idx)}
+                          className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                          title="Quitar"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleAddPagoDiferencia}
+                    disabled={pagosDiferencia.length >= 12}
+                    title={pagosDiferencia.length >= 12 ? 'Máximo 12 métodos de pago' : undefined}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-amber-800 bg-white border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Plus size={12} /> Agregar método de pago
+                  </button>
+                  <div className="text-[11px] font-semibold">
+                    {pendienteDiferencia > 0.011 ? (
+                      <span className="text-amber-800">Cobrado ${cobradoDiferencia.toFixed(2)} · Quedará como deuda: ${pendienteDiferencia.toFixed(2)}</span>
+                    ) : (
+                      <span className="text-emerald-700">Diferencia cubierta ✓ (cobrado ${cobradoDiferencia.toFixed(2)})</span>
+                    )}
+                  </div>
+                </div>
+                {cobradoDiferencia > balanceNetoUsd + 0.011 && (
+                  <p className="text-[10px] font-bold text-red-600">La suma de los pagos supera la diferencia a cobrar (${balanceNetoUsd.toFixed(2)}).</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

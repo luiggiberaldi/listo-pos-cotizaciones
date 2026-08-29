@@ -1071,7 +1071,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                 className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 mt-0.5 cursor-pointer hover:text-indigo-600 hover:underline transition-all"
               >
                 <PackageCheck size={11} />
-                {despacho.items_count[0].count} {despacho.items_count[0].count === 1 ? 'Ítem' : 'Ítems'}
+                {Number(despacho.items_count[0].count) || 0} {Number(despacho.items_count[0].count) === 1 ? 'Ítem' : 'Ítems'}
               </button>
             )}
           </div>
