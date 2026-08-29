@@ -51,13 +51,12 @@ function decodeJwtPayload(token) {
     if (parts.length !== 3) return null;
     const base64Url = parts[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
+    const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const text = new TextDecoder().decode(bytes);
+    return JSON.parse(text);
   } catch {
     return null;
   }

@@ -76,8 +76,8 @@ export async function handleSwitchOperator(request, env) {
     return jsonError('PIN incorrecto', 401, request);
   }
 
-  // Update app_metadata on the business auth user
-  const metaRes = await fetchConTimeout(
+  // Update app_metadata on the business auth user in background (no bloquea el login)
+  void fetchConTimeout(
     `${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`,
     {
       method: 'PUT',
@@ -95,22 +95,15 @@ export async function handleSwitchOperator(request, env) {
         },
       }),
     },
-    12000
-  );
-
-  console.log('[SWITCH-OP] metadata', requestId, mark(), 'ms status:', metaRes.status)
-  if (!metaRes.ok) {
-    const errText = await metaRes.text().catch(() => 'no body')
-    console.error('[SWITCH-OP] Metadata update error:', errText)
-    return jsonError('Error al establecer operador', 500, request);
-  }
+    8000
+  ).catch(err => console.warn('[SWITCH-OP] Metadata update background warn:', requestId, err.message));
 
   // Auditoría exitosa en background: no puede bloquear el login.
   void audit({
     usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
     categoria: 'AUTH', accion: 'LOGIN_EXITOSO', descripcion: `${operator.nombre} inició sesión`,
     entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
-  })
+  });
 
   let markup_pct = operator.markup_pct ?? null;
   if (operator.es_externo) {
