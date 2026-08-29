@@ -5,6 +5,7 @@
 import { create } from 'zustand'
 import supabase from '../services/supabase/client'
 import { apiUrl, fetchConTimeout } from '../services/apiBase'
+import { getValidAccessToken, refreshSessionSingleFlight, resetSessionState } from '../services/sessionManager'
 import queryClient from '../lib/queryClient'
 import { indexedDbPersister } from '../lib/queryPersister'
 
@@ -22,23 +23,17 @@ function traducirError(mensaje) {
   return 'Error al iniciar sesión. Intenta de nuevo'
 }
 
-// ─── Helper: obtener token de sesión actual (con refresh si está expirado) ────
+// ─── Helper: token best-effort (cache offline, logout, switchOut) ────────────
+// Delega en el coordinador global (sessionManager). El camino crítico del PIN
+// usa getValidAccessToken() directo: estricto, nunca devuelve silenciosamente
+// un JWT vencido (causa del ciclo 401 → refresh → 400 → "Verificando…").
 async function getAccessToken() {
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token
-  if (!token) return null
-
-  // Verificar si el token está próximo a expirar (menos de 60s de vida)
-  const exp = data.session.expires_at // epoch en segundos
-  if (exp && exp - Math.floor(Date.now() / 1000) < 60) {
-    try {
-      const { data: refreshed } = await supabase.auth.refreshSession()
-      return refreshed?.session?.access_token ?? token
-    } catch {
-      return token // usar el que hay si falla el refresh
-    }
+  try {
+    return await getValidAccessToken({ timeoutMs: 8000, allowStale: true })
+  } catch {
+    const { data } = await supabase.auth.getSession()
+    return data?.session?.access_token ?? null
   }
-  return token
 }
 
 // ─── Cache por usuario en localStorage ────────────────────────────────────────
@@ -248,6 +243,9 @@ const useAuthStore = create((set, get) => ({
         }
 
         console.log('[AUTH] evento:', event, 'session:', !!session, 'user:', session?.user?.email)
+        // Evento positivo (login, sync entre pestañas, refresh OK) → revertir
+        // el estado de sesión muerta del coordinador global.
+        if (session) resetSessionState()
         // Mantener el canal Realtime autenticado con el token actual —
         // necesario para que postgres_changes sobre tablas con RLS entregue eventos
         if (session?.access_token) {
@@ -500,6 +498,7 @@ const useAuthStore = create((set, get) => ({
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'X-Request-Id': `auth-${crypto.randomUUID()}`,
         },
         body: JSON.stringify({ operator_id: operatorId, pin }),
       }, 15000)
@@ -514,9 +513,10 @@ const useAuthStore = create((set, get) => ({
     }
 
     try {
-      // Tope de 8s para obtener/refrescar el token: si Supabase no responde,
-      // caemos al catch donde el fallback offline con PBKDF2 puede resolver.
-      let token = await conLimite(getAccessToken(), 8000, 'token_timeout')
+      // Tope de 8s y ESTRICTO: si Supabase Auth no entrega un token válido,
+      // NO se envía el JWT vencido al Worker (evita 401→refresh→400);
+      // caemos directo al catch donde el fallback offline PBKDF2 resuelve.
+      let token = await getValidAccessToken({ timeoutMs: 8000 })
       if (!token) {
         set({ loading: false, error: 'No hay sesión activa. Inicia sesión primero.' })
         return { ok: false }
@@ -530,7 +530,7 @@ const useAuthStore = create((set, get) => ({
       if (!res.ok && res.status === 401 && result.error?.includes('autenticado')) {
         console.log('[AUTH] switchOperator: sesión expirada, intentando refresh...')
         try {
-          const { data: refreshData } = await conLimite(supabase.auth.refreshSession(), 8000, 'refresh_timeout')
+          const { data: refreshData } = await conLimite(refreshSessionSingleFlight(), 8000, 'refresh_timeout')
           const freshToken = refreshData?.session?.access_token
           if (freshToken) {
             set({ user: refreshData.user })
@@ -592,7 +592,7 @@ const useAuthStore = create((set, get) => ({
       // Guard: solo un refresh concurrente a la vez para evitar bucle de eventos
       if (!get()._refreshingToken) {
         set({ _refreshingToken: true })
-        supabase.auth.refreshSession()
+        refreshSessionSingleFlight()
           .then(({ data }) => { if (data?.user) set({ user: data.user }) })
           .catch(() => { /* ignorar — perfil ya está seteado */ })
           .finally(() => set({ _refreshingToken: false }))
@@ -633,18 +633,20 @@ const useAuthStore = create((set, get) => ({
       }
 
       // No hay cache de operadores — no se puede validar offline
-      const esTimeout = ['timeout_red', 'token_timeout', 'refresh_timeout'].includes(err.message)
+      const sesionExpirada = err.code === 'SESSION_EXPIRED' || err.message === 'auth_session_invalid'
+      const esTimeout = err.code === 'SESSION_REFRESH_TIMEOUT'
+        || ['timeout_red', 'token_timeout', 'refresh_timeout'].includes(err.message)
       set({
         loading: false,
-        error: err.message === 'auth_session_invalid'
-          ? 'La sesión no fue aceptada por el servidor local. Reinicia el Worker con las claves del mismo proyecto Supabase y vuelve a iniciar sesión.'
+        error: sesionExpirada
+          ? 'Tu sesión expiró. Inicia sesión nuevamente con tu correo.'
           : esTimeout
             ? 'La conexión tardó demasiado. Verifica tu internet e intenta de nuevo.'
             : !navigator.onLine
               ? 'Sin conexión. Conecta a internet la primera vez para habilitar el modo offline.'
               : 'Error de conexión. Verifica tu internet e intenta de nuevo.',
       })
-      return { ok: false }
+      return sesionExpirada ? { ok: false, sessionExpired: true } : { ok: false }
     }
   },
 
@@ -662,7 +664,7 @@ const useAuthStore = create((set, get) => ({
       }
 
       // Refrescar para limpiar app_metadata del JWT
-      await supabase.auth.refreshSession()
+      await refreshSessionSingleFlight()
 
       // Limpiar cache de datos del operador anterior (memoria + persistido)
       queryClient.clear()
@@ -700,6 +702,7 @@ const useAuthStore = create((set, get) => ({
     set({ _logoutManual: true })
     const userId = get().user?.id
     await supabase.auth.signOut()
+    resetSessionState()
     // Limpiar TODO el cache (memoria + persistido) — evita fugas entre cuentas de negocio
     queryClient.clear()
     indexedDbPersister.removeClient().catch(() => {})

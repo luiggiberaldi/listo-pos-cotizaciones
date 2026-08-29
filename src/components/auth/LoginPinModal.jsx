@@ -49,6 +49,14 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
       const ok = res === true || res?.ok === true
       if (cancelado) return // el fondo terminó tarde; la UI ya fue liberada
       if (!ok) {
+        // Sesión principal expirada (refresh token rechazado): mensaje claro y
+        // cierre del modal para volver al login de correo. NUNCA quedarse girando.
+        if (res?.sessionExpired) {
+          setMsg(res.error || 'Tu sesión expiró. Inicia sesión nuevamente con tu correo.')
+          setPin('')
+          setTimeout(() => { setMsg(null); onClose() }, 2600)
+          return
+        }
         // Verificación anterior aún en curso — explicar el shake en vez de
         // hacer parecer un PIN incorrecto
         if (res?.busy) {

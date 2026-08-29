@@ -25,7 +25,7 @@ export function corsHeaders(request) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Operator-Id, Idempotency-Key',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Operator-Id, Idempotency-Key, X-Request-Id',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   }

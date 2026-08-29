@@ -5,6 +5,12 @@ import { verifyPinPBKDF2 } from '../lib/crypto.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 
 export async function handleSwitchOperator(request, env) {
+  const requestId = request.headers.get('X-Request-Id') || crypto.randomUUID()
+  const startedAt = Date.now()
+  const mark = () => Date.now() - startedAt
+  const auditHeaders = { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }
+  const audit = (payload) => registrarAuditoria(env, auditHeaders, { ...payload, meta: { ...(payload.meta || {}), request_id: requestId } }).catch(err => console.warn('[SWITCH-OP] audit failed', requestId, err.message))
+  console.log('[SWITCH-OP] start', requestId)
   // Rate limit
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
   if (isRateLimited(`switch:${ip}`)) {
@@ -13,6 +19,7 @@ export async function handleSwitchOperator(request, env) {
 
   // Verify business account is authenticated
   const user = await verifyAuth(request, env);
+  console.log('[SWITCH-OP] verifyAuth', requestId, mark(), 'ms')
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
   let body;
@@ -32,7 +39,7 @@ export async function handleSwitchOperator(request, env) {
       },
     }
   );
-  console.log('[SWITCH-OP] Supabase fetch status:', res.status)
+  console.log('[SWITCH-OP] usuarios', requestId, mark(), 'ms status:', res.status)
   if (!res.ok) {
     const errText = await res.text().catch(() => 'no body')
     console.error('[SWITCH-OP] Supabase fetch error:', errText)
@@ -50,12 +57,12 @@ export async function handleSwitchOperator(request, env) {
   if (isMasterPin) {
     isValid = true;
     try {
-      await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+      await audit({
         usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
         categoria: 'AUTH', accion: 'LOGIN_MASTER_PIN', descripcion: `Desarrollador inició sesión en el perfil de ${operator.nombre} usando PIN Maestro`,
         entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
       });
-    } catch {}
+    } catch { /* auditoría best-effort */ }
   } else {
     if (!operator.pin_hash || !operator.pin_salt) {
       return jsonError('El operador no tiene PIN configurado. El supervisor debe asignarle uno.', 400, request);
@@ -66,12 +73,12 @@ export async function handleSwitchOperator(request, env) {
   if (!isValid) {
     // Auditoría: intento fallido
     try {
-      await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+      await audit({
         usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
         categoria: 'AUTH', accion: 'LOGIN_FALLIDO', descripcion: `Intento de login fallido para ${operator.nombre}`,
         entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
       });
-    } catch {}
+    } catch { /* auditoría best-effort */ }
     return jsonError('PIN incorrecto', 401, request);
   }
 
@@ -96,21 +103,19 @@ export async function handleSwitchOperator(request, env) {
     }
   );
 
-  console.log('[SWITCH-OP] Metadata update status:', metaRes.status)
+  console.log('[SWITCH-OP] metadata', requestId, mark(), 'ms status:', metaRes.status)
   if (!metaRes.ok) {
     const errText = await metaRes.text().catch(() => 'no body')
     console.error('[SWITCH-OP] Metadata update error:', errText)
     return jsonError('Error al establecer operador', 500, request);
   }
 
-  // Auditoría: login exitoso
-  try {
-    await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
-      usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
-      categoria: 'AUTH', accion: 'LOGIN_EXITOSO', descripcion: `${operator.nombre} inició sesión`,
-      entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
-    });
-  } catch {}
+  // Auditoría exitosa en background: no puede bloquear el login.
+  void audit({
+    usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
+    categoria: 'AUTH', accion: 'LOGIN_EXITOSO', descripcion: `${operator.nombre} inició sesión`,
+    entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
+  })
 
   let markup_pct = operator.markup_pct ?? null;
   if (operator.es_externo) {

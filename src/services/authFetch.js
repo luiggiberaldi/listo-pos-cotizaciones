@@ -3,6 +3,7 @@
 // Si la primera llamada falla con 401, refresca la sesión y reintenta una vez.
 import supabase from './supabase/client'
 import { apiUrl } from './apiBase'
+import { refreshSessionSingleFlight } from './sessionManager'
 import useAuthStore from '../store/useAuthStore'
 
 const DEFAULT_TIMEOUT = 15000 // 15 segundos
@@ -46,11 +47,22 @@ export async function authFetch(path, options = {}) {
   }
   clearTimeout(timeoutId)
 
-  // Si 401, intentar refrescar sesión y reintentar una vez
+  // Si 401, refrescar vía el coordinador global (tope 8s) y reintentar UNA vez.
+  // Si el refresh es rechazado (SESSION_EXPIRED), no hay reintento en cascada.
   if (res.status === 401) {
-    const { data: refreshData } = await supabase.auth.refreshSession()
-    const newToken = refreshData?.session?.access_token
-    if (!newToken) throw new Error('No autenticado')
+    let newToken = null
+    try {
+      const { data: refreshData } = await Promise.race([
+        refreshSessionSingleFlight(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SESSION_REFRESH_TIMEOUT')), 8000)),
+      ])
+      newToken = refreshData?.session?.access_token ?? null
+    } catch { newToken = null }
+    if (!newToken) {
+      const e = new Error('Tu sesión expiró. Inicia sesión nuevamente.')
+      e.code = 'SESSION_EXPIRED'
+      throw e
+    }
 
     const retryController = new AbortController()
     const retryTimeoutId = setTimeout(() => retryController.abort(), timeout)

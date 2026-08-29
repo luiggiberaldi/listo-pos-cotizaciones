@@ -436,7 +436,7 @@ function UserSelectStep({ onLogout }) {
         return
       }
 
-      await supabase.auth.refreshSession()
+      await useAuthStore.getState().precalentarToken()
 
       const store = useAuthStore.getState()
       useAuthStore.setState({

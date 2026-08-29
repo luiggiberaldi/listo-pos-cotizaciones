@@ -1,0 +1,102 @@
+// src/services/sessionManager.js
+// Coordinador GLOBAL de la sesión de Supabase Auth.
+//
+// Problema que resuelve: cada módulo (store, authFetch) tenía su propio
+// "single-flight" duplicado y el camino del PIN devolvía silenciosamente el
+// JWT vencido cuando el refresh fallaba → ciclo 401 → refresh → 400 →
+// "Verificando…" congelado.
+//
+// Aquí existe UNA sola promesa de refresh compartida por toda la app y
+// errores tipados (SESSION_EXPIRED / SESSION_REFRESH_TIMEOUT) para que el
+// login por PIN nunca intente validarse con un token muerto.
+import supabase from './supabase/client'
+
+let refreshInFlight = null
+let sessionDead = false // refresh token inválido/rotado confirmado por Supabase
+
+export function isSessionDead() {
+  return sessionDead
+}
+
+export function markSessionDead() {
+  sessionDead = true
+}
+
+// Se reactiva la sesión ante eventos positivos (login, sync entre pestañas,
+// TOKEN_REFRESHED exitoso en otro contexto) — lo invoca onAuthStateChange.
+export function resetSessionState() {
+  sessionDead = false
+}
+
+export function refreshSessionSingleFlight() {
+  // Sesión confirmada como muerta: no martillar /auth/v1/token con 400s.
+  // Cada llamada resuelve inmediatamente sin sesión → el caller decide
+  // (fallback offline o mensaje de sesión expirada).
+  if (sessionDead) {
+    return Promise.resolve({ data: { session: null }, error: new Error('SESSION_EXPIRED') })
+  }
+
+  if (!refreshInFlight) {
+    refreshInFlight = supabase.auth.refreshSession()
+      .then((result) => {
+        const err = result?.error
+        const msg = String(err?.message || '').toLowerCase()
+        const status = err?.status
+        // Detectar refresh token inválido/rotado ("Invalid Refresh Token",
+        // invalid_grant): marcar la sesión como muerta para frenar reintentos.
+        // Los fallos de red (sin status, "Failed to fetch") NO marcan nada.
+        if (!result?.data?.session && err && (status === 400 || status === 401 || status === 403 || msg.includes('invalid') || msg.includes('refresh token'))) {
+          sessionDead = true
+        }
+        return result
+      })
+      .finally(() => { refreshInFlight = null })
+  }
+  return refreshInFlight
+}
+
+function errorTipado(code, mensaje) {
+  const e = new Error(mensaje || code)
+  e.code = code
+  return e
+}
+
+/**
+ * Devuelve un access_token VÁLIDO o lanza error tipado:
+ * - SESSION_EXPIRED: no hay sesión o el refresh fue rechazado por Supabase.
+ * - SESSION_REFRESH_TIMEOUT: Supabase Auth no respondió dentro del tope.
+ *
+ * allowStale=true (solo usos best-effort: cache de operadores, logout,
+ * switchOut) devuelve el token viejo como último recurso. El camino crítico
+ * del PIN usa allowStale=false — NUNCA recibe un JWT vencido como si fuera
+ * válido.
+ */
+export async function getValidAccessToken({ timeoutMs = 8000, allowStale = false } = {}) {
+  const { data } = await supabase.auth.getSession()
+  const session = data?.session
+  const token = session?.access_token
+  if (!token) throw errorTipado('SESSION_EXPIRED', 'No hay sesión activa')
+
+  // Token con más de 60s de vida por delante → usarlo directamente.
+  const exp = session.expires_at // epoch en segundos
+  const fresco = !exp || exp - Math.floor(Date.now() / 1000) >= 60
+  if (fresco) return token
+
+  let timer
+  try {
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(errorTipado('SESSION_REFRESH_TIMEOUT', 'El refresh de sesión no respondió a tiempo')), timeoutMs)
+    })
+    const { data: refreshed } = await Promise.race([refreshSessionSingleFlight(), timeoutPromise])
+    const newToken = refreshed?.session?.access_token
+    if (newToken) return newToken
+    if (allowStale) return token
+    throw errorTipado('SESSION_EXPIRED', 'La sesión no pudo renovarse')
+  } catch (err) {
+    if (err.code === 'SESSION_EXPIRED' || err.code === 'SESSION_REFRESH_TIMEOUT') throw err
+    if (allowStale) return token
+    throw errorTipado('SESSION_EXPIRED', err.message)
+  } finally {
+    clearTimeout(timer)
+  }
+}
