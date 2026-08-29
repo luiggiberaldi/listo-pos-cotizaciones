@@ -527,7 +527,7 @@ const useAuthStore = create((set, get) => ({
 
       // Si el worker responde 401 "No autenticado" → sesión expirada
       // Intentar refrescar el token y reintentar una vez
-      if (!res.ok && res.status === 401 && result.error?.includes('autenticado')) {
+      if (!res.ok && res.status === 401) {
         console.log('[AUTH] switchOperator: sesión expirada, intentando refresh...')
         try {
           const { data: refreshData } = await conLimite(refreshSessionSingleFlight(), 8000, 'refresh_timeout')
@@ -547,6 +547,18 @@ const useAuthStore = create((set, get) => ({
       }
 
       if (!res.ok) {
+        // Un 401 después del refresh confirma que la sesión remota no es válida.
+        // No usar fallback offline: ese camino no actualiza app_metadata y puede
+        // dejar al usuario dentro de la app con un JWT rechazado por el Worker.
+        if (res.status === 401) {
+          try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* noop */ }
+          queryClient.clear()
+          indexedDbPersister.removeClient().catch(() => {})
+          guardarPerfilCache(null, get().user?.id)
+          set({ user: null, perfil: null, loading: false, error: 'Tu sesión expiró. Inicia sesión nuevamente.' })
+          return { ok: false, sessionExpired: true }
+        }
+
         // Si el worker está caído (500) → intentar validación offline con cache
         // Esto evita falsos "PIN incorrecto" cuando wrangler no corre localmente
         if (res.status === 500) {

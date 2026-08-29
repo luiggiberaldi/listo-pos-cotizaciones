@@ -6,13 +6,22 @@ import { get, set, del, keys } from 'idb-keyval'
 
 // ─── Precache: app shell (HTML, JS, CSS, images) ────────────────────────────
 // __WB_MANIFEST es reemplazado en build por la lista de assets compilados
-precacheAndRoute(self.__WB_MANIFEST)
+precacheAndRoute(self.__WB_MANIFEST, {
+  cleanURLs: false,
+  ignoreURLParametersMatching: [/^utm_/i],
+})
 cleanupOutdatedCaches()
+
+// Nunca interceptar API ni autenticación: deben ir siempre a red.
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/') || url.pathname.startsWith('/rest/')) return
+})
 
 // ─── Activar nuevo SW inmediatamente al instalar ────────────────────────────
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => {
-  // Limpiar caches viejos (de versiones anteriores del SW) al activar
+  // Limpiar caches viejos (de versiones anteriores del SW) al activar.
   event.waitUntil(self.clients.claim())
 })
 

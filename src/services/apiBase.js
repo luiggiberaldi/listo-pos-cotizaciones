@@ -7,7 +7,7 @@
 import supabase from './supabase/client'
 import useAuthStore from '../store/useAuthStore'
 
-const WORKER_ORIGIN = import.meta.env.VITE_WORKER_ORIGIN || ''
+const WORKER_ORIGIN = import.meta.env.PROD ? '' : (import.meta.env.VITE_WORKER_ORIGIN || '')
 
 export function apiUrl(path) {
   if (!WORKER_ORIGIN) return path

@@ -53,7 +53,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', async () => {
     try {
-      await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      await registration.update()
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload()
+      }, { once: true })
     } catch (err) {
       console.error('Error registrando el Service Worker', err)
     }
