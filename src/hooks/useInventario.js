@@ -101,6 +101,19 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
       const CHUNK = 1000
       const MAX_CATALOGO = 5000
 
+      // Helper para RPC segura de vendedor (SECURITY DEFINER)
+      const fetchPagina = async (limit, offset) => {
+        const { data, error } = await supabase.rpc('obtener_productos_vendedor', {
+          p_busqueda: busqueda.trim(),
+          p_categoria: categoria || '',
+          p_categoria_grupo: isGroup,
+          p_limit: limit,
+          p_offset: offset,
+        })
+        if (error) throw error
+        return data ?? []
+      }
+
       if (esPrivilegiado) {
         // Supervisor: tabla directa (con costo_usd)
         const buildQuery = (desde, hasta) => {
@@ -132,7 +145,19 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
         const { data, error, count } = await buildQuery(page * pageSize, (page + 1) * pageSize - 1)
         if (error) throw error
         let productos = data ?? []
-        const totalCount = count ?? productos.length
+        let totalCount = count ?? productos.length
+
+        // Guardrail: si la consulta directa devuelve 0 filas sin filtros (posible bloqueo RLS/token stale),
+        // intentar de inmediato la RPC SECURITY DEFINER como fallback de seguridad
+        if (totalCount === 0 && !busqueda.trim() && !categoria && !mostrarInactivos) {
+          try {
+            const rpcRows = await fetchPagina(Math.min(pageSize, CHUNK), page * pageSize)
+            if (rpcRows.length > 0) {
+              totalCount = Number(rpcRows[0].total_count) || rpcRows.length
+              productos = rpcRows.map(({ total_count, ...rest }) => rest)
+            }
+          } catch { /* ignorar fallback */ }
+        }
 
         // Traer las páginas restantes si el catálogo supera el primer chunk
         if (esCatalogoCompleto && totalCount > productos.length) {
@@ -149,19 +174,6 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
         }
 
         return { productos, totalCount, truncado: totalCount > productos.length }
-      }
-
-      // Vendedor: RPC segura
-      const fetchPagina = async (limit, offset) => {
-        const { data, error } = await supabase.rpc('obtener_productos_vendedor', {
-          p_busqueda: busqueda.trim(),
-          p_categoria: categoria || '',
-          p_categoria_grupo: isGroup,
-          p_limit: limit,
-          p_offset: offset,
-        })
-        if (error) throw error
-        return data ?? []
       }
 
       const rows = await fetchPagina(Math.min(pageSize, CHUNK), page * pageSize)

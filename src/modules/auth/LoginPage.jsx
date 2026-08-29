@@ -503,7 +503,12 @@ function UserSelectStep({ onLogout }) {
   async function handlePin(pin) {
     if (!seleccionado) return false
     const res = await switchOperator(seleccionado.id, pin)
-    if (res.ok) navigate('/', { replace: true })
+    if (res.ok) {
+      navigate('/', { replace: true })
+    } else if (res.sessionExpired) {
+      // Sesión principal de negocio expirada por inactividad → volver al login de email/clave
+      if (typeof onLogout === 'function') onLogout()
+    }
     return res
   }
 
@@ -606,11 +611,7 @@ function UserSelectStep({ onLogout }) {
                   <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
                 </button>
                 <button
-                  onClick={() => {
-                    // Usar el logout coordinado evita competir con refreshSession
-                    // por el navigator lock de Supabase.
-                    void useAuthStore.getState().logout().finally(() => onLogout())
-                  }}
+                  onClick={onLogout}
                   className="p-2 sm:p-2.5 rounded-xl transition-all"
                   style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'rgba(239,68,68,0.7)' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = 'rgba(239,68,68,0.9)' }}
@@ -811,11 +812,18 @@ export default function LoginPage() {
     )
   }
 
-  // Si no hay sesión de negocio → pedir email/contraseña (solo la primera vez)
-  if (!gatePassed && !user) {
+  // Si no hay sesión de negocio o se cerró sesión → pedir email/contraseña
+  if (!gatePassed || !user) {
     return <GateStep onPass={() => setGatePassed(true)} />
   }
 
   // Sesión activa → selección de operador + PIN
-  return <UserSelectStep onLogout={() => setGatePassed(false)} />
+  return (
+    <UserSelectStep
+      onLogout={() => {
+        setGatePassed(false)
+        useAuthStore.getState().logout()
+      }}
+    />
+  )
 }

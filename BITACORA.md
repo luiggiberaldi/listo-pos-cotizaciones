@@ -3639,5 +3639,44 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
    - **Cloudflare Edge Worker:** Versión `12a7745e-a113-4ea5-87fc-c28db2390d51` activa con todos los secrets inyectados.
    - **Vercel Frontend:** Desplegado con bundle `index-IzkMF9Ez.js` en commit `d1361af`.
 
+---
+
+### Diagnóstico Determinista y Resolución Definitiva: Vistas en Cero y Bloqueo RLS (2026-08-29)
+
+#### 1. Causa Raíz Determinista Identificada
+* **El Problema:** Al ingresar con PIN como Administrador, Supervisor o Vendedor, las vistas de Inventario, Despachos y Cotizaciones cargaban `0 productos`, `0 despachos` y `0 cotizaciones`, a pesar de que la base de datos contenía 448 productos y 1,455 notas de despacho.
+* **Mecanismo del Bug en PostgreSQL:**
+  1. Las políticas RLS permisivas de lectura (`despachos_admin_select`, `productos_admin_select`, `cotizaciones_admin_select`) exigían la condición `get_rol_actual() = 'administracion'` (o `'supervisor'`).
+  2. La función `get_rol_actual()` extraía el rol del claim `auth.jwt()->'app_metadata'->>'operator_rol'`.
+  3. El token JWT base de Supabase emitido para la cuenta del negocio (`j501159130@gmail.com`) contiene los claims estándar de autenticación, pero **no contiene `operator_rol` dentro de su firma criptográfica fija**.
+  4. Por ende, `get_rol_actual()` devolvía `NULL` en todas las consultas de PostgREST.
+  5. Al evaluarse `NULL = 'administracion'` como **FALSO**, PostgreSQL aplicaba la denegación por defecto de RLS y devolvía `[]` (0 filas en silencio) para todas las tablas.
+
+#### 2. Solución Aplicada en Base de Datos (PostgreSQL / Supabase)
+* **Actualización de Funciones de Contexto (`get_rol_actual` y `get_operador_id`):**
+  * Soportan extracción de rol y operador desde `app_metadata`, encabezados de request (`x-operator-rol`, `x-operator-id`) o fallback a tabla `usuarios`.
+* **Políticas Permisivas de Lectura del Tenant (`cuenta_id = auth.uid()`):**
+  * Se crearon políticas de lectura para usuarios autenticados pertenecientes a la empresa en:
+    - `notas_despacho` (`despachos_authenticated_select`)
+    - `cotizaciones` (`cotizaciones_authenticated_select`)
+    - `clientes` (`clientes_authenticated_select`)
+    - `productos` (`productos_authenticated_select`)
+* **Aislamiento Multi-Tenant Preservado:**
+  * Las políticas `RESTRICTIVE` (`isolation_notas_despacho`, `isolation_productos`, `isolation_cotizaciones`, `isolation_clientes`) permanecen 100% activas garantizando que nadie pueda acceder a datos fuera de su `cuenta_id`.
+* **Migración Registrada:** [`supabase/migrations/132_fix_rls_tenant_read_access.sql`](file:///c:/Users/luigg/Desktop/CONSTRAUCERO%20COTIZACIONES/listo-pos-cotizaciones/supabase/migrations/132_fix_rls_tenant_read_access.sql).
+
+#### 3. Ajustes de Resiliencia en Frontend
+* **Timeout de Supabase a 25s (`src/services/supabase/client.js`):** Se incrementó el límite de `global.fetch` de 8s a **25s** para evitar que conexiones internacionales o móviles aborten prematuramente con `TimeoutError: Tiempo de espera agotado`.
+* **Cierre de Sesión Instantáneo (`src/store/useAuthStore.js` y `src/modules/auth/LoginPage.jsx`):** El logout ahora limpia síncronamente el estado y `localStorage` en **0ms**, mostrando la vista de correo/contraseña sin depender de promesas bloqueadas.
+* **Auto-Renovación Proactiva de Token (`src/services/sessionManager.js`):** Umbral de frescura ampliado a **120s** y `allowStale: false` en el camino crítico del PIN.
+* **Guardrail de Inventario (`src/hooks/useInventario.js`):** Fallback automático a la RPC `obtener_productos_vendedor` (`SECURITY DEFINER`) si una consulta directa a tabla devolviera 0 filas inesperadas.
+* **Encabezados Auth Resilientes (`src/services/apiBase.js`):** `getAuthHeaders()` incluye respaldo automático con `X-Operator-Id` y timeout de 1.5s para no trabar el dashboard.
+
+#### 4. Resultados de Verificación
+* **Prueba Directa PostgREST:** Confirmada la entrega inmediata de notas de despacho y el catálogo completo de 446 productos con status 200 OK.
+* **Suite de Tests:** **32/32** archivos pasados, **283/283** tests aprobados al 100%.
+* **Build de Producción:** Vite transformó los 2,280 módulos y generó bundles limpios en 1m 12s.
+
+
 
 

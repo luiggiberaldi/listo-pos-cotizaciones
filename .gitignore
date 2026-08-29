@@ -83,6 +83,7 @@ __tests__/
 !docs/plans/2026-08-22-auditoria-pdfs-comisiones.md
 !docs/plans/2026-08-22-fix-e2e-comisiones-pago-legacy.md
 !docs/plans/2026-08-22-quitar-pago-comisiones.md
+!docs/plans/2026-08-29-plan-comision-split-sabados-v2.md
 !src/utils/__tests__/
 !src/utils/__tests__/comisionUtils.test.js
 !src/utils/__tests__/comisionesGeneradasPDF.test.js

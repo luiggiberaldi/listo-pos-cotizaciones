@@ -572,7 +572,7 @@ const useAuthStore = create((set, get) => ({
       // NO se envía el JWT vencido al Worker (evita 401→refresh→400);
       // caemos directo al catch donde el fallback offline PBKDF2 resuelve.
       console.log('[AUTH-PIN] 🔑 Paso 2: Obteniendo token válido de Supabase...')
-      let token = await getValidAccessToken({ timeoutMs: 8000 })
+      let token = await getValidAccessToken({ timeoutMs: 8000, allowStale: false })
       console.log(`[AUTH-PIN] 🔑 Token: ${token ? `${token.slice(0, 20)}... (OK)` : 'NO DISPONIBLE'}`)
       if (!token) {
         set({ loading: false, error: 'No hay sesión activa. Inicia sesión primero.' })
@@ -592,6 +592,7 @@ const useAuthStore = create((set, get) => ({
           if (freshToken) {
             console.log('[AUTH-PIN] 🔄 Sesión refrescada exitosamente. Reintentando llamada al Worker...')
             set({ user: refreshData.user })
+            try { supabase.realtime.setAuth(freshToken) } catch {}
             res = await callWorker(freshToken)
             result = await readResponseJson(res)
           } else {
@@ -758,26 +759,35 @@ const useAuthStore = create((set, get) => ({
 
   // ─── Logout completo ─────────────────────────────────────────────────────
   logout: async () => {
-    // Limpiar operador antes de cerrar sesión
+    // 1. Limpieza síncrona e inmediata del estado local y storage (0ms)
+    const userId = get().user?.id
+    set({ user: null, perfil: null, error: null, _logoutManual: true })
+    resetSessionState()
+    queryClient.clear()
+    indexedDbPersister.removeClient().catch(() => {})
+
     try {
-      const token = await getAccessToken()
-      if (token) {
-        await fetch(apiUrl('/api/auth/clear-operator'), {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
+      const keys = Object.keys(localStorage)
+      for (const k of keys) {
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          localStorage.removeItem(k)
+        }
+        if (k.startsWith('listo_perfil_cache')) {
+          localStorage.removeItem(k)
+        }
       }
     } catch { /* ignorar */ }
 
-    set({ _logoutManual: true })
-    const userId = get().user?.id
-    await supabase.auth.signOut()
-    resetSessionState()
-    // Limpiar TODO el cache (memoria + persistido) — evita fugas entre cuentas de negocio
-    queryClient.clear()
-    indexedDbPersister.removeClient().catch(() => {})
-    guardarPerfilCache(null, userId)
-    set({ user: null, perfil: null, error: null, _logoutManual: false })
+    // 2. Limpieza en background (no bloquea la UI)
+    ;(async () => {
+      try {
+        await Promise.race([
+          supabase.auth.signOut(),
+          new Promise(r => setTimeout(r, 1000))
+        ])
+      } catch { /* ignorar */ }
+      set({ _logoutManual: false })
+    })()
   },
 
   // ─── Precalentar token en background ──────────────────────────────────
@@ -787,7 +797,7 @@ const useAuthStore = create((set, get) => ({
   precalentarToken: async () => {
     try {
       if (!get().user) return
-      await getAccessToken()
+      await getValidAccessToken({ timeoutMs: 4000, allowStale: false })
     } catch { /* no crítico — switchOperator tiene tope propio + fallback offline */ }
   },
 

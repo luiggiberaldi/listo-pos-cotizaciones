@@ -8,6 +8,8 @@
 
 - [ ] **[2026-08-28-plan-cortesia-absorbe-diferencia.md](./2026-08-28-plan-cortesia-absorbe-diferencia.md)**: Plan futuro de la cortesía "Empresa absorbe la diferencia" en devolución parcial: toggle solo admin/jefe que evita crear el cargo en CxC, threading aditivo `p_cortesia` por la cadena de RPCs (con lecciones 42725), auditoría dedicada, E2E con caso 403 y despliegue DB-primero con rollback.
 
+- [x] **[2026-08-29-plan-comision-split-sabados-v2.md](./2026-08-29-plan-comision-split-sabados-v2.md)**: Plan corregido y vigente para promoción segura del split por cliente ajeno: fecha canónica `creado_en`, activación inicial OFF, guard 238b, rollback desde cuerpos vivos, ocho piezas, riesgos y GO/NO-GO.
+
 - [x] **[2026-08-28-plan-comision-split-cliente-ajeno.md](./2026-08-28-plan-comision-split-cliente-ajeno.md)**: Comisión split por cliente ajeno los sábados (0.5% vendedor / 1.5% dueño, configurable): **implementado en staging** (migración 257, fila por beneficiario `UNIQUE(despachoid, vendedorid)`, funciones 238b multi-fila, Worker + UI, E2E 111/111 ×2). Pendiente: promoción al principal con release `03` + rollback ya preparados (sin aplicar).
 
 - [ ] **[2026-08-28-plan-promocion-split-principal.md](./2026-08-28-plan-promocion-split-principal.md)**: Runbook completo de promoción del split a producción (10 fases): preflight del principal ya ejecutado con 4 hallazgos (trigger guard 238b ausente, rollback a reconstruir con cuerpos vivos, ports de Worker/frontend pendientes, bug latente de recálculo que el 03 corrige), activación controlada con `comision_split_activo=false` y rollback por fase.

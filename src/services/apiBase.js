@@ -39,11 +39,32 @@ export async function fetchConTimeout(url, options = {}, timeoutMs = 15000) {
 
 /** Returns auth headers including X-Operator-Id to avoid JWT refresh delay issues */
 export async function getAuthHeaders(extra = {}) {
-  const { data: { session } } = await supabase.auth.getSession()
+  let token = null
+  try {
+    const sessionRes = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise(r => setTimeout(() => r({ data: { session: null } }), 1500))
+    ])
+    token = sessionRes?.data?.session?.access_token
+  } catch { /* fallback */ }
+
+  if (!token) {
+    try {
+      const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+      if (storageKey) {
+        const raw = localStorage.getItem(storageKey)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          token = parsed?.access_token || parsed?.currentSession?.access_token || parsed?.session?.access_token
+        }
+      }
+    } catch { /* fallback */ }
+  }
+
   const perfil = useAuthStore.getState().perfil
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${session?.access_token}`,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(perfil?.id ? { 'X-Operator-Id': perfil.id } : {}),
     ...extra,
   }

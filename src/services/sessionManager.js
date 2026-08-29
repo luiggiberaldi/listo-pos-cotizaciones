@@ -100,9 +100,9 @@ export async function getValidAccessToken({ timeoutMs = 4000, allowStale = true 
   const token = session?.access_token
   if (!token) throw errorTipado('SESSION_EXPIRED', 'No hay sesión activa')
 
-  // Token con vida útil → usarlo directamente
+  // Token con vida útil → usarlo directamente (umbral de 120s para renovar con margen)
   const exp = session.expires_at // epoch en segundos
-  const fresco = !exp || exp - Math.floor(Date.now() / 1000) >= 30
+  const fresco = !exp || exp - Math.floor(Date.now() / 1000) >= 120
   if (fresco || allowStale) return token
 
   let timer
