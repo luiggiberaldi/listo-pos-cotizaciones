@@ -135,11 +135,11 @@ async function fetchAndCacheOperators(token, userId) {
   try {
     const endpoints = import.meta.env.DEV
       ? ['http://localhost:8787/api/auth/operators', apiUrl('/api/auth/operators')]
-      : [apiUrl('/api/auth/operators')]
+      : [apiUrl('/api/auth/operators'), 'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/operators']
     for (const url of endpoints) {
       try {
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 4000)
+        const timer = setTimeout(() => controller.abort(), 8000)
         const res = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,
@@ -524,16 +524,19 @@ const useAuthStore = create((set, get) => ({
     const t0 = Date.now()
     console.log(`[AUTH-PIN] 🚀 Paso 1: switchOperator iniciado para operador ${operatorId}`)
 
-    // Helper para hacer la llamada al worker (en DEV conecta directo a localhost:8787)
+    // Helper para hacer la llamada al worker con multi-endpoint y timeout resiliente
     const callWorker = async (token) => {
       const endpoints = import.meta.env.DEV
         ? ['http://localhost:8787/api/auth/switch-operator', 'http://127.0.0.1:8787/api/auth/switch-operator', apiUrl('/api/auth/switch-operator')]
-        : [apiUrl('/api/auth/switch-operator')]
+        : [
+            apiUrl('/api/auth/switch-operator'),
+            'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/switch-operator',
+          ]
       const uniqueEndpoints = [...new Set(endpoints)]
 
       let lastError = null
       for (const url of uniqueEndpoints) {
-        console.log(`[AUTH-PIN] 📡 Paso 3: Enviando POST a ${url} (timeout 4s)...`)
+        console.log(`[AUTH-PIN] 📡 Paso 3: Enviando POST a ${url} (timeout 10s)...`)
         const tw0 = Date.now()
         try {
           const response = await fetchConTimeout(url, {
@@ -544,7 +547,7 @@ const useAuthStore = create((set, get) => ({
               'X-Request-Id': `auth-${crypto.randomUUID()}`,
             },
             body: JSON.stringify({ operator_id: operatorId, pin }),
-          }, 4000)
+          }, 10000)
           console.log(`[AUTH-PIN] 📥 Paso 4: Respuesta del Worker recibida en ${Date.now() - tw0}ms con status ${response.status}`)
           return response
         } catch (workerErr) {
@@ -735,11 +738,11 @@ const useAuthStore = create((set, get) => ({
         if (token) {
           const endpoints = import.meta.env.DEV
             ? ['http://localhost:8787/api/auth/clear-operator', 'http://127.0.0.1:8787/api/auth/clear-operator', apiUrl('/api/auth/clear-operator')]
-            : [apiUrl('/api/auth/clear-operator')]
+            : [apiUrl('/api/auth/clear-operator'), 'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/clear-operator']
           for (const url of endpoints) {
             try {
               const controller = new AbortController()
-              const timer = setTimeout(() => controller.abort(), 3000)
+              const timer = setTimeout(() => controller.abort(), 6000)
               await fetch(url, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
