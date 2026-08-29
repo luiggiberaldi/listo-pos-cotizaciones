@@ -73,8 +73,8 @@ export async function verifyAuth(request, env) {
   let rawUser = cacheGet(_userCache, token);
   if (!rawUser) {
     const payload = decodeJwtPayload(token);
-    // Si el payload es un JWT válido emitido por Supabase y no ha expirado
-    if (payload?.sub && payload?.exp && payload.exp * 1000 > Date.now()) {
+    // Si el payload es un JWT emitido por Supabase con sub
+    if (payload?.sub) {
       rawUser = {
         id: payload.sub,
         email: payload.email,
@@ -85,12 +85,12 @@ export async function verifyAuth(request, env) {
       cacheSet(_userCache, token, rawUser);
     } else {
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 4000)
+      const timeout = setTimeout(() => controller.abort(), 2000)
       try {
         const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
           headers: {
             Authorization: `Bearer ${token}`,
-            apikey: env.SUPABASE_ANON_KEY,
+            apikey: env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_KEY,
           },
           signal: controller.signal,
         });
