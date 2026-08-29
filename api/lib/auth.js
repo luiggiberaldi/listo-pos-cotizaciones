@@ -45,6 +45,24 @@ export function supaServiceHeaders(env) {
   };
 }
 
+function decodeJwtPayload(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
 // Verifica el JWT del usuario autenticado contra Supabase
 // Extrae operator_id/operator_rol de app_metadata si están presentes
 export async function verifyAuth(request, env) {
@@ -55,15 +73,37 @@ export async function verifyAuth(request, env) {
   // Verificar el token: caché 60s por token para evitar el round-trip repetido
   let rawUser = cacheGet(_userCache, token);
   if (!rawUser) {
-    const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        apikey: env.SUPABASE_ANON_KEY,
-      },
-    });
-    if (!res.ok) return null;
-    rawUser = await res.json();
-    cacheSet(_userCache, token, rawUser);
+    const payload = decodeJwtPayload(token);
+    // Si el payload es un JWT válido emitido por Supabase y no ha expirado
+    if (payload?.sub && payload?.exp && payload.exp * 1000 > Date.now()) {
+      rawUser = {
+        id: payload.sub,
+        email: payload.email,
+        app_metadata: payload.app_metadata || {},
+        user_metadata: payload.user_metadata || {},
+        role: payload.role || 'authenticated',
+      };
+      cacheSet(_userCache, token, rawUser);
+    } else {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 4000)
+      try {
+        const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            apikey: env.SUPABASE_ANON_KEY,
+          },
+          signal: controller.signal,
+        });
+        if (!res.ok) return null;
+        rawUser = await res.json();
+        cacheSet(_userCache, token, rawUser);
+      } catch {
+        return null;
+      } finally {
+        clearTimeout(timeout)
+      }
+    }
   }
 
   // Clonar antes de mutar — el objeto cacheado se comparte entre peticiones

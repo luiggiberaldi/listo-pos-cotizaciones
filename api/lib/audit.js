@@ -32,13 +32,16 @@ export async function logToSystem(env, { nivel = 'error', origen = 'worker', cat
   } catch { /* observabilidad best-effort */ }
 }
 
-// Registra auditoría vía REST con timeout; el caller decide si espera o la agenda en background.
-export async function registrarAuditoria(env, headers, { usuarioId, usuarioNombre, usuarioRol, categoria, accion, descripcion, entidadTipo, entidadId, meta, ip }, { timeoutMs = 2000 } = {}) {
-  const response = await fetchWithTimeout(`${env.SUPABASE_URL}/rest/v1/auditoria`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ usuario_id: usuarioId, usuario_nombre: usuarioNombre, usuario_rol: usuarioRol, categoria, accion, descripcion: descripcion || null, entidad_tipo: entidadTipo, entidad_id: entidadId, meta: meta || null, ip_origen: ip || null }),
-  }, timeoutMs)
-  if (!response.ok) throw new Error(`auditoria_http_${response.status}`)
-  return response
+// Registra auditoría vía REST con timeout; seguro y best-effort (no bloquea)
+export async function registrarAuditoria(env, headers, { usuarioId, usuarioNombre, usuarioRol, categoria, accion, descripcion, entidadTipo, entidadId, meta, ip }, { timeoutMs = 4000 } = {}) {
+  try {
+    const response = await fetchWithTimeout(`${env.SUPABASE_URL}/rest/v1/auditoria`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ usuario_id: usuarioId, usuario_nombre: usuarioNombre, usuario_rol: usuarioRol, categoria, accion, descripcion: descripcion || null, entidad_tipo: entidadTipo, entidad_id: entidadId, meta: meta || null, ip_origen: ip || null }),
+    }, timeoutMs)
+    return response
+  } catch {
+    return null
+  }
 }

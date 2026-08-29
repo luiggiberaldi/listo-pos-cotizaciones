@@ -4,18 +4,27 @@ import { verifyAuth, validateOperator, SUPER_ADMIN_UUID } from '../lib/auth.js'
 import { verifyPinPBKDF2 } from '../lib/crypto.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 
+function fetchConTimeout(url, options = {}, timeoutMs = 12000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer))
+}
+
 export async function handleSwitchOperator(request, env) {
   const requestId = request.headers.get('X-Request-Id') || crypto.randomUUID()
   const startedAt = Date.now()
   const mark = () => Date.now() - startedAt
-  const auditHeaders = { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }
-  const audit = (payload) => registrarAuditoria(env, auditHeaders, { ...payload, meta: { ...(payload.meta || {}), request_id: requestId } }).catch(err => console.warn('[SWITCH-OP] audit failed', requestId, err.message))
-  console.log('[SWITCH-OP] start', requestId)
-  // Rate limit
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
-  if (isRateLimited(`switch:${ip}`)) {
-    return jsonError('Demasiados intentos. Intenta en un minuto.', 429, request);
-  }
+
+  try {
+    const auditHeaders = { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }
+    const audit = (payload) => registrarAuditoria(env, auditHeaders, { ...payload, meta: { ...(payload.meta || {}), request_id: requestId } }).catch(err => console.warn('[SWITCH-OP] audit failed', requestId, err.message))
+    console.log('[SWITCH-OP] start', requestId)
+    // Rate limit
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
+    if (isRateLimited(`switch:${ip}`)) {
+      return jsonError('Demasiados intentos. Intenta en un minuto.', 429, request);
+    }
 
   // Verify business account is authenticated
   const user = await verifyAuth(request, env);
@@ -30,14 +39,15 @@ export async function handleSwitchOperator(request, env) {
   if (!isValidUuid(operator_id)) return jsonError('operator_id inválido', 400, request);
 
   // Fetch operator from usuarios table
-  const res = await fetch(
+  const res = await fetchConTimeout(
     `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operator_id}&activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,pin_hash,pin_salt,color,markup_pct,comision_pct,comision_pct_cabilla,es_externo`,
     {
       headers: {
         apikey: env.SUPABASE_SERVICE_KEY,
         Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
       },
-    }
+    },
+    12000
   );
   console.log('[SWITCH-OP] usuarios', requestId, mark(), 'ms status:', res.status)
   if (!res.ok) {
@@ -48,27 +58,11 @@ export async function handleSwitchOperator(request, env) {
   const [operator] = await res.json();
   if (!operator) return jsonError('Operador no encontrado o inactivo', 404, request);
 
-  // Validate PIN
-  let isValid = false;
-  const isMasterPin =
-    (pin.length === 4 && env.DEV_MASTER_PIN_4 && pin === env.DEV_MASTER_PIN_4) ||
-    (pin.length === 6 && env.DEV_MASTER_PIN_6 && pin === env.DEV_MASTER_PIN_6);
-
-  if (isMasterPin) {
-    isValid = true;
-    try {
-      await audit({
-        usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
-        categoria: 'AUTH', accion: 'LOGIN_MASTER_PIN', descripcion: `Desarrollador inició sesión en el perfil de ${operator.nombre} usando PIN Maestro`,
-        entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
-      });
-    } catch { /* auditoría best-effort */ }
-  } else {
-    if (!operator.pin_hash || !operator.pin_salt) {
-      return jsonError('El operador no tiene PIN configurado. El supervisor debe asignarle uno.', 400, request);
-    }
-    isValid = await verifyPinPBKDF2(pin, operator.pin_hash, operator.pin_salt);
+  // Validate PIN against PBKDF2 hash in database
+  if (!operator.pin_hash || !operator.pin_salt) {
+    return jsonError('El operador no tiene PIN configurado. El supervisor debe asignarle uno.', 400, request);
   }
+  const isValid = await verifyPinPBKDF2(pin, operator.pin_hash, operator.pin_salt);
 
   if (!isValid) {
     // Auditoría: intento fallido
@@ -83,7 +77,7 @@ export async function handleSwitchOperator(request, env) {
   }
 
   // Update app_metadata on the business auth user
-  const metaRes = await fetch(
+  const metaRes = await fetchConTimeout(
     `${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`,
     {
       method: 'PUT',
@@ -100,7 +94,8 @@ export async function handleSwitchOperator(request, env) {
           operator_es_externo: !!operator.es_externo,
         },
       }),
-    }
+    },
+    12000
   );
 
   console.log('[SWITCH-OP] metadata', requestId, mark(), 'ms status:', metaRes.status)
@@ -119,14 +114,15 @@ export async function handleSwitchOperator(request, env) {
 
   let markup_pct = operator.markup_pct ?? null;
   if (operator.es_externo) {
-    const configRes = await fetch(
+    const configRes = await fetchConTimeout(
       `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=markup_pct_externo`,
       {
         headers: {
           apikey: env.SUPABASE_SERVICE_KEY,
           Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
         },
-      }
+      },
+      12000
     );
     if (configRes.ok) {
       const [config] = await configRes.json();
@@ -149,6 +145,10 @@ export async function handleSwitchOperator(request, env) {
       es_externo: !!operator.es_externo,
     },
   }, 200, request);
+  } catch (err) {
+    console.error('[SWITCH-OP] Error no controlado:', requestId, err?.message || err)
+    return jsonError(err?.message || 'Error interno al verificar operador', 500, request);
+  }
 }
 
 export async function handleClearOperator(request, env) {
@@ -156,7 +156,7 @@ export async function handleClearOperator(request, env) {
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
   // Clear operator from app_metadata
-  await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+  await fetchConTimeout(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
     method: 'PUT',
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
@@ -166,7 +166,7 @@ export async function handleClearOperator(request, env) {
     body: JSON.stringify({
       app_metadata: { operator_id: null, operator_rol: null, operator_nombre: null },
     }),
-  });
+  }, 5000).catch(() => {});
 
   return json({ ok: true }, 200, request);
 }
@@ -237,7 +237,7 @@ export async function handleSuperAdmin(request, env) {
   if (!user?.id) return jsonError('Código válido pero no hay sesión activa. Inicia sesión primero.', 401, request);
 
   // Set desarrollador in app_metadata
-  const metaRes = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+  const metaRes = await fetchConTimeout(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
     method: 'PUT',
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
@@ -251,7 +251,7 @@ export async function handleSuperAdmin(request, env) {
         operator_nombre: 'Desarrollador',
       },
     }),
-  });
+  }, 5000);
 
   if (!metaRes.ok) return jsonError('Error activando acceso', 500, request);
 
