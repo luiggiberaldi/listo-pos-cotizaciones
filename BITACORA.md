@@ -3676,6 +3676,11 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
 * **Prueba Directa PostgREST:** Confirmada la entrega inmediata de notas de despacho y el catálogo completo de 446 productos con status 200 OK.
 * **Suite de Tests:** **32/32** archivos pasados, **283/283** tests aprobados al 100%.
 * **Build de Producción:** Vite transformó los 2,280 módulos y generó bundles limpios en 1m 12s.
+* **Lanzamiento Oficial v1.0.0:** Versión del sistema fijada formalmente en `1.0.0` (`package.json`), badge flotante superior izquierdo en pantalla de acceso y footer del menú lateral.
+* **Commits de Cierre:**
+  - `08edbd6` — `fix(rls): resolve empty views via tenant read access policies, 25s timeout, instant logout, and proactive refresh`
+  - `1da5ebd` — `feat(ui): add v1.0.0 badge to top-left corner on login and sidebar footer`
+
 
 
 
