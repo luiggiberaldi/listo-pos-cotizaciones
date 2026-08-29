@@ -185,15 +185,15 @@ BEGIN
     v_balance_neto := ROUND((p_total_intercambio_usd - p_total_devuelto_usd)::NUMERIC, 4);
   END IF;
 
-  -- Contrato real del principal: comisiones usa nombres legacy v2. Nunca se
-  -- recalcula una comisión ya pagada en silencio.
+  -- Las comisiones legacy se conservan intactas. Solo una fila creada con
+  -- calculo_version = '238b' se recalcula con la política nueva.
   SELECT *
   INTO v_comision
   FROM public.comisiones c
   WHERE c.despachoid = p_despacho_id
   FOR UPDATE;
 
-  IF FOUND THEN
+  IF FOUND AND v_comision.calculo_version = '238b' THEN
     IF v_comision.estado = 'pagada' OR COALESCE(v_comision.montopagado, 0) > 0.01 THEN
       RAISE EXCEPTION 'COMISION_YA_PAGADA: revierta el pago antes de registrar la devolución';
     END IF;

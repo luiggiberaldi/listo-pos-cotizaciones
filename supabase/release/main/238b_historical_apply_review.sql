@@ -41,6 +41,12 @@ ALTER TABLE public.comision_238b_batches
   ADD COLUMN IF NOT EXISTS applied_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS applied_by UUID;
 
+-- 238a crea el snapshot base; estos campos completan el contrato histórico
+-- sin sobrescribir datos existentes y permiten rollback exacto de pagadapor.
+ALTER TABLE public.comision_238b_batch_rows
+  ADD COLUMN IF NOT EXISTS old_pagadapor UUID,
+  ADD COLUMN IF NOT EXISTS proposed_pagadapor UUID;
+
 -- ---------------------------------------------------------------------------
 -- 1. Registrar snapshot y propuesta del dry-run
 -- ---------------------------------------------------------------------------
@@ -107,7 +113,7 @@ BEGIN
       otras_exclusiones_anterior NUMERIC,
       fraccion_anterior NUMERIC,
       pagadaen_anterior TIMESTAMPTZ,
-      pagadopor_anterior UUID,
+      pagadapor_anterior UUID,
       detalle_extras_anterior JSONB,
       calculo_version_anterior TEXT,
       politica_anterior TEXT,
@@ -153,7 +159,7 @@ BEGIN
        OR v_commission.comision_retenida IS DISTINCT FROM v_row.retenida_anterior
        OR v_commission.montopagado IS DISTINCT FROM v_row.montopagado_anterior
        OR v_commission.pagadaen IS DISTINCT FROM v_row.pagadaen_anterior
-       OR v_commission.pagadopor IS DISTINCT FROM v_row.pagadopor_anterior
+       OR v_commission.pagadapor IS DISTINCT FROM v_row.pagadapor_anterior
        OR v_commission.comision_cxc_excluida IS DISTINCT FROM v_row.cxc_excluida_anterior
        OR v_commission.comision_pago_excluida IS DISTINCT FROM v_row.pago_excluida_anterior
        OR v_commission.comision_otras_exclusiones IS DISTINCT FROM v_row.otras_exclusiones_anterior
@@ -170,14 +176,14 @@ BEGIN
       batch_key, comision_id, despacho_id, estado,
       old_state, old_totalcomision, old_comisioncabilla, old_comisionotros,
       old_comision_liberada, old_comision_retenida, old_montopagado,
-      old_pagadaen, old_pagadopor, old_comision_cxc_excluida,
+      old_pagadaen, old_pagadapor, old_comision_cxc_excluida,
       old_comision_pago_excluida, old_comision_otras_exclusiones,
       old_fraccion_no_cxc, old_detalle_extras, old_calculo_version,
       old_politica_comision, old_fuente_calculo, old_calculo_evidencia,
       proposed_state, proposed_totalcomision, proposed_comisioncabilla,
       proposed_comisionotros, proposed_comision_liberada,
       proposed_comision_retenida, proposed_montopagado,
-      proposed_pagadaen, proposed_pagadopor,
+      proposed_pagadaen, proposed_pagadapor,
       proposed_comision_cxc_excluida, proposed_comision_pago_excluida,
       proposed_comision_otras_exclusiones, proposed_fraccion_no_cxc,
       proposed_detalle_extras, proposed_calculo_version,
@@ -189,7 +195,7 @@ BEGIN
       v_commission.estado, v_commission.totalcomision, v_commission.comisioncabilla,
       v_commission.comisionotros, v_commission.comision_liberada,
       v_commission.comision_retenida, v_commission.montopagado,
-      v_commission.pagadaen, v_commission.pagadopor,
+      v_commission.pagadaen, v_commission.pagadapor,
       v_commission.comision_cxc_excluida, v_commission.comision_pago_excluida,
       v_commission.comision_otras_exclusiones,
       v_commission.fraccion_no_cxc, v_commission.detalle_extras, v_commission.calculo_version,
@@ -374,7 +380,7 @@ BEGIN
        OR v_current.comision_retenida IS DISTINCT FROM v_row.old_comision_retenida
        OR v_current.montopagado IS DISTINCT FROM v_row.old_montopagado
        OR v_current.pagadaen IS DISTINCT FROM v_row.old_pagadaen
-       OR v_current.pagadopor IS DISTINCT FROM v_row.old_pagadopor
+       OR v_current.pagadapor IS DISTINCT FROM v_row.old_pagadapor
        OR v_current.comision_cxc_excluida IS DISTINCT FROM v_row.old_comision_cxc_excluida
        OR v_current.comision_pago_excluida IS DISTINCT FROM v_row.old_comision_pago_excluida
        OR v_current.comision_otras_exclusiones IS DISTINCT FROM v_row.old_comision_otras_exclusiones
@@ -396,7 +402,7 @@ BEGIN
         comision_retenida = v_row.proposed_comision_retenida,
         montopagado = v_row.proposed_montopagado,
         pagadaen = v_row.proposed_pagadaen,
-        pagadopor = v_row.proposed_pagadopor,
+        pagadapor = v_row.proposed_pagadapor,
         comision_cxc_excluida = v_row.proposed_comision_cxc_excluida,
         comision_pago_excluida = v_row.proposed_comision_pago_excluida,
         comision_otras_exclusiones = v_row.proposed_comision_otras_exclusiones,
@@ -437,6 +443,132 @@ REVOKE ALL ON FUNCTION public.aplicar_reconciliacion_comisiones_238b(UUID, UUID,
 GRANT EXECUTE ON FUNCTION public.registrar_propuestas_comisiones_238b(UUID, UUID, UUID, TEXT, JSONB, JSONB) TO service_role;
 GRANT EXECUTE ON FUNCTION public.aprobar_reconciliacion_comisiones_238b(UUID, UUID, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.aplicar_reconciliacion_comisiones_238b(UUID, UUID, UUID, TEXT) TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 4. Rollback atomico del batch, con verificacion del snapshot aplicado
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.revertir_reconciliacion_comisiones_238b(
+  p_batch_key UUID,
+  p_rollback_key UUID,
+  p_usuario_id UUID,
+  p_usuario_nombre TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_batch RECORD;
+  v_row RECORD;
+  v_current RECORD;
+  v_count INTEGER := 0;
+BEGIN
+  IF p_batch_key IS NULL OR p_rollback_key IS NULL OR p_usuario_id IS NULL
+     OR NULLIF(btrim(p_usuario_nombre), '') IS NULL THEN
+    RAISE EXCEPTION 'PARAMETROS_ROLLBACK_COMISIONES_INVALIDOS';
+  END IF;
+
+  SELECT * INTO v_batch
+  FROM public.comision_238b_batches
+  WHERE batch_key = p_batch_key
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'BATCH_COMISIONES_NO_ENCONTRADO'; END IF;
+  PERFORM public.comision_238b_assert_operator(v_batch.cuenta_id, p_usuario_id);
+
+  IF v_batch.estado = 'rolled_back' THEN
+    IF v_batch.rollback_key IS DISTINCT FROM p_rollback_key THEN
+      RAISE EXCEPTION 'ROLLBACK_KEY_REUTILIZADA';
+    END IF;
+    RETURN jsonb_build_object('ok', TRUE, 'idempotent', TRUE,
+      'batch_key', p_batch_key, 'rollback_key', v_batch.rollback_key);
+  END IF;
+  IF v_batch.estado <> 'applied' THEN
+    RAISE EXCEPTION 'BATCH_COMISIONES_NO_APLICADO';
+  END IF;
+  IF v_batch.rollback_key IS NOT NULL AND v_batch.rollback_key <> p_rollback_key THEN
+    RAISE EXCEPTION 'ROLLBACK_KEY_REUTILIZADA';
+  END IF;
+
+  FOR v_row IN
+    SELECT *
+    FROM public.comision_238b_batch_rows
+    WHERE batch_key = p_batch_key AND estado = 'applied'
+    ORDER BY id
+    FOR UPDATE
+  LOOP
+    SELECT * INTO v_current
+    FROM public.comisiones
+    WHERE id = v_row.comision_id
+      AND despachoid = v_row.despacho_id
+      AND cuentaid = v_batch.cuenta_id
+    FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'COMISION_SNAPSHOT_NO_ENCONTRADA'; END IF;
+
+    IF v_current.estado IS DISTINCT FROM v_row.proposed_state
+       OR v_current.totalcomision IS DISTINCT FROM v_row.proposed_totalcomision
+       OR v_current.comisioncabilla IS DISTINCT FROM v_row.proposed_comisioncabilla
+       OR v_current.comisionotros IS DISTINCT FROM v_row.proposed_comisionotros
+       OR v_current.comision_liberada IS DISTINCT FROM v_row.proposed_comision_liberada
+       OR v_current.comision_retenida IS DISTINCT FROM v_row.proposed_comision_retenida
+       OR v_current.montopagado IS DISTINCT FROM v_row.proposed_montopagado
+       OR v_current.pagadaen IS DISTINCT FROM v_row.proposed_pagadaen
+       OR v_current.pagadapor IS DISTINCT FROM v_row.proposed_pagadapor
+       OR v_current.comision_cxc_excluida IS DISTINCT FROM v_row.proposed_comision_cxc_excluida
+       OR v_current.comision_pago_excluida IS DISTINCT FROM v_row.proposed_comision_pago_excluida
+       OR v_current.comision_otras_exclusiones IS DISTINCT FROM v_row.proposed_comision_otras_exclusiones
+       OR v_current.fraccion_no_cxc IS DISTINCT FROM v_row.proposed_fraccion_no_cxc
+       OR v_current.detalle_extras IS DISTINCT FROM v_row.proposed_detalle_extras
+       OR v_current.calculo_version IS DISTINCT FROM v_row.proposed_calculo_version
+       OR v_current.politica_comision IS DISTINCT FROM v_row.proposed_politica_comision
+       OR v_current.fuente_calculo IS DISTINCT FROM v_row.proposed_fuente_calculo
+       OR v_current.calculo_evidencia IS DISTINCT FROM v_row.proposed_evidencia THEN
+      RAISE EXCEPTION 'ROLLBACK_COMISION_BLOQUEADO_POR_CAMBIO_POSTERIOR: %', v_row.comision_id;
+    END IF;
+
+    UPDATE public.comisiones
+    SET estado = v_row.old_state,
+        totalcomision = v_row.old_totalcomision,
+        comisioncabilla = v_row.old_comisioncabilla,
+        comisionotros = v_row.old_comisionotros,
+        comision_liberada = v_row.old_comision_liberada,
+        comision_retenida = v_row.old_comision_retenida,
+        montopagado = v_row.old_montopagado,
+        pagadaen = v_row.old_pagadaen,
+        pagadapor = v_row.old_pagadapor,
+        comision_cxc_excluida = v_row.old_comision_cxc_excluida,
+        comision_pago_excluida = v_row.old_comision_pago_excluida,
+        comision_otras_exclusiones = v_row.old_comision_otras_exclusiones,
+        fraccion_no_cxc = v_row.old_fraccion_no_cxc,
+        detalle_extras = v_row.old_detalle_extras,
+        calculo_version = v_row.old_calculo_version,
+        politica_comision = v_row.old_politica_comision,
+        fuente_calculo = v_row.old_fuente_calculo,
+        calculo_evidencia = v_row.old_calculo_evidencia,
+        actualizadoen = now()
+    WHERE id = v_row.comision_id;
+
+    UPDATE public.comision_238b_batch_rows
+    SET estado = 'rolled_back'
+    WHERE id = v_row.id;
+    v_count := v_count + 1;
+  END LOOP;
+
+  UPDATE public.comision_238b_batches
+  SET estado = 'rolled_back', rollback_key = p_rollback_key,
+      rollback_at = now(), rollback_by = p_usuario_id
+  WHERE batch_key = p_batch_key;
+
+  RETURN jsonb_build_object('ok', TRUE, 'batch_key', p_batch_key,
+    'rollback_key', p_rollback_key, 'restored', v_count,
+    'evidence_preserved', TRUE);
+END
+$$;
+
+REVOKE ALL ON FUNCTION public.revertir_reconciliacion_comisiones_238b(UUID, UUID, UUID, TEXT)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.revertir_reconciliacion_comisiones_238b(UUID, UUID, UUID, TEXT)
+  TO service_role;
 
 NOTIFY pgrst, 'reload schema';
 COMMIT;

@@ -326,10 +326,17 @@ BEGIN
     WHERE id = v_cliente_id AND cuenta_id = p_cuenta_id;
   END IF;
 
-  -- La función histórica calcula la comisión con los contratos v2 del
-  -- principal. Al estar dentro de esta transacción, un error revierte todo.
-  SELECT public.calcularcomisiondespacho(p_despacho_id)
-  INTO v_comision_id;
+  -- La función futura calcula toda comisión nueva con la política 238b.
+  -- Las comisiones legacy existentes no se convierten aquí.
+  -- El wrapper de entrega solo crea la comisión futura si aún no existe;
+  -- una comisión legacy no se convierte ni se modifica.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.comisiones c
+    WHERE c.despachoid = p_despacho_id
+  ) THEN
+    SELECT public.calcularcomisiondespacho_238b(p_despacho_id)
+    INTO v_comision_id;
+  END IF;
 
   v_resultado := COALESCE(v_inventario, '{}'::JSONB)
     || jsonb_build_object(

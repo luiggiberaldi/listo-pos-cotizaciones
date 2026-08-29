@@ -45,7 +45,7 @@ objetivo AS (
     c.comision_otras_exclusiones AS otras_exclusiones_anterior,
     c.fraccion_no_cxc AS fraccion_anterior,
     c.pagadaen AS pagadaen_anterior,
-    c.pagadopor AS pagadopor_anterior,
+    c.pagadapor AS pagadapor_anterior,
     c.detalle_extras AS detalle_extras_anterior,
     c.calculo_version AS calculo_version_anterior,
     c.politica_comision AS politica_anterior,
@@ -179,7 +179,7 @@ base AS (
     o.otras_exclusiones_anterior,
     o.fraccion_anterior,
     o.pagadaen_anterior,
-    o.pagadopor_anterior,
+    o.pagadapor_anterior,
     o.detalle_extras_anterior,
     o.calculo_version_anterior,
     o.politica_anterior,
@@ -216,7 +216,7 @@ base AS (
     o.otros_anterior, o.liberada_anterior, o.retenida_anterior,
     o.montopagado_anterior, o.cxc_excluida_anterior,
     o.pago_excluida_anterior, o.otras_exclusiones_anterior,
-    o.fraccion_anterior, o.pagadaen_anterior, o.pagadopor_anterior,
+    o.fraccion_anterior, o.pagadaen_anterior, o.pagadapor_anterior,
     o.detalle_extras_anterior, o.calculo_version_anterior,
     o.politica_anterior, o.fuente_anterior, o.evidencia_anterior,
     o.payment_split, o.vendedor_rol, o.vendedor_es_externo,
@@ -290,7 +290,7 @@ SELECT
   p.otras_exclusiones_anterior,
   p.fraccion_anterior,
   p.pagadaen_anterior,
-  p.pagadopor_anterior,
+  p.pagadapor_anterior,
   p.detalle_extras_anterior,
   p.calculo_version_anterior,
   p.politica_anterior,
@@ -312,7 +312,7 @@ SELECT
   p.detalle_extras_propuesto,
   CASE
     WHEN p.montopagado_anterior IS DISTINCT FROM 0 THEN 'manual_review'
-    WHEN p.pagadaen_anterior IS NOT NULL OR p.pagadopor_anterior IS NOT NULL THEN 'manual_review'
+    WHEN p.pagadaen_anterior IS NOT NULL OR p.pagadapor_anterior IS NOT NULL THEN 'manual_review'
     WHEN p.vendedorid IS NULL THEN 'manual_review'
     WHEN p.vendedorid IS DISTINCT FROM p.vendedor_comision_id THEN 'manual_review'
     WHEN p.used_cotizacion_fallback THEN 'manual_review'

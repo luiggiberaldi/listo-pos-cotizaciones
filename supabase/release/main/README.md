@@ -125,3 +125,14 @@ npm run prepare:kardex:isolated -- --baseline
 La primera entrega ya tiene preparado el contrato `confirmar_entrega_finanzas_idempotente`: inventario, estado, CxC y comisión quedan en la misma transacción, con replay guardado en `inventario_operaciones`. La cotización de reemplazo queda ligada al mismo `idempotency_key` de `registrar_devolucion_parcial_idempotente`; sus cabecera/ítems se crean dentro de la transacción de devolución, por lo que un fallo no deja una cotización huérfana y un replay devuelve el mismo UUID.
 
 Quedan como gates antes de ejecutar o desplegar: (1) validar las firmas/columnas del snapshot disposable, (2) ejecutar tests mutables únicamente en esa base aislada, (3) revisar la semántica financiera de la primera entrega con datos representativos y (4) aprobar el retiro de `REVIEW_ONLY` y los grants. Todavía no se debe ejecutar SQL mutable ni desplegar.
+
+## Release 2026-08-28 — Cobro de la diferencia en devolución parcial (Opción A)
+
+Paquete aditivo publicado en `supabase/release/principal/02_devolucion_cobro_diferencia.sql` (con rollback en `02_devolucion_cobro_diferencia_rollback.sql`) y espejo para staging en `construacero-staging/supabase/migrations/252_staging_devolucion_cobro_diferencia.sql`.
+
+- **Sobrecarga aditiva**: `registrar_devolucion_parcial_idempotente` gana una firma de 14 parámetros (`p_pagos_diferencia JSONB DEFAULT NULL`). La firma de 13 parámetros queda intacta; el Worker existente no cambia de contrato.
+- **Helpers nuevos**: `validar_pagos_diferencia_devolucion` (validación temprana, no consume la clave idempotente) y `registrar_cobro_diferencia_devolucion` (inserta un abono por pago cobrado dentro de la misma transacción y recalcula saldos del cliente).
+- **Replay-safe**: en replay la sobrecarga devuelve el resultado guardado sin re-insertar abonos.
+- **Grants**: solo `service_role`; el Worker sigue siendo el único consumidor.
+- **Rollback**: `DROP FUNCTION` de la sobrecarga y helpers; no requiere restore ni toca datos.
+- En staging la misma pieza sobrecarga `registrar_devolucion_parcial_finanzas_atomica_staging` (migración 252, sin gate por convención de ese proyecto).

@@ -26,7 +26,9 @@
     "postflight:security:grants:main:full": "node scripts/postflight-security-grants-full-main.mjs",
     "smoke:products:main": "node scripts/smoke-product-worker-main.mjs",
     "smoke:tester:cleanup:main": "node scripts/smoke-tester-cleanup-worker-main.mjs",
-    "validate:238b:review": "node scripts/validate-238b-review-package.mjs"
+    "validate:238b:review": "node scripts/validate-238b-review-package.mjs",
+    "validate:238b:phases": "node scripts/validate-238b-phase-package.mjs",
+    "test:238b:historical:staging": "node scripts/run-238b-historical-contract-staging-v4.mjs"
 },
   "dependencies": {
     "@honcho-ai/sdk": "^2.1.1",

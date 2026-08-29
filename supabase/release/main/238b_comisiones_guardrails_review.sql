@@ -123,6 +123,7 @@ DECLARE
   v_non_cxc NUMERIC(12,4) := 0;
   v_fraction NUMERIC(12,8) := 1;
   v_excluded BOOLEAN := FALSE;
+  v_requires_manual_review BOOLEAN := FALSE;
   v_method TEXT;
 BEGIN
   v_source := COALESCE(NULLIF(btrim(p_forma_pago_cliente), ''), NULLIF(btrim(p_forma_pago), ''));
@@ -253,6 +254,11 @@ BEGIN
     INTO v_excluded
     FROM jsonb_array_elements(v_methods) AS elem;
 
+    v_requires_manual_review := v_cxc_methods > 0
+      AND v_non_cxc_methods > 0
+      AND v_cxc_explicit <= 0
+      AND v_non_cxc_explicit <= 0;
+
     IF v_cxc_methods > 0 THEN
       v_cxc := CASE
         WHEN v_cxc_explicit > 0 THEN LEAST(v_total, v_cxc_explicit)
@@ -287,6 +293,9 @@ BEGIN
     'non_cxc_amount', round(v_non_cxc, 4),
     'fraction', round(v_fraction, 8),
     'excluded_by_payment', COALESCE(v_excluded, FALSE),
+    'requires_manual_review', COALESCE(v_requires_manual_review, FALSE),
+    'manual_review_reason', CASE WHEN COALESCE(v_requires_manual_review, FALSE)
+      THEN 'mixed_payment_without_explicit_amounts' ELSE NULL END,
     'methods', v_methods
   );
 END
@@ -558,6 +567,9 @@ BEGIN
   v_payment := public.comision_238b_pago_split(
     v_despacho.total_usd, v_despacho.forma_pago_cliente, v_despacho.forma_pago
   );
+  IF COALESCE((v_payment->>'requires_manual_review')::boolean, FALSE) THEN
+    RAISE EXCEPTION 'PAGO_MIXTO_SIN_MONTOS_REQUIERE_REVISION';
+  END IF;
   v_fraction := COALESCE((v_payment->>'fraction')::numeric, 1);
 
   SELECT EXISTS (
@@ -765,15 +777,10 @@ END
 $$;
 
 -- ---------------------------------------------------------------------------
--- 6. Revocar el ciclo de pago legacy despues de confirmar el Worker
+-- 6. El cutover legacy queda fuera de este contrato revisable.
 -- ---------------------------------------------------------------------------
-REVOKE ALL ON FUNCTION public.calcularcomisiondespacho(UUID)
-  FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.marcar_comision_pagada(UUID)
-  FROM PUBLIC, anon, authenticated, service_role;
-REVOKE ALL ON FUNCTION public.obtener_resumen_comisiones_v2(UUID, UUID, TEXT, TIMESTAMPTZ, TIMESTAMPTZ)
-  FROM PUBLIC, anon, authenticated;
-
+-- No se revocan RPC ni permisos aquí. La revocación requiere smoke autenticado
+-- y se ejecutará únicamente mediante 238b_cutover_legacy_rpc_review.sql.
 GRANT EXECUTE ON FUNCTION public.calcularcomisiondespacho_238b(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.obtener_resumen_comisiones_v2(UUID, UUID, TEXT, TIMESTAMPTZ, TIMESTAMPTZ) TO service_role;
 
@@ -813,7 +820,7 @@ CREATE TABLE IF NOT EXISTS public.comision_238b_batch_rows (
   old_comision_retenida NUMERIC(12,2),
   old_montopagado NUMERIC(12,2),
   old_pagadaen TIMESTAMPTZ,
-  old_pagadopor UUID,
+  old_pagadapor UUID,
   old_comision_cxc_excluida NUMERIC(12,2),
   old_comision_pago_excluida NUMERIC(12,2),
   old_comision_otras_exclusiones NUMERIC(12,2),
@@ -832,7 +839,7 @@ CREATE TABLE IF NOT EXISTS public.comision_238b_batch_rows (
   proposed_comision_retenida NUMERIC(12,2),
   proposed_montopagado NUMERIC(12,2) NOT NULL DEFAULT 0,
   proposed_pagadaen TIMESTAMPTZ,
-  proposed_pagadopor UUID,
+  proposed_pagadapor UUID,
   proposed_comision_cxc_excluida NUMERIC(12,2) NOT NULL DEFAULT 0,
   proposed_comision_pago_excluida NUMERIC(12,2) NOT NULL DEFAULT 0,
   proposed_comision_otras_exclusiones NUMERIC(12,2) NOT NULL DEFAULT 0,
@@ -849,11 +856,11 @@ CREATE TABLE IF NOT EXISTS public.comision_238b_batch_rows (
 
 ALTER TABLE public.comision_238b_batch_rows
   ADD COLUMN IF NOT EXISTS old_pagadaen TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS old_pagadopor UUID,
+  ADD COLUMN IF NOT EXISTS old_pagadapor UUID,
   ADD COLUMN IF NOT EXISTS old_comision_pago_excluida NUMERIC(12,2),
   ADD COLUMN IF NOT EXISTS proposed_montopagado NUMERIC(12,2) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS proposed_pagadaen TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS proposed_pagadopor UUID,
+  ADD COLUMN IF NOT EXISTS proposed_pagadapor UUID,
   ADD COLUMN IF NOT EXISTS proposed_comision_pago_excluida NUMERIC(12,2) NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_comision_238b_batch_rows_batch
@@ -924,7 +931,7 @@ BEGIN
        OR v_current.comision_retenida IS DISTINCT FROM v_row.proposed_comision_retenida
        OR v_current.montopagado IS DISTINCT FROM v_row.proposed_montopagado
        OR v_current.pagadaen IS DISTINCT FROM v_row.proposed_pagadaen
-       OR v_current.pagadopor IS DISTINCT FROM v_row.proposed_pagadopor
+       OR v_current.pagadapor IS DISTINCT FROM v_row.proposed_pagadapor
        OR v_current.comision_cxc_excluida IS DISTINCT FROM v_row.proposed_comision_cxc_excluida
        OR v_current.comision_pago_excluida IS DISTINCT FROM v_row.proposed_comision_pago_excluida
        OR v_current.comision_otras_exclusiones IS DISTINCT FROM v_row.proposed_comision_otras_exclusiones
@@ -946,7 +953,7 @@ BEGIN
         comision_retenida = v_row.old_comision_retenida,
         montopagado = v_row.old_montopagado,
         pagadaen = v_row.old_pagadaen,
-        pagadopor = v_row.old_pagadopor,
+        pagadapor = v_row.old_pagadapor,
         comision_cxc_excluida = v_row.old_comision_cxc_excluida,
         comision_pago_excluida = v_row.old_comision_pago_excluida,
         comision_otras_exclusiones = v_row.old_comision_otras_exclusiones,
