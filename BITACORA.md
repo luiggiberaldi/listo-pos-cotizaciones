@@ -3613,4 +3613,27 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
   - `2503e1a` — `fix(auth-worker): decode JWT locally for instant validation and make audit non-blocking`
   - `fde6e76` — `fix(auth-ui): differentiate 401 PIN error, make switchOut instant and add multi-endpoint fallback in dev`
   - `5dcebc0` — `fix(app): prevent duplicate auth initializations during React StrictMode remounts`
+  - `6d44a79` — `docs: update BITACORA.md with 2026-08-29 auth, PIN resilience and switchOut optimizations`
+  - `e1a18ae` — `fix(auth): add AUTH_CACHE_VERSION auto-invalidation and clean deploy.ps1`
+  - `e509f51` — `fix(auth): increase switchOperator timeout to 10s and add direct worker fallback in prod`
+
+---
+
+### Despliegue a Producción (Cloudflare Edge + Vercel) y Ajuste de Timeouts
+
+1. **Ajuste de Timeout para Producción en la Nube:**
+   - En el frontend, el timeout de `switchOperator` se elevó de 4s a **10s** para evitar cortes prematuros durante los arranques en frío (cold starts) a través de redes internacionales (Vercel ➡️ Cloudflare Edge ➡️ Supabase AWS us-west-2).
+   - Se añadió fallback multicanal directo a `https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/switch-operator` con soporte CORS completo en producción.
+2. **Inyección Completa de Secrets en Cloudflare:**
+   - Se actualizó `deploy.ps1` para cargar automáticamente variables desde `.env.secrets` o `.dev.vars` e inyectar en Cloudflare: `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`, `DEV_SUPER_CODE`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `GROQ_KEYS_A`, `GROQ_KEYS_B`, `GROQ_KEYS_C`.
+   - Despliegue de Cloudflare Worker completado con éxito (versión `073ba068-8fa4-4b58-a15e-21ed5138483f`).
+3. **Prueba en Vivo en Producción (Cloudflare + Vercel):**
+   - **Gabi / Enzo Patti (`010101`):** `200 OK` (490ms - 1.4s).
+   - **Administrador (`676767`):** `200 OK` (3.0s).
+   - **Logística (`000000`):** `200 OK` (251ms).
+   - **Niki Ramírez (`010203`):** `200 OK` (1.6s).
+   - **Edgar / Josué / Empresa (`0000`):** `200 OK` (401ms - 972ms).
+   - **Seguridad:** Administrador con `000000` ➡️ `401 PIN incorrecto` (284ms) ✅.
+   - **Configuración de Negocio en vivo:** `200 OK` (333ms) ✅.
+
 
