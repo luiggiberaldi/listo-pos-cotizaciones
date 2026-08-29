@@ -30,27 +30,30 @@ export function resetSessionState() {
 
 export function refreshSessionSingleFlight() {
   // Sesión confirmada como muerta: no martillar /auth/v1/token con 400s.
-  // Cada llamada resuelve inmediatamente sin sesión → el caller decide
-  // (fallback offline o mensaje de sesión expirada).
   if (sessionDead) {
     return Promise.resolve({ data: { session: null }, error: new Error('SESSION_EXPIRED') })
   }
 
   if (!refreshInFlight) {
-    refreshInFlight = supabase.auth.refreshSession()
+    let timer
+    const timeoutPromise = new Promise((resolve) => {
+      timer = setTimeout(() => resolve({ data: { session: null }, error: new Error('refresh_timeout') }), 3000)
+    })
+
+    refreshInFlight = Promise.race([supabase.auth.refreshSession(), timeoutPromise])
       .then((result) => {
         const err = result?.error
         const msg = String(err?.message || '').toLowerCase()
         const status = err?.status
-        // Detectar refresh token inválido/rotado ("Invalid Refresh Token",
-        // invalid_grant): marcar la sesión como muerta para frenar reintentos.
-        // Los fallos de red (sin status, "Failed to fetch") NO marcan nada.
         if (!result?.data?.session && err && (status === 400 || status === 401 || status === 403 || msg.includes('invalid') || msg.includes('refresh token'))) {
           sessionDead = true
         }
         return result
       })
-      .finally(() => { refreshInFlight = null })
+      .finally(() => {
+        clearTimeout(timer)
+        refreshInFlight = null
+      })
   }
   return refreshInFlight
 }

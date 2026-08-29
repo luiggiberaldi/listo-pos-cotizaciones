@@ -657,15 +657,6 @@ const useAuthStore = create((set, get) => ({
         set({ perfil: perfilOp, loading: false, error: null })
       }
 
-      // Refrescar JWT en background — no bloquear al usuario
-      if (!get()._refreshingToken) {
-        set({ _refreshingToken: true })
-        refreshSessionSingleFlight()
-          .then(({ data }) => { if (data?.user) set({ user: data.user }) })
-          .catch(() => { /* ignorar — perfil ya está seteado */ })
-          .finally(() => set({ _refreshingToken: false }))
-      }
-
       return { ok: true }
     } catch (err) {
       console.warn(`[AUTH-PIN] 🛡️ Fallo remoto (${err.name}: ${err.message}) en ${Date.now() - t0}ms. Intentando fallback offline...`);

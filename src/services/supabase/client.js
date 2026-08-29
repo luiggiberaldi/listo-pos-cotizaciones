@@ -26,11 +26,11 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       const timeoutController = new AbortController()
       const timeout = setTimeout(() => {
         try {
-          timeoutController.abort(new DOMException('Tiempo de espera agotado (30s)', 'TimeoutError'))
+          timeoutController.abort(new DOMException('Tiempo de espera agotado (8s)', 'TimeoutError'))
         } catch {
           timeoutController.abort()
         }
-      }, 30000)
+      }, 8000)
 
       const upstreamSignal = options.signal
       let signal = timeoutController.signal
