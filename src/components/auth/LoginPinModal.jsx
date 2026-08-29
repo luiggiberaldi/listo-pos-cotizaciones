@@ -44,8 +44,10 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
       setTimeout(() => { setError(false); setMsg(null) }, 3000)
     }, 20000)
 
+    console.log('[PIN-MODAL] 🚀 Disparando submit del PIN...')
     try {
       const res = await onSubmit(pin)
+      console.log('[PIN-MODAL] 📥 Resultado recibido de onSubmit:', res)
       const ok = res === true || res?.ok === true
       if (cancelado) return // el fondo terminó tarde; la UI ya fue liberada
       if (!ok) {
@@ -54,7 +56,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
         if (res?.sessionExpired) {
           setMsg(res.error || 'Tu sesión expiró. Inicia sesión nuevamente con tu correo.')
           setPin('')
-          setTimeout(() => { setMsg(null); onClose() }, 2600)
+          setTimeout(() => { setMsg(null); setError(false); onClose() }, 2600)
           return
         }
         // Verificación anterior aún en curso — explicar el shake en vez de
@@ -62,6 +64,9 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
         if (res?.busy) {
           setMsg('La verificación anterior sigue en curso. Espera unos segundos…')
           setTimeout(() => setMsg(null), 4000)
+        } else if (res?.error) {
+          setMsg(res.error)
+          setTimeout(() => setMsg(null), 3500)
         }
         setError(true); setPin('')
         setTimeout(() => setError(false), 600)

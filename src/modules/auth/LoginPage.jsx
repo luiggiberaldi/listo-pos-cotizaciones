@@ -422,15 +422,29 @@ function UserSelectStep({ onLogout }) {
         return
       }
 
-      // El backend valida el código — nunca viaja en el bundle del cliente
-      const res = await fetch(apiUrl('/api/auth/super-admin'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code: superPin }),
-      })
+      // El backend valida el código — con fallback directo en desarrollo
+      const endpoints = [
+        apiUrl('/api/auth/super-admin'),
+        ...(import.meta.env.DEV ? ['http://127.0.0.1:8787/api/auth/super-admin', 'http://localhost:8787/api/auth/super-admin'] : []),
+      ]
+      const uniqueEndpoints = [...new Set(endpoints)]
+      let res = null
+      for (const url of uniqueEndpoints) {
+        try {
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 5000)
+          res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ code: superPin }),
+            signal: controller.signal,
+          }).finally(() => clearTimeout(timer))
+          if (res && res.status !== 502 && res.status !== 503 && res.status !== 504) break
+        } catch { /* probar siguiente */ }
+      }
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
+      if (!res || !res.ok) {
+        const err = res ? await res.json().catch(() => ({})) : {}
         setSuperError(err.error || 'Código incorrecto')
         setSuperPin('')
         return
@@ -592,9 +606,10 @@ function UserSelectStep({ onLogout }) {
                   <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
                 </button>
                 <button
-                  onClick={async () => {
-                    await supabase.auth.signOut()
-                    onLogout()
+                  onClick={() => {
+                    // Usar el logout coordinado evita competir con refreshSession
+                    // por el navigator lock de Supabase.
+                    void useAuthStore.getState().logout().finally(() => onLogout())
                   }}
                   className="p-2 sm:p-2.5 rounded-xl transition-all"
                   style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'rgba(239,68,68,0.7)' }}

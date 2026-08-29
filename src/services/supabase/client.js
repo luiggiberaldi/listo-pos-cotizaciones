@@ -20,11 +20,32 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   global: {
     fetch: (url, options = {}) => {
-      const controller = new AbortController()
-      // 30s: en redes lentas los reportes pesados superaban los 15s y la vista
-      // quedaba "cargando" o vacía por el abort
-      const timeout = setTimeout(() => controller.abort(), 30000)
-      return fetch(url, { ...options, signal: controller.signal })
+      // No reemplazar la señal de Supabase: GoTrue usa su propio AbortSignal
+      // y su navigator lock. Sobrescribirla podía abortar login/refresh durante
+      // StrictMode o al desmontar una vista.
+      const timeoutController = new AbortController()
+      const timeout = setTimeout(() => {
+        try {
+          timeoutController.abort(new DOMException('Tiempo de espera agotado (30s)', 'TimeoutError'))
+        } catch {
+          timeoutController.abort()
+        }
+      }, 30000)
+
+      const upstreamSignal = options.signal
+      let signal = timeoutController.signal
+
+      if (upstreamSignal) {
+        if (typeof AbortSignal.any === 'function') {
+          signal = AbortSignal.any([upstreamSignal, timeoutController.signal])
+        } else if (upstreamSignal.aborted) {
+          timeoutController.abort(upstreamSignal.reason)
+        } else {
+          upstreamSignal.addEventListener('abort', () => timeoutController.abort(upstreamSignal.reason), { once: true })
+        }
+      }
+
+      return fetch(url, { ...options, signal })
         .finally(() => clearTimeout(timeout))
     },
   },

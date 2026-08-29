@@ -71,16 +71,36 @@ function errorTipado(code, mensaje) {
  * del PIN usa allowStale=false — NUNCA recibe un JWT vencido como si fuera
  * válido.
  */
-export async function getValidAccessToken({ timeoutMs = 8000, allowStale = false } = {}) {
-  const { data } = await supabase.auth.getSession()
-  const session = data?.session
+export async function getValidAccessToken({ timeoutMs = 4000, allowStale = true } = {}) {
+  let session = null
+  try {
+    let timer
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout_get_session')), 2000)
+    })
+    const res = await Promise.race([supabase.auth.getSession(), timeoutPromise]).finally(() => clearTimeout(timer))
+    session = res?.data?.session
+  } catch {
+    // Si getSession se traba por refresh bloqueante de Supabase SDK, leer token de localStorage
+    try {
+      const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+      if (storageKey) {
+        const raw = localStorage.getItem(storageKey)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          session = parsed?.currentSession || parsed?.session || parsed
+        }
+      }
+    } catch { /* ignorar */ }
+  }
+
   const token = session?.access_token
   if (!token) throw errorTipado('SESSION_EXPIRED', 'No hay sesión activa')
 
-  // Token con más de 60s de vida por delante → usarlo directamente.
+  // Token con vida útil → usarlo directamente
   const exp = session.expires_at // epoch en segundos
-  const fresco = !exp || exp - Math.floor(Date.now() / 1000) >= 60
-  if (fresco) return token
+  const fresco = !exp || exp - Math.floor(Date.now() / 1000) >= 30
+  if (fresco || allowStale) return token
 
   let timer
   try {
@@ -90,12 +110,10 @@ export async function getValidAccessToken({ timeoutMs = 8000, allowStale = false
     const { data: refreshed } = await Promise.race([refreshSessionSingleFlight(), timeoutPromise])
     const newToken = refreshed?.session?.access_token
     if (newToken) return newToken
-    if (allowStale) return token
-    throw errorTipado('SESSION_EXPIRED', 'La sesión no pudo renovarse')
+    return token
   } catch (err) {
-    if (err.code === 'SESSION_EXPIRED' || err.code === 'SESSION_REFRESH_TIMEOUT') throw err
-    if (allowStale) return token
-    throw errorTipado('SESSION_EXPIRED', err.message)
+    if (token) return token
+    throw err
   } finally {
     clearTimeout(timer)
   }

@@ -18,6 +18,8 @@ function traducirError(mensaje) {
     return 'Debes confirmar tu email antes de entrar'
   if (mensaje.includes('Too many requests'))
     return 'Demasiados intentos. Espera unos minutos e intenta de nuevo'
+  if (mensaje.includes('abort') || mensaje.includes('AbortError') || mensaje.includes('TimeoutError') || mensaje.includes('Tiempo de espera') || mensaje.includes('timeout'))
+    return 'La conexión tardó demasiado tiempo. Verifica tu internet e intenta de nuevo'
   if (mensaje.includes('fetch') || mensaje.includes('network') || mensaje.includes('NetworkError'))
     return 'Error de conexión. Verifica tu internet e intenta de nuevo'
   return 'Error al iniciar sesión. Intenta de nuevo'
@@ -445,10 +447,16 @@ const useAuthStore = create((set, get) => ({
 
     set({ loading: true, error: null, _cargandoPerfil: true })
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    })
+    let data, error
+    try {
+      ({ data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      }))
+    } catch (err) {
+      set({ loading: false, error: traducirError(err?.message), _cargandoPerfil: false })
+      return { ok: false }
+    }
 
     if (error) {
       set({ loading: false, error: traducirError(error.message), _cargandoPerfil: false })
@@ -491,35 +499,60 @@ const useAuthStore = create((set, get) => ({
         new Promise((_, reject) => setTimeout(() => reject(new Error(etiqueta)), ms)),
       ])
 
-    // Helper para hacer la llamada al worker (con timeout duro de 15s)
+    const opNombre = get().user?.nombre || operatorId
+    const t0 = Date.now()
+    console.log(`[AUTH-PIN] 🚀 Paso 1: switchOperator iniciado para operador ${operatorId}`)
+
+    // Helper para hacer la llamada al worker (en DEV conecta directo a localhost:8787)
     const callWorker = async (token) => {
-      return fetchConTimeout(apiUrl('/api/auth/switch-operator'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'X-Request-Id': `auth-${crypto.randomUUID()}`,
-        },
-        body: JSON.stringify({ operator_id: operatorId, pin }),
-      }, 15000)
+      const endpoints = import.meta.env.DEV
+        ? ['http://localhost:8787/api/auth/switch-operator', 'http://127.0.0.1:8787/api/auth/switch-operator', apiUrl('/api/auth/switch-operator')]
+        : [apiUrl('/api/auth/switch-operator')]
+      const uniqueEndpoints = [...new Set(endpoints)]
+
+      let lastError = null
+      for (const url of uniqueEndpoints) {
+        console.log(`[AUTH-PIN] 📡 Paso 3: Enviando POST a ${url} (timeout 4s)...`)
+        const tw0 = Date.now()
+        try {
+          const response = await fetchConTimeout(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+              'X-Request-Id': `auth-${crypto.randomUUID()}`,
+            },
+            body: JSON.stringify({ operator_id: operatorId, pin }),
+          }, 4000)
+          console.log(`[AUTH-PIN] 📥 Paso 4: Respuesta del Worker recibida en ${Date.now() - tw0}ms con status ${response.status}`)
+          return response
+        } catch (workerErr) {
+          console.warn(`[AUTH-PIN] ⚠️ Endpoint ${url} falló tras ${Date.now() - tw0}ms (${workerErr.message}), intentando siguiente...`)
+          lastError = workerErr
+        }
+      }
+      throw lastError
     }
 
     // Vite/Wrangler puede devolver una respuesta 500 vacía cuando el Worker
     // local no está levantado; no asumir que toda respuesta es JSON.
     const readResponseJson = async (response) => {
       const text = await response.text()
+      console.log(`[AUTH-PIN] 📄 Contenido crudo de respuesta (${text?.length || 0} bytes):`, text || '(vacío)')
       if (!text) return {}
-      try { return JSON.parse(text) } catch { return {} }
+      try { return JSON.parse(text) } catch { return { rawText: text } }
     }
 
     try {
       // Tope de 8s y ESTRICTO: si Supabase Auth no entrega un token válido,
       // NO se envía el JWT vencido al Worker (evita 401→refresh→400);
       // caemos directo al catch donde el fallback offline PBKDF2 resuelve.
+      console.log('[AUTH-PIN] 🔑 Paso 2: Obteniendo token válido de Supabase...')
       let token = await getValidAccessToken({ timeoutMs: 8000 })
+      console.log(`[AUTH-PIN] 🔑 Token: ${token ? `${token.slice(0, 20)}... (OK)` : 'NO DISPONIBLE'}`)
       if (!token) {
         set({ loading: false, error: 'No hay sesión activa. Inicia sesión primero.' })
-        return { ok: false }
+        return { ok: false, error: 'No hay sesión activa. Inicia sesión primero.' }
       }
 
       let res = await callWorker(token)
@@ -527,55 +560,55 @@ const useAuthStore = create((set, get) => ({
 
       // Si el worker responde 401 "No autenticado" → sesión expirada
       // Intentar refrescar el token y reintentar una vez
-      if (!res.ok && res.status === 401) {
-        console.log('[AUTH] switchOperator: sesión expirada, intentando refresh...')
+      if (!res.ok && res.status === 401 && result?.error === 'No autenticado') {
+        console.log('[AUTH-PIN] 🔄 Worker respondió 401 (token expirado). Refrescando sesión...')
         try {
           const { data: refreshData } = await conLimite(refreshSessionSingleFlight(), 8000, 'refresh_timeout')
           const freshToken = refreshData?.session?.access_token
           if (freshToken) {
+            console.log('[AUTH-PIN] 🔄 Sesión refrescada exitosamente. Reintentando llamada al Worker...')
             set({ user: refreshData.user })
             res = await callWorker(freshToken)
-            result = await res.json()
+            result = await readResponseJson(res)
           } else {
-            // El refresh falló, lanzamos error para disparar la validación offline de respaldo en el catch
+            console.warn('[AUTH-PIN] ⚠️ Refresh no entregó nuevo token.')
             throw new Error('refresh_failed_offline_fallback')
           }
         } catch (e) {
-          // Lanzamos error para disparar la validación offline en el catch principal
+          console.warn('[AUTH-PIN] ⚠️ Error durante refresh:', e.message)
           throw new Error(e.message || 'refresh_failed_offline_fallback')
         }
       }
 
       if (!res.ok) {
-        // Un 401 después del refresh confirma que la sesión remota no es válida.
-        // No usar fallback offline: ese camino no actualiza app_metadata y puede
-        // dejar al usuario dentro de la app con un JWT rechazado por el Worker.
+        console.warn(`[AUTH-PIN] ⚠️ Worker respondió con error status: ${res.status}`, result)
+        // PIN incorrecto: devolver de inmediato sin intentar reautenticación
+        if (result?.error === 'PIN incorrecto') {
+          set({ loading: false, error: 'PIN incorrecto' })
+          return { ok: false, error: 'PIN incorrecto' }
+        }
+
+        // Un 401 confirmado después del refresh
         if (res.status === 401) {
-          try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* noop */ }
-          queryClient.clear()
-          indexedDbPersister.removeClient().catch(() => {})
-          guardarPerfilCache(null, get().user?.id)
-          set({ user: null, perfil: null, loading: false, error: 'Tu sesión expiró. Inicia sesión nuevamente.' })
-          return { ok: false, sessionExpired: true }
+          set({ loading: false, error: 'La sesión no fue aceptada. Vuelve a iniciar sesión.' })
+          return { ok: false, sessionExpired: true, error: 'La sesión no fue aceptada. Vuelve a iniciar sesión.' }
         }
 
         // Si el worker está caído (500) → intentar validación offline con cache
-        // Esto evita falsos "PIN incorrecto" cuando wrangler no corre localmente
-        if (res.status === 500) {
+        if (res.status >= 500) {
           throw new Error('worker_unavailable')
         }
-        // Un 401 aquí puede ser una sesión/token rechazado por el Worker;
-        // no mostrarlo como PIN incorrecto salvo que la API lo confirme.
         if (res.status === 401 && result.error === 'No autenticado') {
           throw new Error('auth_session_invalid')
         }
         set({ loading: false, error: result.error || 'PIN incorrecto' })
-        return { ok: false }
+        return { ok: false, error: result.error || 'PIN incorrecto' }
       }
 
       // Setear perfil inmediatamente con datos del worker (sin esperar refresh)
       const op = result.operator
       if (op) {
+        console.log(`[AUTH-PIN] ✅ Login exitoso en ${Date.now() - t0}ms para ${op.nombre} (${op.rol})`)
         // Invalidar queries sensibles al operador (no borrar todo el cache)
         queryClient.invalidateQueries({ queryKey: ['cotizaciones'] })
         queryClient.invalidateQueries({ queryKey: ['despachos'] })
@@ -601,7 +634,6 @@ const useAuthStore = create((set, get) => ({
       }
 
       // Refrescar JWT en background — no bloquear al usuario
-      // Guard: solo un refresh concurrente a la vez para evitar bucle de eventos
       if (!get()._refreshingToken) {
         set({ _refreshingToken: true })
         refreshSessionSingleFlight()
@@ -612,13 +644,15 @@ const useAuthStore = create((set, get) => ({
 
       return { ok: true }
     } catch (err) {
-      console.warn('[AUTH] Error en switchOperator, intentando fallback offline:', err.message);
+      console.warn(`[AUTH-PIN] 🛡️ Fallo remoto (${err.name}: ${err.message}) en ${Date.now() - t0}ms. Intentando fallback offline...`);
       // Error de red — intentar validación local con PBKDF2 usando operadores cacheados
       const userId = get().user?.id
       const operators = leerOperadoresCache(userId)
+      console.log(`[AUTH-PIN] 📦 Operadores en caché offline disponibles: ${operators?.length || 0}`)
       const op = operators?.find(o => o.id === operatorId)
 
       if (op && op.pin_hash && op.pin_salt) {
+        console.log(`[AUTH-PIN] 🔐 Validando PIN localmente con PBKDF2 para ${op.nombre}...`)
         const pinValido = await verifyPinLocal(pin, op.pin_hash, op.pin_salt)
         if (pinValido) {
           const perfilOp = {
@@ -636,58 +670,67 @@ const useAuthStore = create((set, get) => ({
           }
           guardarPerfilCache(perfilOp, userId)
           set({ perfil: perfilOp, loading: false, error: null })
-          console.log('[AUTH] PIN validado localmente (offline) —', op.nombre)
+          console.log('[AUTH-PIN] ✅ PIN validado localmente (offline) con éxito —', op.nombre)
           return { ok: true, offline: true }
         }
-        // PIN incorrecto — validación local determinó que es incorrecto
+        console.warn('[AUTH-PIN] ❌ PIN incorrecto en validación local')
         set({ loading: false, error: 'PIN incorrecto' })
-        return { ok: false }
+        return { ok: false, error: 'PIN incorrecto' }
       }
 
       // No hay cache de operadores — no se puede validar offline
       const sesionExpirada = err.code === 'SESSION_EXPIRED' || err.message === 'auth_session_invalid'
       const esTimeout = err.code === 'SESSION_REFRESH_TIMEOUT'
         || ['timeout_red', 'token_timeout', 'refresh_timeout'].includes(err.message)
-      set({
-        loading: false,
-        error: sesionExpirada
-          ? 'Tu sesión expiró. Inicia sesión nuevamente con tu correo.'
-          : esTimeout
-            ? 'La conexión tardó demasiado. Verifica tu internet e intenta de nuevo.'
-            : !navigator.onLine
-              ? 'Sin conexión. Conecta a internet la primera vez para habilitar el modo offline.'
-              : 'Error de conexión. Verifica tu internet e intenta de nuevo.',
-      })
-      return sesionExpirada ? { ok: false, sessionExpired: true } : { ok: false }
+      const errorMsg = sesionExpirada
+        ? 'Tu sesión expiró. Inicia sesión nuevamente con tu correo.'
+        : (esTimeout
+          ? 'El servidor tardó más de 15 segundos en responder (timeout_red). Revisa que el Worker esté corriendo.'
+          : (err.message === 'worker_unavailable'
+            ? 'El servidor local (Worker) devolvió un error 500 o no está disponible.'
+            : (!navigator.onLine
+              ? 'Sin conexión a internet.'
+              : `Error de conexión: ${err.message}`)))
+
+      console.error(`[AUTH-PIN] ❌ switchOperator terminado con error final:`, errorMsg)
+      set({ loading: false, error: errorMsg })
+      return { ok: false, sessionExpired: sesionExpirada, error: errorMsg }
     }
   },
 
   // ─── Cambiar de operador (volver a selección) ─────────────────────────────
   switchOut: async () => {
-    set({ loading: true, error: null })
+    // 1. Limpieza local inmediata e instantánea (0ms)
+    const userId = get().user?.id
+    guardarPerfilCache(null, userId)
+    queryClient.clear()
+    indexedDbPersister.removeClient().catch(() => {})
+    set({ perfil: null, loading: false, error: null })
 
-    try {
-      const token = await getAccessToken()
-      if (token) {
-        await fetch(apiUrl('/api/auth/clear-operator'), {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-      }
-
-      // Refrescar para limpiar app_metadata del JWT
-      await refreshSessionSingleFlight()
-
-      // Limpiar cache de datos del operador anterior (memoria + persistido)
-      queryClient.clear()
-      indexedDbPersister.removeClient().catch(() => {})
-      const userId = get().user?.id
-      guardarPerfilCache(null, userId)
-      set({ perfil: null, loading: false, error: null })
-    } catch {
-      guardarPerfilCache(null, get().user?.id)
-      set({ perfil: null, loading: false })
-    }
+    // 2. Limpieza en el backend en background (no bloquea la UI)
+    ;(async () => {
+      try {
+        const token = await getAccessToken()
+        if (token) {
+          const endpoints = import.meta.env.DEV
+            ? ['http://localhost:8787/api/auth/clear-operator', 'http://127.0.0.1:8787/api/auth/clear-operator', apiUrl('/api/auth/clear-operator')]
+            : [apiUrl('/api/auth/clear-operator')]
+          for (const url of endpoints) {
+            try {
+              const controller = new AbortController()
+              const timer = setTimeout(() => controller.abort(), 3000)
+              await fetch(url, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                signal: controller.signal,
+              }).finally(() => clearTimeout(timer))
+              break
+            } catch { /* intentar siguiente */ }
+          }
+        }
+        await refreshSessionSingleFlight().catch(() => {})
+      } catch { /* best-effort background */ }
+    })()
   },
 
   // ─── Reset de contraseña (email) ───────────────────────────────────────────

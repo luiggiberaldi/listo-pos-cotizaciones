@@ -7,7 +7,7 @@
     "dev": "npx concurrently -n VITE,API -c cyan,yellow \"vite\" \"npm run dev:worker\"",
     "dev:vite": "vite",
     "dev:api": "npm run dev:worker",
-    "dev:worker": "npx wrangler dev --config wrangler.toml --port 8787 --local",
+    "dev:worker": "npx wrangler dev --config wrangler.toml --port 8787 --ip 127.0.0.1 --local",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
@@ -29,7 +29,7 @@
     "validate:238b:review": "node scripts/validate-238b-review-package.mjs",
     "validate:238b:phases": "node scripts/validate-238b-phase-package.mjs",
     "test:238b:historical:staging": "node scripts/run-238b-historical-contract-staging-v4.mjs"
-},
+  },
   "dependencies": {
     "@honcho-ai/sdk": "^2.1.1",
     "@supabase/supabase-js": "^2.97.0",
@@ -58,6 +58,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "eslint-plugin-unused-imports": "^4.4.1",
     "globals": "^16.5.0",
+    "playwright": "^1.62.1",
     "postcss": "^8.5.6",
     "postcss-import": "^16.1.1",
     "prettier": "^3.8.1",
