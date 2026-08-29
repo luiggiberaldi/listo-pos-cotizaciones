@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
-import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { apiUrl, getAuthHeaders, chunkIds } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { authFetch } from '../services/authFetch'
 import { broadcastEntidad } from '../services/supabase/realtimeBus'
@@ -118,7 +118,20 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
         .order(estado ? 'actualizado_en' : 'numero', { ascending: false })
 
       if (matchedIds !== null) {
-        query = query.in('id', matchedIds)
+        // Evitar URLs gigantes; para búsquedas con muchos resultados el filtro
+        // se divide en lotes y se resuelve antes de la consulta enriquecida.
+        const matchedChunks = chunkIds(matchedIds, 50)
+        if (matchedChunks.length === 0) return []
+        if (matchedChunks.length > 1) {
+          const results = await Promise.all(matchedChunks.map(chunk =>
+            supabase.from('notas_despacho').select('id').in('id', chunk)
+          ))
+          const ids = results.flatMap(r => r.error ? [] : (r.data || []).map(row => row.id))
+          if (ids.length === 0) return []
+          query = query.in('id', ids.slice(0, 200))
+        } else {
+          query = query.in('id', matchedChunks[0])
+        }
       }
 
       if (esHoy) {

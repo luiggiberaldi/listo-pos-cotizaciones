@@ -8,6 +8,7 @@ import { INVENTARIO_KEY } from './useInventario'
 import { showToast } from '../components/ui/Toast'
 import { notifyStockBajo, notifyStockCritico, notifyStockReabastecido } from '../services/notificationService'
 import { formatCorrelativo } from '../utils/motivosTipo'
+import { chunkIds } from '../services/apiBase'
 
 export const MOVIMIENTOS_KEY = ['inventario_movimientos']
 const KARDEX_KEY = ['kardex']
@@ -98,12 +99,13 @@ export function useAplicarMovimientoLote() {
 
       // Verificar estado de stock después del movimiento
       try {
-        const ids = variables.items.map(i => i.producto_id)
-        const { data: productos } = await supabase
-          .from('productos')
-          .select('id, nombre, stock_actual, stock_minimo, unidad')
-          .in('id', ids)
-        if (productos) {
+        const ids = [...new Set(variables.items.map(i => i.producto_id).filter(Boolean))]
+        const productoChunks = chunkIds(ids, 50)
+        const productoResults = await Promise.all(productoChunks.map(batch =>
+          supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, unidad').in('id', batch)
+        ))
+        const productos = productoResults.flatMap(r => r.error ? [] : (r.data || []))
+        if (productos.length) {
           // Stock crítico (agotado)
           const criticos = productos.filter(p => p.stock_actual <= 0)
           if (criticos.length > 0) notifyStockCritico(criticos, 'supervisor')
@@ -131,7 +133,7 @@ export function useAplicarMovimientoLote() {
             }
           }
         }
-      } catch (_) {}
+      } catch (_) { /* notificación best-effort */ }
     },
     onError: (error) => {
       showToast(error.message || 'Error al aplicar movimiento', 'error')

@@ -48,3 +48,11 @@ export async function getAuthHeaders(extra = {}) {
     ...extra,
   }
 }
+
+/** Divide identificadores para evitar URLs .in() excesivamente grandes. */
+export function chunkIds(ids, size = 50) {
+  const unique = [...new Set((ids || []).filter(Boolean))]
+  const chunks = []
+  for (let i = 0; i < unique.length; i += size) chunks.push(unique.slice(i, i + size))
+  return chunks
+}
