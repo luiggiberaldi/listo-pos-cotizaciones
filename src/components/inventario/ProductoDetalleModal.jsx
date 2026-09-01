@@ -243,7 +243,7 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     : 'bg-red-50 text-red-700 border-red-200'
               }`}>
-                <span>{stockNegativo ? '⚠️ Stock negativo (Venta Anticipada)' : disponible ? '✅ Disponible' : '❌ Agotado'}</span>
+                <span>{stockNegativo ? '⚠️ Stock negativo' : disponible ? '✅ Disponible' : '❌ Agotado'}</span>
                 <span className="opacity-30">•</span>
                 <span>{Number(stockActual).toLocaleString('es-VE')}{producto.unidad ? ` ${producto.unidad}` : ''}</span>
               </span>
