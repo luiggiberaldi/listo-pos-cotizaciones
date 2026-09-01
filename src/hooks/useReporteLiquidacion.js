@@ -23,7 +23,7 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
         .select(`
           id, numero, cotizacion_id, total_usd, flete_usd, descuento_total_usd, forma_pago,
           vendedor_id, cliente_id, entregada_en,
-          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color, rol),
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color, rol, codigo),
           cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre)
         `)
         .eq('estado', 'entregada')

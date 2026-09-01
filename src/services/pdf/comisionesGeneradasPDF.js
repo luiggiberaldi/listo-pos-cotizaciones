@@ -42,6 +42,7 @@ function sellerFromRow(row, fallback = null) {
     id: seller.id || fallback?.id || 'sin_asesor',
     nombre: seller.nombre || fallback?.nombre || 'Sin asesor',
     color: seller.color || fallback?.color || '#1B365D',
+    codigo: seller.codigo || fallback?.codigo || null,
     markup_pct: seller.markup_pct ?? fallback?.markup_pct ?? null,
     es_externo: !!(seller.es_externo ?? fallback?.es_externo),
   }
@@ -517,7 +518,15 @@ function drawDetailedTables(doc, rows, rate, title, config, range, dispatchCount
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(10.5)
     doc.setTextColor(...C_DARK)
-    doc.text(seller.nombre.toUpperCase(), MARGIN + 7, y + 4)
+    const sellerName = seller.nombre.toUpperCase()
+    doc.text(sellerName, MARGIN + 7, y + 4)
+    if (seller.codigo) {
+      const curX = MARGIN + 7 + doc.getTextWidth(sellerName)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(110, 120, 135)
+      doc.text(` [${seller.codigo.toUpperCase()}]`, curX, y + 4)
+    }
     y += 8
     y = drawTableHeader(doc, columns, y)
 
@@ -560,7 +569,8 @@ function drawDetailedTables(doc, rows, rate, title, config, range, dispatchCount
     doc.setTextColor(...C_PRIMARY)
     const subtotal = sellerRows.reduce((sum, row) => sum + row.totalcomision, 0)
     const subtotalBs = rate > 0 ? subtotal * rate : 0
-    doc.text(`Subtotal ${seller.nombre}:`, MARGIN + 2, y + 5)
+    const subtotalLabel = seller.codigo ? `Subtotal ${seller.nombre} [${seller.codigo.toUpperCase()}]:` : `Subtotal ${seller.nombre}:`
+    doc.text(subtotalLabel, MARGIN + 2, y + 5)
     doc.setTextColor(...C_DARK)
     doc.text(fmtUsd(subtotal), columns[6].x + columns[6].w - 2, y + 5, { align: 'right' })
     doc.setTextColor(...C_EMERALD)
@@ -611,7 +621,8 @@ function drawSummaryTable(doc, summary, rate, range, config, title, dispatchCoun
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...C_DARK)
-    doc.text(seller.nombre, MARGIN + 7, y + 4)
+    const summarySellerLabel = seller.codigo ? `${seller.nombre} [${seller.codigo.toUpperCase()}]` : seller.nombre
+    doc.text(summarySellerLabel, MARGIN + 7, y + 4)
     doc.setFont('helvetica', 'normal')
     doc.text(fmtUsd(seller.generadoUsd), columns[1].x + columns[1].w - 2, y + 4, { align: 'right' })
     doc.setTextColor(180, 83, 9)

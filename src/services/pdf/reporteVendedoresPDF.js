@@ -37,7 +37,7 @@ function drawTableHeader(doc, cols, y) {
 }
 
 // ─── Función principal ─────────────────────────────────────────────────────────
-export async function generarReporteVendedoresPDF({ data, config = {}, periodo = {}, tipo = 'completo', vendedorId = null }) {
+export async function generarReporteVendedoresPDF({ data, config = {}, periodo = {}, tipo = 'completo', vendedorId = null, action = 'download' }) {
   let { porVendedor = [] } = data
 
   let listToUse = porVendedor
@@ -283,9 +283,23 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(7.5)
-      const labelName = v.nombre || '—'
-      const suffix = isAmber ? ' (E)' : ''
-      doc.text((labelName + suffix).substring(0, 22), MARGIN + 8, y + 5.2)
+      const baseNombre = (v.nombre || '—')
+      doc.text(baseNombre, MARGIN + 8, y + 5.2)
+      let curX = MARGIN + 8 + doc.getTextWidth(baseNombre)
+      if (v.codigo) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(6)
+        doc.setTextColor(110, 120, 135)
+        const cStr = ` [${v.codigo.toUpperCase()}]`
+        doc.text(cStr, curX, y + 5.2)
+        curX += doc.getTextWidth(cStr)
+      }
+      if (isAmber) {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6.5)
+        doc.setTextColor(234, 88, 12)
+        doc.text(' (E)', curX, y + 5.2)
+      }
 
       // Barra de progreso mini
       const barW = 35
@@ -407,8 +421,23 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     doc.setFontSize(10)
     doc.setTextColor(...C_WHITE)
 
-    const displayNombre = (v.nombre || 'Sin nombre') + (esExterno ? ' (E)' : '')
-    doc.text(displayNombre, MARGIN + 5, y + 7)
+    const baseName = (v.nombre || 'Sin nombre')
+    doc.text(baseName, MARGIN + 5, y + 7)
+    let curX = MARGIN + 5 + doc.getTextWidth(baseName)
+    if (v.codigo) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(240, 244, 250)
+      const cStr = ` [${v.codigo.toUpperCase()}]`
+      doc.text(cStr, curX, y + 7)
+      curX += doc.getTextWidth(cStr)
+    }
+    if (esExterno) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...C_WHITE)
+      doc.text(' (E)', curX, y + 7)
+    }
 
     if (esExterno) {
       doc.setFont('helvetica', 'bold')
@@ -655,6 +684,9 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     safeName = `Reporte_Vendedores_Internos_${periodo.from ?? ''}_${periodo.to ?? ''}.pdf`
   } else if (tipo === 'externos') {
     safeName = `Reporte_Vendedores_Externos_${periodo.from ?? ''}_${periodo.to ?? ''}.pdf`
+  }
+  if (action === 'return') {
+    return doc
   }
   doc.save(safeName)
 }

@@ -24,7 +24,7 @@ export function useReportePipeline({ from, to }) {
         .select(`
           id, numero, version, estado, total_usd, subtotal_usd,
           creado_en, enviada_en,
-          vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, rol),
+          vendedor:usuarios!cotizaciones_vendedor_id_fkey(id, nombre, color, rol, codigo),
           cliente:clientes!cotizaciones_cliente_id_fkey(id, nombre)
         `)
         .gte('creado_en', `${from}T00:00:00${tzStr}`)

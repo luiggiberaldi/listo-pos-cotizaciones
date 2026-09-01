@@ -102,7 +102,14 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
     if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
     if (!new RegExp(`^\\d{${pinLen}}$`).test(campos.pin)) { setError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`); return }
     if (coloresUsados.includes(campos.color))    { setError('Ese color ya está en uso por otro usuario'); return }
-    onGuardar({ nombre: campos.nombre, pin: campos.pin, rol: campos.rol, color: campos.color, telefono: campos.telefono.trim() || undefined, es_externo: campos.es_externo })
+    onGuardar({
+      nombre: campos.nombre,
+      pin: campos.pin,
+      rol: campos.rol,
+      color: campos.color,
+      telefono: campos.telefono.trim() || undefined,
+      es_externo: campos.es_externo,
+    })
   }
 
   const inputCls = `
@@ -118,6 +125,11 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">N</div>
         <input value={campos.nombre} onChange={e => cambiar('nombre', e.target.value)}
           placeholder="Nombre completo" className={inputCls} disabled={cargando} autoFocus />
+      </div>
+      {/* Código auto-generado info */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-sky-50/70 border border-sky-100 rounded-xl text-xs text-sky-800">
+        <span className="font-mono font-bold text-[10px] text-sky-600 bg-sky-100/80 px-1.5 py-0.5 rounded border border-sky-200">AUTO-ID</span>
+        <span>Código único aleatorio asignado automáticamente al guardar</span>
       </div>
       {/* Teléfono */}
       <div className="relative">
@@ -293,6 +305,13 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
     <form onSubmit={submit} className="space-y-3">
       <input value={campos.nombre} onChange={e => setCampos(p => ({ ...p, nombre: e.target.value }))}
         className={inputCls} placeholder="Nombre completo" disabled={cargando} />
+      {/* Código único (inmutable) */}
+      <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-100/90 border border-slate-200 rounded-xl text-xs">
+        <span className="text-slate-500 font-semibold">Código único (Inmutable):</span>
+        <span className="font-mono font-black text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+          {usuario.codigo || '—'}
+        </span>
+      </div>
       {/* Teléfono */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Phone size={14} /></div>
@@ -575,8 +594,13 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
       {/* ── Nombre + rol + estado + fecha ── */}
       <div className="px-4 pt-3 pb-2 flex-1 space-y-2">
         {/* Nombre */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-sm font-black text-slate-800 truncate">{usuario.nombre}</p>
+          {usuario.codigo && (
+            <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+              {usuario.codigo}
+            </span>
+          )}
           {propio && (
             <span className="text-[8px] font-black uppercase tracking-wider bg-primary-light text-primary px-1.5 py-0.5 rounded-full shrink-0">Tú</span>
           )}

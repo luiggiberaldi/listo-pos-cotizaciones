@@ -168,7 +168,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
 
       const session = (await supabase.auth.getSession()).data.session
 
-      const VENDEDOR_COLS = 'id, nombre, color, telefono, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo'
+      const VENDEDOR_COLS = 'id, nombre, color, telefono, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo, codigo'
 
       // 1. Cargar clientes y vendedores de los despachos EN PARALELO
       //    (antes era en serie: 3 viajes → ahora 1 tanda + 1 condicional)

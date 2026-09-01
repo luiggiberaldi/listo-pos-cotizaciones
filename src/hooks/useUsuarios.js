@@ -16,7 +16,7 @@ export function useUsuarios() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('usuarios')
-        .select('id, nombre, rol, activo, creado_en, color, telefono, markup_pct, comision_pct, comision_pct_cabilla, es_externo')
+        .select('id, nombre, rol, activo, creado_en, color, telefono, markup_pct, comision_pct, comision_pct_cabilla, es_externo, codigo')
         .order('nombre')
       if (error) throw error
       // Ocultar cuenta "Super Admin" y desarrolladores de todo el sistema
@@ -32,8 +32,8 @@ export function useUsuarios() {
 export function useCrearUsuario() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ nombre, pin, rol, color, telefono, es_externo }) => {
-      await adminAPI.createUser({ nombre, pin, rol, color, telefono, es_externo })
+    mutationFn: async ({ nombre, pin, rol, color, telefono, es_externo, codigo }) => {
+      await adminAPI.createUser({ nombre, pin, rol, color, telefono, es_externo, codigo })
     },
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: KEY })

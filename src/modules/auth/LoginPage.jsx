@@ -127,7 +127,7 @@ function UserCard({ user, onClick, index }) {
   )
 }
 
-const USUARIOS_CACHE_KEY = 'construacero_usuarios_cache'
+const USUARIOS_CACHE_KEY = 'construacero_usuarios_cache_v4'
 
 // ─── Botón de instalación PWA ─────────────────────────────────────────────────
 function PwaInstallButton() {

@@ -53,7 +53,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const fetchUsuarios = async () => {
         const { data } = await supabase
           .from('usuarios')
-          .select('id, nombre, color, markup_pct, rol, comision_pct, comision_pct_cabilla, es_externo, activo')
+          .select('id, nombre, color, markup_pct, rol, comision_pct, comision_pct_cabilla, es_externo, activo, codigo')
         return data ?? []
       }
 
@@ -108,12 +108,14 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const vendorColorMap = {}
       const vendorRolMap = {}
       const vendorEsExternoMap = {}
+      const vendorCodigoMap = {}
       if (dbVendedores) {
         dbVendedores.forEach(u => {
           vendorMarkupMap[u.id] = u.markup_pct != null ? Number(u.markup_pct) : null
           vendorColorMap[u.id] = u.color || '#64748b'
           vendorRolMap[u.id] = u.rol
           vendorEsExternoMap[u.id] = !!u.es_externo
+          vendorCodigoMap[u.id] = u.codigo || null
         })
       }
 
@@ -453,6 +455,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             id: u.id,
             nombre: u.nombre,
             color: u.color || '#64748b',
+            codigo: u.codigo || null,
             markup_pct: u.markup_pct != null ? Number(u.markup_pct) : null,
             rol: u.rol,
             es_externo: !!u.es_externo,
@@ -473,6 +476,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             id: vid,
             nombre: d.asesor_nombre ?? 'Sin nombre',
             color: (vendorColorMap[vid] || d.asesor_color) ?? '#64748b',
+            codigo: vendorCodigoMap[vid] || null,
             markup_pct: vendorMarkupMap[vid] ?? null,
             rol: vendorRolMap[vid],
             es_externo: vendorEsExternoMap[vid] ?? false,
@@ -494,6 +498,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             id: vid,
             nombre: c.vendedor?.nombre || c.vendedornombre || 'Sin nombre',
             color: vendorColorMap[vid] || c.vendedor?.color || c.vendedorcolor || '#64748b',
+            codigo: vendorCodigoMap[vid] || c.vendedor?.codigo || null,
             markup_pct: vendorMarkupMap[vid] ?? c.vendedor?.markup_pct ?? null,
             rol: vendorRolMap[vid] || c.vendedor?.rol,
             es_externo: vendorEsExternoMap[vid] ?? !!c.vendedor?.es_externo,

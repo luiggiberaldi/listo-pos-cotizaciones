@@ -114,7 +114,7 @@ async function enrichCommissions(env, headers, rows, cuentaId) {
     headers,
     'usuarios',
     rows.map(row => row.vendedorid),
-    'id,nombre,color,markup_pct,rol,es_externo',
+    'id,nombre,color,markup_pct,rol,es_externo,codigo',
   )
   const config = await fetchCommissionConfig(env, headers, cuentaId)
 

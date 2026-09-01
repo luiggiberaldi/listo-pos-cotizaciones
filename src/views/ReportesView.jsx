@@ -627,6 +627,7 @@ function TabVentas({ configNeg }) {
           ...v,
           vendedor: v.nombre,
           vendedorColor: v.color,
+          codigo: v.codigo,
           count: v.despachos,
         })),
         porCliente: (reporteFiltrado.porCliente || []).map(c => ({

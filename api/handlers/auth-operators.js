@@ -40,7 +40,7 @@ export async function handleSwitchOperator(request, env) {
 
   // Fetch operator from usuarios table
   const res = await fetchConTimeout(
-    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operator_id}&activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,pin_hash,pin_salt,color,markup_pct,comision_pct,comision_pct_cabilla,es_externo`,
+    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operator_id}&activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,codigo,pin_hash,pin_salt,color,markup_pct,comision_pct,comision_pct_cabilla,es_externo`,
     {
       headers: {
         apikey: env.SUPABASE_SERVICE_KEY,
@@ -171,7 +171,7 @@ export async function handleGetOperators(request, env) {
 
   const [res, configRes] = await Promise.all([
     fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,color,pin_hash,pin_salt,markup_pct,comision_pct,comision_pct_cabilla,es_externo&order=nombre.asc`,
+      `${env.SUPABASE_URL}/rest/v1/usuarios?activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,codigo,color,pin_hash,pin_salt,markup_pct,comision_pct,comision_pct_cabilla,es_externo&order=nombre.asc`,
       {
         headers: {
           apikey: env.SUPABASE_SERVICE_KEY,

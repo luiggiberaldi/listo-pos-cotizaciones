@@ -25,7 +25,7 @@ export function useReporteDespachos({ from, to }) {
           id, numero, cotizacion_id, total_usd, forma_pago, estado,
           creado_en, despachada_en, entregada_en,
           cliente_id,
-          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color, rol)
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, color, rol, codigo)
         `)
         .gte('creado_en', `${from}T00:00:00${tzStr}`)
         .lte('creado_en', `${to}T23:59:59${tzStr}`)

@@ -212,4 +212,17 @@ describe('comisionesGeneradasPDF', () => {
       expect(doc.internal.getNumberOfPages()).toBeGreaterThan(1)
     }
   })
+
+  it('normaliza y preserva el codigo del vendedor para mostrarlo en el PDF', () => {
+    const normalized = normalizarComisionGenerada({
+      id: 'test-codigo',
+      totalcomision: 15,
+      estado: 'generada',
+      vendedor: { id: 'seller-1', nombre: 'Edgar Ramirez', color: '#16A34A', codigo: 'V-01' },
+      despacho: { total_usd: 100 },
+    })
+
+    expect(normalized.vendedor.codigo).toBe('V-01')
+    expect(normalized.vendedor.nombre).toBe('Edgar Ramirez')
+  })
 })

@@ -38,7 +38,7 @@ export async function handleAdmin(request, env, url) {
 
   // ── Crear usuario (solo en tabla usuarios, sin auth.users) ───────────
   if (route === 'users' && request.method === 'POST') {
-    const { nombre, rol, pin, color, telefono, es_externo } = body;
+    const { nombre, rol, pin, color, telefono, es_externo, codigo } = body;
     if (!nombre || !rol || !pin) {
       return jsonError('Faltan campos: nombre, rol, pin', 400, request);
     }
@@ -59,6 +59,37 @@ export async function handleAdmin(request, env, url) {
     const hash = await hashPinPBKDF2(pin, salt);
     const newId = crypto.randomUUID();
 
+    // Generar código único aleatorio inmutable
+    const rolePrefix = rol === 'jefe' ? 'J'
+      : rol === 'supervisor' ? 'S'
+      : (rol === 'vendedor' || rol === 'vendedor_sin_comision') ? 'V'
+      : rol === 'administracion' ? 'A'
+      : rol === 'logistica' ? 'L'
+      : rol === 'desarrollador' ? 'D' : 'U';
+    
+    let finalCodigo = codigo ? String(codigo).trim().toUpperCase() : null;
+    if (!finalCodigo) {
+      const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+      const genCode = () => {
+        let suffix = '';
+        for (let i = 0; i < 4; i++) suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+        return `${rolePrefix}-${suffix}`;
+      };
+
+      try {
+        const existRes = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?cuenta_id=eq.${user.id}&select=codigo`, {
+          headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+        });
+        const existingRows = existRes.ok ? await existRes.json() : [];
+        const existingSet = new Set(existingRows.map(r => r.codigo).filter(Boolean).map(c => String(c).toUpperCase()));
+        do {
+          finalCodigo = genCode();
+        } while (existingSet.has(finalCodigo));
+      } catch {
+        finalCodigo = genCode();
+      }
+    }
+
     // Insertar en public.usuarios
     const dbRes = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios`, {
       method: 'POST',
@@ -77,6 +108,7 @@ export async function handleAdmin(request, env, url) {
         pin_salt: salt,
         cuenta_id: user.id,
         es_externo: !!es_externo,
+        codigo: finalCodigo,
         ...(color ? { color } : {}),
         ...(telefono ? { telefono: telefono.trim() } : {}),
       }),
@@ -91,12 +123,12 @@ export async function handleAdmin(request, env, url) {
     try {
       await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
         usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
-        categoria: 'USUARIO', accion: 'CREAR_USUARIO', descripcion: `Usuario "${nombre.trim()}" creado con rol ${rol}`,
-        entidadTipo: 'usuario', entidadId: newId, meta: { nombre: nombre.trim(), rol, color }, ip,
+        categoria: 'USUARIO', accion: 'CREAR_USUARIO', descripcion: `Usuario "${nombre.trim()}" creado con rol ${rol} y código ${finalCodigo}`,
+        entidadTipo: 'usuario', entidadId: newId, meta: { nombre: nombre.trim(), rol, color, codigo: finalCodigo }, ip,
       });
     } catch { /* auditoría secundaria no debe bloquear la operación */ }
 
-    return json({ id: newId, ok: true }, 201, request);
+    return json({ id: newId, ok: true, codigo: finalCodigo }, 201, request);
   }
 
   // ── Actualizar usuario (nombre, rol, PIN, color) ──────────────────────
@@ -110,7 +142,7 @@ export async function handleAdmin(request, env, url) {
       return jsonError('Rol inválido', 400, request);
     }
 
-    // Build update data
+    // Build update data (codigo es inmutable tras la creación)
     const updateData = {};
     if (nombre) updateData.nombre = nombre.trim();
     if (rol) updateData.rol = rol;

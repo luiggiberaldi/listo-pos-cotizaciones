@@ -285,7 +285,16 @@ export async function generarPipelinePDF({ reporte, rango, config = {} }) {
         doc.setFillColor(vc[0], vc[1], vc[2])
         doc.circle(tpCols[2].x + 2, y + 2, 1, 'F')
       }
-      doc.text(c.vendedor.substring(0, 16), tpCols[2].x + 5, y + 3)
+      const vendName = (c.vendedor || '—').substring(0, 16)
+      doc.text(vendName, tpCols[2].x + 5, y + 3)
+      if (c.codigo) {
+        const curX = tpCols[2].x + 5 + doc.getTextWidth(vendName)
+        doc.setFontSize(5.5)
+        doc.setTextColor(110, 120, 135)
+        doc.text(` [${c.codigo.toUpperCase()}]`, curX, y + 3)
+        doc.setFontSize(7)
+        doc.setTextColor(...C_DARK)
+      }
 
       doc.setFont('helvetica', 'bold')
       doc.text(fmtUsd(c.totalUsd), tpCols[3].x + 1, y + 3)

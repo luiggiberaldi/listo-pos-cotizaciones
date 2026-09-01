@@ -94,7 +94,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
         fetchClienteViaAPI(cotizacion.cliente_id),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo, codigo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const cotConDatos = {
@@ -146,7 +146,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
         fetchClienteViaAPI(cotizacion.cliente_id),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo, codigo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const cotConDatos = {
@@ -170,7 +170,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         import('../../services/pdf/cotizacionPDF'),
         supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
         fetchClienteViaAPI(cotizacion.cliente_id),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo, codigo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
       ])
       if (itemsRes.error) throw itemsRes.error
       const cliente = clienteData || cotizacion.cliente
