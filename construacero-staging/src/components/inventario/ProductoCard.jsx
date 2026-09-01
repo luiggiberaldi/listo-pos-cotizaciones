@@ -25,10 +25,18 @@ function colorCategoria(str = '') {
 }
 
 function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
-  const agotado = actual <= 0
-  const bajo = !agotado && minimo > 0 && actual <= minimo
+  const negativo = actual < 0
+  const agotado = actual === 0
+  const bajo = !agotado && !negativo && minimo > 0 && actual <= minimo
   const disponible = actual - comprometido
   const sobrecomprometido = comprometido > 0 && disponible < 0
+
+  if (negativo) return (
+    <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100 border border-red-300 px-2.5 py-1 rounded-lg">
+      <AlertTriangle size={10} />
+      {Number(actual).toLocaleString('es-VE')} (negativo)
+    </span>
+  )
 
   if (agotado) return (
     <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100 border border-red-300 px-2.5 py-1 rounded-lg">
@@ -91,8 +99,9 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
 
   const stockActual = Number(producto.stock_actual) || 0
   const stockMinimo = Number(producto.stock_minimo) || 0
-  const agotado = stockActual <= 0
-  const stockBajo = !agotado && stockMinimo > 0 && stockActual <= stockMinimo
+  const stockNegativo = stockActual < 0
+  const agotado = stockActual === 0
+  const stockBajo = !agotado && !stockNegativo && stockMinimo > 0 && stockActual <= stockMinimo
 
   const precio = Number(producto.precio_usd)
   const costo = Number(producto.costo_usd)
@@ -123,6 +132,10 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
         {producto.activo === false ? (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 z-10">
             <span className="text-[10px] font-black text-white bg-slate-700 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Desactivado</span>
+          </div>
+        ) : stockNegativo ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-red-900/50">
+            <span className="text-[10px] font-black text-white bg-red-600 px-2 py-0.5 rounded-full uppercase tracking-wider">Stock {stockActual}</span>
           </div>
         ) : agotado ? (
           <div className="absolute inset-0 flex items-center justify-center bg-red-900/40">

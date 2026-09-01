@@ -32,6 +32,7 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
   const precio3Display   = producto.precio_3   != null ? aplicarMarkup(producto.precio_3)   : null
 
   const stockActual = Number(producto.stock_actual) || 0
+  const stockNegativo = stockActual < 0
   const disponible  = stockActual > 0
 
   // ── Tasas ────────────────────────────────────────────────────────────────────
@@ -236,11 +237,13 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
             {/* Disponibilidad y Stock */}
             <div className="flex flex-col items-center justify-center gap-1 pt-0.5">
               <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold border ${
-                disponible
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'bg-red-50 text-red-700 border-red-200'
+                stockNegativo
+                  ? 'bg-red-100 text-red-800 border-red-300'
+                  : disponible
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
               }`}>
-                <span>{disponible ? '✅ Disponible' : '❌ Agotado'}</span>
+                <span>{stockNegativo ? '⚠️ Stock negativo (Venta Anticipada)' : disponible ? '✅ Disponible' : '❌ Agotado'}</span>
                 <span className="opacity-30">•</span>
                 <span>{Number(stockActual).toLocaleString('es-VE')}{producto.unidad ? ` ${producto.unidad}` : ''}</span>
               </span>
