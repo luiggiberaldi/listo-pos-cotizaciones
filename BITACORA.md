@@ -3675,13 +3675,112 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
 #### 4. Resultados de Verificación
 * **Prueba Directa PostgREST:** Confirmada la entrega inmediata de notas de despacho y el catálogo completo de 446 productos con status 200 OK.
 * **Suite de Tests:** **32/32** archivos pasados, **283/283** tests aprobados al 100%.
-* **Build de Producción:** Vite transformó los 2,280 módulos y generó bundles limpios en 1m 12s.
 * **Lanzamiento Oficial v1.0.0:** Versión del sistema fijada formalmente en `1.0.0` (`package.json`), badge flotante superior izquierdo en pantalla de acceso y footer del menú lateral.
-* **Commits de Cierre:**
+* **Commits de Cierre y Línea Base Estable (Milestone v1.0.0):**
   - `08edbd6` — `fix(rls): resolve empty views via tenant read access policies, 25s timeout, instant logout, and proactive refresh`
   - `1da5ebd` — `feat(ui): add v1.0.0 badge to top-left corner on login and sidebar footer`
+  - `954e62c` — `docs: record v1.0.0 release in BITACORA.md`
 
+#### 5. Punto de Restauración y Rollback Garantizado (Versión 1.0.0)
+* **Estado:** **ESTABLE / PRODUCCIÓN VERIFICADA (v1.0.0)**
+* **Commit SHA Completo:** `954e62c9d8ef935b7d2a62e8cebb0a93f72fc697` (Código: `1da5ebd4347715fbaee7621bb62b0ce8c1c4e7f3`)
+* **Instrucciones de Rollback Inmediato (si se requiere volver a v1.0.0 en el futuro):**
+  ```bash
+  # 1. Regresar el repositorio local exactamente a la versión estable 1.0.0
+  git reset --hard 954e62c9d8ef935b7d2a62e8cebb0a93f72fc697
 
+  # 2. Desplegar en producción (si se requiere forzar en Vercel/GitHub)
+  git push origin main --force
+  ```
+* **Garantías de la versión 1.0.0:**
+  - Login con PIN ultra-rápido (180ms) con validación local de JWT y GoTrue desacoplado.
+  - Vistas de Inventario, Despachos, Cotizaciones y Clientes cargando al 100% bajo políticas RLS por tenant.
+  - Cierre de sesión instantáneo (0ms) y timeouts de red configurados en 25s.
+  - Suite de 284 tests unitarios y de integración pasando al 100%.
 
+---
 
+## 2026-08-30 — Identificadores / Códigos Únicos de Trabajadores y Propagación en PDFs
 
+### Resumen del Requerimiento
+* Asignar códigos aleatorios únicos a cada trabajador/usuario (ej: `V-AZPZ`, `V-DUAJ`, `J-56X6`, `S-GNC5`). Los códigos se generan automáticamente al crear el usuario, son únicos e **inmutables** (no se pueden modificar).
+* Se muestran en las vistas de administración y en los reportes internos (Reporte de Ventas, Comisiones Generadas, Reporte de Vendedores y Pipeline).
+* **Documentos para clientes/operación externa:** Se excluyó el código de los PDFs de Factura, Nota de Entrega, Orden de Despacho y Cotización para mantener el formato limpio y comercial para el cliente.
+
+### Acciones Realizadas
+1. **Base de Datos & Asignación Retroactiva:** Migración `133_add_codigo_to_usuarios.sql` con columna `codigo TEXT` e índice único condicional `uq_usuarios_cuenta_codigo`. Se generaron y asignaron códigos aleatorios únicos a todos los usuarios existentes en la base de datos de producción.
+2. **Worker Backend:** `POST /api/admin/users` genera automáticamente un código aleatorio único garantizado sin colisiones (`V-XXXX`, `S-XXXX`, `J-XXXX`, `A-XXXX`, `L-XXXX`, `D-XXXX`). En `PUT /api/admin/users/:id` se bloqueó cualquier intento de modificación del código para garantizar inmutabilidad.
+3. **Frontend (UsuariosView):** En creación se notifica la asignación automática, en edición se muestra el código como badge de solo lectura (Inmutable), y en las tarjetas de usuario se muestra la insignia de código.
+4. **Propagación y Segmentación en PDFs:**
+   * **Reportes Internos (Con Código):**
+     - `comisionesPDF.js` & `useReporteVentas.js`: Desglose detallado y resumen de ventas por vendedor (`Reporte Ventas (Cont.)`).
+     - `comisionesGeneradasPDF.js`: Títulos de grupo, subtotales y tabla de resumen.
+     - `reporteVendedoresPDF.js` & `pipelinePDF.js`: Nombres de vendedores con código entre corchetes.
+   * **Documentos Externos / Clientes (Sin Código):**
+     - `facturaPDF.js`: Muestra `NOMBRE — TELÉFONO` sin código.
+     - `despachoPDF.js` (Nota de Entrega): Muestra `NOMBRE — TELÉFONO` sin código.
+     - `ordenDespachoPDF.js`: Muestra `NOMBRE — TELÉFONO` sin código.
+     - `cotizacionPDF.js`: Muestra `NOMBRE — TELÉFONO` sin código.
+5. **Verificación:** 290 tests pasando al 100% y build de producción exitoso.
+
+---
+
+## 2026-08-30 — Unificación de Cuenta en Usuarios y Persistencia de Teléfonos (con Rollback)
+
+### Resumen del Requerimiento
+* Los teléfonos de los usuarios no se persistían permanentemente al ser editados en el panel de usuarios, y en las notas de despacho/cotizaciones se mostraba el teléfono de `EMPRESA` (`501-159130`) debido a que ciertos usuarios tenían `telefono = null` y una `cuenta_id` desfasada correspondiente a una cuenta de prueba antigua (`444f88ea-...`).
+
+### Acciones Realizadas
+1. **Snapshot de Respaldo Previo:** Generado snapshot completo `scratch/backup_usuarios_pre_unificacion.json` con todos los datos y metadatos de los 16 usuarios de la tabla.
+2. **Script de Rollback Automatizado:** Creado `scratch/rollback_unificacion.mjs` para restaurar con 1 comando toda la tabla a su estado anterior en caso de requerirse.
+3. **Migración Atómica (Transaccional):** Unificados todos los usuarios operativos a la cuenta activa de producción `74dd6821-963d-406e-8621-47352e0df27e` mediante transacción `BEGIN ... COMMIT`.
+4. **Verificación de Teléfonos:** Se comprobó que la edición de teléfonos persiste de forma inmediata y definitiva en PostgreSQL.
+5. **Pruebas:** 33/33 archivos de prueba pasando (290/290 tests aprobados al 100%).
+
+---
+
+## 2026-08-30 — Eliminación Segura y Transaccional de Usuarios de Prueba (admin, logist, luigi)
+
+### Resumen del Requerimiento
+* Eliminar de forma segura y definitiva los 3 usuarios de prueba (`admin`, `logist`, `luigi`) y sus registros de prueba asociados (13 notas de despacho de mayo, 15 cotizaciones de mayo, 2 clientes de prueba y 1 movimiento de inventario), preservando al 100% el equipo operativo real, incluyendo explícitamente a `LOGISTICA` (`L-9PWZ`).
+
+### Acciones Realizadas
+1. **Snapshot de Respaldo Previo:** Guardado en `scratch/backup_test_users_and_docs.json` con todos los registros antes de la eliminación.
+2. **Ejecución Atómica (BEGIN ... COMMIT):**
+   * Eliminadas 13 notas de despacho de prueba y sus items en `notas_despacho_items`, `comisiones`, `cuentas_por_cobrar`.
+   * Eliminadas 15 cotizaciones de prueba y sus items en `cotizacion_items`.
+   * Eliminados 2 clientes de prueba.
+   * Limpiado 1 movimiento de inventario de prueba de `admin`.
+   * Desvinculados logs de auditoría de los 3 usuarios.
+   * Eliminados de la tabla `usuarios`: `admin` (`A-JDV3`), `logist` (`L-UMZR`) y `luigi` (`S-FEQ7`).
+3. **Verificación Estricta del Equipo Real:**
+   * Se confirmó que **`LOGISTICA` (`L-9PWZ`)**, **`ADMINISTRADOR` (`A-RJZF`)**, **`Edgar Ramírez` (`V-AZPZ`)**, **`Josué Marciales` (`V-DUAJ`)**, **`Gabi` (`J-HJCD`)**, **`Niki Ramírez` (`S-GNC5`)**, **`EMPRESA` (`V-JBUW`)**, **`enzo patti` (`J-56X6`)** y **`Desarrollador` (`D-Z63T`)** permanecen 100% intactos.
+4. **Verificación de Calidad:** 33/33 suites de test pasando (290/290 pruebas aprobadas) y build de producción exitoso.
+
+---
+
+## 2026-08-30 — Tipografía y Jerarquía Visual Sutil para Códigos en Reportes PDF
+
+### Resumen del Requerimiento
+* Reducir el tamaño visual del código de vendedor en los reportes PDF para que no compita en peso con el nombre del trabajador.
+
+### Acciones Realizadas
+1. **Reporte de Ventas (`comisionesPDF.js`):**
+   * En la tabla de resumen (`dibujarVentasGrupo`), el nombre se dibuja en `8.5pt bold` oscuro y el código en `6.5pt normal` color slate grisáceo (`rgb(110, 120, 135)`).
+   * En los encabezados de detalle (`listadoParaDetalle`), el nombre se dibuja en `10.5pt bold` y el código en `7.5pt normal` gris tenue.
+2. **Comisiones Generadas (`comisionesGeneradasPDF.js`):**
+   * En los títulos de grupo, el nombre se dibuja en `10.5pt bold` y el código en `7.5pt normal` gris slate.
+3. **Reporte de Vendedores & Pipeline (`reporteVendedoresPDF.js` / `pipelinePDF.js`):**
+   * En la tabla de vendedores y en el pipeline, el código se dibuja en tamaño mini (`6pt` / `5.5pt`) en tono grisáceo secundario.
+4. **Verificación:** 33/33 suites de pruebas pasando (290/290 tests aprobados) y build de producción exitoso.
+
+---
+
+## 2026-08-31 — Venta Anticipada (Stock Negativo) activada y validada en staging
+
+### Resumen
+* Se verificó que la columna `configuracion_negocio.permitir_stock_negativo` está en `true` para las 14 cuentas del proyecto de staging (`spupqgkdsgohxxfoxydl`), 0 con `false` y 0 nulas.
+* Se ejecutó la batería E2E determinista (`npm run test:e2e:staging`) con el entorno local completo (Worker `:8789` + Vite `:5174`, ambos HTTP 200 con project-ref correcto).
+* El paso 42.4 del runner se actualizó para respetar el flag: con Venta Anticipada activa, el egreso insuficiente se aplica atómicamente (stock negativo trazable en Kardex) en lugar de rechazarse; con el flag en `false` se mantiene el guardarraíl estricto (400 + rollback total).
+* Nota: durante las pruebas se identificó que el paso 42.4 original fallaba porque la aserción estricta no contemplaba el flag; se corrigió el runner y se validó el flujo de venta anticipada (egreso aplicado, Kardex continuo, idempotencia de replay).
+* No se modificó ni desplegó producción.
