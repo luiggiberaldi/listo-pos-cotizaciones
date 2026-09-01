@@ -3798,3 +3798,29 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
 * **F4 Verificación read-only:** `confirmar_entrega_finanzas_idempotente` llama internamente a `confirmar_entrega_inventario_atomica`, que lee el flag de la cuenta como fuente de verdad; el Worker (`api/handlers/despachos.js`) también lo consulta antes del guardarraíl de stock. El flujo de entrega de despachos respetará Venta Anticipada sin deploy adicional.
 * Rollback documentado: `UPDATE configuracion_negocio SET permitir_stock_negativo = false;` — efecto inmediato, sin revertir datos.
 * Frontend con fix del reporte (`bajStock <= 0`, commit `e3eacdd`) desplegado en Vercel (`listo-pos-cotizaciones.vercel.app`).
+
+---
+
+## 2026-09-01 — Commit selectivo del working tree: Códigos de Trabajadores + Endpoint Finanzas-Sync + UI Stock Negativo
+
+### Contexto
+* El working tree acumulaba cambios de sesiones anteriores sin commit. Se probó manualmente (OK) y con la suite (290/290 tests ✓, build ✓). Se decidió commitear de forma **selectiva por grupos** para mantener rollback/bisect limpios.
+* Verificación previa en producción: columna `usuarios.codigo` e índice único `uq_usuarios_cuenta_codigo` **ya aplicados** (13 usuarios con código) — el Grupo A no tiene dependencia de DB pendiente.
+
+### Commits
+* **`58c262b` — feat(users): códigos únicos e inmutables de trabajadores (estilo `V-AZPZ`)** — 21 archivos:
+  - `supabase/migrations/133_add_codigo_to_usuarios.sql` (columna + índice único condicional por cuenta).
+  - Generación en `api/handlers/admin.js` (prefijo por rol J/S/V/A/L/D, 4 caracteres sin ambiguas, unicidad validada contra cuentas existentes).
+  - Propagación: `auth-operators.js`, `clientes.js` (join vendedor), `comisiones.js`, hooks (`useClientes`, `useDespachos`, `useReporteDespachos`, `useReporteLiquidacion`, `useReportePipeline`, `useReporteVentas`, `useUsuarios`), `LoginPage.jsx` (cache key v4), `UsuariosView.jsx`, `ReportesView.jsx`, `CotizacionCard.jsx`.
+  - PDFs con código: `comisionesPDF.js`, `comisionesGeneradasPDF.js`, `reporteVendedoresPDF.js`, `pipelinePDF.js` + test actualizado.
+* **`cc8e841` — feat(worker): endpoint seguro de cierre diario de ventas** — `api/handlers/finanzas-sync.js` (nuevo) + ruta `GET /api/finanzas-sync/cierre-diario` en `worker.js`. Solo ingresos líquidos reales en `total_ingresos_usd` (efectivo, zelle, usdt, pago móvil, transf, punto); créditos (CxC/COD) y fletes foráneos informativos.
+* **`2a7957d` — chore(deps):** playwright ^1.62.1 en root; `react-router` ^7.14.1 + `react-is` en lockfile staging.
+
+### UI Stock Negativo (misma sesión)
+* **`f03fe1f` — feat(ui):** ficha de producto distingue stock negativo de agotado (badge `−N (negativo)` + detalle `⚠️ Stock negativo`); paridad con copia staging.
+* **`f6759b9` — fix(ui):** el stock no aparece sobre la zona de foto; la tarjeta conserva tinte rojo para negativos.
+* **`e829d7e` — fix(ui):** badge del detalle sin el texto "(Venta Anticipada)".
+
+### Integración y push
+* **Push a GitHub:** `954e62c..2a7957d main -> main` (11 commits, incluidos el fix del reporte `e3eacdd`, runner E2E `2cdca35` y docs del runbook).
+* Working tree limpio. Pendiente: deploy a Vercel de estos commits (el último deploy fue anterior a los 11).
