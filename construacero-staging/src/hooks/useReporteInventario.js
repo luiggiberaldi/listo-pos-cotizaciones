@@ -28,8 +28,8 @@ function transformarReporte(raw, esPrivilegiado) {
     const diasSinMov = ultimaActividad
       ? Math.floor((Date.now() - new Date(ultimaActividad).getTime()) / (1000 * 60 * 60 * 24))
       : 999
-    const bajStock = Number(p.stock_actual) === 0 ||
-      (Number(p.stock_actual) <= Number(p.stock_minimo || 0) && Number(p.stock_minimo) > 0)
+    const bajStock = Number(p.stock_actual) <= 0 ||
+      (Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo))
 
     return { ...p, comprometido, disponible, valorVenta, valorCosto, ultimaActividad, diasSinMov, bajStock }
   })
