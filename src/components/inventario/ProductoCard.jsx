@@ -113,7 +113,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
     <div className={`rounded-2xl border hover:shadow-lg transition-all duration-200 flex flex-col relative ${
       producto.activo === false
         ? 'bg-slate-50/80 border-slate-300 opacity-80 shadow-none hover:shadow-none'
-        : agotado
+        : (agotado || stockNegativo)
           ? 'bg-red-50/50 border-red-200 hover:border-red-300 hover:shadow-red-100'
           : stockBajo
             ? 'bg-amber-50/30 border-amber-200 hover:border-amber-300 hover:shadow-amber-100'
@@ -132,10 +132,6 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
         {producto.activo === false ? (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 z-10">
             <span className="text-[10px] font-black text-white bg-slate-700 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Desactivado</span>
-          </div>
-        ) : stockNegativo ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-red-900/50">
-            <span className="text-[10px] font-black text-white bg-red-600 px-2 py-0.5 rounded-full uppercase tracking-wider">Stock {stockActual}</span>
           </div>
         ) : agotado ? (
           <div className="absolute inset-0 flex items-center justify-center bg-red-900/40">
