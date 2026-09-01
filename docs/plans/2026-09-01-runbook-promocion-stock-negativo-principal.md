@@ -1,6 +1,7 @@
 # Runbook: Promoción al Principal — `permitir_stock_negativo = true` (Venta Anticipada)
 
 > **Estado:** LISTO PARA EJECUTAR cuando el dueño autorice. Nada de este documento se ha aplicado al principal.
+> **Orden de rollout:** código primero (ya compatible — el backend lee el flag en runtime, sin deploy pendiente), DB después (F2). Rollback = revertir el UPDATE (efecto inmediato, ver §9).
 > **Fecha:** 2026-09-01 · **Origen:** validación completa en staging (BITACORA 2026-08-31, entradas de esta sesión).
 > **Proyecto principal:** `oyfyuszgjwcepjpngclv` · Worker: `listo-pos-cotizaciones` · Frontend: `listo-pos-cotizaciones.vercel.app`
 > **Proyecto staging (validado):** `spupqgkdsgohxxfoxydl`
