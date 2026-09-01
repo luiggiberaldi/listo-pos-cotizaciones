@@ -39,7 +39,7 @@ import {
   handleRegistrarTransaccionCxP,
   handleActualizarTransaccionCxP
 } from './api/handlers/proveedores.js'
-
+import { handleCierreDiarioSync } from './api/handlers/finanzas-sync.js'
 
 export default {
   async fetch(request, env) {
@@ -73,6 +73,11 @@ export default {
           ...corsHeaders(request),
         },
       });
+    }
+
+    // ── API: sincronización de ventas con Nómina y Finanzas ─────────────
+    if (url.pathname === '/api/finanzas-sync/cierre-diario' && request.method === 'GET') {
+      return handleCierreDiarioSync(request, env)
     }
 
     // ── API: tasas oficiales BCV (proxy same-origin) ─────────────────────
