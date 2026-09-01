@@ -211,7 +211,7 @@ const STEPS = [
   ['batch_ingest_idempotent', '42.1. Ingesta masiva atómica por RPC'],
   ['assert_batch_ingest_idempotent', '42.2. Assert: replay de ingesta no duplica stock ni Kardex'],
   ['assert_kardex_provenance', '42.3. Assert: provenance e idempotencia quedan estructurados'],
-  ['assert_inventory_batch_rollback', '42.4. Assert: lote inválido revierte todo sin movimiento parcial'],
+  ['assert_inventory_batch_rollback', '42.4. Assert: lote insuficiente — guarda reverte ou venta anticipada aplica e restaura'],
   ['transform_inventory', '42.5. Transformación atómica entre dos productos'],
   ['assert_transform_inventory', '42.6. Assert: transformación registra egreso/ingreso coherentes'],
   ['return_loan', '42.7. Devolución atómica de préstamo'],
@@ -1169,31 +1169,81 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     assert(rows?.length >= 1 && rows.every(row => row.origen_tipo && row.origen_id && row.idempotency_key), rows, 'origen estructurado')
   }
   f.assert_inventory_batch_rollback = async () => {
+    // El comportamiento del lote con stock insuficiente depende del flag de la cuenta:
+    // permitir_stock_negativo=false → guardarraíl estricto (rechazo 400, rollback total);
+    // permitir_stock_negativo=true  → Venta Anticipada (aplicación atómica con stock
+    // negativo, Kardex continuo y reposición espejo para los pasos siguientes).
     const beforeProduct = await dbSingle('productos', 'stock_actual', d.productoId)
     const beforeProduct2 = await dbSingle('productos', 'stock_actual', d.producto2Id)
-    const rollbackReason = 'Movimiento inválido E2E — debe revertirse completo'
+    const cfg = await this.db(
+      this.supabase.from('configuracion_negocio').select('permitir_stock_negativo').eq('cuenta_id', this.user.id).limit(1).maybeSingle(),
+      'config permitir_stock_negativo',
+    )
+    // La cuenta autenticada puede estar representada por el operador virtual;
+    // para evitar que RLS o el fallback de configuración oculten el valor real,
+    // usa también la configuración que devuelve el Worker autenticado.
+    const workerConfig = await this.api('/api/config')
+    const allowNegative = workerConfig?.permitir_stock_negativo === true || cfg?.permitir_stock_negativo === true
+    this.log(`permitir_stock_negativo=${allowNegative} (DB=${cfg?.permitir_stock_negativo}, Worker=${workerConfig?.permitir_stock_negativo})`, 'INFO')
+    const rollbackReason = `Lote insuficiente E2E — guardarraíl o venta anticipada — ${globalThis.crypto?.randomUUID?.() || Date.now()}`
+    const insufficientLote = {
+      tipo: 'egreso',
+      motivo: rollbackReason,
+      motivo_tipo: 'ajuste_inventario',
+      items: [
+        { producto_id: d.productoId, cantidad: 1 },
+        { producto_id: d.producto2Id, cantidad: 100000 },
+      ],
+    }
     let failed = false
     try {
-      await this.api('/api/inventario/movimiento', 'POST', {
-        tipo: 'egreso',
-        motivo: rollbackReason,
-        motivo_tipo: 'ajuste_inventario',
-        items: [
-          { producto_id: d.productoId, cantidad: 1 },
-          { producto_id: d.producto2Id, cantidad: 100000 },
-        ],
-      })
+      await this.api('/api/inventario/movimiento', 'POST', insufficientLote)
     } catch (error) {
       failed = true
-      assert(error.status === 400, 400, error.status, 'lote inválido rechaza con 400')
+      assert(error.status === 400, 400, error.status, 'lote insuficiente rechaza con 400')
     }
-    assert(failed, true, failed, 'lote inválido debe fallar')
+    if (!allowNegative) {
+      // Guardarraíl estricto: el lote completo se rechaza atómicamente.
+      assert(failed, true, failed, 'guardarraíl: lote insuficiente debe fallar')
+      const afterProduct = await dbSingle('productos', 'stock_actual', d.productoId)
+      const afterProduct2 = await dbSingle('productos', 'stock_actual', d.producto2Id)
+      assert(Number(afterProduct.stock_actual) === Number(beforeProduct.stock_actual), beforeProduct.stock_actual, afterProduct.stock_actual, 'rollback stock producto 1')
+      assert(Number(afterProduct2.stock_actual) === Number(beforeProduct2.stock_actual), beforeProduct2.stock_actual, afterProduct2.stock_actual, 'rollback stock producto 2')
+      const partialRows = await this.db(this.supabase.from('inventario_movimientos').select('id').eq('motivo', rollbackReason), 'buscar movimiento parcial')
+      assert(!partialRows?.length, 0, partialRows?.length, 'rollback sin Kardex parcial')
+      return
+    }
+    // Venta Anticipada: el egreso se aplica atómicamente aunque el stock quede negativo.
+    // Si la cuenta está habilitada pero la RPC aún aplica el guardarraíl estricto,
+    // reportamos esa discrepancia explícitamente (sin intentar continuar con un
+    // estado de inventario incierto).
+    if (failed) {
+      throw new Error('permitir_stock_negativo=true pero la RPC rechazó el lote insuficiente; revisar migración/RPC de staging')
+    }
+    const midProduct = await dbSingle('productos', 'stock_actual', d.productoId)
+    const midProduct2 = await dbSingle('productos', 'stock_actual', d.producto2Id)
+    assert(Number(midProduct.stock_actual) === Number(beforeProduct.stock_actual) - 1, beforeProduct.stock_actual - 1, midProduct.stock_actual, 'venta anticipada descuenta producto 1')
+    assert(Number(midProduct2.stock_actual) === Number(beforeProduct2.stock_actual) - 100000, beforeProduct2.stock_actual - 100000, midProduct2.stock_actual, 'venta anticipada descuenta producto 2 (negativo)')
+    const appliedRows = await this.db(
+      this.supabase.from('inventario_movimientos').select('producto_id,cantidad,stock_anterior,stock_nuevo').eq('motivo', rollbackReason).eq('cuenta_id', this.user.id),
+      'kardex venta anticipada',
+    )
+    assert(appliedRows?.length === 2, 2, appliedRows?.length, 'venta anticipada registra ambos items')
+    for (const row of appliedRows || []) {
+      const delta = -Number(row.cantidad)
+      assert(Math.abs(Number(row.stock_anterior) + delta - Number(row.stock_nuevo)) <= 0.01, true, `${row.stock_anterior}→${row.stock_nuevo}`, 'continuidad kardex venta anticipada')
+    }
+    // Reposición espejo para no contaminar los pasos siguientes de la batería.
+    await this.api('/api/inventario/movimiento', 'POST', {
+      tipo: 'ingreso',
+      motivo: 'Reposición del lote venta anticipada E2E',
+      motivo_tipo: 'ajuste_inventario',
+      items: insufficientLote.items,
+    })
     const afterProduct = await dbSingle('productos', 'stock_actual', d.productoId)
     const afterProduct2 = await dbSingle('productos', 'stock_actual', d.producto2Id)
-    assert(Number(afterProduct.stock_actual) === Number(beforeProduct.stock_actual), beforeProduct.stock_actual, afterProduct.stock_actual, 'rollback stock producto 1')
-    assert(Number(afterProduct2.stock_actual) === Number(beforeProduct2.stock_actual), beforeProduct2.stock_actual, afterProduct2.stock_actual, 'rollback stock producto 2')
-    const partialRows = await this.db(this.supabase.from('inventario_movimientos').select('id').eq('motivo', rollbackReason), 'buscar movimiento parcial')
-    assert(!partialRows?.length, 0, partialRows?.length, 'rollback sin Kardex parcial')
+    assert(Number(afterProduct.stock_actual) === Number(beforeProduct.stock_actual), beforeProduct.stock_actual, afterProduct.stock_actual, 'reposición stock producto 1')
+    assert(Number(afterProduct2.stock_actual) === Number(beforeProduct2.stock_actual), beforeProduct2.stock_actual, afterProduct2.stock_actual, 'reposición stock producto 2')
   }
   f.transform_inventory = async () => {
     const result = await this.api('/api/inventario/transformacion', 'POST', {
