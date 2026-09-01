@@ -28,7 +28,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const editarItems = useEditarItemsDespacho()
   const { data: config = {} } = useConfigNegocio()
-  const { items, setItems, agregarItem: _agregarItem, eliminarPorKey, cambiarCantidadPorKey, setCantidadDirectaPorKey, cambiarPrecioPorKey, togglePrestamoPorKey, setStockMap } = useLineItems({ checkStock: true })
+  const { items, setItems, agregarItem: _agregarItem, eliminarPorKey, cambiarCantidadPorKey, setCantidadDirectaPorKey, cambiarPrecioPorKey, togglePrestamoPorKey, setStockMap } = useLineItems({ checkStock: false })
   const despachoCargadoRef = useRef(null)
   const cargaEnCursoRef = useRef(null)
 
@@ -673,9 +673,9 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
               return (
                 <div
                   key={p.id}
-                  onClick={() => !enCarrito && stock > 0 && agregarItem(p)}
+                  onClick={() => !enCarrito && agregarItem(p)}
                   className={`group p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${enCarrito ? 'bg-indigo-50 border-indigo-200 opacity-60 cursor-default' :
-                      stock <= 0 ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed' :
+                      stock <= 0 ? 'bg-amber-50/60 border-amber-200 hover:border-amber-300 hover:shadow-md' :
                         'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md'
                     }`}
                 >
