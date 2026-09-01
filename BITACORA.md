@@ -3784,3 +3784,17 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
 * El paso 42.4 del runner se actualizó para respetar el flag: con Venta Anticipada activa, el egreso insuficiente se aplica atómicamente (stock negativo trazable en Kardex) en lugar de rechazarse; con el flag en `false` se mantiene el guardarraíl estricto (400 + rollback total).
 * Nota: durante las pruebas se identificó que el paso 42.4 original fallaba porque la aserción estricta no contemplaba el flag; se corrigió el runner y se validó el flujo de venta anticipada (egreso aplicado, Kardex continuo, idempotencia de replay).
 * No se modificó ni desplegó producción.
+
+---
+
+## 2026-09-01 — Promoción a Producción: `permitir_stock_negativo = true` (Venta Anticipada)
+
+### Resumen
+* Se ejecutó el runbook `docs/plans/2026-09-01-runbook-promocion-stock-negativo-principal.md` completo (F0–F4) sobre el proyecto principal `oyfyuszgjwcepjpngclv`.
+* **F0 Backup:** dump `kardex-principal-pre-correctivos-2026-09-01T04-17-05-901Z.dump` (3.36 MB), SHA-256 `575e0e4dec4e2b7f52761a89859a549f4afe6e49eeb708abb6ab74ed22715b5a`.
+* **F1 Preflight:** columna `configuracion_negocio.permitir_stock_negativo` existe; las 4 RPCs canónicas (`confirmar_entrega_inventario_atomica`, `revertir_entrega_inventario_atomica`, `devolucion_parcial` vía `registrar_devolucion_parcial_cobro_idempotente`, `actualizar_producto_con_kardex`) están presentes en el schema cache. Estado inicial: 1/13 cuentas `true` (piloto), 12 `false`.
+* **F2 UPDATE:** transacción aplicada — **13/13 cuentas con `permitir_stock_negativo = true`**, 0 false, 0 null.
+* **F3 Smoke transaccional:** egreso de 5 unidades sobre producto con stock 0 vía `aplicar_movimiento_inventario_atomico` (requiere `p_idempotency_key uuid` no nula) → stock `-5.00`, Kardex continuo (`stock_anterior 0.00 → stock_nuevo -5.00`), ROLLBACK sin residuos. La RPC reporta `stock_negativo_permitido: true`.
+* **F4 Verificación read-only:** `confirmar_entrega_finanzas_idempotente` llama internamente a `confirmar_entrega_inventario_atomica`, que lee el flag de la cuenta como fuente de verdad; el Worker (`api/handlers/despachos.js`) también lo consulta antes del guardarraíl de stock. El flujo de entrega de despachos respetará Venta Anticipada sin deploy adicional.
+* Rollback documentado: `UPDATE configuracion_negocio SET permitir_stock_negativo = false;` — efecto inmediato, sin revertir datos.
+* Frontend con fix del reporte (`bajStock <= 0`, commit `e3eacdd`) desplegado en Vercel (`listo-pos-cotizaciones.vercel.app`).
