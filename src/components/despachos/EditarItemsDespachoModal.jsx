@@ -670,11 +670,13 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
             productosFiltrados.map(p => {
               const enCarrito = inCartSet.has(p.id)
               const stock = Number(p.stock_actual) || 0
+              const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
               return (
                 <div
                   key={p.id}
-                  onClick={() => !enCarrito && agregarItem(p)}
+                  onClick={() => !enCarrito && !sinPrecio && agregarItem(p)}
                   className={`group p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${enCarrito ? 'bg-indigo-50 border-indigo-200 opacity-60 cursor-default' :
+                      sinPrecio ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed' :
                       stock <= 0 ? 'bg-amber-50/60 border-amber-200 hover:border-amber-300 hover:shadow-md' :
                         'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md'
                     }`}

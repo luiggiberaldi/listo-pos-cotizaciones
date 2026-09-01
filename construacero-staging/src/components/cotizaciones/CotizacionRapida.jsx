@@ -387,11 +387,14 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
               {recientes.map(p => {
                 const yaAgregado = idsAgregados.has(p.id)
                 const sinStock = p.stock_actual != null && p.stock_actual <= 0
+                const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
                 return (
                   <button key={p.id} type="button"
-                    onClick={() => agregarProducto(p)}
+                    onClick={() => !sinPrecio && agregarProducto(p)}
+                    disabled={sinPrecio}
                     className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] font-semibold transition-all active:scale-95 ${
                       yaAgregado ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
+                      sinPrecio ? 'bg-slate-50 text-slate-300 cursor-not-allowed' :
                       sinStock ? 'bg-amber-50 text-amber-700 border border-amber-200' :
                       'bg-white border border-slate-200 text-slate-600 hover:border-primary/40 hover:text-primary shadow-sm'
                     }`}>

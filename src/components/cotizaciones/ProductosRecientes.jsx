@@ -60,20 +60,23 @@ export default function ProductosRecientes({ userId, productosCompletos = [], on
         {recientesEnriquecidos.slice(0, 8).map(p => {
           const yaAgregado = idsAgregados.has(p.id)
           const sinStock = p.stock_actual != null && p.stock_actual <= 0
+          const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
           return (
             <button
               key={p.id}
               type="button"
-              onClick={() => onAgregar(p)}
+              onClick={() => !sinPrecio && onAgregar(p)}
+              disabled={sinPrecio}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${
                 yaAgregado ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                sinPrecio ? 'bg-slate-50 text-slate-300 cursor-not-allowed' :
                 sinStock ? 'bg-amber-50 text-amber-700 border border-amber-200' :
                 'bg-white border border-slate-200 text-slate-600 hover:border-primary/40 hover:text-primary'
               }`}
             >
               <Package size={11} />
               <span className="max-w-[120px] truncate">{p.nombre}</span>
-              {!yaAgregado && <Plus size={11} className={sinStock ? 'text-amber-400' : 'text-slate-400'} />}
+              {!yaAgregado && !sinPrecio && <Plus size={11} className={sinStock ? 'text-amber-400' : 'text-slate-400'} />}
             </button>
           )
         })}
