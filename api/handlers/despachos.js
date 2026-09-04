@@ -2006,6 +2006,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
     exchangeItems,
     pagosDiferencia,
     destinoSaldo = 'saldo_a_favor',
+    pagosReembolso,
     reembolsoMetodo,
     reembolsoReferencia,
     reembolsoMonto
@@ -2070,6 +2071,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
     const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=*`, { headers });
     const [desp] = await dRes.json();
     if (!desp) return jsonError('Despacho no encontrado', 404, request);
+    const clienteCxCId = desp.cliente_factura_id || desp.cliente_id;
 
     if (desp.estado !== 'entregada') {
       return jsonError('El despacho debe estar en estado entregada para registrar una devolución parcial', 400, request);
@@ -2251,6 +2253,68 @@ export async function handleDevolucionParcialDespacho(request, env) {
       pagadoDiferenciaUsd = sumaPagos;
     }
 
+    // Validación temprana de pagos de reembolso (cuando el balance neto favorece al cliente)
+    const balanceNetoDevolucion = Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000;
+    const METODOS_REEMBOLSO = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT'];
+    const REFERENCIA_REQUERIDA_REEMBOLSO = ['Transf. / Pago Móvil', 'Zelle', 'USDT'];
+    const pagosReembolsoLimpios = [];
+    let totalReembolsoUsd = 0;
+
+    if (balanceNetoDevolucion < 0 && destinoSaldo === 'reembolso') {
+      const montoAFavorMaximo = Math.abs(balanceNetoDevolucion);
+
+      if (Array.isArray(pagosReembolso) && pagosReembolso.length > 0) {
+        if (pagosReembolso.length > 12) return jsonError('Máximo 12 pagos de reembolso permitidos', 400, request);
+        const metodosUsados = new Set();
+        for (const p of pagosReembolso) {
+          if (!p || typeof p !== 'object') return jsonError('Pago de reembolso inválido', 400, request);
+          const metodo = String(p.metodo || '').trim();
+          if (!METODOS_REEMBOLSO.includes(metodo)) {
+            return jsonError(`Método de reembolso no permitido: ${metodo || '(vacío)'}`, 400, request);
+          }
+          if (metodosUsados.has(metodo)) {
+            return jsonError(`El método de reembolso "${metodo}" no puede repetirse`, 400, request);
+          }
+          metodosUsados.add(metodo);
+          const monto = Math.round(Number(p.monto) * 10000) / 10000;
+          if (!Number.isFinite(monto) || monto <= 0) {
+            return jsonError(`Monto inválido para el reembolso por ${metodo}`, 400, request);
+          }
+          let referencia = p.referencia === undefined || p.referencia === null ? '' : String(p.referencia).trim();
+          if (REFERENCIA_REQUERIDA_REEMBOLSO.includes(metodo) && !referencia) {
+            return jsonError(`La referencia es obligatoria para el reembolso por ${metodo}`, 400, request);
+          }
+          if (referencia.length > 160) return jsonError('Referencia de reembolso demasiado larga', 400, request);
+          pagosReembolsoLimpios.push({ metodo, monto, referencia: referencia || null });
+          totalReembolsoUsd += monto;
+        }
+      } else if (reembolsoMetodo) {
+        const metodo = String(reembolsoMetodo).trim();
+        if (!METODOS_REEMBOLSO.includes(metodo)) {
+          return jsonError(`Método de reembolso no permitido: ${metodo}`, 400, request);
+        }
+        const monto = Math.round(Number(reembolsoMonto || montoAFavorMaximo) * 10000) / 10000;
+        if (!Number.isFinite(monto) || monto <= 0) {
+          return jsonError('Monto de reembolso inválido', 400, request);
+        }
+        let referencia = reembolsoReferencia ? String(reembolsoReferencia).trim() : '';
+        if (REFERENCIA_REQUERIDA_REEMBOLSO.includes(metodo) && !referencia) {
+          return jsonError(`La referencia es obligatoria para el reembolso por ${metodo}`, 400, request);
+        }
+        pagosReembolsoLimpios.push({ metodo, monto, referencia: referencia || null });
+        totalReembolsoUsd += monto;
+      } else {
+        return jsonError('Debe especificar al menos un método de pago para el reembolso', 400, request);
+      }
+
+      totalReembolsoUsd = Math.round(totalReembolsoUsd * 10000) / 10000;
+      if (totalReembolsoUsd > montoAFavorMaximo + 0.01) {
+        return jsonError(`La suma de los reembolsos ($${totalReembolsoUsd.toFixed(2)}) supera el saldo a favor disponible ($${montoAFavorMaximo.toFixed(2)})`, 400, request);
+      }
+    }
+
+    const returnStartTime = new Date(Date.now() - 5000).toISOString();
+
     const atomicRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_devolucion_parcial_cobro_idempotente`, {
       method: 'POST',
       headers,
@@ -2286,10 +2350,56 @@ export async function handleDevolucionParcialDespacho(request, env) {
         cotizacionReemplazoId: atomicResult.cotizacion_reemplazo_id || null,
         totalDevueltoUsd,
         totalIntercambioUsd,
-        balanceNetoUsd: Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000,
+        balanceNetoUsd: balanceNetoDevolucion,
         idempotency_key: idempotencyKey,
         idempotent: true,
       }, 200, request);
+    }
+
+    // Si hubo reembolso de saldo a favor, registrar egresos en CxC y actualizar saldos
+    if (clienteCxCId && balanceNetoDevolucion < 0 && destinoSaldo === 'reembolso' && pagosReembolsoLimpios.length > 0) {
+      for (const p of pagosReembolsoLimpios) {
+        const devCredRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            cliente_id: clienteCxCId,
+            despacho_id: despachoId,
+            tipo: 'devolucion_credito',
+            monto_usd: p.monto,
+            forma_pago_abono: p.metodo,
+            referencia: p.referencia || `Despacho #${desp.numero}`,
+            saldo_usd: 0,
+            descripcion: `Reembolso por devolución entregado al cliente — Despacho #${desp.numero} (${p.metodo})`,
+            registrado_por: user.operator_id,
+            cuenta_id: operador.cuenta_id
+          })
+        });
+        if (!devCredRes.ok) {
+          console.error('[DEVOLUCION] Error al registrar egreso devolucion_credito CxC:', await devCredRes.text());
+        }
+      }
+      await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
+    }
+
+    // Persistir metadatos de reembolso en despacho_devoluciones cuando aplica
+    if (balanceNetoDevolucion < 0 && destinoSaldo === 'reembolso') {
+      const resumenMetodos = pagosReembolsoLimpios.map(p => `${p.metodo}: $${p.monto.toFixed(2)}`).join(' | ');
+      const resumenReferencias = pagosReembolsoLimpios.map(p => p.referencia).filter(Boolean).join(' | ');
+      try {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=eq.${despachoId}&creado_en=gte.${returnStartTime}`, {
+          method: 'PATCH',
+          headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            destino_saldo: destinoSaldo,
+            reembolso_metodo: (destinoSaldo === 'reembolso') ? (resumenMetodos || pagosReembolsoLimpios[0]?.metodo || 'Efectivo $') : null,
+            reembolso_referencia: (destinoSaldo === 'reembolso') ? (resumenReferencias || null) : null,
+            reembolso_monto: (destinoSaldo === 'reembolso') ? totalReembolsoUsd : 0
+          })
+        });
+      } catch (patchDevErr) {
+        console.warn('[DEVOLUCION] No se pudo actualizar metadatos de reembolso en despacho_devoluciones:', patchDevErr?.message);
+      }
     }
 
     try {
@@ -2299,7 +2409,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
         usuarioRol: operador.rol,
         categoria: 'DESPACHO',
         accion: 'DEVOLUCION_PARCIAL',
-        descripcion: `Devolución parcial atómica en despacho #${desp.numero}. Motivo: ${motivo}`,
+        descripcion: `Devolución parcial atómica en despacho #${desp.numero}. Motivo: ${motivo}${destinoSaldo === 'reembolso' && totalReembolsoUsd > 0 ? `. Reembolso: $${totalReembolsoUsd.toFixed(2)} (${pagosReembolsoLimpios.map(p => p.metodo).join(', ')})` : ''}`,
         entidadTipo: 'nota_despacho',
         entidadId: despachoId,
         meta: {
@@ -2307,8 +2417,12 @@ export async function handleDevolucionParcialDespacho(request, env) {
           cotizacion_reemplazo_id: atomicResult.cotizacion_reemplazo_id || null,
           total_devuelto_usd: totalDevueltoUsd,
           total_intercambio_usd: totalIntercambioUsd,
+          balance_neto_usd: balanceNetoDevolucion,
           pagos_diferencia: Array.isArray(pagosDiferencia) ? pagosDiferencia.length : 0,
           pagado_diferencia_usd: pagadoDiferenciaUsd,
+          destino_saldo: balanceNetoDevolucion < 0 ? destinoSaldo : 'saldo_a_favor',
+          pagos_reembolso: pagosReembolsoLimpios,
+          total_reembolso_usd: totalReembolsoUsd,
         },
         ip,
       });
@@ -2323,7 +2437,10 @@ export async function handleDevolucionParcialDespacho(request, env) {
         cotizacionReemplazoId: atomicResult.cotizacion_reemplazo_id || null,
         totalDevueltoUsd,
         totalIntercambioUsd,
-        balanceNetoUsd: Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000,
+        balanceNetoUsd: balanceNetoDevolucion,
+        destinoSaldo: balanceNetoDevolucion < 0 ? destinoSaldo : 'saldo_a_favor',
+        pagosReembolso: pagosReembolsoLimpios,
+        reembolsoTotalUsd: totalReembolsoUsd,
         idempotency_key: idempotencyKey,
         idempotent: false,
       }, 200, request);
@@ -2473,9 +2590,9 @@ export async function handleDevolucionParcialDespacho(request, env) {
       registrado_por_nombre: operador.nombre,
       cotizacion_reemplazo_id: cotizacionReemplazoId,
       destino_saldo: netBalanceUsd < 0 ? destinoSaldo : 'saldo_a_favor',
-      reembolso_metodo: (netBalanceUsd < 0 && destinoSaldo === 'reembolso') ? (reembolsoMetodo || 'Efectivo $') : null,
-      reembolso_referencia: (netBalanceUsd < 0 && destinoSaldo === 'reembolso') ? (reembolsoReferencia || null) : null,
-      reembolso_monto: (netBalanceUsd < 0 && destinoSaldo === 'reembolso') ? Number(reembolsoMonto || Math.abs(netBalanceUsd)) : 0
+      reembolso_metodo: (netBalanceUsd < 0 && destinoSaldo === 'reembolso') ? (pagosReembolsoLimpios.map(p => `${p.metodo}: $${p.monto.toFixed(2)}`).join(' | ') || 'Efectivo $') : null,
+      reembolso_referencia: (netBalanceUsd < 0 && destinoSaldo === 'reembolso') ? (pagosReembolsoLimpios.map(p => p.referencia).filter(Boolean).join(' | ') || null) : null,
+      reembolso_monto: (netBalanceUsd < 0 && destinoSaldo === 'reembolso') ? totalReembolsoUsd : 0
     }));
 
     const devInsRes = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones`, {
@@ -2533,7 +2650,6 @@ export async function handleDevolucionParcialDespacho(request, env) {
     let cargoMonto = 0;
 
     const netBalanceUsd = Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000;
-    const clienteCxCId = desp.cliente_factura_id || desp.cliente_id;
 
     if (netBalanceUsd > 0) {
       // El cliente debe pagar la diferencia
@@ -2615,12 +2731,12 @@ export async function handleDevolucionParcialDespacho(request, env) {
       creditoMonto = Math.round(creditRemainder * 10000) / 10000;
 
       if (creditoMonto > 0) {
-        if (destinoSaldo === 'reembolso') {
-          // Destino: Reembolso / Pago inmediato al cliente
-          // 1. Registramos 'credito' por la mercancía devuelta
-          // 2. Registramos 'devolucion_credito' por el dinero entregado al cliente
-          // De esta forma el saldo a favor no se altera, queda auditado el egreso en CxC
-          // y el reporte de ventas resta el egreso de la forma de pago utilizada.
+        if (destinoSaldo === 'reembolso' && pagosReembolsoLimpios.length > 0) {
+          // Destino: Reembolso / Pago multi-método al cliente
+          // 1. Registramos 'credito' por el excedente neto devuelto
+          // 2. Registramos 'devolucion_credito' por cada método entregado al cliente
+          // De esta forma queda auditado cada egreso en CxC y en el reporte de ventas.
+          // Si el reembolso es parcial, el restante queda intacto como saldo a favor.
           const nuevoSaldoFavor = Math.round((saldoFavorActual + creditoMonto) * 10000) / 10000;
           await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
             method: 'POST',
@@ -2638,29 +2754,28 @@ export async function handleDevolucionParcialDespacho(request, env) {
             })
           });
 
-          const metodoFinal = String(reembolsoMetodo || 'Efectivo $').trim();
-          const refFinal = reembolsoReferencia ? String(reembolsoReferencia).trim() : null;
+          for (const p of pagosReembolsoLimpios) {
+            const devCredRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+              method: 'POST',
+              headers: { ...headers, Prefer: 'return=minimal' },
+              body: JSON.stringify({
+                cliente_id: clienteCxCId,
+                despacho_id: despachoId,
+                tipo: 'devolucion_credito',
+                monto_usd: p.monto,
+                forma_pago_abono: p.metodo,
+                referencia: p.referencia || `Despacho #${desp.numero}`,
+                saldo_usd: saldoFavorActual,
+                descripcion: `Reembolso por devolución entregado al cliente — Despacho #${desp.numero} (${p.metodo})`,
+                registrado_por: user.operator_id
+              })
+            });
 
-          const devCredRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-            method: 'POST',
-            headers: { ...headers, Prefer: 'return=minimal' },
-            body: JSON.stringify({
-              cliente_id: clienteCxCId,
-              despacho_id: despachoId,
-              tipo: 'devolucion_credito',
-              monto_usd: creditoMonto,
-              forma_pago_abono: metodoFinal,
-              referencia: refFinal || `Despacho #${desp.numero}`,
-              saldo_usd: saldoFavorActual,
-              descripcion: `Reembolso por devolución entregado al cliente — Despacho #${desp.numero} (${metodoFinal})`,
-              registrado_por: user.operator_id
-            })
-          });
-
-          if (devCredRes.ok) {
-            creditoRegistrado = true;
-          } else {
-            console.error('[DEVOLUCION] Error al registrar egreso devolucion_credito CxC:', await devCredRes.text());
+            if (devCredRes.ok) {
+              creditoRegistrado = true;
+            } else {
+              console.error('[DEVOLUCION] Error al registrar egreso devolucion_credito CxC:', await devCredRes.text());
+            }
           }
         } else {
           // Destino: Saldo a Favor (comportamiento estándar)

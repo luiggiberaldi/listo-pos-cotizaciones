@@ -3849,3 +3849,31 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
    * 35/35 suites de prueba pasando (304/304 tests aprobados).
    * Build de producción Vite completado exitosamente sin errores.
 
+---
+
+## 2026-09-03 — Versión 1.0.2: Reembolso Multi-Método y Liquidación Mixta en Devoluciones Parciales
+
+### Resumen del Requerimiento
+* Extender el sistema de reembolsos para permitir que el dinero a favor del cliente pueda ser devuelto a través de **múltiples formas de pago simultáneas** (ej. parte en Efectivo $ y parte por Pago Móvil) o de manera **mixta** (una porción pagada en mano y el remanente acreditado como saldo a favor en cuenta).
+
+### Acciones Realizadas
+1. **Frontend (`DevolucionParcialModal.jsx` y `useDespachos.js`):**
+   * Implementada tabla interactiva de pagos con adición/eliminación dinámica de filas de métodos de pago.
+   * **Opción A (Métodos Únicos):** Cada método de pago solo puede seleccionarse una vez. Al agregar fila, se sugiere automáticamente el siguiente método disponible y los menús desplegables ocultan los métodos ya elegidos en otras filas.
+   * Botón `[TOTAL]` para autocompletar el saldo pendiente por reembolsar.
+   * Botón `[Usar mismos métodos del despacho]` para distribuir el saldo entre los métodos de pago originales del despacho.
+   * Badges dinámicos de estado: indicando si el reembolso está liquidado al 100% o si existe un remanente que se convertirá en saldo a favor.
+   * Validaciones estrictas: referencias obligatorias para métodos digitales (`Pago Móvil`, `Zelle`, `USDT`), validación de unicidad y de tope máximo.
+2. **Backend Worker (`api/handlers/despachos.js`):**
+   * Validación temprana de arrays `pagosReembolso` con guardarraíl de unicidad (error 400 si se repite algún método).
+   * Para cada método de pago del reembolso, se inserta una fila de egreso contable `tipo: 'devolucion_credito'` en `cuentas_por_cobrar`.
+   * En devoluciones mixtas, el remanente no reembolsado queda perfectamente registrado como `saldo_a_favor` neto.
+   * Sincronización denormalizada en `clientes` mediante `recalcularSaldoPendienteCliente()`.
+   * Persistencia del resumen de métodos y montos en `despacho_devoluciones` y registro completo en auditoría.
+3. **Versionado:**
+   * Bump a `v1.0.2` en `package.json`, `LoginPage.jsx` y `AppLayout.jsx`.
+4. **Pruebas y Verificación:**
+   * Ampliada la suite `devolucionReembolso.test.js` con casos de multi-método total, mixto, con deuda previa amortizada y rechazo de duplicados (15/15 tests aprobados).
+   * Nuevos tests en `despachosPartialAtomic.test.js` para validar el endpoint Worker y sus inserciones en CxC y guardarraíl de unicidad (8/8 tests aprobados).
+   * Suite completa del proyecto: **35/35 archivos pasando, 316/316 pruebas unitarias aprobadas al 100%**.
+   * Compilación `npm run build` exitosa en 47.43s sin fallos.

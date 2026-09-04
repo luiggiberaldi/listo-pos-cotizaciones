@@ -353,33 +353,50 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         }
       }
 
-      const comisiones = despachos.map(d => {
-        const calculated = calcularComisionDespachoJS(d, comisionesRaw)
-        if (calculated) {
-          const seller = vendedoresInfo[d.asesor_id || d.vendedor_id]
-          return {
-            ...calculated,
-            vendedorid: d.asesor_id || d.vendedor_id,
-            despachoid: d.despacho_id,
-            vendedor: seller
+      // ── Split por cliente ajeno (sábados): un despacho puede tener 2 filas de
+      // comisión (vendedor que vendió + dueño del cliente). Usamos las filas
+      // reales del Worker una por beneficiario; solo estimamos cuando el despacho
+      // no tiene filas guardadas.
+      const construirComisionesDeDespachos = (listaDespachos, comisionesList) => {
+        const out = []
+        listaDespachos.forEach(d => {
+          const filas = (comisionesList || []).filter(c => c.despachoid === d.despacho_id)
+          if (filas.length > 0) {
+            filas.forEach(c => {
+              const seller = vendedoresInfo[c.vendedorid]
+                || vendedoresInfo[d.asesor_id || d.vendedor_id]
+              out.push({
+                totalcomision: Number(c.totalcomision || 0),
+                comisioncabilla: Number(c.comisioncabilla || 0),
+                comisionotros: Number(c.comisionotros || 0),
+                pctcabilla: Number(c.pctcabilla || 0),
+                pctotros: Number(c.pctotros || 0),
+                estado: c.estado || 'pendiente',
+                es_split: typeof c.tipo === 'string' && c.tipo.startsWith('cliente_ajeno'),
+                vendedorid: c.vendedorid || d.asesor_id || d.vendedor_id,
+                despachoid: d.despacho_id,
+                vendedor: seller
+              })
+            })
+            return
           }
-        }
-        return null
-      }).filter(Boolean)
+          const calculated = calcularComisionDespachoJS(d, comisionesList)
+          if (calculated) {
+            const seller = vendedoresInfo[d.asesor_id || d.vendedor_id]
+            out.push({
+              ...calculated,
+              es_split: false,
+              vendedorid: d.asesor_id || d.vendedor_id,
+              despachoid: d.despacho_id,
+              vendedor: seller
+            })
+          }
+        })
+        return out
+      }
 
-      const prevComisiones = prevDespachos.map(d => {
-        const calculated = calcularComisionDespachoJS(d, prevComisionesRaw)
-        if (calculated) {
-          const seller = vendedoresInfo[d.asesor_id || d.vendedor_id]
-          return {
-            ...calculated,
-            vendedorid: d.asesor_id || d.vendedor_id,
-            despachoid: d.despacho_id,
-            vendedor: seller
-          }
-        }
-        return null
-      }).filter(Boolean)
+      const comisiones = construirComisionesDeDespachos(despachos, comisionesRaw)
+      const prevComisiones = construirComisionesDeDespachos(prevDespachos, prevComisionesRaw)
 
       const vendedorMap = {}
       const getOrCreate = (vid) => {
@@ -400,6 +417,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
             comisionTotal: 0, comisionPagada: 0, comisionPendiente: 0,
             comisionCabilla2: 0,
             comisionCabilla3: 0,
+            comisionSplit: 0,
             clienteMap: {},
             productoMap: {},
             historial: [],
@@ -489,13 +507,18 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           v.comisionPendiente += monto
         }
 
-        // Acumular comisiones de cabillas al 2% y 3%
-        const pctCab = Math.round(Number(c.pctcabilla || 0))
-        const montoCab = Number(c.comisioncabilla || 0)
-        if (pctCab === 2) {
-          v.comisionCabilla2 += montoCab
-        } else if (pctCab === 3) {
-          v.comisionCabilla3 += montoCab
+        // Acumular comisiones de cabillas al 2% y 3%.
+        // Las filas split (0.5%/1.5% por cliente ajeno) van aparte: no son 2% ni 3%.
+        if (c.es_split) {
+          v.comisionSplit = (v.comisionSplit || 0) + monto
+        } else {
+          const pctCab = Math.round(Number(c.pctcabilla || 0))
+          const montoCab = Number(c.comisioncabilla || 0)
+          if (pctCab === 2) {
+            v.comisionCabilla2 += montoCab
+          } else if (pctCab === 3) {
+            v.comisionCabilla3 += montoCab
+          }
         }
         
         v.comisionOtros = (v.comisionOtros || 0) + Number(c.comisionotros || 0)

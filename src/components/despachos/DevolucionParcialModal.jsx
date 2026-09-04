@@ -33,8 +33,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
 
   // --- Estados para destino del balance a favor del cliente ---
   const [destinoSaldo, setDestinoSaldo] = useState('saldo_a_favor') // 'saldo_a_favor' | 'reembolso'
-  const [reembolsoMetodo, setReembolsoMetodo] = useState('Efectivo $')
-  const [reembolsoReferencia, setReembolsoReferencia] = useState('')
+  const [pagosReembolso, setPagosReembolso] = useState([])
 
   const lastValuesRef = useRef({})
   const mutation = useDevolucionParcialDespacho()
@@ -55,8 +54,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
       setClienteInfo(null)
       setPagosDiferencia([])
       setDestinoSaldo('saldo_a_favor')
-      setReembolsoMetodo('Efectivo $')
-      setReembolsoReferencia('')
+      setPagosReembolso([])
       lastValuesRef.current = {}
       fetchItemsAndDevoluciones()
     }
@@ -302,6 +300,68 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     })))
   }
 
+  // ─── Reembolso multi-método (cuando el cliente tiene saldo a favor) ───
+  const montoAFavorUsd = balanceNetoUsd < 0 ? Math.abs(balanceNetoUsd) : 0
+  const reembolsadoTotal = Math.round(pagosReembolso.reduce((s, p) => s + (Number(p.monto) || 0), 0) * 100) / 100
+  const pendienteReembolso = Math.max(0, Math.round((montoAFavorUsd - reembolsadoTotal) * 100) / 100)
+
+  const handleSelectDestinoSaldo = (tipo) => {
+    setDestinoSaldo(tipo)
+    if (tipo === 'reembolso' && pagosReembolso.length === 0 && montoAFavorUsd > 0) {
+      const defaultMetodo = metodosPagoOriginal[0] || 'Efectivo $'
+      setPagosReembolso([{ metodo: defaultMetodo, monto: montoAFavorUsd.toFixed(2), referencia: '' }])
+    }
+  }
+
+  const handleAddPagoReembolso = () => {
+    const pendiente = Math.max(0, pendienteReembolso)
+    const metodosUsados = new Set(pagosReembolso.map(p => p.metodo))
+    const primerMetodoDisponible = METODOS_REEMBOLSO.find(m => !metodosUsados.has(m))
+    if (!primerMetodoDisponible) return
+
+    setPagosReembolso(prev => [
+      ...prev,
+      { metodo: primerMetodoDisponible, monto: pendiente > 0 ? pendiente.toFixed(2) : '', referencia: '' }
+    ])
+  }
+
+  const handleUpdatePagoReembolso = (idx, field, value) => {
+    setPagosReembolso(prev => prev.map((p, i) => {
+      if (i !== idx) return p
+      if (field === 'metodo' && !REFERENCIA_REQUERIDA_REEMBOLSO.includes(value)) {
+        return { ...p, metodo: value, referencia: '' }
+      }
+      return { ...p, [field]: value }
+    }))
+  }
+
+  const handleRemovePagoReembolso = (idx) => {
+    setPagosReembolso(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const handleMontoTotalReembolso = (idx) => {
+    const otros = pagosReembolso.reduce((s, p, i) => i === idx ? s : s + (Number(p.monto) || 0), 0)
+    const pendiente = Math.max(0, Math.round((montoAFavorUsd - otros) * 100) / 100)
+    setPagosReembolso(prev => prev.map((p, i) => (i === idx ? { ...p, monto: pendiente.toFixed(2) } : p)))
+  }
+
+  const handleUsarMismosMetodosReembolso = () => {
+    const metodosValidos = [...new Set(metodosPagoOriginal)].filter(m => METODOS_REEMBOLSO.includes(m))
+    if (metodosValidos.length === 0) {
+      showToast('El despacho no registra métodos de pago reutilizables', 'info')
+      return
+    }
+    const cantidad = metodosValidos.length
+    const montoBase = Math.floor((montoAFavorUsd / cantidad) * 100) / 100
+    setPagosReembolso(metodosValidos.map((m, i) => ({
+      metodo: m,
+      monto: i === cantidad - 1
+        ? (Math.round((montoAFavorUsd - montoBase * (cantidad - 1)) * 100) / 100).toFixed(2)
+        : montoBase.toFixed(2),
+      referencia: '',
+    })))
+  }
+
   // Validaciones
   const hasSelectedItems = selectedItems.length > 0
   const allQtyValid = selectedItems.every(item => {
@@ -319,9 +379,18 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     })
   )
 
+  const metodosReembolsoUnicos = new Set(pagosReembolso.map(p => p.metodo)).size === pagosReembolso.length
+
   const reembolsoValido = !(balanceNetoUsd < 0) || destinoSaldo !== 'reembolso' || (
-    Boolean(reembolsoMetodo) &&
-    (!REFERENCIA_REQUERIDA_REEMBOLSO.includes(reembolsoMetodo) || String(reembolsoReferencia || '').trim().length > 0)
+    pagosReembolso.length > 0 &&
+    reembolsadoTotal > 0 &&
+    reembolsadoTotal <= montoAFavorUsd + 0.011 &&
+    metodosReembolsoUnicos &&
+    pagosReembolso.every(p =>
+      METODOS_REEMBOLSO.includes(p.metodo) &&
+      Number(p.monto) > 0 &&
+      (!REFERENCIA_REQUERIDA_REEMBOLSO.includes(p.metodo) || String(p.referencia || '').trim().length > 0)
+    )
   )
 
   const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid && cobroDiferenciaValido && reembolsoValido
@@ -362,9 +431,18 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
               }))
           : [],
         destinoSaldo: balanceNetoUsd < 0 ? destinoSaldo : 'saldo_a_favor',
-        reembolsoMetodo: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? reembolsoMetodo : null,
-        reembolsoReferencia: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? (String(reembolsoReferencia || '').trim() || null) : null,
-        reembolsoMonto: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? Math.abs(balanceNetoUsd) : 0
+        pagosReembolso: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso')
+          ? pagosReembolso
+              .filter(p => METODOS_REEMBOLSO.includes(p.metodo) && Number(p.monto) > 0)
+              .map(p => ({
+                metodo: p.metodo,
+                monto: Math.round(Number(p.monto) * 100) / 100,
+                referencia: String(p.referencia || '').trim() || null,
+              }))
+          : [],
+        reembolsoMetodo: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? pagosReembolso[0]?.metodo : null,
+        reembolsoReferencia: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? pagosReembolso[0]?.referencia : null,
+        reembolsoMonto: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? reembolsadoTotal : 0
       })
       onClose()
     } catch (err) {
@@ -799,7 +877,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {/* Opción 1: Dejar como Saldo a Favor */}
                   <div
-                    onClick={() => setDestinoSaldo('saldo_a_favor')}
+                    onClick={() => handleSelectDestinoSaldo('saldo_a_favor')}
                     className={`p-3 rounded-xl border cursor-pointer transition-all ${
                       destinoSaldo === 'saldo_a_favor'
                         ? 'bg-white border-emerald-500 shadow-sm ring-2 ring-emerald-500/20'
@@ -811,7 +889,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                         type="radio"
                         name="destinoSaldo"
                         checked={destinoSaldo === 'saldo_a_favor'}
-                        onChange={() => setDestinoSaldo('saldo_a_favor')}
+                        onChange={() => handleSelectDestinoSaldo('saldo_a_favor')}
                         className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
                       <div className="space-y-0.5 select-none">
@@ -828,7 +906,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
 
                   {/* Opción 2: Pagar / Reembolsar al Cliente */}
                   <div
-                    onClick={() => setDestinoSaldo('reembolso')}
+                    onClick={() => handleSelectDestinoSaldo('reembolso')}
                     className={`p-3 rounded-xl border cursor-pointer transition-all ${
                       destinoSaldo === 'reembolso'
                         ? 'bg-white border-emerald-500 shadow-sm ring-2 ring-emerald-500/20'
@@ -840,7 +918,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                         type="radio"
                         name="destinoSaldo"
                         checked={destinoSaldo === 'reembolso'}
-                        onChange={() => setDestinoSaldo('reembolso')}
+                        onChange={() => handleSelectDestinoSaldo('reembolso')}
                         className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
                       <div className="space-y-0.5 select-none">
@@ -856,66 +934,146 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                   </div>
                 </div>
 
-                {/* Si se elige Reembolsar, mostrar selector de método y referencia */}
+                {/* Si se elige Reembolsar, mostrar filas multi-método */}
                 {destinoSaldo === 'reembolso' && (
                   <div className="pt-2 border-t border-emerald-200/70 space-y-2.5">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <label className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider">
-                        Forma de Reembolso al Cliente <span className="text-red-500">*</span>
-                      </label>
-                      {metodosPagoOriginal.length > 0 && metodosPagoOriginal[0] !== reembolsoMetodo && (
-                        <button
-                          type="button"
-                          onClick={() => setReembolsoMetodo(metodosPagoOriginal[0])}
-                          className="px-2 py-0.5 text-[9px] font-bold text-emerald-800 bg-white border border-emerald-300 rounded hover:bg-emerald-50 transition-colors"
-                        >
-                          Usar {metodosPagoOriginal[0]} (original)
-                        </button>
+                      <h5 className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider">
+                        Formas de Reembolso al Cliente <span className="text-red-500">*</span>
+                      </h5>
+                      {metodosPagoOriginal.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-slate-500">Pagó originalmente con:</span>
+                          {metodosPagoOriginal.map(m => (
+                            <span key={m} className="px-1.5 py-0.5 text-[9px] font-bold text-slate-600 bg-white border border-slate-200 rounded">
+                              {m}
+                            </span>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={handleUsarMismosMetodosReembolso}
+                            className="px-2 py-0.5 text-[9px] font-bold text-emerald-800 bg-white border border-emerald-300 rounded hover:bg-emerald-50 transition-colors"
+                          >
+                            Usar mismos métodos
+                          </button>
+                        </div>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* Método selector */}
-                      <div className="w-[180px] shrink-0">
-                        <CustomSelect
-                          options={METODOS_REEMBOLSO.map(m => ({ value: m, label: m }))}
-                          value={reembolsoMetodo}
-                          onChange={val => setReembolsoMetodo(val)}
-                          placeholder="Método..."
-                          searchable={false}
-                        />
-                      </div>
+                    {pagosReembolso.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 italic">
+                        Sin métodos de reembolso seleccionados. Agrega uno abajo.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {pagosReembolso.map((pago, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+                            {/* Método selector */}
+                            <div className="w-[150px] shrink-0">
+                              <CustomSelect
+                                options={METODOS_REEMBOLSO
+                                  .filter(m => m === pago.metodo || !pagosReembolso.some((p, i) => i !== idx && p.metodo === m))
+                                  .map(m => ({ value: m, label: m }))
+                                }
+                                value={pago.metodo}
+                                onChange={val => handleUpdatePagoReembolso(idx, 'metodo', val)}
+                                placeholder="Método..."
+                                searchable={false}
+                              />
+                            </div>
 
-                      {/* Monto visual no editable (fijo al balance neto) */}
-                      <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 shrink-0 select-none">
-                        <span className="text-slate-400 mr-1">$</span>
-                        {Math.abs(balanceNetoUsd).toFixed(2)} USD
-                      </div>
+                            {/* Monto + acceso rápido TOTAL */}
+                            <div className="flex items-center border border-slate-200 rounded-xl bg-white overflow-hidden focus-within:ring-1 focus-within:ring-emerald-500 focus-within:border-emerald-500 shrink-0">
+                              <span className="pl-2.5 pr-1 text-[10px] text-slate-400 font-bold select-none">$</span>
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                value={pago.monto}
+                                onChange={e => handleUpdatePagoReembolso(idx, 'monto', e.target.value)}
+                                placeholder="0.00"
+                                className="w-[68px] text-right py-2.5 pr-2 text-xs font-bold focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleMontoTotalReembolso(idx)}
+                                disabled={pendienteReembolso <= 0.011}
+                                title="Completar con el saldo pendiente por reembolsar"
+                                className="mr-1.5 ml-0.5 px-1.5 py-0.5 text-[9px] font-black text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-md hover:bg-emerald-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all select-none shrink-0"
+                              >
+                                TOTAL
+                              </button>
+                            </div>
 
-                      {/* Referencia si es requerida o para efectivo */}
-                      <div className="flex-1 min-w-[160px]">
-                        <input
-                          type="text"
-                          value={reembolsoReferencia}
-                          onChange={e => setReembolsoReferencia(e.target.value)}
-                          placeholder={
-                            REFERENCIA_REQUERIDA_REEMBOLSO.includes(reembolsoMetodo)
-                              ? "N° Referencia o comprobante *"
-                              : "Referencia / Caja (opcional, ej: Caja chica)"
-                          }
-                          className={`w-full px-3 py-2 text-xs border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                            REFERENCIA_REQUERIDA_REEMBOLSO.includes(reembolsoMetodo) && !String(reembolsoReferencia || '').trim()
-                              ? 'border-red-300 bg-red-50/20'
-                              : 'border-slate-200 bg-white'
-                          }`}
-                        />
+                            {/* Referencia */}
+                            <input
+                              type="text"
+                              value={pago.referencia || ''}
+                              onChange={e => handleUpdatePagoReembolso(idx, 'referencia', e.target.value)}
+                              placeholder={
+                                REFERENCIA_REQUERIDA_REEMBOLSO.includes(pago.metodo)
+                                  ? "N° Referencia *"
+                                  : "Referencia / Caja (opcional)"
+                              }
+                              className={`flex-1 min-w-[110px] px-2.5 py-2.5 text-xs border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                                REFERENCIA_REQUERIDA_REEMBOLSO.includes(pago.metodo) && !String(pago.referencia || '').trim()
+                                  ? 'border-red-300 bg-red-50/20'
+                                  : 'border-slate-200 bg-white'
+                              }`}
+                            />
+
+                            {/* Quitar fila */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePagoReembolso(idx)}
+                              className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                              title="Quitar método"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+                      <button
+                        type="button"
+                        onClick={handleAddPagoReembolso}
+                        disabled={pagosReembolso.length >= METODOS_REEMBOLSO.length || pendienteReembolso <= 0.005}
+                        title={
+                          pagosReembolso.length >= METODOS_REEMBOLSO.length
+                            ? 'Todos los métodos disponibles ya están agregados'
+                            : pendienteReembolso <= 0.005
+                            ? 'El saldo ya está 100% reembolsado'
+                            : undefined
+                        }
+                        className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-emerald-800 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <Plus size={12} /> Agregar método de reembolso
+                      </button>
+
+                      <div className="text-[11px] font-semibold">
+                        {!metodosReembolsoUnicos ? (
+                          <span className="text-red-600 font-bold">
+                            ⚠️ Los métodos de reembolso no pueden repetirse
+                          </span>
+                        ) : reembolsadoTotal > montoAFavorUsd + 0.011 ? (
+                          <span className="text-red-600 font-bold">
+                            ⚠️ La suma (${reembolsadoTotal.toFixed(2)}) supera el saldo a favor (${montoAFavorUsd.toFixed(2)})
+                          </span>
+                        ) : pendienteReembolso > 0.011 ? (
+                          <span className="text-amber-800">
+                            Reembolsando: ${reembolsadoTotal.toFixed(2)} · Restante a Saldo a Favor: ${pendienteReembolso.toFixed(2)} USD
+                          </span>
+                        ) : (
+                          <span className="text-emerald-800 flex items-center gap-1">
+                            <CheckCircle size={12} className="text-emerald-600" />
+                            Reembolso 100% liquidado (${reembolsadoTotal.toFixed(2)} USD)
+                          </span>
+                        )}
                       </div>
                     </div>
-
-                    <p className="text-[10px] text-emerald-800 font-medium flex items-center gap-1">
-                      <CheckCircle size={11} className="text-emerald-600 shrink-0" />
-                      Se registrará un egreso de <strong>${Math.abs(balanceNetoUsd).toFixed(2)} USD</strong> en <strong>{reembolsoMetodo}</strong> en los reportes de caja. El cliente no acumulará crédito duplicado.
-                    </p>
                   </div>
                 )}
               </div>

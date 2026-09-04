@@ -552,6 +552,7 @@ export function useDevolucionParcialDespacho() {
       exchangeItems,
       pagosDiferencia,
       destinoSaldo,
+      pagosReembolso,
       reembolsoMetodo,
       reembolsoReferencia,
       reembolsoMonto
@@ -567,6 +568,7 @@ export function useDevolucionParcialDespacho() {
           exchangeItems,
           pagosDiferencia: Array.isArray(pagosDiferencia) ? pagosDiferencia : [],
           destinoSaldo,
+          pagosReembolso: Array.isArray(pagosReembolso) ? pagosReembolso : [],
           reembolsoMetodo,
           reembolsoReferencia,
           reembolsoMonto
@@ -583,8 +585,8 @@ export function useDevolucionParcialDespacho() {
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
+      qc.invalidateQueries({ queryKey: ['reporte-ventas'], exact: false })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
-      qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
       broadcastEntidad(['despachos', 'inventario', 'clientes', 'cuentas', 'cotizaciones'])
     },
     onError: (error) => {

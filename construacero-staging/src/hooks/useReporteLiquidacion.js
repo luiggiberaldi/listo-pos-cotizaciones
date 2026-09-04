@@ -86,9 +86,12 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
       }
 
       // ── 4. Mapear comisiones por cotizacion_id para consulta rápida ─────────
-      const comisionPorCot = {}
+      // Split por cliente ajeno (sábados): un despacho puede tener 2 filas de
+      // comisión (vendedor que vendió + dueño del cliente). Guardamos todas.
+      const comisionesPorCot = {}
       comisiones.forEach(c => {
-        comisionPorCot[c.cotizacionid] = c
+        if (!comisionesPorCot[c.cotizacionid]) comisionesPorCot[c.cotizacionid] = []
+        comisionesPorCot[c.cotizacionid].push(c)
       })
 
       // ── 5. Construir registros enriquecidos con items y comisión ─────────────
@@ -96,26 +99,27 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
         Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)
 
       const registros = despachos.map(d => {
-        const comision = comisionPorCot[d.cotizacion_id] || null
+        const filas = comisionesPorCot[d.cotizacion_id] || []
+        // Compatibilidad: fila del vendedor del despacho (o primera disponible)
+        const comision = filas.find(c => c.vendedorid === d.vendedor_id) || filas[0] || null
         const itemsDespachado = items.filter(it => it.cotizacion_id === d.cotizacion_id)
         return {
           ...d,
           ventaNeta: ventaNeta(d),
           comision,
+          comisiones: filas,
           items: itemsDespachado,
         }
       })
 
       // ── 6. Agrupar por asesor ────────────────────────────────────────────────
       const asesorMap = {}
-      registros.forEach(r => {
-        const nombre = r.vendedor?.nombre ?? 'Sin asesor'
-        const color  = r.vendedor?.color  ?? '#64748b'
+      const getGrupo = (nombre, color, vendedorId) => {
         if (!asesorMap[nombre]) {
           asesorMap[nombre] = {
             asesor: nombre,
-            color,
-            vendedor_id: r.vendedor_id,
+            color: color ?? '#64748b',
+            vendedor_id: vendedorId ?? null,
             ventas: [],
             totalVentas: 0,
             totalComisiones: 0,
@@ -123,15 +127,24 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
             totalPendiente: 0,
           }
         }
-        const grupo = asesorMap[nombre]
+        return asesorMap[nombre]
+      }
+
+      // Ventas: atribuidas al vendedor del despacho
+      registros.forEach(r => {
+        const grupo = getGrupo(r.vendedor?.nombre ?? 'Sin asesor', r.vendedor?.color, r.vendedor_id)
         grupo.ventas.push(r)
         grupo.totalVentas += r.ventaNeta
-        if (r.comision) {
-          const monto = Number(r.comision.totalcomision || 0)
-          grupo.totalComisiones += monto
-          if (r.comision.estado === 'pagada')    grupo.totalPagado    += monto
-          else                                   grupo.totalPendiente += monto
-        }
+      })
+
+      // Comisiones: atribuidas por fila al beneficiario real (vendedor que vendió
+      // o dueño del cliente en el split), nunca todas al vendedor del despacho.
+      comisiones.forEach(c => {
+        const grupo = getGrupo(c.vendedor?.nombre ?? 'Sin asesor', c.vendedor?.color, c.vendedorid)
+        const monto = Number(c.totalcomision || 0)
+        grupo.totalComisiones += monto
+        if (c.estado === 'pagada') grupo.totalPagado    += monto
+        else                       grupo.totalPendiente += monto
       })
 
       const porAsesor = Object.values(asesorMap).sort((a, b) => b.totalVentas - a.totalVentas)
