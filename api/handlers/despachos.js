@@ -1998,7 +1998,18 @@ export async function handleDevolucionParcialDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { despachoId, items, motivo, generarReemplazo, exchangeItems } = body || {};
+  const {
+    despachoId,
+    items,
+    motivo,
+    generarReemplazo,
+    exchangeItems,
+    pagosDiferencia,
+    destinoSaldo = 'saldo_a_favor',
+    reembolsoMetodo,
+    reembolsoReferencia,
+    reembolsoMonto
+  } = body || {};
   const idempotencyKey = resolverIdempotencyKey(request, body);
 
   if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido o ausente', 400, request);
@@ -2460,7 +2471,11 @@ export async function handleDevolucionParcialDespacho(request, env) {
       motivo: motivo,
       registrado_por: user.operator_id,
       registrado_por_nombre: operador.nombre,
-      cotizacion_reemplazo_id: cotizacionReemplazoId
+      cotizacion_reemplazo_id: cotizacionReemplazoId,
+      destino_saldo: netBalanceUsd < 0 ? destinoSaldo : 'saldo_a_favor',
+      reembolso_metodo: (netBalanceUsd < 0 && destinoSaldo === 'reembolso') ? (reembolsoMetodo || 'Efectivo $') : null,
+      reembolso_referencia: (netBalanceUsd < 0 && destinoSaldo === 'reembolso') ? (reembolsoReferencia || null) : null,
+      reembolso_monto: (netBalanceUsd < 0 && destinoSaldo === 'reembolso') ? Number(reembolsoMonto || Math.abs(netBalanceUsd)) : 0
     }));
 
     const devInsRes = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones`, {
@@ -2600,26 +2615,76 @@ export async function handleDevolucionParcialDespacho(request, env) {
       creditoMonto = Math.round(creditRemainder * 10000) / 10000;
 
       if (creditoMonto > 0) {
-        const nuevoSaldoFavor = Math.round((saldoFavorActual + creditoMonto) * 10000) / 10000;
-        const creditoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-          method: 'POST',
-          headers: { ...headers, Prefer: 'return=minimal' },
-          body: JSON.stringify({
-            cliente_id: clienteCxCId,
-            despacho_id: despachoId,
-            tipo: 'credito',
-            monto_usd: creditoMonto,
-            forma_pago_abono: 'Devolución',
-            referencia: `Despacho #${desp.numero}`,
-            saldo_usd: nuevoSaldoFavor,
-            descripcion: `Saldo a favor por excedente en intercambio — Despacho #${desp.numero}`,
-            registrado_por: user.operator_id
-          })
-        });
-        if (creditoRes.ok) {
-          creditoRegistrado = true;
+        if (destinoSaldo === 'reembolso') {
+          // Destino: Reembolso / Pago inmediato al cliente
+          // 1. Registramos 'credito' por la mercancía devuelta
+          // 2. Registramos 'devolucion_credito' por el dinero entregado al cliente
+          // De esta forma el saldo a favor no se altera, queda auditado el egreso en CxC
+          // y el reporte de ventas resta el egreso de la forma de pago utilizada.
+          const nuevoSaldoFavor = Math.round((saldoFavorActual + creditoMonto) * 10000) / 10000;
+          await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+            method: 'POST',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({
+              cliente_id: clienteCxCId,
+              despacho_id: despachoId,
+              tipo: 'credito',
+              monto_usd: creditoMonto,
+              forma_pago_abono: 'Devolución',
+              referencia: `Despacho #${desp.numero}`,
+              saldo_usd: nuevoSaldoFavor,
+              descripcion: `Crédito por devolución de mercancía — Despacho #${desp.numero}`,
+              registrado_por: user.operator_id
+            })
+          });
+
+          const metodoFinal = String(reembolsoMetodo || 'Efectivo $').trim();
+          const refFinal = reembolsoReferencia ? String(reembolsoReferencia).trim() : null;
+
+          const devCredRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+            method: 'POST',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({
+              cliente_id: clienteCxCId,
+              despacho_id: despachoId,
+              tipo: 'devolucion_credito',
+              monto_usd: creditoMonto,
+              forma_pago_abono: metodoFinal,
+              referencia: refFinal || `Despacho #${desp.numero}`,
+              saldo_usd: saldoFavorActual,
+              descripcion: `Reembolso por devolución entregado al cliente — Despacho #${desp.numero} (${metodoFinal})`,
+              registrado_por: user.operator_id
+            })
+          });
+
+          if (devCredRes.ok) {
+            creditoRegistrado = true;
+          } else {
+            console.error('[DEVOLUCION] Error al registrar egreso devolucion_credito CxC:', await devCredRes.text());
+          }
         } else {
-          console.error('[DEVOLUCION] Error al registrar crédito/saldo a favor CxC:', await creditoRes.text());
+          // Destino: Saldo a Favor (comportamiento estándar)
+          const nuevoSaldoFavor = Math.round((saldoFavorActual + creditoMonto) * 10000) / 10000;
+          const creditoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
+            method: 'POST',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({
+              cliente_id: clienteCxCId,
+              despacho_id: despachoId,
+              tipo: 'credito',
+              monto_usd: creditoMonto,
+              forma_pago_abono: 'Devolución',
+              referencia: `Despacho #${desp.numero}`,
+              saldo_usd: nuevoSaldoFavor,
+              descripcion: `Saldo a favor por excedente en devolución/intercambio — Despacho #${desp.numero}`,
+              registrado_por: user.operator_id
+            })
+          });
+          if (creditoRes.ok) {
+            creditoRegistrado = true;
+          } else {
+            console.error('[DEVOLUCION] Error al registrar crédito/saldo a favor CxC:', await creditoRes.text());
+          }
         }
       }
 

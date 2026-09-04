@@ -3824,3 +3824,28 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
 ### Integración y push
 * **Push a GitHub:** `954e62c..2a7957d main -> main` (11 commits, incluidos el fix del reporte `e3eacdd`, runner E2E `2cdca35` y docs del runbook).
 * Working tree limpio. Pendiente: deploy a Vercel de estos commits (el último deploy fue anterior a los 11).
+
+---
+
+## 2026-09-03 — Versión 1.0.1: Destino de Saldo en Devoluciones (Saldo a Favor vs. Reembolso)
+
+### Resumen del Requerimiento
+* Permitir al operador elegir explícitamente el destino del balance neto a favor del cliente en devoluciones parciales: dejarlo como **Saldo a Favor** (crédito para futuras compras) o **Pagar / Reembolsar al Cliente de Inmediato** (salida física de dinero por Efectivo, Pago Móvil, Zelle, USDT, Punto de Venta).
+* Reflejar los reembolsos como egresos en los reportes de caja para asegurar un arqueo físico 100% exacto y evitar que el cliente acumule saldo a favor duplicado.
+
+### Acciones Realizadas
+1. **Base de Datos (Supabase / PostgreSQL):**
+   * Migración `134_devolucion_reembolso_fields.sql` aplicada con columnas `destino_saldo`, `reembolso_metodo`, `reembolso_referencia`, `reembolso_monto` en `despacho_devoluciones`.
+2. **Frontend (`DevolucionParcialModal.jsx` y `useDespachos.js`):**
+   * Selector interactivo de destino con validación estricta de referencias bancarias para métodos digitales.
+   * Botón inteligente *"Usar método original"* para precargar la forma de pago con la que el cliente pagó la orden.
+3. **Backend Worker (`despachos.js`):**
+   * Guardarraíl financiero: si se elige reembolso, se asienta el egreso contable en `cuentas_por_cobrar` (`tipo: 'devolucion_credito'`) sin inflar el `saldo_a_favor` del cliente.
+4. **Reportes Financieros (`useReporteVentas.js`):**
+   * Descuento automático de reembolsos en el arqueo por forma de pago con indicación clara del despacho.
+5. **Versionado:**
+   * Bump a `v1.0.1` en `package.json`, `LoginPage.jsx` y `AppLayout.jsx`.
+6. **Verificación:**
+   * 35/35 suites de prueba pasando (304/304 tests aprobados).
+   * Build de producción Vite completado exitosamente sin errores.
+

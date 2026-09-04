@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Modal } from '../ui/Modal'
-import { AlertCircle, RotateCcw, CheckCircle, Package, Trash2, Plus } from 'lucide-react'
+import { AlertCircle, RotateCcw, CheckCircle, Package, Trash2, Plus, DollarSign, CreditCard } from 'lucide-react'
 import CustomSelect from '../ui/CustomSelect'
 import supabase from '../../services/supabase/client'
 import { useDevolucionParcialDespacho } from '../../hooks/useDespachos'
@@ -12,6 +12,10 @@ import { showToast } from '../ui/Toast'
 // 'Cta por cobrar': no cobrar ya deja el cargo completo como deuda en CxC.
 const METODOS_COBRO_DIFERENCIA = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT', 'Cruce']
 const REFERENCIA_REQUERIDA = ['Transf. / Pago Móvil']
+
+// Métodos permitidos para reembolsar / pagar al cliente
+const METODOS_REEMBOLSO = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT']
+const REFERENCIA_REQUERIDA_REEMBOLSO = ['Transf. / Pago Móvil', 'Zelle', 'USDT']
 
 export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const [loading, setLoading] = useState(false)
@@ -26,6 +30,11 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const [exchangeItems, setExchangeItems] = useState([])
   const [clienteInfo, setClienteInfo] = useState(null)
   const [pagosDiferencia, setPagosDiferencia] = useState([])
+
+  // --- Estados para destino del balance a favor del cliente ---
+  const [destinoSaldo, setDestinoSaldo] = useState('saldo_a_favor') // 'saldo_a_favor' | 'reembolso'
+  const [reembolsoMetodo, setReembolsoMetodo] = useState('Efectivo $')
+  const [reembolsoReferencia, setReembolsoReferencia] = useState('')
 
   const lastValuesRef = useRef({})
   const mutation = useDevolucionParcialDespacho()
@@ -45,6 +54,9 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
       setExchangeItems([])
       setClienteInfo(null)
       setPagosDiferencia([])
+      setDestinoSaldo('saldo_a_favor')
+      setReembolsoMetodo('Efectivo $')
+      setReembolsoReferencia('')
       lastValuesRef.current = {}
       fetchItemsAndDevoluciones()
     }
@@ -307,7 +319,12 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     })
   )
 
-  const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid && cobroDiferenciaValido
+  const reembolsoValido = !(balanceNetoUsd < 0) || destinoSaldo !== 'reembolso' || (
+    Boolean(reembolsoMetodo) &&
+    (!REFERENCIA_REQUERIDA_REEMBOLSO.includes(reembolsoMetodo) || String(reembolsoReferencia || '').trim().length > 0)
+  )
+
+  const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid && cobroDiferenciaValido && reembolsoValido
 
   const handleConfirm = async () => {
     if (!isFormValid) return
@@ -343,7 +360,11 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 monto: Math.round(Number(p.monto) * 100) / 100,
                 referencia: String(p.referencia || '').trim() || null,
               }))
-          : []
+          : [],
+        destinoSaldo: balanceNetoUsd < 0 ? destinoSaldo : 'saldo_a_favor',
+        reembolsoMetodo: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? reembolsoMetodo : null,
+        reembolsoReferencia: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? (String(reembolsoReferencia || '').trim() || null) : null,
+        reembolsoMonto: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? Math.abs(balanceNetoUsd) : 0
       })
       onClose()
     } catch (err) {
@@ -752,40 +773,179 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
               </div>
             </div>
             
-            {/* Caja explicativa de acciones financieras */}
-            <div className={`p-2.5 rounded-xl border leading-relaxed flex gap-2.5 ${
-              balanceNetoUsd > 0 
-                ? 'bg-amber-50 border-amber-200 text-amber-900' 
-                : balanceNetoUsd < 0 
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
-                : 'bg-slate-50 border-slate-200 text-slate-700'
-            }`}>
-              <CheckCircle size={15} className={`shrink-0 mt-0.5 ${balanceNetoUsd > 0 ? 'text-amber-600' : balanceNetoUsd < 0 ? 'text-emerald-600' : 'text-slate-500'}`} />
-              <div className="space-y-0.5">
-                {balanceNetoUsd > 0 ? (
-                  <>
-                    <p className="font-bold">El cliente debe pagar la diferencia</p>
-                    <p className="text-[11px] opacity-90">
-                      El total a pagar al cliente es <strong>$0.00 USD</strong>. Se registrará un nuevo <strong>cargo (deuda)</strong> por <strong>${balanceNetoUsd.toFixed(2)} USD</strong> en su cuenta por cobrar.
+            {/* Sección de acciones financieras: Si hay saldo a favor (balanceNetoUsd < 0), permitir elegir destino */}
+            {balanceNetoUsd < 0 ? (
+              <div className="border border-emerald-200 rounded-2xl bg-emerald-50/40 p-3.5 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <h5 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                      Destino del balance a favor (${Math.abs(balanceNetoUsd).toFixed(2)} USD)
+                    </h5>
+                  </div>
+                  {metodosPagoOriginal.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-slate-500 font-medium">Pagó originalmente con:</span>
+                      {metodosPagoOriginal.map(m => (
+                        <span key={m} className="px-1.5 py-0.5 text-[9px] font-bold text-slate-600 bg-white border border-slate-200 rounded">
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Selector de 2 opciones: Saldo a Favor vs Reembolso */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Opción 1: Dejar como Saldo a Favor */}
+                  <div
+                    onClick={() => setDestinoSaldo('saldo_a_favor')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      destinoSaldo === 'saldo_a_favor'
+                        ? 'bg-white border-emerald-500 shadow-sm ring-2 ring-emerald-500/20'
+                        : 'bg-white/60 border-slate-200 hover:bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="radio"
+                        name="destinoSaldo"
+                        checked={destinoSaldo === 'saldo_a_favor'}
+                        onChange={() => setDestinoSaldo('saldo_a_favor')}
+                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <div className="space-y-0.5 select-none">
+                        <div className="flex items-center gap-1.5">
+                          <CreditCard size={13} className="text-emerald-700" />
+                          <p className="text-xs font-bold text-slate-800">Dejar como Saldo a Favor</p>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-snug">
+                          Se acreditará a la cuenta del cliente para descontar de futuras compras o amortizar deudas.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Opción 2: Pagar / Reembolsar al Cliente */}
+                  <div
+                    onClick={() => setDestinoSaldo('reembolso')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      destinoSaldo === 'reembolso'
+                        ? 'bg-white border-emerald-500 shadow-sm ring-2 ring-emerald-500/20'
+                        : 'bg-white/60 border-slate-200 hover:bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="radio"
+                        name="destinoSaldo"
+                        checked={destinoSaldo === 'reembolso'}
+                        onChange={() => setDestinoSaldo('reembolso')}
+                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <div className="space-y-0.5 select-none">
+                        <div className="flex items-center gap-1.5">
+                          <DollarSign size={13} className="text-emerald-700" />
+                          <p className="text-xs font-bold text-slate-800">Pagar / Reembolsar al Cliente</p>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-snug">
+                          Se entrega el dinero en efectivo o banco al cliente. Se registrará la salida en el reporte de caja.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Si se elige Reembolsar, mostrar selector de método y referencia */}
+                {destinoSaldo === 'reembolso' && (
+                  <div className="pt-2 border-t border-emerald-200/70 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <label className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider">
+                        Forma de Reembolso al Cliente <span className="text-red-500">*</span>
+                      </label>
+                      {metodosPagoOriginal.length > 0 && metodosPagoOriginal[0] !== reembolsoMetodo && (
+                        <button
+                          type="button"
+                          onClick={() => setReembolsoMetodo(metodosPagoOriginal[0])}
+                          className="px-2 py-0.5 text-[9px] font-bold text-emerald-800 bg-white border border-emerald-300 rounded hover:bg-emerald-50 transition-colors"
+                        >
+                          Usar {metodosPagoOriginal[0]} (original)
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Método selector */}
+                      <div className="w-[180px] shrink-0">
+                        <CustomSelect
+                          options={METODOS_REEMBOLSO.map(m => ({ value: m, label: m }))}
+                          value={reembolsoMetodo}
+                          onChange={val => setReembolsoMetodo(val)}
+                          placeholder="Método..."
+                          searchable={false}
+                        />
+                      </div>
+
+                      {/* Monto visual no editable (fijo al balance neto) */}
+                      <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 shrink-0 select-none">
+                        <span className="text-slate-400 mr-1">$</span>
+                        {Math.abs(balanceNetoUsd).toFixed(2)} USD
+                      </div>
+
+                      {/* Referencia si es requerida o para efectivo */}
+                      <div className="flex-1 min-w-[160px]">
+                        <input
+                          type="text"
+                          value={reembolsoReferencia}
+                          onChange={e => setReembolsoReferencia(e.target.value)}
+                          placeholder={
+                            REFERENCIA_REQUERIDA_REEMBOLSO.includes(reembolsoMetodo)
+                              ? "N° Referencia o comprobante *"
+                              : "Referencia / Caja (opcional, ej: Caja chica)"
+                          }
+                          className={`w-full px-3 py-2 text-xs border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                            REFERENCIA_REQUERIDA_REEMBOLSO.includes(reembolsoMetodo) && !String(reembolsoReferencia || '').trim()
+                              ? 'border-red-300 bg-red-50/20'
+                              : 'border-slate-200 bg-white'
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-emerald-800 font-medium flex items-center gap-1">
+                      <CheckCircle size={11} className="text-emerald-600 shrink-0" />
+                      Se registrará un egreso de <strong>${Math.abs(balanceNetoUsd).toFixed(2)} USD</strong> en <strong>{reembolsoMetodo}</strong> en los reportes de caja. El cliente no acumulará crédito duplicado.
                     </p>
-                  </>
-                ) : balanceNetoUsd < 0 ? (
-                  <>
-                    <p className="font-bold">Saldo a favor del cliente</p>
-                    <p className="text-[11px] opacity-90">
-                      Se aplicará un <strong>abono</strong> para disminuir su deuda actual o se registrará un crédito de <strong>saldo a favor</strong> de <strong>${Math.abs(balanceNetoUsd).toFixed(2)} USD</strong> para futuras compras.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-bold">Intercambio equivalente</p>
-                    <p className="text-[11px] opacity-90">
-                      El valor de los productos es el mismo. No se generarán movimientos de cobro ni abonos en la cuenta del cliente.
-                    </p>
-                  </>
+                  </div>
                 )}
               </div>
-            </div>
+            ) : (
+              /* Si balanceNetoUsd >= 0, mantenemos la caja explicativa estándar */
+              <div className={`p-2.5 rounded-xl border leading-relaxed flex gap-2.5 ${
+                balanceNetoUsd > 0 
+                  ? 'bg-amber-50 border-amber-200 text-amber-900' 
+                  : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}>
+                <CheckCircle size={15} className={`shrink-0 mt-0.5 ${balanceNetoUsd > 0 ? 'text-amber-600' : 'text-slate-500'}`} />
+                <div className="space-y-0.5">
+                  {balanceNetoUsd > 0 ? (
+                    <>
+                      <p className="font-bold">El cliente debe pagar la diferencia</p>
+                      <p className="text-[11px] opacity-90">
+                        El total a pagar al cliente es <strong>$0.00 USD</strong>. Se registrará un nuevo <strong>cargo (deuda)</strong> por <strong>${balanceNetoUsd.toFixed(2)} USD</strong> en su cuenta por cobrar.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-bold">Intercambio equivalente</p>
+                      <p className="text-[11px] opacity-90">
+                        El valor de los productos es el mismo. No se generarán movimientos de cobro ni abonos en la cuenta del cliente.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Cobro de la diferencia: métodos con que paga el cliente el restante */}
             {balanceNetoUsd > 0 && (

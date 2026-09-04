@@ -5,6 +5,7 @@ import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { getComisionPctForItem, getNonCxcFraction, isDonationPayment, isLoanPayment } from '../utils/comisionUtils'
+import { aplicarDescuentosItems } from '../utils/reporteDescuentos'
 
 export const REPORTE_KEY = ['reporte-ventas']
 
@@ -75,7 +76,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         const { data, error } = await supabase
           .from('cuentas_por_cobrar')
           .select(`
-            id, cliente_id, monto_usd, forma_pago_abono, referencia, descripcion, creado_en, registrado_por,
+            id, cliente_id, despacho_id, monto_usd, forma_pago_abono, referencia, descripcion, creado_en, registrado_por,
             cliente:clientes!cuentas_por_cobrar_cliente_id_fkey(id, nombre, tipo_cliente, vendedor_id)
           `)
           .eq('tipo', 'devolucion_credito')
@@ -224,7 +225,12 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         const esDonacion = fp.some(f => f.metodo === 'Donación')
 
         if (dispatchItems.length > 0) {
-          dispatchItems.forEach(it => {
+          // F-03: aplicar también los descuentos por ítem (despacho_descuentos) a
+          // los items de notas_despacho_items para que la sección por
+          // producto/categoría cuadre con la venta neta cuando existen descuentos.
+          const descsDelDespacho = despachoDescuentos.filter(dd => dd.despacho_id === d.despacho_id)
+          const dispatchItemsNetos = aplicarDescuentosItems(dispatchItems, descsDelDespacho)
+          dispatchItemsNetos.forEach(it => {
             const esItemPrestamo = !!it.es_prestamo || tienePrestamoFp
             itemsFinales.push({
               ...it,
@@ -693,10 +699,10 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
            formaPagoMap[nombre] = { formaPago: nombre, count: 0, totalUsd: 0, pagos: [] }
          }
          formaPagoMap[nombre].totalUsd -= monto
-         formaPagoMap[nombre].pagos.push({
-           cliente: dev.cliente_nombre,
-           numero: 'REEMBOLSO',
-           monto: -monto,
+          formaPagoMap[nombre].pagos.push({
+            cliente: dev.cliente_nombre,
+            numero: dev.referencia?.includes('Despacho #') ? dev.referencia.match(/Despacho #\d+/)?.[0] || 'REEMBOLSO' : 'REEMBOLSO',
+            monto: -monto,
            tasa: null,
            montoBs: null,
            referencia: dev.referencia || null,
