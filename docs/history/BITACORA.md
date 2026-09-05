@@ -2040,3 +2040,27 @@ Logs de Postgres en Supabase con error 22P02 `invalid input value for enum log_o
 
 
 
+
+## SESIÓN 05/09/2026 — Split de comisiones de sábados v3 ("designado del día") portado al PRINCIPAL
+
+### Qué se hizo
+- Auditoría de migraciones de staging (47 funciones redefinidas): la única regresión real fue 262 vs 257 (escalado single-fila), ya corregida con 263. Herramientas: `scripts/audit-function-chains.mjs` y `scripts/audit-live-vs-repo.mjs`.
+- Usabilidad del panel de designación (P0/P1): filtro de externos en UI+endpoint+trigger, default al próximo sábado, aviso de día no-sábado, preselección del designado vigente, confirmación al borrar.
+- Puerto del split v3 al principal (plan aprobado, Fases 0–3):
+  - Fase 0 (preflight read-only): el 238b vivo del principal = canon menos `requires_manual_review`, sin trigger guard; config sin columnas split; `recalcularcomisiondespacho_238b` NO existía (los 4 call-sites del Worker fallaban en silencio); `ajustar_finanzas_devolucion_atomica` y `ajustar_finanzas_devolucion_neta` escalaban una sola fila (bug latente igual al 262/263).
+  - Fase 1: release `supabase/release/main/07_comision_split_designado_v3_review.sql`: 4 columnas split en `configuracion_negocio` (toggle OFF forzado), tabla `comision_designacion_diaria` con trigger anti-externo (fix P0), 238b v4 designado (sin `requires_manual_review`, política de pagos mixtos del principal intacta), `recalcularcomisiondespacho_238b` multi-fila, ambos ajustadores multi-fila, delegador `calcularcomisiondespacho → 238b`, índice único `(despachoid, vendedorid)`, grants, NOTIFY y rollback ensayado.
+  - Worker: endpoint `/api/comisiones/designacion` (solo jefe, upsert idempotente), validación G8 de porcentajes, derivación de `tipo` split desde `calculo_evidencia` en `/api/comisiones/lista`.
+  - Frontend: hooks de Ventas/Vendedores/Liquidación multi-fila, PanelDesignacion P0/P1, tarjeta de config split, PDFs con "Cliente ajeno" aparte.
+
+### Validación
+- Staging: E2E 123/123 ×2 (baseline y post-upgrade del trigger P0, migración 265).
+- Dry-run transaccional del release 07 contra Postgres real de staging (BEGIN…ROLLBACK, nada persistió).
+- Principal: Vitest 319/319, `vite build` OK, postflight verde (tabla, índice, toggle OFF, 4 funciones vivas, backup SHA-256 `9879c4f27b8f…` en `tmp/v3-port/backup-main-pre07/`).
+- Deploy Worker+Frontend: versión `983b7a10-faa3-4e18-aab0-4751b73698d9` en workers.dev. Smoke: ping 200, app 200, `/api/comisiones/designacion` sin sesión responde 401 (guard jefe-only activo).
+
+### Estado y siguientes pasos
+- Instalado con `comision_split_activo = false`: sin cambio de comportamiento hasta el piloto.
+- Piloto (Fase 4): designar desde la UI el sábado acordado, activar toggle, monitorear y conciliar al cierre. Runbook completo: `docs/runbooks/2026-09-05-runbook-split-sabados-principal.md`.
+
+### Ajuste del piloto (05/09, mismo día)
+- El jefe redefinió la regla: el designado cobra 0.5% en TODAS las ventas del sábado de vendedores/supervisores elegibles, incluidas cliente propio (dueño cobra 1.5%). Gate de 238b ajustado (se quitó la exclusión cliente-propio) + fix TZ America/Caracas en dow/fecha + fix del form de configuración que no persistía el toggle (filtro frontend contra GET cacheado). Aplicado al principal en vivo y verificado con el despacho #2958 (1.50 + 0.50). Espejo en staging pendiente.

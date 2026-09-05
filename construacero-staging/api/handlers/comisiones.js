@@ -86,14 +86,26 @@ function csvIds(ids) {
 }
 
 async function fetchByIds(env, headers, table, ids, select) {
-  const idsCsv = csvIds(ids)
-  if (!idsCsv) return {}
+  const uniqueIds = [...new Set(ids.filter(Boolean))]
+  if (!uniqueIds.length) return {}
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?id=in.(${idsCsv})&select=${select}`, { headers })
-  if (!res.ok) return {}
+  const CHUNK_SIZE = 50
+  const chunks = []
+  for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+    chunks.push(uniqueIds.slice(i, i + CHUNK_SIZE))
+  }
 
-  const rows = await res.json()
-  return Object.fromEntries(rows.map(row => [row.id, row]))
+  const results = await Promise.all(
+    chunks.map(async chunk => {
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?id=in.(${chunk.join(',')})&select=${select}`, { headers })
+      if (!res.ok) return []
+      const rows = await res.json().catch(() => [])
+      return Array.isArray(rows) ? rows : []
+    })
+  )
+
+  const allRows = results.flat()
+  return Object.fromEntries(allRows.map(row => [row.id, row]))
 }
 
 export async function handleMarcarComisionPagada(request, env) {

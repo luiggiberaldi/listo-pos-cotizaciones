@@ -4010,3 +4010,32 @@ Plan aprobado de 9 mejoras (3 fases) sobre el flujo de devolución parcial. Fase
 
 ### Estado
 Producción completa con las 3 fases. Pendiente opcional: espejo 262 en staging + E2E F6.
+
+---
+
+## 2026-09-05 — Split de sábados v3 ("designado del día") portado y aplicado al PRINCIPAL (toggle OFF)
+
+### Fase 0 — Preflight (read-only) del principal
+- Cuerpos vivos respaldados en `tmp/preflight-main-v3/` con SHA-256 (`9879c4f27b8f…` 238b, `d4d1afc5f4a0…` ajustar).
+- `238b` vivo del principal = canon (release review) **menos** el bloque `requires_manual_review`; sin trigger guard 239. Decisión: el puerto v4 excisa ese bloque para **no cambiar** la política de pagos mixtos del principal.
+- Dependencias v4 verificadas: `usuarios.es_externo`/`markup_pct`, `notas_despacho.creado_en`, alias `vendedor_comision_id` — todas presentes.
+- Datos compatibles con el swap de índice: 0 comisiones con `vendedorid NULL`, 0 despachos multi-fila.
+- **Bugs vivos descubiertos en el principal**: (1) `recalcularcomisiondespacho_238b` NO existía pese a 4 call-sites en `despachos.js` (recalcos fallando en silencio); (2) `ajustar_finanzas_devolucion_neta` escalaba comisión de **una sola fila** (mismo defecto que 262 introdujo en staging). Ambos corregidos por el release 07.
+
+### Fase 1 — Puerto quirúrgico (sin copiar árboles divergentes)
+- SQL: `supabase/release/main/07_comision_split_designado_v3_review.sql` — columnas split (toggle **OFF**), índice `(despachoid, vendedorid)`, tabla `comision_designacion_diaria` (trigger con fix P0 `es_externo`), 238b v4, `recalcular` multi-fila, `ajustar` multi-fila (263), grants + NOTIFY. Rollback documentado en `07_comision_split_designado_v3_rollback_review.sql`.
+- Worker: `handleDesignacion` (solo jefe, endpoint rechaza externos) + G8 en `handleSaveConfig` + derivación `tipo` (`designado`/`cliente_ajeno_dueno`) desde `calculo_evidencia` en `handleGetComisiones` + ruta en `worker.js`.
+- Frontend: hooks `useReporteVentas/Vendedores/Liquidacion` multi-fila (`es_split`, `comisionSplit` aparte de buckets 2/3%, estados propios del principal conservados), `PanelDesignacion` con fixes P0/P1 (no externos, próximo sábado por defecto, aviso no-sábado, preselección, confirmación, próximos designados), tarjeta config con guard de %, PDFs de comisiones y vendedores con línea "Cliente ajeno".
+
+### Fase 2 — Validación
+- E2E staging 123/123 **×2** (antes y después del upgrade P0).
+- Migración `265_staging_designado_no_externo.sql` aplicada y verificada (trigger rechaza jefe y externo con `DESIGNADO_INVALIDO`).
+- Dry-run transaccional del release 07 completo contra Postgres real de staging (BEGIN…ROLLBACK): 0 errores, nada persistido.
+- Árbol principal: Vitest **319/319**, `npm run build` OK.
+
+### Fase 3 — Apply al principal (con toggle OFF)
+- `scripts/apply-release07-main.mjs --ejecutar`: guardia de proyecto, backup+SHA, rollback autogenerado (`07_rollback_aplicar.sql`), apply y postflight verde (tabla, índice nuevo, viejo fuera, toggle OFF, 4 funciones).
+- Postflight adicional: cuerpo v4 vivo correcto; trigger rechaza `jefe`; en el principal no existen usuarios externos (defensa activa = UI + endpoint; guard de BD validado en staging 265).
+- Runbook de activación/rollback: `docs/runbooks/2026-09-05-runbook-split-sabados-principal.md`.
+
+**Estado:** instalado e inerte. Ningún cambio de comportamiento hasta que el jefe active el toggle en el piloto de sábado.

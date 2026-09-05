@@ -75,9 +75,12 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
       }
 
       // ── 4. Mapear comisiones por cotizacion_id para consulta rápida ─────────
-      const comisionPorCot = {}
+      // Split designado (sábados): un despacho puede tener 2 filas de comisión
+      // (vendedor que vendió + beneficiario split). Guardamos todas.
+      const comisionesPorCot = {}
       comisiones.forEach(c => {
-        comisionPorCot[c.cotizacionid] = c
+        if (!comisionesPorCot[c.cotizacionid]) comisionesPorCot[c.cotizacionid] = []
+        comisionesPorCot[c.cotizacionid].push(c)
       })
 
       // ── 5. Construir registros enriquecidos con items y comisión ─────────────
@@ -85,12 +88,15 @@ export function useReporteLiquidacion({ fechaInicio, fechaFin, vendedorId } = {}
         Number(d.total_usd || 0) - Number(d.flete_usd || 0) - Number(d.descuento_total_usd || 0)
 
       const registros = despachos.map(d => {
-        const comision = comisionPorCot[d.cotizacion_id] || null
+        const filas = comisionesPorCot[d.cotizacion_id] || []
+        // Compatibilidad: fila del vendedor del despacho (o primera disponible)
+        const comision = filas.find(c => c.vendedorid === d.vendedor_id) || filas[0] || null
         const itemsDespachado = items.filter(it => it.cotizacion_id === d.cotizacion_id)
         return {
           ...d,
           ventaNeta: ventaNeta(d),
           comision,
+          comisiones: filas,
           items: itemsDespachado,
         }
       })

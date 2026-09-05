@@ -295,7 +295,12 @@ class StagingE2ERunner {
 
   async initLog() {
     await mkdir(this.config.logDir, { recursive: true })
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    function fechaCaracas(offsetDays = 0) {
+  // Fecha (YYYY-MM-DD) y dow en hora Venezuela (UTC-4), no UTC
+  const d = new Date(Date.now() + offsetDays * 86400000 - 4 * 3600000)
+  return { fecha: d.toISOString().slice(0, 10), dow: d.getUTCDay() }
+}
+const stamp = new Date().toISOString().replace(/[:.]/g, '-')
     this.logFile = path.join(this.config.logDir, `tester-${stamp}.log`)
     await this.persist()
   }
@@ -578,7 +583,7 @@ class StagingE2ERunner {
       return
     }
     d.splitJefeId = await this.ensureSplitUser('Jefe E2E Staging', 'jefe', '482160')
-    d.splitTodayDow = new Date().getUTCDay()
+    d.splitTodayDow = fechaCaracas().dow
     const cfg = await this.db(
       this.supabase.from('configuracion_negocio').select('comision_split_activo,comision_split_pct_vendedor,comision_split_pct_dueno,comision_split_dias').eq('cuenta_id', this.user.id).limit(1).maybeSingle(),
       'config split original'
@@ -1473,7 +1478,7 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
   // ── T0: designación del vendedor del día (solo jefe) ──────────────────
   f.split_t0_designar = async () => {
     if (d.splitSkip) return
-    d.splitFechaHoy = new Date().toISOString().slice(0, 10)
+    d.splitFechaHoy = fechaCaracas().fecha
     const res = await this.apiAsJefe('/api/comisiones/designacion', 'POST', { fecha: d.splitFechaHoy, designado_id: d.splitDesignadoId })
     assert(res?.ok === true && res.designacion?.designado_id === d.splitDesignadoId, res, 'T0: designación creada')
   }

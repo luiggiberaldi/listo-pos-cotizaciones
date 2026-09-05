@@ -56,6 +56,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
   const localTotalComisionCabilla2 = listToUse.reduce((s, v) => s + (v.comisionCabilla2 || 0), 0)
   const localTotalComisionCabilla3 = listToUse.reduce((s, v) => s + (v.comisionCabilla3 || 0), 0)
   const localTotalComisionOtros = listToUse.reduce((s, v) => s + (v.comisionOtros || 0), 0)
+  const localTotalComisionSplit = listToUse.reduce((s, v) => s + (v.comisionSplit || 0), 0)
   const localTicketPromedio = localTotalDespachos > 0 ? localTotalVentas / localTotalDespachos : 0
 
   const localPrevTotalVentas = listToUse.reduce((s, v) => s + (v.prevTotalUsd || 0), 0)
@@ -189,8 +190,13 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
         doc.setTextColor(100, 116, 139)
         doc.setFontSize(5.5)
         const catPrincipal = config.comision_categoria_cabilla || 'Cabilla'
+        const kpiParts = [
+          `${catPrincipal} 2%: ${fmtUsd(localTotalComisionCabilla2)}`,
+          `3%: ${fmtUsd(localTotalComisionCabilla3)}`,
+        ]
+        if (localTotalComisionSplit > 0) kpiParts.push(`Cliente ajeno: ${fmtUsd(localTotalComisionSplit)}`)
         doc.text(
-          `${catPrincipal} 2%: ${fmtUsd(localTotalComisionCabilla2)} | 3%: ${fmtUsd(localTotalComisionCabilla3)}`,
+          kpiParts.join(' | '),
           bx + 4.5, y + 18.5
         )
       }
@@ -533,10 +539,11 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     // Bloque derecho: Comisiones
     const bx2 = MARGIN + col2W + 4
     doc.setFillColor(250, 251, 255)
-    doc.roundedRect(bx2, y, col2W, 30, 1.5, 1.5, 'F')
+    const bloquesComH = (v.comisionSplit || 0) > 0 ? 35 : 30
+    doc.roundedRect(bx2, y, col2W, bloquesComH, 1.5, 1.5, 'F')
     doc.setDrawColor(235, 240, 248)
     doc.setLineWidth(0.2)
-    doc.roundedRect(bx2, y, col2W, 30, 1.5, 1.5, 'D')
+    doc.roundedRect(bx2, y, col2W, bloquesComH, 1.5, 1.5, 'D')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
@@ -550,6 +557,9 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       { label: `${labelPrincipal} 3%`, value: fmtUsd(v.comisionCabilla3 || 0), color: C_DARK },
       { label: 'Otros productos', value: fmtUsd(v.comisionOtros || 0), color: C_DARK },
     ]
+    if ((v.comisionSplit || 0) > 0) {
+      comData.push({ label: 'Cliente ajeno (split)', value: fmtUsd(v.comisionSplit), color: [124, 58, 237] })
+    }
     comData.forEach((c, ci) => {
       const cy = y + 10 + ci * 4.8
       doc.setFont('helvetica', 'normal')

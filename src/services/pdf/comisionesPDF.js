@@ -1635,7 +1635,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     { label: 'Ventas Netas (Sin Flete)', value: fmtUsd(kpis.totalVentas), sub: '(Solo mercancía)' },
     { label: 'Despachos', value: String(kpis.numDespachos || 0) },
     { label: 'Ticket Promedio', value: fmtUsd(kpis.ticketPromedio) },
-    { label: 'Comisiones', value: fmtUsd(kpis.totalComisiones), sub: (kpis.totalComisiones > 0) ? `2%: ${fmtUsd((kpis.comisionCabilla2 || 0) + (kpis.comisionCabilla3 || 0))} | 3%: ${fmtUsd(kpis.comisionOtros || 0)}` : null },
+    { label: 'Comisiones', value: fmtUsd(kpis.totalComisiones), sub: (kpis.totalComisiones > 0) ? `2%: ${fmtUsd((kpis.comisionCabilla2 || 0) + (kpis.comisionCabilla3 || 0))} | 3%: ${fmtUsd(kpis.comisionOtros || 0)}${(kpis.totalComisionesSplit || 0) > 0 ? ` | Cliente ajeno: ${fmtUsd(kpis.totalComisionesSplit)}` : ''}` : null },
   ]
   if (hasDev) {
     kpiData.push({
@@ -1739,6 +1739,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       let subComision = 0;
       let subCabilla = 0;
       let subOtros = 0;
+      let subSplit = 0;
 
       list.forEach((v, idx) => {
         const rowH = (v.comision > 0) ? 11 : 8;
@@ -1791,10 +1792,13 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
           doc.setFontSize(7.5);
           doc.setTextColor(71, 85, 105);
           const totalCabilla = (v.comisionCabilla2 || 0) + (v.comisionCabilla3 || 0);
-          doc.text(`2%: ${fmtUsd(totalCabilla)} | 3%: ${fmtUsd(v.comisionOtros || 0)}`, MARGIN + 125, y + 8.5);
+          const parts = [`2%: ${fmtUsd(totalCabilla)}`, `3%: ${fmtUsd(v.comisionOtros || 0)}`];
+          if ((v.comisionSplit || 0) > 0) parts.push(`Cliente ajeno: ${fmtUsd(v.comisionSplit)}`);
+          doc.text(parts.join(' | '), MARGIN + 125, y + 8.5);
           
           subCabilla += totalCabilla;
           subOtros += (v.comisionOtros || 0);
+          subSplit += (v.comisionSplit || 0);
         }
         
         subCount += (v.count || 0);
@@ -1822,14 +1826,16 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(7.5);
         doc.setTextColor(71, 85, 105);
-        doc.text(`2%: ${fmtUsd(subCabilla)} | 3%: ${fmtUsd(subOtros)}`, MARGIN + 125, y + 8.5);
+        const parts = [`2%: ${fmtUsd(subCabilla)}`, `3%: ${fmtUsd(subOtros)}`];
+        if (subSplit > 0) parts.push(`Cliente ajeno: ${fmtUsd(subSplit)}`);
+        doc.text(parts.join(' | '), MARGIN + 125, y + 8.5);
       }
       y += 12;
-      return { count: subCount, totalUsd: subTotalUsd, comision: subComision, comisionCabilla: subCabilla, comisionOtros: subOtros };
+      return { count: subCount, totalUsd: subTotalUsd, comision: subComision, comisionCabilla: subCabilla, comisionOtros: subOtros, comisionSplit: subSplit };
     }
 
-    let rInt = { count: 0, totalUsd: 0, comision: 0, comisionCabilla: 0, comisionOtros: 0 };
-    let rExt = { count: 0, totalUsd: 0, comision: 0, comisionCabilla: 0, comisionOtros: 0 };
+    let rInt = { count: 0, totalUsd: 0, comision: 0, comisionCabilla: 0, comisionOtros: 0, comisionSplit: 0 };
+    let rExt = { count: 0, totalUsd: 0, comision: 0, comisionCabilla: 0, comisionOtros: 0, comisionSplit: 0 };
 
     const showInternos = (reporte.tipoFiltro === 'todos' || reporte.tipoFiltro === 'internos' || !reporte.tipoFiltro);
     const showExternos = (reporte.tipoFiltro === 'todos' || reporte.tipoFiltro === 'externos' || !reporte.tipoFiltro);
@@ -1855,6 +1861,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     const totalComisiones = rInt.comision + rExt.comision;
     const totalCabilla = rInt.comisionCabilla + rExt.comisionCabilla;
     const totalOtros = rInt.comisionOtros + rExt.comisionOtros;
+    const totalSplit = (rInt.comisionSplit || 0) + (rExt.comisionSplit || 0);
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
@@ -1870,7 +1877,9 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(51, 65, 85);
-      doc.text(`2%: ${fmtUsd(totalCabilla)} | 3%: ${fmtUsd(totalOtros)}`, MARGIN + 125, y + 9);
+      const parts = [`2%: ${fmtUsd(totalCabilla)}`, `3%: ${fmtUsd(totalOtros)}`];
+      if (totalSplit > 0) parts.push(`Cliente ajeno: ${fmtUsd(totalSplit)}`);
+      doc.text(parts.join(' | '), MARGIN + 125, y + 9);
     }
 
     doc.line(MARGIN, y + 10, MARGIN + CONTENT_W, y + 10);

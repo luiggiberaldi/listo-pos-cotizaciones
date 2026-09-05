@@ -398,33 +398,51 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         }
       }
 
-      const comisiones = despachos.map(d => {
-        const calculated = calcularComisionDespachoJS(d, comisionesRaw)
-        if (calculated) {
-          const seller = dbVendedores.find(u => u.id === d.asesor_id || u.id === d.vendedor_id)
-          return {
-            ...calculated,
-            vendedorid: d.asesor_id || d.vendedor_id,
-            despachoid: d.despacho_id,
-            vendedor: seller
+      // ── Split designado (sábados): un despacho puede tener 2 filas de comisión
+      // (vendedor que vendió + beneficiario split), cada una con su vendedorid y
+      // porcentaje. Usamos las filas reales del Worker una por beneficiario;
+      // solo estimamos cuando el despacho no tiene filas guardadas.
+      const construirComisionesDeDespachos = (listaDespachos, comisionesList) => {
+        const out = []
+        listaDespachos.forEach(d => {
+          const filas = (comisionesList || []).filter(c => c.despachoid === d.despacho_id)
+          if (filas.length > 0) {
+            filas.forEach(c => {
+              const seller = dbVendedores.find(u => u.id === c.vendedorid)
+                || dbVendedores.find(u => u.id === d.asesor_id || u.id === d.vendedor_id)
+              out.push({
+                totalcomision: Number(c.totalcomision || 0),
+                comisioncabilla: Number(c.comisioncabilla || 0),
+                comisionotros: Number(c.comisionotros || 0),
+                pctcabilla: Number(c.pctcabilla || 0),
+                pctotros: Number(c.pctotros || 0),
+                estado: c.estado || 'generada',
+                // v3: filas split llegan como 'designado' (0.5%) o 'cliente_ajeno_dueno' (1.5%)
+                es_split: typeof c.tipo === 'string' && (c.tipo.startsWith('cliente_ajeno') || c.tipo === 'designado'),
+                vendedorid: c.vendedorid || d.asesor_id || d.vendedor_id,
+                despachoid: d.despacho_id,
+                vendedor: seller
+              })
+            })
+            return
           }
-        }
-        return null
-      }).filter(Boolean)
+          const calculated = calcularComisionDespachoJS(d, comisionesList)
+          if (calculated) {
+            const seller = dbVendedores.find(u => u.id === d.asesor_id || u.id === d.vendedor_id)
+            out.push({
+              ...calculated,
+              es_split: false,
+              vendedorid: d.asesor_id || d.vendedor_id,
+              despachoid: d.despacho_id,
+              vendedor: seller
+            })
+          }
+        })
+        return out
+      }
 
-      const prevComisiones = prevDespachos.map(d => {
-        const calculated = calcularComisionDespachoJS(d, prevComisionesRaw)
-        if (calculated) {
-          const seller = dbVendedores.find(u => u.id === d.asesor_id || u.id === d.vendedor_id)
-          return {
-            ...calculated,
-            vendedorid: d.asesor_id || d.vendedor_id,
-            despachoid: d.despacho_id,
-            vendedor: seller
-          }
-        }
-        return null
-      }).filter(Boolean)
+      const comisiones = construirComisionesDeDespachos(despachos, comisionesRaw)
+      const prevComisiones = construirComisionesDeDespachos(prevDespachos, prevComisionesRaw)
 
       // Map cotizacion_id → despacho para enlazar items con vendedor/cliente
       const cotToDespacho = Object.fromEntries(despachos.map(d => [d.cotizacion_id, d]))
@@ -440,8 +458,10 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const ticketPromedio = numDespachos > 0 ? totalVentas / numDespachos : 0
       const totalComisiones = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
       const comisionesGeneradas = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
-      const comisionCabilla2 = comisiones.filter(c => Math.round(Number(c.pctcabilla || 0)) === 2).reduce((s, c) => s + Number(c.comisioncabilla || 0), 0)
-      const comisionCabilla3 = comisiones.filter(c => Math.round(Number(c.pctcabilla || 0)) === 3).reduce((s, c) => s + Number(c.comisioncabilla || 0), 0)
+      // Las filas split (0.5%/1.5%) no van en los buckets 2%/3%; se reportan aparte.
+      const totalComisionesSplit = comisiones.filter(c => c.es_split).reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      const comisionCabilla2 = comisiones.filter(c => !c.es_split && Math.round(Number(c.pctcabilla || 0)) === 2).reduce((s, c) => s + Number(c.comisioncabilla || 0), 0)
+      const comisionCabilla3 = comisiones.filter(c => !c.es_split && Math.round(Number(c.pctcabilla || 0)) === 3).reduce((s, c) => s + Number(c.comisioncabilla || 0), 0)
       const comisionOtros = comisiones.reduce((s, c) => s + Number(c.comisionotros || 0), 0)
 
       // KPIs anteriores (para comparativo)
@@ -471,6 +491,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             comisionCabilla2: 0,
             comisionCabilla3: 0,
             comisionOtros: 0,
+            comisionSplit: 0,
           }
         }
       })
@@ -492,6 +513,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             comisionCabilla2: 0,
             comisionCabilla3: 0,
             comisionOtros: 0,
+            comisionSplit: 0,
           }
         }
         vendedorMap[vid].despachos++
@@ -514,15 +536,21 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             comisionCabilla2: 0,
             comisionCabilla3: 0,
             comisionOtros: 0,
+            comisionSplit: 0,
           }
         }
         vendedorMap[vid].comision += Number(c.totalcomision || 0)
-        const pctCab = Math.round(Number(c.pctcabilla || 0))
-        const montoCab = Number(c.comisioncabilla || 0)
-        if (pctCab === 2) {
-          vendedorMap[vid].comisionCabilla2 = (vendedorMap[vid].comisionCabilla2 || 0) + montoCab
-        } else if (pctCab === 3) {
-          vendedorMap[vid].comisionCabilla3 = (vendedorMap[vid].comisionCabilla3 || 0) + montoCab
+        // Filas split (0.5%/1.5%) van aparte: no son 2% ni 3%.
+        if (c.es_split) {
+          vendedorMap[vid].comisionSplit = (vendedorMap[vid].comisionSplit || 0) + Number(c.totalcomision || 0)
+        } else {
+          const pctCab = Math.round(Number(c.pctcabilla || 0))
+          const montoCab = Number(c.comisioncabilla || 0)
+          if (pctCab === 2) {
+            vendedorMap[vid].comisionCabilla2 = (vendedorMap[vid].comisionCabilla2 || 0) + montoCab
+          } else if (pctCab === 3) {
+            vendedorMap[vid].comisionCabilla3 = (vendedorMap[vid].comisionCabilla3 || 0) + montoCab
+          }
         }
         const montoOtros = Number(c.comisionotros || 0)
         vendedorMap[vid].comisionOtros = (vendedorMap[vid].comisionOtros || 0) + montoOtros
@@ -716,7 +744,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
        return {
          kpis: {
            totalVentas, totalFlete, totalDescuentos, numDespachos, ticketPromedio, totalComisiones,
-           comisionesGeneradas, comisionCabilla2, comisionCabilla3, comisionOtros,
+           comisionesGeneradas, comisionCabilla2, comisionCabilla3, comisionOtros, totalComisionesSplit,
            prevTotalVentas, prevNumDespachos, prevTicketPromedio, prevTotalComisiones,
            totalDevoluciones, prevTotalDevoluciones
          },

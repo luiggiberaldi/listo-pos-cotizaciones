@@ -26,7 +26,7 @@ import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizac
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleGetRates } from './api/handlers/rates.js'
-import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterCleanupFixtures, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
+import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleDesignacion, handleResetOperacional, handleTesterClearAll, handleTesterCleanupFixtures, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
 import { handleReporteTransportistas, handleDetalleTransportista, handlePagarTransportista, handleRevertirPagoTransportista } from './api/handlers/transportistas.js'
 import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
 import {
@@ -88,6 +88,11 @@ export default {
     // ── API: leer configuración del negocio ─────────────────────────────
     if (url.pathname === '/api/config' && request.method === 'GET') {
       return handleGetConfig(request, env);
+    }
+
+    // ── API: designación del vendedor del día (solo jefe) ────────────────
+    if (url.pathname === '/api/comisiones/designacion') {
+      return handleDesignacion(request, env, url);
     }
 
     // ── API: leer configuración de comisiones ───────────────────────────

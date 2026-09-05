@@ -129,6 +129,18 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
 
   const selectOnFocus = (e) => e.target.select()
 
+  // Split designado (sábados): días activos (lista '0-6' separada por comas; vacío = todos)
+  const diasSplitActuales = (campos.comision_split_dias ?? '')
+    .split(',').map(d => d.trim()).filter(d => /^[0-6]$/.test(d))
+  function toggleSplitDia(dia) {
+    const set = new Set(diasSplitActuales)
+    if (set.has(String(dia))) set.delete(String(dia)); else set.add(String(dia))
+    cambiar('comision_split_dias', [...set].sort().join(','))
+  }
+
+  // Guard espejo del SQL: cada fila del split nunca supera el % general vigente
+  const pctGeneralMaximo = Number(campos.comision_pct_cabilla ?? 2)
+
   const catsDisponibles = categorias.filter(c => !catsEspeciales.includes(c.value))
   const catsDisponiblesExt = categorias.filter(c => !catsEspecialesExt.includes(c.value))
 
@@ -314,6 +326,64 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
               <p className="text-xs text-slate-500 font-semibold">
                 $1,000 → <strong>{fmtUsd(1000 * campos.comision_pct_otros / 100)}</strong>
               </p>
+            </div>
+
+            {/* Tarjeta "Sábado — Vendedor designado" (split v3) */}
+            <div className={`bg-gradient-to-br rounded-xl border p-4 space-y-3 shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300 ${campos.comision_split_activo ? 'from-emerald-50 to-teal-50 border-emerald-200' : 'from-slate-50 to-slate-100 border-slate-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${campos.comision_split_activo ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Sábado — Vendedor designado</span>
+                </div>
+                <button type="button" onClick={() => cambiar('comision_split_activo', !campos.comision_split_activo)} disabled={disabled}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${campos.comision_split_activo ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${campos.comision_split_activo ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">El jefe designa un vendedor/supervisor del día. Las ventas a cliente ajeno se dividen: % designado + % dueño del cliente (el vendedor que vende no cobra ese día). Cliente propio → % normal.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-emerald-700 uppercase">Designado</label>
+                  <div className="flex items-baseline gap-1">
+                    <input type="number" min="0" max="100" step="0.01" value={campos.comision_split_pct_vendedor ?? 0.5} onFocus={selectOnFocus}
+                      onChange={e => cambiar('comision_split_pct_vendedor', Math.max(0, Math.min(pctGeneralMaximo, Number(e.target.value))))}
+                      className={`w-16 px-2 py-2 rounded-xl border bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 text-right font-bold shadow-inner ${(campos.comision_split_pct_vendedor ?? 0) > pctGeneralMaximo ? 'border-red-300 focus:ring-red-300' : 'border-emerald-200 focus:ring-emerald-300'}`} disabled={disabled || !campos.comision_split_activo} />
+                    <span className="text-sm font-bold text-emerald-500">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-teal-700 uppercase">Dueño</label>
+                  <div className="flex items-baseline gap-1">
+                    <input type="number" min="0" max="100" step="0.01" value={campos.comision_split_pct_dueno ?? 1.5} onFocus={selectOnFocus}
+                      onChange={e => cambiar('comision_split_pct_dueno', Math.max(0, Math.min(pctGeneralMaximo, Number(e.target.value))))}
+                      className={`w-16 px-2 py-2 rounded-xl border bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 text-right font-bold shadow-inner ${(campos.comision_split_pct_dueno ?? 0) > pctGeneralMaximo ? 'border-red-300 focus:ring-red-300' : 'border-teal-200 focus:ring-teal-300'}`} disabled={disabled || !campos.comision_split_activo} />
+                    <span className="text-sm font-bold text-teal-500">%</span>
+                  </div>
+                </div>
+              </div>
+              {((campos.comision_split_pct_vendedor ?? 0) > pctGeneralMaximo || (campos.comision_split_pct_dueno ?? 0) > pctGeneralMaximo) && (
+                <p className="text-[11px] text-red-600 font-bold">⚠ No puede superar el % general ({pctGeneralMaximo}%)</p>
+              )}
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Días que aplica</label>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((letra, dia) => (
+                    <button key={dia} type="button" disabled={disabled || !campos.comision_split_activo}
+                      onClick={() => toggleSplitDia(dia)}
+                      className={`w-7 h-7 rounded-lg text-[11px] font-bold border transition-colors disabled:opacity-50 ${diasSplitActuales.includes(String(dia)) ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-400 hover:border-emerald-300'}`}>
+                      {letra}
+                    </button>
+                  ))}
+                </div>
+                {diasSplitActuales.length === 0 && (
+                  <p className="text-[10px] text-amber-600 font-semibold mt-1">Sin días: aplica todos los días</p>
+                )}
+              </div>
+              {campos.comision_split_activo && (
+                <p className="text-xs text-emerald-600 font-semibold">
+                  $1,000 cliente ajeno → designado <strong>{fmtUsd(1000 * (campos.comision_split_pct_vendedor ?? 0.5) / 100)}</strong> · dueño <strong>{fmtUsd(1000 * (campos.comision_split_pct_dueno ?? 1.5) / 100)}</strong>
+                </p>
+              )}
             </div>
 
             {/* Tarjeta "Descuento de Personal" */}
@@ -683,6 +753,10 @@ export default function ConfiguracionView() {
     comision_ext_pct_externos:    3,
     _comision_ext_extras:         [],
     descuento_personal_pct:       10.00,
+    comision_split_activo:        false,
+    comision_split_pct_vendedor:  0.5,
+    comision_split_pct_dueno:     1.5,
+    comision_split_dias:          '6',
     transp_tipo_calculo:           'porcentaje',
     transp_pct_comision:           20,
     transp_tarifa_fija_usd:        50,
@@ -714,6 +788,10 @@ export default function ConfiguracionView() {
         comision_ext_pct_externos:  config.comision_ext_pct_externos  ?? 3,
         _comision_ext_extras:       config._comision_ext_extras       ?? [],
         descuento_personal_pct:     config.descuento_personal_pct     ?? 10.00,
+        comision_split_activo:      config.comision_split_activo      ?? false,
+        comision_split_pct_vendedor: config.comision_split_pct_vendedor ?? 0.5,
+        comision_split_pct_dueno:   config.comision_split_pct_dueno   ?? 1.5,
+        comision_split_dias:        config.comision_split_dias        ?? '6',
         transp_tipo_calculo:         config.transp_tipo_calculo         ?? 'porcentaje',
         transp_pct_comision:         config.transp_pct_comision         ?? 20,
         transp_tarifa_fija_usd:      config.transp_tarifa_fija_usd      ?? 50,
@@ -787,13 +865,11 @@ export default function ConfiguracionView() {
     e.preventDefault()
     if (!campos.nombre_negocio.trim()) { setError('El nombre del negocio es obligatorio'); return }
     try {
-      const keysExistentes = Object.keys(config)
-      const datosGuardar = {}
-      for (const [key, val] of Object.entries(campos)) {
-        if (keysExistentes.length === 0 || keysExistentes.includes(key) || key === 'gate_password_hash') {
-          datosGuardar[key] = val
-        }
-      }
+      // Se envía el estado completo del formulario: el backend filtra por las
+      // columnas reales de la BD (getExistingColumns). El filtro previo contra
+      // Object.keys(config) descartaba en silencio campos nuevos (ej. split
+      // sábados) si el GET venía cacheado de antes de la migración.
+      const datosGuardar = { ...campos }
       if (gatePassword.trim()) {
         datosGuardar.gate_password_hash = await hashSHA256(gatePassword)
         setGatePassword('')

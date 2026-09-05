@@ -74,16 +74,30 @@ function addCommissionFilters(query, params, user, operador) {
 }
 
 function baseCommissionQuery(env) {
-  return `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en)&order=creadoen.desc`
+  return `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en),split:calculo_evidencia->>split_cliente_ajeno,designado_ev:calculo_evidencia->>split_designado_id&order=creadoen.desc`
 }
 
 async function fetchByIds(env, headers, table, ids, select) {
   const uniqueIds = [...new Set(ids.filter(Boolean))]
   if (!uniqueIds.length) return {}
-  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?id=in.(${uniqueIds.join(',')})&select=${select}`, { headers })
-  if (!response.ok) return {}
-  const rows = await response.json()
-  return Object.fromEntries(rows.map(row => [row.id, row]))
+
+  const CHUNK_SIZE = 50
+  const chunks = []
+  for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+    chunks.push(uniqueIds.slice(i, i + CHUNK_SIZE))
+  }
+
+  const results = await Promise.all(
+    chunks.map(async chunk => {
+      const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?id=in.(${chunk.join(',')})&select=${select}`, { headers })
+      if (!response.ok) return []
+      const rows = await response.json().catch(() => [])
+      return Array.isArray(rows) ? rows : []
+    })
+  )
+
+  const allRows = results.flat()
+  return Object.fromEntries(allRows.map(row => [row.id, row]))
 }
 
 async function fetchCommissionConfig(env, headers, cuentaId) {
@@ -118,9 +132,36 @@ async function enrichCommissions(env, headers, rows, cuentaId) {
   )
   const config = await fetchCommissionConfig(env, headers, cuentaId)
 
+  // v3: designaciones del día — mapa fecha → designado_id para derivar el tipo de fila
+  const fechasDespachos = [...new Set(rows
+    .filter(row => row.split === true || row.split === 'true')
+    .map(row => (despachos[row.despachoid]?.creado_en || '').slice(0, 10))
+    .filter(Boolean))]
+  const designacionPorFecha = {}
+  if (fechasDespachos.length) {
+    try {
+      const desigRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${cuentaId}&fecha=in.(${fechasDespachos.map(f => `"${f}"`).join(',')})&select=fecha,designado_id`,
+        { headers },
+      )
+      if (desigRes.ok) {
+        for (const d of await desigRes.json()) designacionPorFecha[d.fecha] = d.designado_id
+      }
+    } catch { /* si falla, las filas split caen a 'cliente_ajeno_dueno' */ }
+  }
+
   return rows.map(row => {
     const despacho = despachos[row.despachoid]
     const cotizacion = cotizaciones[row.cotizacionid]
+    // v3: tipo de fila — 'venta' normal, o split 'designado' (0.5% al designado del día)
+    // / 'cliente_ajeno_dueno' (1.5% al dueño del cliente)
+    const esSplit = row.split === true || row.split === 'true'
+    let tipo = 'venta'
+    if (esSplit) {
+      const fechaDespacho = (despacho?.creado_en || '').slice(0, 10)
+      const designadoDelDia = row.designado_ev || designacionPorFecha[fechaDespacho] || null
+      tipo = (designadoDelDia && row.vendedorid === designadoDelDia) ? 'designado' : 'cliente_ajeno_dueno'
+    }
     const policy = getCommissionPolicy(despacho)
     const storedAlreadyNet = String(row.estado || '').toLowerCase() === 'generada'
     const storedTotal = Number(row.totalcomision || 0)
@@ -152,6 +193,7 @@ async function enrichCommissions(env, headers, rows, cuentaId) {
       id: row.id,
       despachoid: row.despachoid,
       vendedorid: row.vendedorid,
+      tipo,
       cotizacionid: row.cotizacionid,
       cuentaid: row.cuentaid,
       totalcomision: effectiveTotalWithProducts,
