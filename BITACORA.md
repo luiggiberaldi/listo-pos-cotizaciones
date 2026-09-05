@@ -1,3 +1,29 @@
+## 2026-09-05 — Reversión consciente de devoluciones (release 06 + Fase B UX) — commits `3ddd4fa`, `72da4e2`
+
+### Resumen del Requerimiento
+* Un despacho entregado y devuelto al 100% registra en CxC abonos `forma_pago_abono='Devolución'` (ajustes contables, no cobros). La guarda de reversión (migración 232 + Worker) los trataba como cobros reales y bloqueaba la reapertura con "Anule los cobros primero" — callejón sin salida que obligaba a anular abonos a mano.
+
+### Acciones Realizadas
+1. **Release 06 (`supabase/release/principal/06_reversion_con_devoluciones.sql` + rollback):** `revertir_entrega_finanzas_atomica` reemplazada IN-PLACE (misma identidad de 5 args, lección 42725): guarda relajada (solo bloquean cobros reales; `Devolución`/`Saldo a favor`/NULL-devolu se anulan en la transacción), `REEMBOLSO_EFECTIVO_REGISTRADO` (efectivo ya pagado no puede reactivar deuda), `CREDITO_YA_CONSUMIDO` (antes solo en el Worker, ahora atómico), respuesta con `abonos_devolucion_anulados`/`credito_anulado_usd`. Los triggers 179 recalculan ambos saldos del cliente en cada DELETE dentro de la transacción.
+2. **Worker (`/api/despachos/estado`, ambos):** guardarraíl alineado — fetch completo de abonos + filtro JS (los ajustes de devolución ya no bloquean); contadores propagados en la respuesta.
+3. **Fase B UX (ambos):** panel-resumen "Despacho totalmente devuelto — venta anulada económicamente" con deuda del despacho y puntero a Reabrir; confirmación inteligente en `DevolverAnularModal` (consulta CxC: verde "solo ajustes de devolución, se anularán automáticamente" / rojo "tiene cobros reales, será bloqueada"); toast de reversión con el efecto exacto ("2 abonos de devolución anulados · CxC como antes de la devolución").
+4. **Espejo staging:** migraciones `264_staging_reversion_con_devoluciones.sql` + rollback; el wrapper staging `revertir_entrega_finanzas_atomica_staging` (247) delega en la función base — cubierto.
+5. **Tests:** nuevo `despachosReversionDevoluciones.test.js` (abono Devolución → reversión 100% RPC sin DELETE/PATCH REST; cobro real → 400; abono sin forma de pago → 400 conservador). **319/319 ✓ · build ✓**.
+6. **Runbook:** `docs/plans/2026-09-05-runbook-promocion-reversion-devoluciones.md` (backup → preflight → apply → smoke con ROLLBACK → postflight → deploy).
+
+### Ejecución del runbook (2026-09-05, F0–F5 completos)
+1. **F0 Backup:** `tmp/kardex-principal-pre-release06-2026-09-05T04-04-19-108Z.dump` (3.74 MB), SHA-256 `62768b0d…76aa2c`.
+2. **F1 Preflight PASS:** firma 232 vigente; 5 abonos 'Devolución' ($10,197.40) desbloqueables; 6 `devolucion_credito` históricos seguirán bloqueados (por diseño).
+3. **F2 Apply:** release 06 aplicada sin excepciones (`CREATE OR REPLACE` idempotente).
+4. **F3 Smoke (ROLLBACK, 0 residuos):** rama A — despacho #2954 con abono 'Devolución' → reversión OK (`abonos_devolucion_anulados: 2`, `finanzas_revertidas: true`, deuda $2.00 → $0.00, 0 filas CxC restantes); rama B — cobro real 'Efectivo $' → `CXC_CON_ABONOS` ✓; rama C — `devolucion_credito` → `REEMBOLSO_EFECTIVO_REGISTRADO` ✓.
+5. **F4 Postflight PASS:** anon/authenticated sin EXECUTE; service_role con EXECUTE en RPC y wrapper idempotente.
+6. **F5 Deploy:** Vercel producción Ready → `https://listo-pos-cotizaciones.vercel.app` responde 200. Producción ya tiene Fase A (RPC + guardarraíl) y Fase B (UX completa).
+
+**Lecciones:** `cuentas_por_cobrar` exige INSERT con `saldo_usd`/`descripcion`/`registrado_por` NOT NULL (3 iteraciones del smoke); los errores esperados de guarda requieren `SAVEPOINT` por rama — el cliente pg deja la transacción `aborted` (25P02) tras el primer error aunque se capture en JS; la transacción abortada del intento 1 se revirtió sola al cerrar la conexión (0 residuos).
+
+### Pendiente
+* Aplicar espejo 264 en staging y correr el E2E de devolución/reversión (producción ya está promovida).
+
 # Bitácora de Proyecto — Construacero Carabobo
 
 > Registro cronológico de decisiones, avance y errores.
