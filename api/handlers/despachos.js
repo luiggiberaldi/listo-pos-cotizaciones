@@ -689,19 +689,27 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // Guardarrail: Bloquear si existen abonos reales en CxC (no Saldo a Favor) para este despacho
+    // Guardarrail: Bloquear si existen abonos REALES en CxC para este despacho.
+    // Los abonos 'Devolución' y 'Saldo a favor' son ajustes contables del propio
+    // despacho (no entró dinero) y la RPC de reversión los anula dentro de su
+    // transacción (release 06). El chequeo de reembolsos en efectivo
+    // (REEMBOLSO_EFECTIVO_REGISTRADO) y de crédito consumido vive en la RPC.
     if (['pendiente', 'anulada'].includes(nuevoEstado) && ['despachada', 'entregada'].includes(desp.estado)) {
       if (rolOp !== 'desarrollador') {
         try {
           const abonosRes = await fetch(
-            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.abono&forma_pago_abono=neq.Saldo%20a%20favor&select=id,monto_usd&limit=1`,
+            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&tipo=eq.abono&select=id,monto_usd,forma_pago_abono`,
             { headers }
           );
           if (abonosRes.ok) {
-            const [abono] = await abonosRes.json();
-            if (abono) {
+            const abonos = await abonosRes.json();
+            const abonoReal = (abonos || []).find(a =>
+              !a.forma_pago_abono ||
+              (a.forma_pago_abono !== 'Saldo a favor' && a.forma_pago_abono !== 'Devolución')
+            );
+            if (abonoReal) {
               return jsonError(
-                `No se puede reabrir/revertir este despacho porque ya tiene abonos o pagos registrados en CxC ($${Number(abono.monto_usd || 0).toFixed(2)}). Anule los cobros primero.`,
+                `No se puede reabrir/revertir este despacho porque tiene cobros reales registrados en CxC ($${Number(abonoReal.monto_usd || 0).toFixed(2)}). Anule los cobros primero.`,
                 400, request
               );
             }
@@ -1339,6 +1347,9 @@ export async function handleActualizarEstadoDespacho(request, env) {
       inventario_atomico: Boolean(entregaAtomica || reversaAtomica),
       finanzas_atomicas: Boolean(entregaAtomica?.finanzas_atomicas || reversaAtomica),
       frontera_financiera: entregaAtomica ? 'sql_atomic' : null,
+      // Release 06: contadores para el toast/UX de reversión consciente de devoluciones.
+      abonos_devolucion_anulados: reversaAtomica?.abonos_devolucion_anulados ?? null,
+      credito_anulado_usd: reversaAtomica?.credito_anulado_usd ?? null,
     }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al actualizar despacho', 500, request);
