@@ -255,8 +255,8 @@ const STEPS = [
   ['split_t1_crear', '29.9. Split T1: venta a cliente ajeno en día designado'],
   ['split_assert_t1', '29.10. Split T1: 2 filas (dueño 1.5% / designado 0.5%), vendedor que vendió no cobra'],
   ['split_t2_replay', '29.11. Split T2: replay de entrega no duplica filas'],
-  ['split_t3_cliente_propio', '29.12. Split T3: cliente propio → 1 fila normal del vendedor'],
-  ['split_assert_t3', '29.12.1 Assert T3: 1 fila normal del vendedor que vendió'],
+  ['split_t3_cliente_propio', '29.12. Split T3 (v3.1): cliente propio del vendedor → 2 filas split'],
+  ['split_assert_t3', '29.12.1 Assert T3: dueño=vendedor con %_dueno + designado con %_vendedor'],
   ['split_t4_dia_no_config', '29.13. Split T4: día no configurado → sin split aunque haya designado'],
   ['split_assert_t4', '29.13.1 Assert T4: 1 fila del dueño con % normal'],
   ['split_t4b_sin_designacion', '29.14. Split T4b: día configurado sin designación → sin split'],
@@ -1550,15 +1550,19 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
   f.split_t3_cliente_propio = async () => { if (d.splitSkip) return; d.splitT3 = await this.runSplitSale({ cantidad: 2, formaPago: 'Efectivo $', clienteId: d.splitClientePropioId }) }
   f.split_assert_t3 = async () => {
       if (d.splitSkip) return
+      // v3.1: cliente propio del vendedor que vende TAMBIÉN splittea →
+      // 2 filas: dueño=vendedor con %_dueno, designado con %_vendedor.
       const rows = await this.db(this.supabase.from('comisiones').select('*').eq('despachoid', d.splitT3.despachoId), 'comisiones T3')
-      assert(rows?.length === 1, 1, rows?.length, 'T3: cliente propio → 1 fila')
-      const cfg = await this.db(this.supabase.from('configuracion_negocio').select('comision_pct_cabilla,comision_pct_otros,comision_categoria_cabilla').eq('cuenta_id', this.user.id).limit(1).maybeSingle(), 'config T3')
-      const isCab = TEST.producto.categoria.toLowerCase() === String(cfg?.comision_categoria_cabilla || '').toLowerCase().trim()
-      const pct = Number(isCab ? cfg?.comision_pct_cabilla : cfg?.comision_pct_otros)
-      const exp = round2(50 * pct / 100)
-      assert(Number(rows[0].totalcomision) === exp, exp, rows[0].totalcomision, 'T3 comisión normal')
-      assert(rows[0].vendedorid === this.salesperson.id, this.salesperson.id, rows[0].vendedorid, 'T3 beneficiario=dueño')
-      assert(rows[0].calculo_evidencia?.split_cliente_ajeno !== true, false, rows[0].calculo_evidencia?.split_cliente_ajeno, 'T3 sin split')
+      assert(rows?.length === 2, 2, rows?.length, 'T3: cliente propio → 2 filas (v3.1)')
+      const owner = rows.find(r => r.vendedorid === this.salesperson.id)
+      const designated = rows.find(r => r.vendedorid === d.splitDesignadoId)
+      assert(!!owner && !!designated, 'dueño+designado', rows.map(r => r.vendedorid), 'T3 beneficiarios')
+      const expOwner = round2(50 * d.splitPctD / 100)
+      const expDesig = round2(50 * d.splitPctV / 100)
+      assert(Number(owner.totalcomision) === expOwner, expOwner, owner.totalcomision, 'T3 dueño %_dueno')
+      assert(Number(designated.totalcomision) === expDesig, expDesig, designated.totalcomision, 'T3 designado %_vendedor')
+      assert(Number(owner.pctotros) === d.splitPctD && Number(designated.pctotros) === d.splitPctV, 'pcts planos', rows.map(r => r.pctotros), 'T3 pcts')
+      assert(designated.calculo_evidencia?.split_designado_id === d.splitDesignadoId, d.splitDesignadoId, designated.calculo_evidencia?.split_designado_id, 'T3 evidencia designado')
   }
   f.split_t4_dia_no_config = async () => {
       if (d.splitSkip) return
@@ -1655,7 +1659,7 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
   }
   f.split_t9_designado_dueno = async () => {
       if (d.splitSkip) return
-      // El designado del día vende a SU PROPIO cliente → cobra su % normal (es dueño), sin split
+      // v3.1: el designado que vende a SU PROPIO cliente cobra su % normal (guardia designado=dueño); no se autopaga el 0.5%
       d.splitT9 = await this.runSplitSale({ cantidad: 2, formaPago: 'Efectivo $', clienteId: d.splitClienteDesignadoId, vendedorId: d.splitDesignadoId })
   }
   f.split_assert_t9 = async () => {
@@ -1668,7 +1672,7 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
       const exp = round2(50 * pct / 100)
       assert(Number(rows[0].totalcomision) === exp, exp, rows[0].totalcomision, 'T9 comisión normal del dueño')
       assert(rows[0].vendedorid === d.splitDesignadoId, d.splitDesignadoId, rows[0].vendedorid, 'T9 beneficiario=designado/dueño')
-      assert(rows[0].calculo_evidencia?.split_cliente_ajeno !== true, false, rows[0].calculo_evidencia?.split_cliente_ajeno, 'T9 sin split')
+      assert(rows[0].calculo_evidencia?.split_designado !== true, false, rows[0].calculo_evidencia?.split_designado, 'T9 sin split')
   }
   f.split_assert_lista = async () => {
       if (d.splitSkip) return
