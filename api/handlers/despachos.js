@@ -2313,8 +2313,6 @@ export async function handleDevolucionParcialDespacho(request, env) {
       }
     }
 
-    const returnStartTime = new Date(Date.now() - 5000).toISOString();
-
     const atomicRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_devolucion_parcial_cobro_idempotente`, {
       method: 'POST',
       headers,
@@ -2333,6 +2331,12 @@ export async function handleDevolucionParcialDespacho(request, env) {
         p_total_intercambio_usd: totalIntercambioUsd,
         p_reemplazo: reemplazoPayload,
         p_pagos_diferencia: pagosDiferencia,
+        // Fase 3: destino del balance + reembolso atómico (filas
+        // devolucion_credito y metadatos dentro de la transacción de la RPC).
+        p_destino_saldo: balanceNetoDevolucion < 0 ? destinoSaldo : 'saldo_a_favor',
+        p_pagos_reembolso: (balanceNetoDevolucion < 0 && destinoSaldo === 'reembolso' && pagosReembolsoLimpios.length > 0)
+          ? pagosReembolsoLimpios
+          : null,
       }),
     });
     const atomicText = await atomicRes.text();
@@ -2356,51 +2360,9 @@ export async function handleDevolucionParcialDespacho(request, env) {
       }, 200, request);
     }
 
-    // Si hubo reembolso de saldo a favor, registrar egresos en CxC y actualizar saldos
-    if (clienteCxCId && balanceNetoDevolucion < 0 && destinoSaldo === 'reembolso' && pagosReembolsoLimpios.length > 0) {
-      for (const p of pagosReembolsoLimpios) {
-        const devCredRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-          method: 'POST',
-          headers: { ...headers, Prefer: 'return=minimal' },
-          body: JSON.stringify({
-            cliente_id: clienteCxCId,
-            despacho_id: despachoId,
-            tipo: 'devolucion_credito',
-            monto_usd: p.monto,
-            forma_pago_abono: p.metodo,
-            referencia: p.referencia || `Despacho #${desp.numero}`,
-            saldo_usd: 0,
-            descripcion: `Reembolso por devolución entregado al cliente — Despacho #${desp.numero} (${p.metodo})`,
-            registrado_por: user.operator_id,
-            cuenta_id: operador.cuenta_id
-          })
-        });
-        if (!devCredRes.ok) {
-          console.error('[DEVOLUCION] Error al registrar egreso devolucion_credito CxC:', await devCredRes.text());
-        }
-      }
-      await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
-    }
-
-    // Persistir metadatos de reembolso en despacho_devoluciones cuando aplica
-    if (balanceNetoDevolucion < 0 && destinoSaldo === 'reembolso') {
-      const resumenMetodos = pagosReembolsoLimpios.map(p => `${p.metodo}: $${p.monto.toFixed(2)}`).join(' | ');
-      const resumenReferencias = pagosReembolsoLimpios.map(p => p.referencia).filter(Boolean).join(' | ');
-      try {
-        await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=eq.${despachoId}&creado_en=gte.${returnStartTime}`, {
-          method: 'PATCH',
-          headers: { ...headers, Prefer: 'return=minimal' },
-          body: JSON.stringify({
-            destino_saldo: destinoSaldo,
-            reembolso_metodo: (destinoSaldo === 'reembolso') ? (resumenMetodos || pagosReembolsoLimpios[0]?.metodo || 'Efectivo $') : null,
-            reembolso_referencia: (destinoSaldo === 'reembolso') ? (resumenReferencias || null) : null,
-            reembolso_monto: (destinoSaldo === 'reembolso') ? totalReembolsoUsd : 0
-          })
-        });
-      } catch (patchDevErr) {
-        console.warn('[DEVOLUCION] No se pudo actualizar metadatos de reembolso en despacho_devoluciones:', patchDevErr?.message);
-      }
-    }
+    // Reembolso atómico: las filas devolucion_credito y los metadatos de
+    // reembolso los inserta la RPC dentro de su transacción (release
+    // principal/05). El Worker ya no hace INSERT REST post-transacción.
 
     try {
       await registrarAuditoria(env, headers, {

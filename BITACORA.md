@@ -3877,3 +3877,59 @@ Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo
    * Nuevos tests en `despachosPartialAtomic.test.js` para validar el endpoint Worker y sus inserciones en CxC y guardarraíl de unicidad (8/8 tests aprobados).
    * Suite completa del proyecto: **35/35 archivos pasando, 316/316 pruebas unitarias aprobadas al 100%**.
    * Compilación `npm run build` exitosa en 47.43s sin fallos.
+
+---
+
+## 2026-09-04 — Comisión split por "designado del día" (sábados) v3 en staging
+
+### Resumen del Requerimiento
+* Cambio de modelo de comisión (decisión del negocio): el sábado el **jefe** designa a una persona (vendedor o supervisor) como "designado del día". Ese día, las ventas a **cliente ajeno** se dividen: **0.5% al designado** + **1.5% al dueño del cliente**; el vendedor que vendió **no cobra** esa venta. Solo participan vendedores y supervisores activos no externos (excluye vendedor_sin_comision interno, jefes, admin, administración, logística). Reemplaza al modelo v2 ("vendedor ajeno 0.5% / dueño 1.5%").
+
+### Acciones Realizadas
+1. **Base de datos (`260_staging_comision_split_designado.sql`):**
+   * Tabla `comision_designacion_diaria` con UNIQUE(cuenta_id, fecha), trigger validador de elegibilidad (vendedor/supervisor activo) y RLS por cuenta.
+   * `CREATE OR REPLACE calcularcomisiondespacho_238b` (misma firma, lección 42725): con split activo inserta fila del dueño (1.5%) y fila del designado (0.5%); el vendedor que vendió no genera fila. Designado=dueño → 1 fila con % normal. Evidencia completa (`split_designado_id`, pcts, dow).
+   * Guard monetario: los % del split nunca superan el % general (`LEAST` en runtime; G8 en Worker rechaza el save).
+2. **Worker:**
+   * Endpoint `/api/comisiones/designacion` (GET/POST/DELETE) **exclusivo del rol jefe**, con upsert idempotente y auditoría.
+   * G8 v3 en `handleSaveConfig`: % split ≤ % general.
+   * Derivación de `tipo` en `/api/comisiones/lista`: `designado` / `cliente_ajeno_dueno` (retro-compatible con v2).
+3. **Frontend:**
+   * Tarjeta de configuración "Sábado — Vendedor designado" con %s acotados y días aplicables.
+   * `PanelDesignacion` en Comisiones (solo jefe): designar/quitar por fecha.
+   * Badge "Designado sábado" (esmeralda) junto al badge "Cliente ajeno · dueño".
+   * Reportes de ventas y vendedores reconocen el tipo `designado` como fila split (suman ambas filas por beneficiario correcto).
+4. **Pruebas y Verificación:**
+   * Suite E2E de staging reescrita con la sección split v3 (T0–T9 + designación): 123/123 pasos mapeados, sintaxis verificada. Pendiente de ejecución contra BD local tras aplicar la migración 260.
+   * Vitest: **27 archivos / 242/242 tests aprobados**. Build Vite + PWA exitoso. `node --check` OK en worker y handlers.
+5. **Documentación:**
+   * Plan: `docs/plans/2026-09-04-plan-comision-split-designado-sabados-v3.md` (incluye nota: el release 03 v2 del principal queda obsoleto; regenerar con lógica v3 para promover).
+   * Aplicación de la migración 260 a staging (2026-09-04): ejecutada vía Management API sobre `spupqgkdsgohxxfoxydl` (HTTP 201). Verificado: tabla `comision_designacion_diaria` con RLS + policy SELECT + UNIQUE(cuenta_id, fecha) + índice por fecha; trigger `trg_validar_designacion_diaria` operativo (rechaza jefe/admin con `DESIGNADO_INVALIDO`, acepta vendedor activo); RPC `calcularcomisiondespacho_238b` v4 sin overloads, ejecutable solo por service_role, cuerpo vivo byte a byte con el archivo (script `scripts/verify-260-rpc-live.mjs`, gitignored). Corrección aplicada durante el despliegue: la FK de `cuenta_id` apunta a `configuracion_negocio(cuenta_id)` (patrón 195), no a `usuarios(id)` — la cuenta de negocio nunca existe como fila de `usuarios`. Base limpia (0 designaciones) tras los smoke tests.
+
+---
+
+## 2026-09-04 — Fase 3: reembolso atómico y destino coherente del balance en devoluciones CxC
+
+### Resumen del Requerimiento
+Plan aprobado de 9 mejoras (3 fases) sobre el flujo de devolución parcial. Fases 1–2 (UX + guardarraíl) commiteadas en `940c77e`. Esta entrada documenta la **Fase 3**: eliminar la no-atomicidad del reembolso en efectivo (INSERT REST post-transacción del Worker) y corregir el doble beneficio (la RPC compensaba deuda Y el Worker pagaba efectivo).
+
+### Acciones Realizadas
+1. **Release principal (`supabase/release/principal/05_devolucion_reembolso_atomico.sql` + rollback):**
+   * `ajustar_finanzas_devolucion_neta` reemplazada IN-PLACE (misma identidad de 5 args, lección 42725): lee GUC transaccionales `app.devolucion_destino` / `app.devolucion_reembolso_pagos`. Sin GUC = comportamiento histórico byte-a-byte.
+   * Destino `reembolso`: deuda intacta, `credito` por el total y filas `devolucion_credito` + metadatos de reembolso DENTRO de la misma transacción (validación de métodos/montos/referencias, tope 12 pagos, tope ≤ |balance|).
+   * `registrar_devolucion_parcial_cobro_idempotente`: DROP de 14 + CREATE de 16 params (`p_destino_saldo`, `p_pagos_reembolso` con default). Worker viejo de 14 args nombrados sigue resolviendo.
+   * Preflight en el propio SQL: columnas de la migración 134 + firmas previas presentes.
+2. **Espejo staging (`construacero-staging/supabase/migrations/262_staging_devolucion_reembolso_atomico.sql`):** mismo patrón GUC sobre `ajustar_finanzas_devolucion_atomica` (226), wrapper `registrar_devolucion_parcial_cobro_staging` y alias canónico (261) pasan a 16 params.
+3. **Workers (principal + staging):** envían `p_destino_saldo`/`p_pagos_reembolso`; eliminados los INSERT REST de `devolucion_credito`, el `recalcularSaldoPendienteCliente` y el PATCH de metadatos post-RPC. El staging además completaba trabajo previo no commiteado del handler (soporte destinoSaldo/pagosReembolso del turno interrumpido).
+4. **Test actualizado al nuevo contrato:** `procesa reembolso multi-método delegando los egresos a la RPC atómica` — verifica que la RPC recibe destino+pagos y que ya NO hay POST/PATCH REST post-transacción.
+5. **Runbook de promoción:** `docs/plans/2026-09-04-runbook-promocion-devolucion-reembolso-atomico.md` (patrón backup → preflight → apply → smoke con ROLLBACK → postflight → deploy Worker).
+
+### Verificación
+* Suite completa: **35/35 archivos, 316/316 tests** en verde.
+* Build de producción (`vite build`) sin errores.
+* `node --check` en ambos Workers.
+* SQL **aún sin aplicar** ni en staging ni en producción — requiere ejecutar el runbook.
+
+### Notas
+* La semántica nueva de Reembolso (deuda intacta + efectivo) aplica solo a operaciones nuevas; el histórico queda intacto.
+* En staging persiste una ruta REST legacy post-RPC (líneas ~2795+) alcanzable solo si la RPC falla antes; limpieza diferida.
