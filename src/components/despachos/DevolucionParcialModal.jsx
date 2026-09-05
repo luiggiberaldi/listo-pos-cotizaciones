@@ -16,6 +16,8 @@ const REFERENCIA_REQUERIDA = ['Transf. / Pago Móvil']
 // Métodos permitidos para reembolsar / pagar al cliente
 const METODOS_REEMBOLSO = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT']
 const REFERENCIA_REQUERIDA_REEMBOLSO = ['Transf. / Pago Móvil', 'Zelle', 'USDT']
+// Reembolsos por encima de este monto exigen confirmación explícita del operador.
+const UMBRAL_REEMBOLSO_GRANDE = 50
 
 export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const [loading, setLoading] = useState(false)
@@ -34,6 +36,10 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   // --- Estados para destino del balance a favor del cliente ---
   const [destinoSaldo, setDestinoSaldo] = useState('saldo_a_favor') // 'saldo_a_favor' | 'reembolso'
   const [pagosReembolso, setPagosReembolso] = useState([])
+  // Deuda pendiente de ESTE despacho (Σ cargo − Σ abono en CxC). null = no se pudo cargar.
+  const [deudaDespacho, setDeudaDespacho] = useState(null)
+  // Guardarraíl: confirmación explícita del reembolso (doble beneficio o monto grande)
+  const [confirmarReembolso, setConfirmarReembolso] = useState(false)
 
   const lastValuesRef = useRef({})
   const mutation = useDevolucionParcialDespacho()
@@ -55,6 +61,8 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
       setPagosDiferencia([])
       setDestinoSaldo('saldo_a_favor')
       setPagosReembolso([])
+      setDeudaDespacho(null)
+      setConfirmarReembolso(false)
       lastValuesRef.current = {}
       fetchItemsAndDevoluciones()
     }
@@ -64,11 +72,12 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     setLoading(true)
     try {
       const clienteId = despacho.cliente_factura_id || despacho.cliente_id;
-      const [itemsRes, exchangePrevRes, devRes, clRes] = await Promise.all([
+      const [itemsRes, exchangePrevRes, devRes, clRes, cxcRes] = await Promise.all([
         supabase.from('notas_despacho_items').select('*').eq('despacho_id', despacho.id).order('orden', { ascending: true }),
         supabase.from('despacho_devolucion_intercambios').select('*').eq('despacho_id', despacho.id),
         supabase.from('despacho_devoluciones').select('despacho_item_id, producto_id, cantidad_devuelta').eq('despacho_id', despacho.id),
-        supabase.from('clientes').select('nombre, saldo_pendiente, saldo_a_favor').eq('id', clienteId).maybeSingle()
+        supabase.from('clientes').select('nombre, saldo_pendiente, saldo_a_favor').eq('id', clienteId).maybeSingle(),
+        supabase.from('cuentas_por_cobrar').select('tipo,monto_usd').eq('despacho_id', despacho.id)
       ])
 
       if (itemsRes.error) throw itemsRes.error
@@ -76,6 +85,16 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
 
       if (clRes && !clRes.error && clRes.data) {
         setClienteInfo(clRes.data)
+      }
+
+      // Deuda a nivel despacho: Σ cargo − Σ abono (misma fórmula de la RPC). Si falla, degrada a null.
+      if (cxcRes && !cxcRes.error && Array.isArray(cxcRes.data)) {
+        const deuda = cxcRes.data.reduce(
+          (s, c) => s + (c.tipo === 'cargo' ? (Number(c.monto_usd) || 0) : -(Number(c.monto_usd) || 0)), 0
+        )
+        setDeudaDespacho(Math.round(deuda * 100) / 100)
+      } else {
+        setDeudaDespacho(null)
       }
 
       const itemsData = itemsRes.data || []
@@ -243,6 +262,16 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const roundedTotalIntercambioUsd = Math.round(totalIntercambioUsd * 100) / 100
   const balanceNetoUsd = Math.round((totalIntercambioUsd - totalDevolverUsd) * 100) / 100
 
+  // Desglose del reintegro según la RPC: primero compensa la deuda del despacho
+  // (abono), el excedente queda como saldo a favor (credito).
+  const aporteADeuda = balanceNetoUsd < 0 && deudaDespacho != null
+    ? Math.round(Math.min(Math.abs(balanceNetoUsd), Math.max(0, deudaDespacho)) * 100) / 100
+    : 0
+  const saldoAFavorNuevo = balanceNetoUsd < 0
+    ? Math.round((Math.abs(balanceNetoUsd) - aporteADeuda) * 100) / 100
+    : 0
+  const deudaDespues = deudaDespacho != null ? Math.max(0, Math.round((deudaDespacho - aporteADeuda) * 100) / 100) : null
+
   // ─── Cobro de la diferencia (solo cuando el intercambio supera lo devuelto) ───
   const metodosPagoOriginal = useMemo(() => {
     try {
@@ -307,6 +336,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
 
   const handleSelectDestinoSaldo = (tipo) => {
     setDestinoSaldo(tipo)
+    setConfirmarReembolso(false)
     if (tipo === 'reembolso' && pagosReembolso.length === 0 && montoAFavorUsd > 0) {
       const defaultMetodo = metodosPagoOriginal[0] || 'Efectivo $'
       setPagosReembolso([{ metodo: defaultMetodo, monto: montoAFavorUsd.toFixed(2), referencia: '' }])
@@ -393,7 +423,13 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     )
   )
 
-  const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid && cobroDiferenciaValido && reembolsoValido
+  // Guardarraíles de reembolso: confirmación obligatoria si hay doble beneficio
+  // (efectivo + deuda pendiente en el despacho) o si el monto supera el umbral.
+  const requiereConfirmacionReembolso = balanceNetoUsd < 0 && destinoSaldo === 'reembolso' &&
+    (aporteADeuda > 0 || montoAFavorUsd > UMBRAL_REEMBOLSO_GRANDE)
+
+  const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid && cobroDiferenciaValido && reembolsoValido &&
+    (!requiereConfirmacionReembolso || confirmarReembolso)
 
   const handleConfirm = async () => {
     if (!isFormValid) return
@@ -474,6 +510,14 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
               <span className="text-slate-400 font-bold uppercase tracking-wider block text-[9px]">Cliente Facturación</span>
               <span className="font-extrabold text-slate-800 text-sm leading-tight block">{clienteInfo.nombre}</span>
             </div>
+            {deudaDespacho != null && (
+              <div className="mt-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-center gap-1.5">
+                <AlertCircle size={12} className="shrink-0 text-amber-600" />
+                <span>
+                  Este despacho registra <b>${deudaDespacho.toFixed(2)}</b> pendientes en Cuentas por Cobrar (venta a crédito).{deudaDespacho <= 0.009 ? ' Saldado.' : ''}
+                </span>
+              </div>
+            )}
             <div className="flex gap-6 shrink-0">
               <div className="text-left sm:text-right">
                 <span className="text-slate-400 font-bold uppercase tracking-wider block text-[9px]">Deuda Pendiente</span>
@@ -823,7 +867,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
             <div className="absolute top-0 left-0 right-0 h-1 bg-amber-500" />
             <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider border-b pb-2 flex items-center justify-between">
               <span>Resumen del Intercambio</span>
-              <span className="text-[10px] text-slate-400 font-mono">PRO-FORMA</span>
+              <span className="text-[10px] text-slate-400 font-mono">Resumen del ajuste</span>
             </h4>
             
             <div className="space-y-1.5">
@@ -895,10 +939,14 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                       <div className="space-y-0.5 select-none">
                         <div className="flex items-center gap-1.5">
                           <CreditCard size={13} className="text-emerald-700" />
-                          <p className="text-xs font-bold text-slate-800">Dejar como Saldo a Favor</p>
+                          <p className="text-xs font-bold text-slate-800">
+                            {aporteADeuda > 0 ? 'Descontar de la deuda' : 'Dejar como Saldo a Favor'}
+                          </p>
                         </div>
                         <p className="text-[11px] text-slate-500 leading-snug">
-                          Se acreditará a la cuenta del cliente para descontar de futuras compras o amortizar deudas.
+                          {aporteADeuda > 0
+                            ? 'La devolución se aplicará a la deuda pendiente de este despacho en CxC.'
+                            : 'Se acreditará a la cuenta del cliente para descontar de futuras compras o amortizar deudas.'}
                         </p>
                       </div>
                     </div>
@@ -934,6 +982,25 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                   </div>
                 </div>
 
+                {/* Vista previa del resultado (misma fórmula de la RPC) */}
+                <div className="px-3 py-2 rounded-lg bg-white border border-emerald-200 text-[11px] text-slate-700 leading-relaxed">
+                  <span className="font-bold text-emerald-950 uppercase tracking-wide text-[9px] block mb-0.5">Resultado esperado</span>
+                  {deudaDespues != null ? (
+                    <>
+                      Deuda de este despacho: <b>${deudaDespacho.toFixed(2)}</b> → <b>${deudaDespues.toFixed(2)}</b>
+                      {' · '}Saldo a favor: <b>${saldoAFavorNuevo.toFixed(2)}</b>
+                      {destinoSaldo === 'reembolso' && montoAFavorUsd > 0 && (
+                        <> · <b className="text-red-700">Sale efectivo: ${montoAFavorUsd.toFixed(2)}</b></>
+                      )}
+                      {destinoSaldo !== 'reembolso' && saldoAFavorNuevo <= 0.009 && ' · Sin movimiento de caja'}
+                    </>
+                  ) : (
+                    destinoSaldo === 'reembolso' && montoAFavorUsd > 0
+                      ? <>Saldo a favor: <b>${saldoAFavorNuevo.toFixed(2)}</b> · <b className="text-red-700">Sale efectivo: ${montoAFavorUsd.toFixed(2)}</b></>
+                      : <>Saldo a favor: <b>${saldoAFavorNuevo.toFixed(2)}</b>{saldoAFavorNuevo <= 0.009 ? ' · Sin movimiento de caja' : ''}</>
+                  )}
+                </div>
+
                 {/* Si se elige Reembolsar, mostrar filas multi-método */}
                 {destinoSaldo === 'reembolso' && (
                   <div className="pt-2 border-t border-emerald-200/70 space-y-2.5">
@@ -959,6 +1026,31 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                         </div>
                       )}
                     </div>
+
+                    {aporteADeuda > 0 && (
+                      <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-900 flex items-start gap-2">
+                        <AlertCircle size={14} className="shrink-0 text-amber-600 mt-0.5" />
+                        <span>
+                          <b>Atención:</b> este despacho tiene <b>${aporteADeuda.toFixed(2)}</b> de deuda pendiente. Además del efectivo, esa deuda se reducirá automáticamente. El cliente recibirá <b>${montoAFavorUsd.toFixed(2)} en efectivo</b> y deberá <b>${aporteADeuda.toFixed(2)} menos</b>.
+                        </span>
+                      </div>
+                    )}
+
+                    {requiereConfirmacionReembolso && (
+                      <label className="flex items-start gap-2 cursor-pointer p-2 rounded-lg bg-amber-50 border border-amber-300">
+                        <input
+                          type="checkbox"
+                          checked={confirmarReembolso}
+                          onChange={e => setConfirmarReembolso(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded text-amber-600 border-amber-400 focus:ring-amber-500 cursor-pointer shrink-0"
+                        />
+                        <span className="text-[11px] text-amber-900 select-none leading-snug">
+                          {aporteADeuda > 0
+                            ? `Confirmo que entiendo: el cliente recibirá $${montoAFavorUsd.toFixed(2)} en efectivo y su deuda bajará $${aporteADeuda.toFixed(2)}.`
+                            : `Confirmo el reembolso por $${montoAFavorUsd.toFixed(2)} (monto alto).`}
+                        </span>
+                      </label>
+                    )}
 
                     {pagosReembolso.length === 0 ? (
                       <p className="text-[11px] text-slate-500 italic">

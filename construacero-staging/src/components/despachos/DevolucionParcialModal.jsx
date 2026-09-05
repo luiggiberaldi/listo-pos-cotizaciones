@@ -1,17 +1,23 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Modal as _Modal } from '../ui/Modal'
-import { AlertCircle as _AlertCircle, RotateCcw as _RotateCcw, CheckCircle as _CheckCircle, Package as _Package, Trash2 as _Trash2, Plus as _Plus } from 'lucide-react'
-import _CustomSelect from '../ui/CustomSelect'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { Modal } from '../ui/Modal'
+import { AlertCircle, RotateCcw, CheckCircle, Package, Trash2, Plus, DollarSign, CreditCard } from 'lucide-react'
+import CustomSelect from '../ui/CustomSelect'
 import supabase from '../../services/supabase/client'
 import { useDevolucionParcialDespacho } from '../../hooks/useDespachos'
 import { useInventario } from '../../hooks/useInventario'
-import _ProductoAutocomplete from '../cotizaciones/ProductoAutocomplete'
+import ProductoAutocomplete from '../cotizaciones/ProductoAutocomplete'
 import { showToast } from '../ui/Toast'
 
 // Métodos permitidos para cobrar la diferencia. Se excluyen 'Donación' y
 // 'Cta por cobrar': no cobrar ya deja el cargo completo como deuda en CxC.
 const METODOS_COBRO_DIFERENCIA = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT', 'Cruce']
 const REFERENCIA_REQUERIDA = ['Transf. / Pago Móvil']
+
+// Métodos permitidos para reembolsar / pagar al cliente
+const METODOS_REEMBOLSO = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT']
+const REFERENCIA_REQUERIDA_REEMBOLSO = ['Transf. / Pago Móvil', 'Zelle', 'USDT']
+// Reembolsos por encima de este monto exigen confirmación explícita del operador.
+const UMBRAL_REEMBOLSO_GRANDE = 50
 
 export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const [loading, setLoading] = useState(false)
@@ -27,40 +33,31 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const [clienteInfo, setClienteInfo] = useState(null)
   const [pagosDiferencia, setPagosDiferencia] = useState([])
 
+  // --- Estados para destino del balance a favor del cliente ---
+  const [destinoSaldo, setDestinoSaldo] = useState('saldo_a_favor') // 'saldo_a_favor' | 'reembolso'
+  const [pagosReembolso, setPagosReembolso] = useState([])
+  // Deuda pendiente de ESTE despacho (Σ cargo − Σ abono en CxC). null = no se pudo cargar.
+  const [deudaDespacho, setDeudaDespacho] = useState(null)
+  // Guardarraíl: confirmación explícita del reembolso (doble beneficio o monto grande)
+  const [confirmarReembolso, setConfirmarReembolso] = useState(false)
+
   const lastValuesRef = useRef({})
-  const idempotencyKeyRef = useRef(null)
   const mutation = useDevolucionParcialDespacho()
 
   // Cargar catálogo de productos localmente para el intercambio
   const { data: catalogoRes } = useInventario({ pageSize: 1500 })
   const productosCatalog = catalogoRes?.productos || []
 
-  useEffect(() => {
-    if (isOpen && despacho?.id) {
-      setItemsList([])
-      setMotivoSelect('')
-      setMotivoText('')
-      setGenerarReemplazo(false)
-      setConfirmarKardex(false)
-      setRealizarIntercambio(false)
-      setExchangeItems([])
-      setClienteInfo(null)
-      setPagosDiferencia([])
-      lastValuesRef.current = {}
-      idempotencyKeyRef.current = null
-      fetchItemsAndDevoluciones()
-    }
-  }, [isOpen, despacho, fetchItemsAndDevoluciones])
-
-  const fetchItemsAndDevoluciones = useCallback(async () => {
+  const fetchItemsAndDevoluciones = async () => {
     setLoading(true)
     try {
       const clienteId = despacho.cliente_factura_id || despacho.cliente_id;
-      const [itemsRes, exchangePrevRes, devRes, clRes] = await Promise.all([
+      const [itemsRes, exchangePrevRes, devRes, clRes, cxcRes] = await Promise.all([
         supabase.from('notas_despacho_items').select('*').eq('despacho_id', despacho.id).order('orden', { ascending: true }),
         supabase.from('despacho_devolucion_intercambios').select('*').eq('despacho_id', despacho.id),
         supabase.from('despacho_devoluciones').select('despacho_item_id, producto_id, cantidad_devuelta').eq('despacho_id', despacho.id),
-        supabase.from('clientes').select('nombre, saldo_pendiente, saldo_a_favor').eq('id', clienteId).maybeSingle()
+        supabase.from('clientes').select('nombre, saldo_pendiente, saldo_a_favor').eq('id', clienteId).maybeSingle(),
+        supabase.from('cuentas_por_cobrar').select('tipo,monto_usd').eq('despacho_id', despacho.id)
       ])
 
       if (itemsRes.error) throw itemsRes.error
@@ -68,6 +65,16 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
 
       if (clRes && !clRes.error && clRes.data) {
         setClienteInfo(clRes.data)
+      }
+
+      // Deuda a nivel despacho: Σ cargo − Σ abono (misma fórmula de la RPC). Si falla, degrada a null.
+      if (cxcRes && !cxcRes.error && Array.isArray(cxcRes.data)) {
+        const deuda = cxcRes.data.reduce(
+          (s, c) => s + (c.tipo === 'cargo' ? (Number(c.monto_usd) || 0) : -(Number(c.monto_usd) || 0)), 0
+        )
+        setDeudaDespacho(Math.round(deuda * 100) / 100)
+      } else {
+        setDeudaDespacho(null)
       }
 
       const itemsData = itemsRes.data || []
@@ -125,7 +132,27 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     } finally {
       setLoading(false)
     }
-  }, [despacho])
+  }
+
+  useEffect(() => {
+    if (isOpen && despacho?.id) {
+      setItemsList([])
+      setMotivoSelect('')
+      setMotivoText('')
+      setGenerarReemplazo(false)
+      setConfirmarKardex(false)
+      setRealizarIntercambio(false)
+      setExchangeItems([])
+      setClienteInfo(null)
+      setPagosDiferencia([])
+      setDestinoSaldo('saldo_a_favor')
+      setPagosReembolso([])
+      setDeudaDespacho(null)
+      setConfirmarReembolso(false)
+      lastValuesRef.current = {}
+      fetchItemsAndDevoluciones()
+    }
+  }, [isOpen, despacho])
 
   const handleCheckboxChange = (id) => {
     setItemsList(prev => prev.map(item => {
@@ -235,6 +262,16 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const roundedTotalIntercambioUsd = Math.round(totalIntercambioUsd * 100) / 100
   const balanceNetoUsd = Math.round((totalIntercambioUsd - totalDevolverUsd) * 100) / 100
 
+  // Desglose del reintegro según la RPC: primero compensa la deuda del despacho
+  // (abono), el excedente queda como saldo a favor (credito).
+  const aporteADeuda = balanceNetoUsd < 0 && deudaDespacho != null
+    ? Math.round(Math.min(Math.abs(balanceNetoUsd), Math.max(0, deudaDespacho)) * 100) / 100
+    : 0
+  const saldoAFavorNuevo = balanceNetoUsd < 0
+    ? Math.round((Math.abs(balanceNetoUsd) - aporteADeuda) * 100) / 100
+    : 0
+  const deudaDespues = deudaDespacho != null ? Math.max(0, Math.round((deudaDespacho - aporteADeuda) * 100) / 100) : null
+
   // ─── Cobro de la diferencia (solo cuando el intercambio supera lo devuelto) ───
   const metodosPagoOriginal = useMemo(() => {
     try {
@@ -292,6 +329,69 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     })))
   }
 
+  // ─── Reembolso multi-método (cuando el cliente tiene saldo a favor) ───
+  const montoAFavorUsd = balanceNetoUsd < 0 ? Math.abs(balanceNetoUsd) : 0
+  const reembolsadoTotal = Math.round(pagosReembolso.reduce((s, p) => s + (Number(p.monto) || 0), 0) * 100) / 100
+  const pendienteReembolso = Math.max(0, Math.round((montoAFavorUsd - reembolsadoTotal) * 100) / 100)
+
+  const handleSelectDestinoSaldo = (tipo) => {
+    setDestinoSaldo(tipo)
+    setConfirmarReembolso(false)
+    if (tipo === 'reembolso' && pagosReembolso.length === 0 && montoAFavorUsd > 0) {
+      const defaultMetodo = metodosPagoOriginal[0] || 'Efectivo $'
+      setPagosReembolso([{ metodo: defaultMetodo, monto: montoAFavorUsd.toFixed(2), referencia: '' }])
+    }
+  }
+
+  const handleAddPagoReembolso = () => {
+    const pendiente = Math.max(0, pendienteReembolso)
+    const metodosUsados = new Set(pagosReembolso.map(p => p.metodo))
+    const primerMetodoDisponible = METODOS_REEMBOLSO.find(m => !metodosUsados.has(m))
+    if (!primerMetodoDisponible) return
+
+    setPagosReembolso(prev => [
+      ...prev,
+      { metodo: primerMetodoDisponible, monto: pendiente > 0 ? pendiente.toFixed(2) : '', referencia: '' }
+    ])
+  }
+
+  const handleUpdatePagoReembolso = (idx, field, value) => {
+    setPagosReembolso(prev => prev.map((p, i) => {
+      if (i !== idx) return p
+      if (field === 'metodo' && !REFERENCIA_REQUERIDA_REEMBOLSO.includes(value)) {
+        return { ...p, metodo: value, referencia: '' }
+      }
+      return { ...p, [field]: value }
+    }))
+  }
+
+  const handleRemovePagoReembolso = (idx) => {
+    setPagosReembolso(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const handleMontoTotalReembolso = (idx) => {
+    const otros = pagosReembolso.reduce((s, p, i) => i === idx ? s : s + (Number(p.monto) || 0), 0)
+    const pendiente = Math.max(0, Math.round((montoAFavorUsd - otros) * 100) / 100)
+    setPagosReembolso(prev => prev.map((p, i) => (i === idx ? { ...p, monto: pendiente.toFixed(2) } : p)))
+  }
+
+  const handleUsarMismosMetodosReembolso = () => {
+    const metodosValidos = [...new Set(metodosPagoOriginal)].filter(m => METODOS_REEMBOLSO.includes(m))
+    if (metodosValidos.length === 0) {
+      showToast('El despacho no registra métodos de pago reutilizables', 'info')
+      return
+    }
+    const cantidad = metodosValidos.length
+    const montoBase = Math.floor((montoAFavorUsd / cantidad) * 100) / 100
+    setPagosReembolso(metodosValidos.map((m, i) => ({
+      metodo: m,
+      monto: i === cantidad - 1
+        ? (Math.round((montoAFavorUsd - montoBase * (cantidad - 1)) * 100) / 100).toFixed(2)
+        : montoBase.toFixed(2),
+      referencia: '',
+    })))
+  }
+
   // Validaciones
   const hasSelectedItems = selectedItems.length > 0
   const allQtyValid = selectedItems.every(item => {
@@ -309,7 +409,27 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     })
   )
 
-  const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid && cobroDiferenciaValido
+  const metodosReembolsoUnicos = new Set(pagosReembolso.map(p => p.metodo)).size === pagosReembolso.length
+
+  const reembolsoValido = !(balanceNetoUsd < 0) || destinoSaldo !== 'reembolso' || (
+    pagosReembolso.length > 0 &&
+    reembolsadoTotal > 0 &&
+    reembolsadoTotal <= montoAFavorUsd + 0.011 &&
+    metodosReembolsoUnicos &&
+    pagosReembolso.every(p =>
+      METODOS_REEMBOLSO.includes(p.metodo) &&
+      Number(p.monto) > 0 &&
+      (!REFERENCIA_REQUERIDA_REEMBOLSO.includes(p.metodo) || String(p.referencia || '').trim().length > 0)
+    )
+  )
+
+  // Guardarraíles de reembolso: confirmación obligatoria si hay doble beneficio
+  // (efectivo + deuda pendiente en el despacho) o si el monto supera el umbral.
+  const requiereConfirmacionReembolso = balanceNetoUsd < 0 && destinoSaldo === 'reembolso' &&
+    (aporteADeuda > 0 || montoAFavorUsd > UMBRAL_REEMBOLSO_GRANDE)
+
+  const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid && cobroDiferenciaValido && reembolsoValido &&
+    (!requiereConfirmacionReembolso || confirmarReembolso)
 
   const handleConfirm = async () => {
     if (!isFormValid) return
@@ -325,13 +445,11 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     const motivoFinal = motivoSelect === 'Otro' ? motivoText.trim() : motivoSelect
 
     try {
-      idempotencyKeyRef.current = idempotencyKeyRef.current || globalThis.crypto?.randomUUID?.()
       await mutation.mutateAsync({
         despachoId: despacho.id,
         items: itemsPayload,
         motivo: motivoFinal,
         generarReemplazo,
-        idempotencyKey: idempotencyKeyRef.current,
         exchangeItems: realizarIntercambio
           ? exchangeItems.map(it => ({
               producto_id: it.id,
@@ -347,7 +465,20 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 monto: Math.round(Number(p.monto) * 100) / 100,
                 referencia: String(p.referencia || '').trim() || null,
               }))
-          : []
+          : [],
+        destinoSaldo: balanceNetoUsd < 0 ? destinoSaldo : 'saldo_a_favor',
+        pagosReembolso: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso')
+          ? pagosReembolso
+              .filter(p => METODOS_REEMBOLSO.includes(p.metodo) && Number(p.monto) > 0)
+              .map(p => ({
+                metodo: p.metodo,
+                monto: Math.round(Number(p.monto) * 100) / 100,
+                referencia: String(p.referencia || '').trim() || null,
+              }))
+          : [],
+        reembolsoMetodo: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? pagosReembolso[0]?.metodo : null,
+        reembolsoReferencia: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? pagosReembolso[0]?.referencia : null,
+        reembolsoMonto: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? reembolsadoTotal : 0
       })
       onClose()
     } catch (err) {
@@ -364,7 +495,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   ]
 
   return (
-    <_Modal
+    <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={`Registrar Devolución Parcial — Despacho #${String(despacho?.numero).padStart(5, '0')}`}
@@ -379,6 +510,14 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
               <span className="text-slate-400 font-bold uppercase tracking-wider block text-[9px]">Cliente Facturación</span>
               <span className="font-extrabold text-slate-800 text-sm leading-tight block">{clienteInfo.nombre}</span>
             </div>
+            {deudaDespacho != null && (
+              <div className="mt-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-center gap-1.5">
+                <AlertCircle size={12} className="shrink-0 text-amber-600" />
+                <span>
+                  Este despacho registra <b>${deudaDespacho.toFixed(2)}</b> pendientes en Cuentas por Cobrar (venta a crédito).{deudaDespacho <= 0.009 ? ' Saldado.' : ''}
+                </span>
+              </div>
+            )}
             <div className="flex gap-6 shrink-0">
               <div className="text-left sm:text-right">
                 <span className="text-slate-400 font-bold uppercase tracking-wider block text-[9px]">Deuda Pendiente</span>
@@ -400,7 +539,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
             
             {/* Banner Informativo */}
             <div className="p-2.5 rounded-lg border flex items-center gap-2 text-xs bg-amber-50 border-amber-200 text-amber-900 leading-tight">
-              <_AlertCircle size={16} className="shrink-0 text-amber-600" />
+              <AlertCircle size={16} className="shrink-0 text-amber-600" />
               <span>
                 Registra el retorno de mercancía entregada. Se reintegrará el stock y se calcularán los ajustes en CxC.
               </span>
@@ -409,7 +548,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
             {/* Lista de Productos del Despacho */}
             <div className="space-y-2">
               <h3 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
-                <_Package size={14} className="text-slate-500" />
+                <Package size={14} className="text-slate-500" />
                 Productos a devolver
               </h3>
 
@@ -421,7 +560,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
               ) : itemsList.length === 0 || itemsList.every(i => i.maxReturnable <= 0) ? (
                 <div className="space-y-3">
                   <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 text-xs flex items-start gap-2">
-                    <_AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
+                    <AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
                     <div>
                       <p className="font-bold">Todos los productos de este despacho han sido devueltos en su totalidad.</p>
                       <p className="mt-0.5 text-[11px] opacity-80">No hay unidades disponibles para registrar una nueva devolución.</p>
@@ -573,7 +712,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">Motivo de devolución <span className="text-red-500">*</span></label>
-                <_CustomSelect
+                <CustomSelect
                   options={opcionesMotivo.map(op => ({ value: op, label: op }))}
                   value={motivoSelect}
                   onChange={val => setMotivoSelect(val)}
@@ -618,12 +757,12 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
             {realizarIntercambio && (
               <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-3 animate-in fade-in duration-200">
                 <h3 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
-                  <_Package size={14} className="text-slate-500" />
+                  <Package size={14} className="text-slate-500" />
                   Productos de reemplazo (Intercambio)
                 </h3>
 
                 {/* Buscador de productos en catálogo */}
-                <_ProductoAutocomplete
+                <ProductoAutocomplete
                   productos={productosCatalog}
                   onAgregar={handleAddExchangeProduct}
                   idsAgregados={new Set(exchangeItems.map(p => p.id))}
@@ -693,7 +832,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                           className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
                           title="Eliminar"
                         >
-                          <_Trash2 size={13} />
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     ))}
@@ -713,7 +852,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 />
                 <div className="text-xs select-none">
                   <span className="font-semibold text-slate-700 flex items-center gap-1">
-                    <_RotateCcw size={12} className="text-slate-500" />
+                    <RotateCcw size={12} className="text-slate-500" />
                     Confirmar ingreso de mercancía devuelta a stock <span className="text-red-500">*</span>
                   </span>
                 </div>
@@ -728,7 +867,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
             <div className="absolute top-0 left-0 right-0 h-1 bg-amber-500" />
             <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider border-b pb-2 flex items-center justify-between">
               <span>Resumen del Intercambio</span>
-              <span className="text-[10px] text-slate-400 font-mono">PRO-FORMA</span>
+              <span className="text-[10px] text-slate-400 font-mono">Resumen del ajuste</span>
             </h4>
             
             <div className="space-y-1.5">
@@ -756,40 +895,307 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
               </div>
             </div>
             
-            {/* Caja explicativa de acciones financieras */}
-            <div className={`p-2.5 rounded-xl border leading-relaxed flex gap-2.5 ${
-              balanceNetoUsd > 0 
-                ? 'bg-amber-50 border-amber-200 text-amber-900' 
-                : balanceNetoUsd < 0 
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
-                : 'bg-slate-50 border-slate-200 text-slate-700'
-            }`}>
-              <_CheckCircle size={15} className={`shrink-0 mt-0.5 ${balanceNetoUsd > 0 ? 'text-amber-600' : balanceNetoUsd < 0 ? 'text-emerald-600' : 'text-slate-500'}`} />
-              <div className="space-y-0.5">
-                {balanceNetoUsd > 0 ? (
-                  <>
-                    <p className="font-bold">El cliente debe pagar la diferencia</p>
-                    <p className="text-[11px] opacity-90">
-                      El total a pagar al cliente es <strong>$0.00 USD</strong>. Se registrará un nuevo <strong>cargo (deuda)</strong> por <strong>${balanceNetoUsd.toFixed(2)} USD</strong> en su cuenta por cobrar.
-                    </p>
-                  </>
-                ) : balanceNetoUsd < 0 ? (
-                  <>
-                    <p className="font-bold">Saldo a favor del cliente</p>
-                    <p className="text-[11px] opacity-90">
-                      Se aplicará un <strong>abono</strong> para disminuir su deuda actual o se registrará un crédito de <strong>saldo a favor</strong> de <strong>${Math.abs(balanceNetoUsd).toFixed(2)} USD</strong> para futuras compras.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-bold">Intercambio equivalente</p>
-                    <p className="text-[11px] opacity-90">
-                      El valor de los productos es el mismo. No se generarán movimientos de cobro ni abonos en la cuenta del cliente.
-                    </p>
-                  </>
+            {/* Sección de acciones financieras: Si hay saldo a favor (balanceNetoUsd < 0), permitir elegir destino */}
+            {balanceNetoUsd < 0 ? (
+              <div className="border border-emerald-200 rounded-2xl bg-emerald-50/40 p-3.5 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <h5 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                      Destino del balance a favor (${Math.abs(balanceNetoUsd).toFixed(2)} USD)
+                    </h5>
+                  </div>
+                  {metodosPagoOriginal.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-slate-500 font-medium">Pagó originalmente con:</span>
+                      {metodosPagoOriginal.map(m => (
+                        <span key={m} className="px-1.5 py-0.5 text-[9px] font-bold text-slate-600 bg-white border border-slate-200 rounded">
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Selector de 2 opciones: Saldo a Favor vs Reembolso */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Opción 1: Dejar como Saldo a Favor */}
+                  <div
+                    onClick={() => handleSelectDestinoSaldo('saldo_a_favor')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      destinoSaldo === 'saldo_a_favor'
+                        ? 'bg-white border-emerald-500 shadow-sm ring-2 ring-emerald-500/20'
+                        : 'bg-white/60 border-slate-200 hover:bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="radio"
+                        name="destinoSaldo"
+                        checked={destinoSaldo === 'saldo_a_favor'}
+                        onChange={() => handleSelectDestinoSaldo('saldo_a_favor')}
+                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <div className="space-y-0.5 select-none">
+                        <div className="flex items-center gap-1.5">
+                          <CreditCard size={13} className="text-emerald-700" />
+                          <p className="text-xs font-bold text-slate-800">
+                            {aporteADeuda > 0 ? 'Descontar de la deuda' : 'Dejar como Saldo a Favor'}
+                          </p>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-snug">
+                          {aporteADeuda > 0
+                            ? 'La devolución se aplicará a la deuda pendiente de este despacho en CxC.'
+                            : 'Se acreditará a la cuenta del cliente para descontar de futuras compras o amortizar deudas.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Opción 2: Pagar / Reembolsar al Cliente */}
+                  <div
+                    onClick={() => handleSelectDestinoSaldo('reembolso')}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      destinoSaldo === 'reembolso'
+                        ? 'bg-white border-emerald-500 shadow-sm ring-2 ring-emerald-500/20'
+                        : 'bg-white/60 border-slate-200 hover:bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="radio"
+                        name="destinoSaldo"
+                        checked={destinoSaldo === 'reembolso'}
+                        onChange={() => handleSelectDestinoSaldo('reembolso')}
+                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <div className="space-y-0.5 select-none">
+                        <div className="flex items-center gap-1.5">
+                          <DollarSign size={13} className="text-emerald-700" />
+                          <p className="text-xs font-bold text-slate-800">Pagar / Reembolsar al Cliente</p>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-snug">
+                          Se entrega el dinero en efectivo o banco al cliente. Se registrará la salida en el reporte de caja.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vista previa del resultado (misma fórmula de la RPC) */}
+                <div className="px-3 py-2 rounded-lg bg-white border border-emerald-200 text-[11px] text-slate-700 leading-relaxed">
+                  <span className="font-bold text-emerald-950 uppercase tracking-wide text-[9px] block mb-0.5">Resultado esperado</span>
+                  {deudaDespues != null ? (
+                    <>
+                      Deuda de este despacho: <b>${deudaDespacho.toFixed(2)}</b> → <b>${deudaDespues.toFixed(2)}</b>
+                      {' · '}Saldo a favor: <b>${saldoAFavorNuevo.toFixed(2)}</b>
+                      {destinoSaldo === 'reembolso' && montoAFavorUsd > 0 && (
+                        <> · <b className="text-red-700">Sale efectivo: ${montoAFavorUsd.toFixed(2)}</b></>
+                      )}
+                      {destinoSaldo !== 'reembolso' && saldoAFavorNuevo <= 0.009 && ' · Sin movimiento de caja'}
+                    </>
+                  ) : (
+                    destinoSaldo === 'reembolso' && montoAFavorUsd > 0
+                      ? <>Saldo a favor: <b>${saldoAFavorNuevo.toFixed(2)}</b> · <b className="text-red-700">Sale efectivo: ${montoAFavorUsd.toFixed(2)}</b></>
+                      : <>Saldo a favor: <b>${saldoAFavorNuevo.toFixed(2)}</b>{saldoAFavorNuevo <= 0.009 ? ' · Sin movimiento de caja' : ''}</>
+                  )}
+                </div>
+
+                {/* Si se elige Reembolsar, mostrar filas multi-método */}
+                {destinoSaldo === 'reembolso' && (
+                  <div className="pt-2 border-t border-emerald-200/70 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <h5 className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider">
+                        Formas de Reembolso al Cliente <span className="text-red-500">*</span>
+                      </h5>
+                      {metodosPagoOriginal.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-slate-500">Pagó originalmente con:</span>
+                          {metodosPagoOriginal.map(m => (
+                            <span key={m} className="px-1.5 py-0.5 text-[9px] font-bold text-slate-600 bg-white border border-slate-200 rounded">
+                              {m}
+                            </span>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={handleUsarMismosMetodosReembolso}
+                            className="px-2 py-0.5 text-[9px] font-bold text-emerald-800 bg-white border border-emerald-300 rounded hover:bg-emerald-50 transition-colors"
+                          >
+                            Usar mismos métodos
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {aporteADeuda > 0 && (
+                      <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-900 flex items-start gap-2">
+                        <AlertCircle size={14} className="shrink-0 text-amber-600 mt-0.5" />
+                        <span>
+                          <b>Atención:</b> este despacho tiene <b>${aporteADeuda.toFixed(2)}</b> de deuda pendiente. Además del efectivo, esa deuda se reducirá automáticamente. El cliente recibirá <b>${montoAFavorUsd.toFixed(2)} en efectivo</b> y deberá <b>${aporteADeuda.toFixed(2)} menos</b>.
+                        </span>
+                      </div>
+                    )}
+
+                    {requiereConfirmacionReembolso && (
+                      <label className="flex items-start gap-2 cursor-pointer p-2 rounded-lg bg-amber-50 border border-amber-300">
+                        <input
+                          type="checkbox"
+                          checked={confirmarReembolso}
+                          onChange={e => setConfirmarReembolso(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded text-amber-600 border-amber-400 focus:ring-amber-500 cursor-pointer shrink-0"
+                        />
+                        <span className="text-[11px] text-amber-900 select-none leading-snug">
+                          {aporteADeuda > 0
+                            ? `Confirmo que entiendo: el cliente recibirá $${montoAFavorUsd.toFixed(2)} en efectivo y su deuda bajará $${aporteADeuda.toFixed(2)}.`
+                            : `Confirmo el reembolso por $${montoAFavorUsd.toFixed(2)} (monto alto).`}
+                        </span>
+                      </label>
+                    )}
+
+                    {pagosReembolso.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 italic">
+                        Sin métodos de reembolso seleccionados. Agrega uno abajo.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {pagosReembolso.map((pago, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+                            {/* Método selector */}
+                            <div className="w-[150px] shrink-0">
+                              <CustomSelect
+                                options={METODOS_REEMBOLSO
+                                  .filter(m => m === pago.metodo || !pagosReembolso.some((p, i) => i !== idx && p.metodo === m))
+                                  .map(m => ({ value: m, label: m }))
+                                }
+                                value={pago.metodo}
+                                onChange={val => handleUpdatePagoReembolso(idx, 'metodo', val)}
+                                placeholder="Método..."
+                                searchable={false}
+                              />
+                            </div>
+
+                            {/* Monto + acceso rápido TOTAL */}
+                            <div className="flex items-center border border-slate-200 rounded-xl bg-white overflow-hidden focus-within:ring-1 focus-within:ring-emerald-500 focus-within:border-emerald-500 shrink-0">
+                              <span className="pl-2.5 pr-1 text-[10px] text-slate-400 font-bold select-none">$</span>
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                value={pago.monto}
+                                onChange={e => handleUpdatePagoReembolso(idx, 'monto', e.target.value)}
+                                placeholder="0.00"
+                                className="w-[68px] text-right py-2.5 pr-2 text-xs font-bold focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleMontoTotalReembolso(idx)}
+                                disabled={pendienteReembolso <= 0.011}
+                                title="Completar con el saldo pendiente por reembolsar"
+                                className="mr-1.5 ml-0.5 px-1.5 py-0.5 text-[9px] font-black text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-md hover:bg-emerald-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all select-none shrink-0"
+                              >
+                                TOTAL
+                              </button>
+                            </div>
+
+                            {/* Referencia */}
+                            <input
+                              type="text"
+                              value={pago.referencia || ''}
+                              onChange={e => handleUpdatePagoReembolso(idx, 'referencia', e.target.value)}
+                              placeholder={
+                                REFERENCIA_REQUERIDA_REEMBOLSO.includes(pago.metodo)
+                                  ? "N° Referencia *"
+                                  : "Referencia / Caja (opcional)"
+                              }
+                              className={`flex-1 min-w-[110px] px-2.5 py-2.5 text-xs border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                                REFERENCIA_REQUERIDA_REEMBOLSO.includes(pago.metodo) && !String(pago.referencia || '').trim()
+                                  ? 'border-red-300 bg-red-50/20'
+                                  : 'border-slate-200 bg-white'
+                              }`}
+                            />
+
+                            {/* Quitar fila */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePagoReembolso(idx)}
+                              className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                              title="Quitar método"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+                      <button
+                        type="button"
+                        onClick={handleAddPagoReembolso}
+                        disabled={pagosReembolso.length >= METODOS_REEMBOLSO.length || pendienteReembolso <= 0.005}
+                        title={
+                          pagosReembolso.length >= METODOS_REEMBOLSO.length
+                            ? 'Todos los métodos disponibles ya están agregados'
+                            : pendienteReembolso <= 0.005
+                            ? 'El saldo ya está 100% reembolsado'
+                            : undefined
+                        }
+                        className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-emerald-800 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <Plus size={12} /> Agregar método de reembolso
+                      </button>
+
+                      <div className="text-[11px] font-semibold">
+                        {!metodosReembolsoUnicos ? (
+                          <span className="text-red-600 font-bold">
+                            ⚠️ Los métodos de reembolso no pueden repetirse
+                          </span>
+                        ) : reembolsadoTotal > montoAFavorUsd + 0.011 ? (
+                          <span className="text-red-600 font-bold">
+                            ⚠️ La suma (${reembolsadoTotal.toFixed(2)}) supera el saldo a favor (${montoAFavorUsd.toFixed(2)})
+                          </span>
+                        ) : pendienteReembolso > 0.011 ? (
+                          <span className="text-amber-800">
+                            Reembolsando: ${reembolsadoTotal.toFixed(2)} · Restante a Saldo a Favor: ${pendienteReembolso.toFixed(2)} USD
+                          </span>
+                        ) : (
+                          <span className="text-emerald-800 flex items-center gap-1">
+                            <CheckCircle size={12} className="text-emerald-600" />
+                            Reembolso 100% liquidado (${reembolsadoTotal.toFixed(2)} USD)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
-            </div>
+            ) : (
+              /* Si balanceNetoUsd >= 0, mantenemos la caja explicativa estándar */
+              <div className={`p-2.5 rounded-xl border leading-relaxed flex gap-2.5 ${
+                balanceNetoUsd > 0 
+                  ? 'bg-amber-50 border-amber-200 text-amber-900' 
+                  : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}>
+                <CheckCircle size={15} className={`shrink-0 mt-0.5 ${balanceNetoUsd > 0 ? 'text-amber-600' : 'text-slate-500'}`} />
+                <div className="space-y-0.5">
+                  {balanceNetoUsd > 0 ? (
+                    <>
+                      <p className="font-bold">El cliente debe pagar la diferencia</p>
+                      <p className="text-[11px] opacity-90">
+                        El total a pagar al cliente es <strong>$0.00 USD</strong>. Se registrará un nuevo <strong>cargo (deuda)</strong> por <strong>${balanceNetoUsd.toFixed(2)} USD</strong> en su cuenta por cobrar.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-bold">Intercambio equivalente</p>
+                      <p className="text-[11px] opacity-90">
+                        El valor de los productos es el mismo. No se generarán movimientos de cobro ni abonos en la cuenta del cliente.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Cobro de la diferencia: métodos con que paga el cliente el restante */}
             {balanceNetoUsd > 0 && (
@@ -821,7 +1227,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                       <div key={idx} className="flex items-center gap-1.5 flex-wrap">
                         {/* Método — selector redondeado consistente con el modal */}
                         <div className="w-[150px] shrink-0">
-                          <_CustomSelect
+                          <CustomSelect
                             options={METODOS_COBRO_DIFERENCIA.map(m => ({ value: m, label: m }))}
                             value={pago.metodo}
                             onChange={val => handleUpdatePagoDiferencia(idx, 'metodo', val)}
@@ -867,7 +1273,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                           className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
                           title="Quitar"
                         >
-                          <_Trash2 size={13} />
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     ))}
@@ -882,7 +1288,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                     title={pagosDiferencia.length >= 12 ? 'Máximo 12 métodos de pago' : undefined}
                     className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-amber-800 bg-white border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
-                    <_Plus size={12} /> Agregar método de pago
+                    <Plus size={12} /> Agregar método de pago
                   </button>
                   <div className="text-[11px] font-semibold">
                     {pendienteDiferencia > 0.011 ? (
@@ -921,6 +1327,6 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
           </button>
         </div>
       </div>
-    </_Modal>
+    </Modal>
   )
 }

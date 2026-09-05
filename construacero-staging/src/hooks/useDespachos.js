@@ -559,26 +559,70 @@ export function useDevolucionParcialDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, items, motivo, generarReemplazo, exchangeItems, idempotencyKey = null, pagosDiferencia }) => {
+    mutationFn: async ({
+      despachoId,
+      items,
+      motivo,
+      generarReemplazo,
+      exchangeItems,
+      idempotencyKey = null,
+      pagosDiferencia,
+      destinoSaldo,
+      pagosReembolso,
+      reembolsoMetodo,
+      reembolsoReferencia,
+      reembolsoMonto
+    }) => {
       const stableIdempotencyKey = idempotencyKey || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
       const res = await authFetch('/api/despachos/devolucion-parcial', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': stableIdempotencyKey },
-        body: JSON.stringify({ despachoId, items, motivo, generarReemplazo, exchangeItems, idempotencyKey: stableIdempotencyKey, pagosDiferencia: Array.isArray(pagosDiferencia) ? pagosDiferencia : [] }),
+        body: JSON.stringify({
+          despachoId,
+          items,
+          motivo,
+          generarReemplazo,
+          exchangeItems,
+          idempotencyKey: stableIdempotencyKey,
+          pagosDiferencia: Array.isArray(pagosDiferencia) ? pagosDiferencia : [],
+          destinoSaldo,
+          pagosReembolso: Array.isArray(pagosReembolso) ? pagosReembolso : [],
+          reembolsoMetodo,
+          reembolsoReferencia,
+          reembolsoMonto
+        }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al registrar devolución parcial')
       return result
     },
-    onSuccess: async () => {
-      showToast('Devolución parcial registrada con éxito', 'success')
+    onSuccess: async (result) => {
+      // Toast detallado con el efecto real en CxC (campos de la RPC atómica)
+      let msg = 'Devolución parcial registrada con éxito'
+      try {
+        const balance = Number(result?.balanceNetoUsd ?? result?.balance_neto_usd) || 0
+        const abono = Number(result?.abono_monto) || 0
+        const credito = Number(result?.credito_monto) || 0
+        const reembolso = Number(result?.reembolsoTotalUsd) || 0
+        const partes = []
+        if (balance < 0) {
+          if (abono > 0) partes.push(`deuda reducida $${abono.toFixed(2)}`)
+          if (credito > 0) partes.push(`saldo a favor $${credito.toFixed(2)}`)
+          if (reembolso > 0) partes.push(`reembolso en efectivo $${reembolso.toFixed(2)}`)
+          if (partes.length === 0) partes.push('sin efecto financiero')
+        } else if (balance > 0) {
+          partes.push(`cargo por diferencia $${balance.toFixed(2)}`)
+        }
+        if (partes.length > 0) msg = `Devolución registrada: ${partes.join(' · ')}`
+      } catch { /* fallback al mensaje genérico */ }
+      showToast(msg, 'success')
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
+      qc.invalidateQueries({ queryKey: ['reporte-ventas'], exact: false })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
-      qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
       broadcastEntidad(['despachos', 'inventario', 'clientes', 'cuentas', 'cotizaciones'])
     },
     onError: (error) => {
