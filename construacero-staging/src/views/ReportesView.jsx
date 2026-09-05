@@ -10,8 +10,8 @@ import {
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useReporteExternos } from '../hooks/useReporteExternos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
-import { useComisiones, useComisionesResumen, useMarcarComisionPagada } from '../hooks/useComisiones'
-import ConfirmModal from '../components/ui/ConfirmModal'
+import { useComisiones, useComisionesResumen } from '../hooks/useComisiones'
+
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
 import { useProveedores } from '../hooks/useProveedores'
 import { getDayRange, getCorteSemanalRange, getMonthRange } from '../utils/dateHelpers'
@@ -30,10 +30,50 @@ import TablaProductos from '../components/reportes/TablaProductos'
 import TablaClientes from '../components/reportes/TablaClientes'
 import TabTransportistas from '../components/reportes/TabTransportistas'
 import SeccionTransportistasVentas from '../components/reportes/SeccionTransportistasVentas'
+import ModalDetalleVendedor from '../components/reportes/ModalDetalleVendedor'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { countUniqueDispatches } from '../utils/comisionUtils'
 
 // Helper para formatear forma_pago_abono (que puede venir como JSON array o string)
+const round2 = value => Math.round((Number(value) || 0) * 100) / 100
+
+function prepararComisionParaPDF(evento, cotizacion = null, vendedorFallback = null) {
+  const event = evento || {}
+  const com = event.comisiones || {}
+  const despacho = com.despacho || event.despacho || null
+  const cot = cotizacion || com.cotizacion || event.cotizacion || null
+  const vendedor = event.vendedor || com.vendedor || vendedorFallback || null
+
+  return {
+    ...event,
+    monto: Number(event.monto ?? com.totalcomision ?? 0),
+    creado_en: event.creado_en || event.creadoen || null,
+    comisiones: {
+      ...com,
+      id: com.id || event.id,
+      totalcomision: Number(com.totalcomision ?? event.monto ?? 0),
+      comisioncabilla: Number(com.comisioncabilla || 0),
+      comisionotros: Number(com.comisionotros || 0),
+      pctcabilla: Number(com.pctcabilla || 0),
+      pctotros: Number(com.pctotros || 0),
+      estado: 'generada',
+      despacho: despacho ? {
+        ...despacho,
+        totalusd: despacho.totalusd !== undefined ? despacho.totalusd : despacho.total_usd,
+        creado_en: despacho.creado_en || despacho.creadoEn || null,
+        cliente_nombre: despacho.cliente_nombre || despacho.clienteNombre || despacho.cliente?.nombre || null,
+        productos: despacho.productos || [],
+      } : null,
+      cotizacion: cot ? {
+        ...cot,
+        cliente_nombre: cot.cliente_nombre || cot.cliente?.nombre || null,
+      } : null,
+    },
+    vendedor,
+  }
+}
+
 function formatMetodoPago(val, fallback = '—') {
   if (!val) return fallback
   try {
@@ -588,6 +628,7 @@ function TabVentas({ configNeg }) {
           ...v,
           vendedor: v.nombre,
           vendedorColor: v.color,
+          codigo: v.codigo,
           count: v.despachos,
         })),
         porCliente: (reporteFiltrado.porCliente || []).map(c => ({
@@ -974,562 +1015,6 @@ function TabVentas({ configNeg }) {
     </div>
   )
 }
-function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, ajustesManuales = {} }) {
-  const { data: comisionesRes, isLoading } = useComisiones({
-    desde: rango?.from,
-    hasta: rango?.to,
-    vendedorId: vendedor?.id,
-    pageSize: 1000
-  })
-  const detalle = comisionesRes?.data ?? []
-
-  const marcar = useMarcarComisionPagada()
-  const { perfil } = useAuthStore()
-  const { tasaEuro, tasaUsdt } = useTasaCambio()
-  const [tipoTasaComision, setTipoTasaComision] = useState('euro') // 'euro' | 'usdt'
-  const tasaSeleccionadaInfo = tipoTasaComision === 'usdt' ? tasaUsdt : tasaEuro
-  const tasaSeleccionada = tasaSeleccionadaInfo?.precio || 0
-  const tipoTasaLabel = tipoTasaComision === 'usdt' ? 'USDT' : 'Euro BCV'
-  const tasaDisponible = Number(tasaSeleccionada) > 0
-
-  const esDev = perfil?.rol === 'desarrollador'
-  // En staging, solo Desarrollo conserva los controles internos de pago.
-  const puedePagarComisiones = esDev
-
-  const catPrincipal = configNeg?.comision_categoria_cabilla || 'Cabilla'
-  const esExterno = !!vendedor?.es_externo || (vendedor?.markup_pct != null && Number(vendedor.markup_pct) > 0)
-  const pctCabilla = esExterno ? (configNeg?.comision_ext_pct_cabilla || 2) : (configNeg?.comision_pct_cabilla || 2)
-  const labelCabillaHeader = esExterno ? `Cemento (${pctCabilla}%)` : `${catPrincipal} (${pctCabilla}%)`
-
-  const [comisionAPagar, setComisionAPagar] = useState(null)
-  const [pagoMasivoData, setPagoMasivoData] = useState(null)
-  const [pagandoMasivo, setPagandoMasivo] = useState(false)
-  const [selectedIds, setSelectedIds] = useState(new Set())
-
-  const comisionesPendientes = useMemo(() => {
-    return detalle.filter(c => c.estado !== 'pagada')
-  }, [detalle])
-
-  const comisionesSoloPendientes = useMemo(() => {
-    return detalle.filter(c => {
-      if (c.estado === 'pendiente') return true
-      if (c.estado === 'cta_cobrar') {
-        const saldoLib = Number(c.comision_liberada || 0) - Number(c.montopagado || 0)
-        return saldoLib > 0.01
-      }
-      return false
-    })
-  }, [detalle])
-
-  const montoPendiente = useMemo(() => {
-    return comisionesPendientes.reduce((acc, c) => {
-      const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-      return acc + Math.max(0, m - Number(c.montopagado || 0))
-    }, 0)
-  }, [comisionesPendientes])
-
-  const montoSoloPendiente = useMemo(() => {
-    return comisionesSoloPendientes.reduce((acc, c) => {
-      const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-      return acc + Math.max(0, m - Number(c.montopagado || 0))
-    }, 0)
-  }, [comisionesSoloPendientes])
-
-  // Derived: selected pending commissions and their total
-  const selectedPendientes = useMemo(() => {
-    return comisionesPendientes.filter(c => selectedIds.has(c.id))
-  }, [comisionesPendientes, selectedIds])
-
-  const montoSeleccionado = useMemo(() => {
-    return selectedPendientes.reduce((acc, c) => {
-      const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-      return acc + Math.max(0, m - Number(c.montopagado || 0))
-    }, 0)
-  }, [selectedPendientes])
-
-  const allPendienteIds = useMemo(() => comisionesPendientes.map(c => c.id), [comisionesPendientes])
-  const allSelected = allPendienteIds.length > 0 && allPendienteIds.every(id => selectedIds.has(id))
-  const someSelected = allPendienteIds.some(id => selectedIds.has(id))
-
-  const toggleId = (id) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  const toggleAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(allPendienteIds))
-    }
-  }
-
-  const tasaComision = () => tasaSeleccionada || 0
-
-  // Calcular totales del detalle
-  const totales = detalle.reduce((acc, item) => {
-    const total = item.estado === 'cta_cobrar' ? Number(item.comision_liberada || 0) : Number(item.totalcomision || 0)
-    acc.totalUsd += total
-    acc.comBs += total * tasaSeleccionada
-    return acc
-  }, { totalUsd: 0, comBs: 0 })
-
-  const [exportando, setExportando] = useState(false)
-  const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
-
-  const totalConAjustes = useMemo(() => {
-    if (!vendedor) return totales;
-    const aj = ajustesManuales[vendedor.id] || { cxc: '', descuentoCarro: '' };
-    const cxcVal = Number(aj.cxc) || 0;
-    const descVal = Number(aj.descuentoCarro) || 0;
-    const rateVal = tasaSeleccionada || 0;
-
-    if (formatoReporte === 'resumido') {
-      const adjustedUsd = totales.totalUsd + cxcVal - descVal;
-      const adjustedBs = adjustedUsd * rateVal;
-      return { totalUsd: adjustedUsd, comBs: adjustedBs };
-    }
-    return totales;
-  }, [totales, vendedor, ajustesManuales, formatoReporte, tasaSeleccionada])
-
-  async function exportarPDF(action = 'download') {
-    if (!tasaDisponible) {
-      alert(`No hay una tasa ${tipoTasaLabel} disponible para generar el PDF.`)
-      return
-    }
-    setExportando(true)
-    try {
-      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
-
-      // Usar el Worker, igual que el reporte general, para respetar el tenant
-      // y el rol de la sesión. La consulta directa desde el navegador queda
-      // sometida a RLS y puede ocultar eventos válidos en staging.
-      const params = new URLSearchParams()
-      params.set('vista', 'eventos')
-      params.set('page', '1')
-      params.set('pageSize', '500')
-      if (rango?.from) params.set('desde', rango.from)
-      if (rango?.to) params.set('hasta', rango.to)
-      if (vendedor?.id) params.set('vendedorId', vendedor.id)
-
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`HTTP ${res.status}: ${text}`)
-      }
-      const resJson = await res.json()
-      const rawEvents = resJson.data || []
-
-      if (rawEvents.length === 0) {
-        alert(`🔍 SIN DATOS: No hay liberaciones de comisiones para ${vendedor?.nombre || 'este vendedor'} en el periodo seleccionado.`)
-        return
-      }
-
-      // Fetch cotizaciones
-      const cotizacionIds = [...new Set(rawEvents.map(r => r.comisiones?.cotizacionid).filter(Boolean))]
-      let cotizacionesMap = {}
-      if (cotizacionIds.length > 0) {
-        const { data: cotList, error: cotErr } = await supabase
-          .from('cotizaciones')
-          .select('id, numero, tasa_bcv_snapshot, cliente:clientes(id, nombre)')
-          .in('id', cotizacionIds)
-        if (!cotErr && cotList) {
-          cotizacionesMap = Object.fromEntries(cotList.map(c => [c.id, c]))
-        }
-      }
-
-      const comisionesParaPDF = rawEvents.map(r => {
-        const com = r.comisiones || {};
-        const desp = com.despacho || {};
-        const cot = cotizacionesMap[com.cotizacionid] || com.cotizacion;
-        return {
-          id: r.id,
-          monto: Number(r.monto || 0),
-          tipo: r.tipo,
-          creado_en: r.creado_en,
-          comisiones: {
-            id: com.id,
-            totalcomision: Number(com.totalcomision || 0),
-            comisioncabilla: Number(com.comisioncabilla || 0),
-            comisionotros: Number(com.comisionotros || 0),
-            pctcabilla: Number(com.pctcabilla || 0),
-            pctotros: Number(com.pctotros || 0),
-            estado: com.estado,
-            montopagado: Number(com.montopagado || 0),
-            cotizacionid: com.cotizacionid,
-            despacho: desp ? {
-              id: desp.id,
-              numero: desp.numero,
-              totalusd: desp.total_usd,
-              tasa_snapshot: desp.tasa_snapshot,
-              cliente: desp.cliente,
-              productos: desp.productos || []
-            } : null,
-            cotizacion: cot ? {
-              id: cot.id,
-              numero: cot.numero,
-              tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
-              cliente_nombre: cot.cliente?.nombre || null
-            } : null
-          },
-          vendedor: r.vendedor || com.vendedor || {
-            id: vendedor?.id,
-            nombre: vendedor?.nombre,
-            color: vendedor?.color,
-            markup_pct: vendedor?.markup_pct,
-            es_externo: vendedor?.es_externo
-          }
-        };
-      });
-
-      await generarComisionesPDF({
-        comisiones: comisionesParaPDF,
-        vendedor: { nombre: vendedor?.nombre, color: vendedor?.color, markup_pct: vendedor?.markup_pct, es_externo: vendedor?.es_externo },
-        rango,
-        config: configNeg ?? {},
-        action,
-        formato: formatoReporte,
-        tasaEuro: tasaSeleccionada,
-        tasaAplicada: tasaSeleccionada,
-        tipoTasa: tipoTasaLabel,
-        tasaFuente: tasaSeleccionadaInfo?.fuente,
-        tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
-        ajustesManuales,
-        modoCorteSemanal: true
-      })
-    } catch (e) {
-      console.error('Error generando PDF individual:', e)
-      alert('❌ Error al generar el PDF: ' + e.message)
-    } finally {
-      setExportando(false)
-    }
-  }
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={
-        <div className="flex items-center gap-2">
-          <span>Detalle de Comisiones - {vendedor?.nombre || 'Vendedor'}</span>
-          {vendedor && (!!vendedor.es_externo || (vendedor.markup_pct != null && Number(vendedor.markup_pct) > 0)) && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5">
-              💼 {vendedor.markup_pct ? `Externo (+${vendedor.markup_pct}%)` : 'Externo'}
-            </span>
-          )}
-        </div>
-      }
-      className="max-w-6xl"
-    >
-      {isLoading ? <SkeletonReporte /> : (
-        <div className="space-y-4">
-          {/* Fila 1: KPIs - siempre en ancho completo */}
-          <div className="grid grid-cols-2 gap-4">
-            <KpiCard icon={DollarSign} label="Total Comisión USD" value={fmtUsd(totalConAjustes.totalUsd)} gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
-            <KpiCard icon={Percent} label={`Total Comisión Bs (${tipoTasaLabel})`} value={fmtBs(totalConAjustes.comBs)} gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
-          </div>
-
-          {/* Fila 2: Acciones */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={(e) => { e.stopPropagation(); exportarPDF('download'); }}
-              disabled={exportando || !tasaDisponible}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-all duration-200 border border-slate-700 shadow-md active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
-              title="Descargar Reporte PDF"
-            >
-              {exportando ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} className="group-hover:translate-y-0.5 transition-transform" />}
-              <span>Descargar PDF</span>
-            </button>
-
-            <button
-              onClick={(e) => { e.stopPropagation(); exportarPDF('print'); }}
-              disabled={exportando || !tasaDisponible}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-900/10 hover:bg-blue-900/20 text-blue-900 transition-all duration-200 border border-blue-900/20 shadow-md active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
-              title="Imprimir Reporte PDF"
-            >
-              {exportando ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} className="group-hover:scale-110 transition-transform" />}
-              <span>Imprimir</span>
-            </button>
-
-            {/* Selector de Tasa Euro / USDT */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shrink-0 h-9">
-              <button
-                type="button"
-                onClick={() => setTipoTasaComision('euro')}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                title="Calcular comisiones con tasa Euro Oficial BCV"
-              >
-                <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
-                <span>Euro BCV:</span>
-                <b>{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTipoTasaComision('usdt')}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                title="Calcular comisiones con tasa USDT (Binance P2P)"
-              >
-                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
-                <span>USDT:</span>
-                <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
-              </button>
-            </div>
-
-            <div className="flex p-0.5 bg-slate-100 rounded-xl h-9 min-w-[180px] border border-slate-200 ml-auto">
-              <button
-                type="button"
-                onClick={() => setFormatoReporte('detallado')}
-                className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${formatoReporte === 'detallado' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-              >Detallado</button>
-              <button
-                type="button"
-                onClick={() => setFormatoReporte('resumido')}
-                className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${formatoReporte === 'resumido' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-              >Resumido</button>
-            </div>
-
-            {/* Pagar seleccionadas (cuando hay selección) */}
-            {puedePagarComisiones && someSelected && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPagoMasivoData({
-                    pendientes: selectedPendientes,
-                    montoPendiente: montoSeleccionado,
-                    vendedor,
-                    title: `Pagar ${selectedPendientes.length} comisión(es) seleccionada(s)`,
-                    desc: `${selectedPendientes.length} comisiones marcadas manualmente`
-                  });
-                }}
-                disabled={marcar.isPending || pagandoMasivo}
-                className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 text-white transition-all duration-200 shadow-md shadow-violet-600/15 border border-violet-500/20 active:scale-95 disabled:opacity-50 group"
-                title={`Pagar ${selectedPendientes.length} comisiones seleccionadas`}
-              >
-                <CheckCircle size={15} className="group-hover:scale-110 transition-transform text-violet-200 shrink-0" />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="font-black text-xs tracking-wide">{fmtUsd(montoSeleccionado)}</span>
-                  <span className="text-[10px] font-medium text-violet-200 whitespace-nowrap">{selectedPendientes.length} seleccionada{selectedPendientes.length !== 1 ? 's' : ''}</span>
-                </div>
-              </button>
-            )}
-
-            {/* Separador + botones globales cuando NO hay selección */}
-            {!someSelected && (
-              <>
-                {puedePagarComisiones && comisionesSoloPendientes.length > 0 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPagoMasivoData({
-                        pendientes: comisionesSoloPendientes,
-                        montoPendiente: montoSoloPendiente,
-                        vendedor,
-                        title: "Pagar Todo (Comisiones)",
-                        desc: "todas las comisiones pendientes, excluyendo cuentas por cobrar no liberadas"
-                      });
-                    }}
-                    disabled={marcar.isPending || pagandoMasivo}
-                    className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all duration-200 shadow-md shadow-emerald-600/10 border border-emerald-500/20 active:scale-95 disabled:opacity-50 group"
-                    title="Pagar todas las comisiones pendientes (excluyendo CxC no liberadas) de este vendedor"
-                  >
-                    <CheckCircle size={15} className="group-hover:scale-110 transition-transform text-emerald-200 shrink-0" />
-                    <div className="flex flex-col items-start leading-tight">
-                      <span className="font-black text-xs tracking-wide">{fmtUsd(montoSoloPendiente)}</span>
-                      <span className="text-[10px] font-medium text-emerald-200 whitespace-nowrap">Pagar Todo</span>
-                    </div>
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-slate-100 flex items-center gap-2">
-              <FileText size={14} className="text-indigo-500 sm:w-4 sm:h-4" />
-              <h3 className="text-xs sm:text-sm font-black text-slate-800 flex-1">Comisiones generadas</h3>
-              {puedePagarComisiones && someSelected && (
-                <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-full">
-                  {selectedIds.size} seleccionada{selectedIds.size !== 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs sm:text-sm">
-                <thead>
-                  <tr className="text-[10px] sm:text-xs text-slate-400 uppercase border-b border-slate-100">
-                    {puedePagarComisiones && (
-                      <th className="px-3 py-2 w-8">
-                        <input
-                          type="checkbox"
-                          checked={allSelected}
-                          ref={el => { if (el) el.indeterminate = someSelected && !allSelected }}
-                          onChange={toggleAll}
-                          className="w-3.5 h-3.5 rounded border-slate-300 text-violet-600 cursor-pointer accent-violet-600"
-                          title={allSelected ? 'Deseleccionar todas' : 'Seleccionar todas las pendientes'}
-                        />
-                      </th>
-                    )}
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-left">Fecha</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-left">Correlativo</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Venta ($)</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">{labelCabillaHeader}</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Otros</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Com. ($)</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Tasa {tipoTasaLabel}</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-right">Com. (Bs)</th>
-                    <th className="px-2 sm:px-4 py-2 font-semibold text-center">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detalle.map((d, i) => {
-                    const total = d.estado === 'cta_cobrar' ? Number(d.comision_liberada || 0) : Number(d.totalcomision || 0)
-                    const tasa = tasaComision(d)
-                    const comBs = total * tasa
-                    const valCabilla = Number(d.comisioncabilla || 0)
-                    const valOtros = Number(d.comisionotros || 0)
-                    const isPendiente = d.estado !== 'pagada'
-                    const isSelected = selectedIds.has(d.id)
-
-                    let badgeClass = 'bg-amber-50 text-amber-700 border border-amber-200'
-                    let label = d.estado
-                    if (d.estado === 'pagada') {
-                      badgeClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    } else if (d.estado === 'cta_cobrar') {
-                      badgeClass = 'bg-rose-50 text-rose-700 border border-rose-200'
-                      label = 'cta x cobrar'
-                    }
-
-                    return (
-                      <tr
-                        key={d.id || i}
-                        className={`border-b border-slate-50 transition-colors duration-150 ${
-                          isSelected
-                            ? 'bg-violet-50/60 hover:bg-violet-50'
-                            : 'hover:bg-slate-50/50'
-                        }`}
-                        onClick={() => isPendiente && puedePagarComisiones && toggleId(d.id)}
-                        style={{ cursor: isPendiente && puedePagarComisiones ? 'pointer' : 'default' }}
-                      >
-                        {puedePagarComisiones && (
-                          <td className="px-3 py-2 w-8">
-                            {isPendiente ? (
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleId(d.id)}
-                                onClick={e => e.stopPropagation()}
-                                className="w-3.5 h-3.5 rounded border-slate-300 cursor-pointer accent-violet-600"
-                              />
-                            ) : (
-                              <span className="block w-3.5 h-3.5" />
-                            )}
-                          </td>
-                        )}
-                        <td className="px-2 sm:px-4 py-2 sm:py-2.5">
-                          <span className="font-bold text-slate-700">{new Date(d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}</span>
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-2.5">
-                          <div className="text-[10px] leading-tight font-mono font-bold space-y-1.5 my-0.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[8px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded font-sans uppercase tracking-wider">Desp</span>
-                              <span className="text-slate-700">#{d.despacho?.numero || '—'}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[8px] bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded font-sans uppercase tracking-wider">Cot</span>
-                              <span className="text-slate-700">#{d.cotizacion?.numero || '—'}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right font-medium text-slate-500">{fmtUsd(d.despacho?.totalusd || 0)}</td>
-                        <td className={`px-2 sm:px-4 py-2 sm:py-2.5 text-right font-semibold ${valCabilla === 0 ? 'text-slate-300 font-normal' : 'text-slate-800'}`}>{fmtUsd(valCabilla)}</td>
-                        <td className={`px-2 sm:px-4 py-2 sm:py-2.5 text-right font-semibold ${valOtros === 0 ? 'text-slate-300 font-normal' : 'text-slate-800'}`}>{fmtUsd(valOtros)}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right font-black text-slate-900 bg-slate-50/50">{fmtUsd(total)}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right text-[11px] text-slate-500 font-semibold">{tasa > 0 ? `Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—'}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right font-black text-indigo-600 bg-indigo-50/20">{fmtBs(comBs)}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-center">
-                          <div className="flex flex-col items-center gap-1.5 py-0.5">
-                            <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
-                              {d.estado === 'pagada' && <CheckCircle size={9} className="text-emerald-600" />}
-                              {label}
-                            </div>
-                            {puedePagarComisiones && d.estado !== 'pagada' && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setComisionAPagar(d); }}
-                                className="px-2 py-0.5 rounded-md text-[9.5px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-500 transition-all duration-200 active:scale-95 uppercase tracking-wider shadow-sm flex items-center justify-center gap-1 mx-auto"
-                              >
-                                <CreditCard size={9} />
-                                Pagar
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modales de Confirmación de Pago */}
-      <ConfirmModal
-        isOpen={!!comisionAPagar}
-        onConfirm={() => {
-          if (!comisionAPagar) return
-          const m = comisionAPagar.estado === 'cta_cobrar' ? Number(comisionAPagar.comision_liberada || 0) : Number(comisionAPagar.totalcomision || 0)
-          const saldo = Math.max(0, m - Number(comisionAPagar.montopagado || 0))
-          marcar.mutate({ comisionid: comisionAPagar.id, montopagado: saldo })
-          setComisionAPagar(null)
-        }}
-        onClose={() => setComisionAPagar(null)}
-        title="Registrar Pago de Comisión"
-        message={comisionAPagar ? (() => {
-          const m = comisionAPagar.estado === 'cta_cobrar' ? Number(comisionAPagar.comision_liberada || 0) : Number(comisionAPagar.totalcomision || 0)
-          return `Se registrará el pago de ${fmtUsd(Math.max(0, m - Number(comisionAPagar.montopagado || 0)))}. Esta acción es atómica y final.`
-        })() : ''}
-        confirmText="Confirmar Pago"
-        variant="success"
-      />
-
-      <ConfirmModal
-        isOpen={!!pagoMasivoData}
-        onConfirm={async () => {
-          if (!pagoMasivoData) return
-          setPagandoMasivo(true)
-          const { pendientes: items } = pagoMasivoData
-          for (const c of items) {
-            const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-            const saldo = Math.max(0, m - Number(c.montopagado || 0))
-            if (saldo > 0) {
-              try {
-                await marcar.mutateAsync({ comisionid: c.id, montopagado: saldo })
-              } catch (e) {
-                console.error('Error pagando comisión', c.id, e)
-              }
-            }
-          }
-          setPagandoMasivo(false)
-          setPagoMasivoData(null)
-        }}
-        onClose={() => setPagoMasivoData(null)}
-        title={pagoMasivoData?.title || "Pagar Comisiones"}
-        message={
-          pagoMasivoData 
-            ? `Se registrará el pago de ${pagoMasivoData.pendientes.length} comisiones (${pagoMasivoData.desc}) de ${pagoMasivoData.vendedor?.nombre || 'este vendedor'} por un total de ${fmtUsd(pagoMasivoData.montoPendiente)}. Esta acción es secuencial y final.` 
-            : ''
-        }
-        confirmText="Confirmar Pago"
-        variant="success"
-      />
-    </Modal>
-  )
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TAB: COMISIONES
@@ -1537,20 +1022,10 @@ function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, aju
 function TabComisiones({ configNeg }) {
   const { perfil } = useAuthStore()
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
-  const esDev = perfil?.rol === 'desarrollador'
-  // En staging, Administración y Jefatura trabajan con el corte externo;
-  // solo Desarrollo conserva la herramienta para pruebas/contingencia.
-  const puedePagarComisiones = esDev
-
-  const marcar = useMarcarComisionPagada()
-  const [pagoMasivoData, setPagoMasivoData] = useState(null)
-  const [pagandoMasivo, setPagandoMasivo] = useState(false)
-
   const [rango, setRango] = useState(() => {
     const r = getCorteSemanalRange(0)
     return { from: r.from, to: r.to }
   })
-  const [filtroEstado, setFiltroEstado] = useState('pendiente') // Inicializado con 'pendiente'
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [formatoReporte, setFormatoReporte] = useState('detallado') // 'detallado', 'resumido'
   const { tasaEuro, tasaUsdt } = useTasaCambio()
@@ -1575,36 +1050,12 @@ function TabComisiones({ configNeg }) {
   }
 
   const { data: comisionesRes, isLoading: comisionesLoading, isError, refetch } = useComisiones({
-    estado: filtroEstado,
     vendedorId: filtroVendedor,
     desde: rango.from,
     hasta: rango.to,
     pageSize: 1000
   })
   const comisiones = comisionesRes?.data ?? []
-
-  const handlePagarTodoVendedor = useCallback((v, conCxc = true) => {
-    const pendientes = comisiones.filter(c => {
-      const vId = c.vendedor?.id || '00000000-0000-0000-0000-000000000000'
-      if (vId !== v.id) return false
-      
-      const m = (c.estado === 'cta_cobrar' && !conCxc)
-        ? Number(c.comision_liberada || 0)
-        : Number(c.totalcomision || 0)
-      const saldo = Math.max(0, m - Number(c.montopagado || 0))
-      
-      const matchEstado = conCxc ? c.estado !== 'pagada' : ['pendiente', 'cta_cobrar'].includes(c.estado)
-      return matchEstado && saldo > 0.01
-    })
-    if (pendientes.length === 0) return
-    setPagoMasivoData({
-      pendientes,
-      montoPendiente: conCxc ? v.pendUsd : v.pendSoloComisUsd,
-      vendedor: v,
-      title: conCxc ? "Pagar Todo (Comisiones + CxC)" : "Pagar Solo Comisiones (Sin CxC)",
-      desc: conCxc ? "todas las comisiones pendientes, incluyendo cuentas por cobrar" : "solo comisiones pendientes, excluyendo cuentas por cobrar"
-    })
-  }, [comisiones])
 
   // Segunda llamada SIN filtro de vendedor, solo para construir el dropdown
   // de forma que siempre muestre los vendedores con comisiones en el rango
@@ -1618,8 +1069,7 @@ function TabComisiones({ configNeg }) {
   const { data: resumen, isLoading: resumenLoading } = useComisionesResumen({
     vendedorId: filtroVendedor,
     desde: rango.from,
-    hasta: rango.to,
-    estado: filtroEstado
+    hasta: rango.to
   })
 
   // Agrupar por vendedor para la vista Maestro (Resumen)
@@ -1638,30 +1088,27 @@ function TabComisiones({ configNeg }) {
           rol: c.vendedor?.rol,
           totalUsd: 0,
           totalBs: 0,
-          pendUsd: 0,
-          pendSoloComisUsd: 0,
-          pagUsd: 0,
-          cantidad: 0
+          cantidad: 0,
+          rows: []
         }
       }
-      // Para CxC usar solo la porción liberada, para el resto usar totalcomision
-      const m = c.estado === 'cta_cobrar'
-        ? Number(c.comision_liberada || 0)
-        : Number(c.totalcomision || 0)
-      const tasa = Number(tasaSeleccionada || 0)
-      const mBs = m * tasa
-
+      // La comisión se suma por fila, pero el indicador cuenta despachos únicos.
+      const m = Number(c.totalcomision || 0)
       map[vId].totalUsd += m
-      map[vId].totalBs += mBs
-      map[vId].cantidad++
-      if (['pendiente', 'cta_cobrar'].includes(c.estado)) {
-        map[vId].pendSoloComisUsd += m
-        map[vId].pendUsd += Number(c.totalcomision || 0)
-      } else {
-        map[vId].pagUsd += m
-      }
+      map[vId].rows.push(c)
     })
     return Object.values(map)
+      .map(v => {
+        const totalUsd = round2(v.totalUsd)
+        const totalBs = round2(totalUsd * Number(tasaSeleccionada || 0))
+        return {
+          ...v,
+          totalUsd,
+          totalBs,
+          cantidad: countUniqueDispatches(v.rows),
+          rows: undefined,
+        }
+      })
       .filter(v => v.rol !== 'desarrollador' && v.rol !== 'administracion' && v.rol !== 'logistica')
       .sort((a, b) => b.totalUsd - a.totalUsd)
   }, [comisiones, tasaSeleccionada])
@@ -1689,12 +1136,13 @@ function TabComisiones({ configNeg }) {
     }
     setExportando(true)
     try {
-      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
+      const { generarComisionesPDF } = await import('../services/pdf/comisionesGeneradasPDF')
 
       const params = new URLSearchParams()
       params.set('vista', 'eventos')
       params.set('page', '1')
-      params.set('pageSize', '500')
+      // El Worker admite hasta 1000 filas; debe cubrir el lote completo de staging.
+      params.set('pageSize', '1000')
       if (rango.from) params.set('desde', rango.from)
       if (rango.to) params.set('hasta', rango.to)
       if (filtroVendedor) params.set('vendedorId', filtroVendedor)
@@ -1751,49 +1199,11 @@ function TabComisiones({ configNeg }) {
         ? vendedoresAgrupados.find(v => v.id === filtroVendedor)
         : null
 
-      const comisionesParaPDF = filteredEvents.map(r => {
-        const com = r.comisiones || {};
-        const desp = com.despacho || {};
-        const cot = cotizacionesMap[com.cotizacionid] || com.cotizacion;
-        return {
-          id: r.id,
-          monto: Number(r.monto || 0),
-          tipo: r.tipo,
-          creado_en: r.creado_en,
-          comisiones: {
-            id: com.id,
-            totalcomision: Number(com.totalcomision || 0),
-            comisioncabilla: Number(com.comisioncabilla || 0),
-            comisionotros: Number(com.comisionotros || 0),
-            pctcabilla: Number(com.pctcabilla || 0),
-            pctotros: Number(com.pctotros || 0),
-            estado: com.estado,
-            montopagado: Number(com.montopagado || 0),
-            cotizacionid: com.cotizacionid,
-            despacho: desp ? {
-              id: desp.id,
-              numero: desp.numero,
-              totalusd: desp.totalusd !== undefined ? desp.totalusd : desp.total_usd,
-              tasa_snapshot: desp.tasa_snapshot,
-              cliente: desp.cliente,
-              productos: desp.productos || []
-            } : null,
-            cotizacion: cot ? {
-              id: cot.id,
-              numero: cot.numero,
-              tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
-              cliente_nombre: cot.cliente_nombre || cot.cliente?.nombre || null
-            } : null
-          },
-          vendedor: r.vendedor || com.vendedor || (vendedorInfo ? {
-            id: vendedorInfo.id,
-            nombre: vendedorInfo.nombre,
-            color: vendedorInfo.color,
-            markup_pct: vendedorInfo.markup_pct,
-            es_externo: vendedorInfo.es_externo
-          } : null)
-        };
-      });
+      const comisionesParaPDF = filteredEvents.map(r => prepararComisionParaPDF(
+        r,
+        r.comisiones?.cotizacion || cotizacionesMap[r.comisiones?.cotizacionid],
+        vendedorInfo,
+      ));
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
@@ -1809,7 +1219,7 @@ function TabComisiones({ configNeg }) {
         tasaFuente: tasaSeleccionadaInfo?.fuente,
         tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
         ajustesManuales,
-        modoCorteSemanal: true
+        modoCorteSemanal: formatoReporte === 'detallado'
       })
     } catch (e) {
       console.error('Error generando PDF general:', e)
@@ -1826,7 +1236,7 @@ function TabComisiones({ configNeg }) {
     }
     setExportando(true)
     try {
-      const { generarComisionesPDF } = await import('../services/pdf/comisionesPDF')
+      const { generarComisionesPDF } = await import('../services/pdf/comisionesGeneradasPDF')
 
       // Usar el Worker, igual que el reporte general, para respetar el tenant
       // y el rol de la sesión. La consulta directa desde el navegador queda
@@ -1834,7 +1244,8 @@ function TabComisiones({ configNeg }) {
       const params = new URLSearchParams()
       params.set('vista', 'eventos')
       params.set('page', '1')
-      params.set('pageSize', '500')
+      // El Worker admite hasta 1000 filas; debe cubrir el lote completo de staging.
+      params.set('pageSize', '1000')
       if (rango?.from) params.set('desde', rango.from)
       if (rango?.to) params.set('hasta', rango.to)
       if (vendedor?.id) params.set('vendedorId', vendedor.id)
@@ -1866,49 +1277,11 @@ function TabComisiones({ configNeg }) {
         }
       }
 
-      const comisionesParaPDF = rawEvents.map(r => {
-        const com = r.comisiones || {};
-        const desp = com.despacho || {};
-        const cot = cotizacionesMap[com.cotizacionid] || com.cotizacion;
-        return {
-          id: r.id,
-          monto: Number(r.monto || 0),
-          tipo: r.tipo,
-          creado_en: r.creado_en,
-          comisiones: {
-            id: com.id,
-            totalcomision: Number(com.totalcomision || 0),
-            comisioncabilla: Number(com.comisioncabilla || 0),
-            comisionotros: Number(com.comisionotros || 0),
-            pctcabilla: Number(com.pctcabilla || 0),
-            pctotros: Number(com.pctotros || 0),
-            estado: com.estado,
-            montopagado: Number(com.montopagado || 0),
-            cotizacionid: com.cotizacionid,
-            despacho: desp ? {
-              id: desp.id,
-              numero: desp.numero,
-              totalusd: desp.total_usd,
-              tasa_snapshot: desp.tasa_snapshot,
-              cliente: desp.cliente,
-              productos: desp.productos || []
-            } : null,
-            cotizacion: cot ? {
-              id: cot.id,
-              numero: cot.numero,
-              tasa_bcv_snapshot: cot.tasa_bcv_snapshot,
-              cliente_nombre: cot.cliente?.nombre || null
-            } : null
-          },
-          vendedor: r.vendedor || com.vendedor || {
-            id: vendedor.id,
-            nombre: vendedor.nombre,
-            color: vendedor.color,
-            markup_pct: vendedor.markup_pct,
-            es_externo: vendedor.es_externo
-          }
-        };
-      });
+      const comisionesParaPDF = rawEvents.map(r => prepararComisionParaPDF(
+        r,
+        r.comisiones?.cotizacion || cotizacionesMap[r.comisiones?.cotizacionid],
+        vendedor,
+      ));
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
@@ -1922,7 +1295,7 @@ function TabComisiones({ configNeg }) {
         tasaFuente: tasaSeleccionadaInfo?.fuente,
         tasaActualizadaEn: tasaSeleccionadaInfo?.ultimaActualizacion,
         ajustesManuales,
-        modoCorteSemanal: true
+        modoCorteSemanal: formatoReporte === 'detallado'
       })
     } catch (e) {
       console.error('Error generating PDF individual:', e)
@@ -1937,12 +1310,6 @@ function TabComisiones({ configNeg }) {
 
   return (
     <div className="space-y-4">
-      {esDev && (
-        <div className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-[11px] text-violet-800">
-          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-violet-600" />
-          <p><strong>Modo desarrollador:</strong> los controles internos de pago solo son visibles para este perfil. Administración y Jefatura trabajan con el corte PDF y no ven estas acciones.</p>
-        </div>
-      )}
       {/* Filtros */}
       <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-3.5">
@@ -1970,24 +1337,6 @@ function TabComisiones({ configNeg }) {
                   />
                 </div>
               )}
-
-              <div className="w-60">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Estado de Comisión</label>
-                <div className="flex p-0.5 bg-slate-100/80 rounded-xl h-9">
-                  <button
-                    onClick={() => setFiltroEstado('')}
-                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${!filtroEstado ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                  >Todas</button>
-                  <button
-                    onClick={() => setFiltroEstado('pendiente')}
-                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${filtroEstado === 'pendiente' ? 'bg-white shadow-md text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
-                  >Pendientes</button>
-                  <button
-                    onClick={() => setFiltroEstado('pagada')}
-                    className={`flex-1 text-[11px] font-bold rounded-lg transition-all ${filtroEstado === 'pagada' ? 'bg-white shadow-md text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
-                  >Pagadas</button>
-                </div>
-              </div>
 
               <div className="w-44">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Formato Reporte</label>
@@ -2059,36 +1408,36 @@ function TabComisiones({ configNeg }) {
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
                           <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                            <button
-                              onClick={() => {
-                                setShowPrintMenu(false)
-                                exportarPDF('todos', 'imprimir')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-                            >
-                              <FileText size={13} className="text-slate-400" />
-                              Imprimir PDF Completo
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowPrintMenu(false)
-                                exportarPDF('internos', 'imprimir')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
-                            >
-                              <UserCheck size={13} className="text-indigo-500" />
-                              Imprimir Solo Internos
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowPrintMenu(false)
-                                exportarPDF('externos', 'imprimir')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
-                            >
-                              <Globe size={13} className="text-amber-500" />
-                              Imprimir Solo Externos
-                            </button>
+<button
+  onClick={() => {
+    setShowPrintMenu(false)
+    exportarPDF('todos', 'imprimir')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+>
+  <FileText size={13} className="text-slate-400" />
+  Imprimir PDF Completo
+</button>
+<button
+  onClick={() => {
+    setShowPrintMenu(false)
+    exportarPDF('internos', 'imprimir')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+>
+  <UserCheck size={13} className="text-indigo-500" />
+  Imprimir Solo Internos
+</button>
+<button
+  onClick={() => {
+    setShowPrintMenu(false)
+    exportarPDF('externos', 'imprimir')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+>
+  <Globe size={13} className="text-amber-500" />
+  Imprimir Solo Externos
+</button>
                           </div>
                         </>
                       )}
@@ -2125,36 +1474,36 @@ function TabComisiones({ configNeg }) {
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
                           <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                            <button
-                              onClick={() => {
-                                setShowExportMenu(false)
-                                exportarPDF('todos', 'descargar')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-                            >
-                              <FileText size={13} className="text-slate-400" />
-                              Descargar PDF Completo
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowExportMenu(false)
-                                exportarPDF('internos', 'descargar')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
-                            >
-                              <UserCheck size={13} className="text-indigo-500" />
-                              Descargar Solo Internos
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowExportMenu(false)
-                                exportarPDF('externos', 'descargar')
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
-                            >
-                              <Globe size={13} className="text-amber-500" />
-                              Descargar Solo Externos
-                            </button>
+<button
+  onClick={() => {
+    setShowExportMenu(false)
+    exportarPDF('todos', 'descargar')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+>
+  <FileText size={13} className="text-slate-400" />
+  Descargar PDF Completo
+</button>
+<button
+  onClick={() => {
+    setShowExportMenu(false)
+    exportarPDF('internos', 'descargar')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+>
+  <UserCheck size={13} className="text-indigo-500" />
+  Descargar Solo Internos
+</button>
+<button
+  onClick={() => {
+    setShowExportMenu(false)
+    exportarPDF('externos', 'descargar')
+  }}
+  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
+>
+  <Globe size={13} className="text-amber-500" />
+  Descargar Solo Externos
+</button>
                           </div>
                         </>
                       )}
@@ -2251,14 +1600,14 @@ function TabComisiones({ configNeg }) {
         <>
           {/* KPIs (Fuente de verdad SQL) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <KpiCard icon={DollarSign} label="Total Periodo" value={fmtUsd(resumen?.total || 0)}
-              sub="Bruto histórico"
+            <KpiCard icon={DollarSign} label="Comisión generada" value={fmtUsd(resumen?.totalAcumulado || 0)}
+              sub={`${resumen?.totalDespachos || 0} despachos únicos`}
               gradient="linear-gradient(135deg, #1e293b, #0f172a)" border="rgba(255,255,255,0.05)" />
-            <KpiCard icon={Clock} label="Pendiente USD" value={fmtUsd(resumen?.pendiente || 0)}
-              sub={`${resumen?.countPendiente || 0} comisiones`}
+            <KpiCard icon={Percent} label="Comisión CxC manual" value="Se registra aparte"
+              sub="No se calcula en el sistema"
               gradient="linear-gradient(135deg, #92400e, #78350f)" border="rgba(255,255,255,0.05)" />
-            <KpiCard icon={ArrowUpCircle} label="Total Pagado" value={fmtUsd(resumen?.pagado || 0)}
-              sub={`${resumen?.countPagado || 0} liquidadas`}
+            <KpiCard icon={ArrowUpCircle} label="Estado" value="Generada"
+              sub="Sin flujo de pago interno"
               gradient="linear-gradient(135deg, #065f46, #064e3b)" border="rgba(255,255,255,0.05)" />
           </div>
 
@@ -2283,52 +1632,43 @@ function TabComisiones({ configNeg }) {
                           className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-400 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col gap-3 group"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: v.color }}>
-                              {v.nombre.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{v.nombre}</h4>
-                              <p className="text-xs text-slate-500 font-medium">{v.cantidad} despachos procesados</p>
-                            </div>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
-                              title="Descargar reporte individual"
-                              className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all active:scale-95 duration-200"
-                            >
-                              <Download size={14} />
-                            </button>
+<div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: v.color }}>
+  {v.nombre.charAt(0).toUpperCase()}
+</div>
+<div className="flex-1 min-w-0">
+  <h4 className="font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{v.nombre}</h4>
+  <p className="text-xs text-slate-500 font-medium">{v.cantidad} despachos únicos</p>
+</div>
+<button
+  onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
+  title="Descargar reporte individual"
+  className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all active:scale-95 duration-200"
+>
+  <Download size={14} />
+</button>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 mt-2">
-                            <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
-                              <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
-                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
-                            </div>
-                            <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
-                              <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
-                              <p className="font-bold text-amber-600">{fmtUsd(v.pendSoloComisUsd)}</p>
-                            </div>
+<div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
+  <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
+  <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+</div>
+<div className="bg-emerald-50/50 rounded-xl p-2.5 text-center border border-emerald-100/50">
+  <p className="text-[10px] text-emerald-600/70 font-bold uppercase mb-0.5">Generada</p>
+  <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+</div>
                           </div>
 
                           <div className="flex justify-between items-center px-1 pt-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
-                            <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
+<span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
+<span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
 
-                          {puedePagarComisiones && v.pendSoloComisUsd > 0.01 && (
-                            <div className="flex flex-col gap-2 mt-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePagarTodoVendedor(v, false);
-                                }}
-                                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                              >
-                                <CheckCircle size={14} className="text-white" />
-                                <span>Pagar Todo ({fmtUsd(v.pendSoloComisUsd)})</span>
-                              </button>
-                            </div>
-                          )}
+
+
+    
+
+
                         </div>
                       ))}
                     </div>
@@ -2350,57 +1690,48 @@ function TabComisiones({ configNeg }) {
                           className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm cursor-pointer hover:border-amber-400 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col gap-3 group bg-amber-50/5"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: '#D97706' }}>
-                              {v.nombre.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-slate-800 truncate group-hover:text-amber-600 transition-colors">{v.nombre}</h4>
-                              <div className="flex flex-col gap-0.5 mt-0.5">
-                                <span className="text-xs text-slate-500 font-medium">{v.cantidad} despachos procesados</span>
-                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5 w-fit">
-                                  💼 Externo (+{v.markup_pct}%)
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
-                              title="Descargar reporte individual"
-                              className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all active:scale-95 duration-200"
-                            >
-                              <Download size={14} />
-                            </button>
+<div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-inner" style={{ backgroundColor: '#D97706' }}>
+  {v.nombre.charAt(0).toUpperCase()}
+</div>
+<div className="flex-1 min-w-0">
+  <h4 className="font-bold text-slate-800 truncate group-hover:text-amber-600 transition-colors">{v.nombre}</h4>
+  <div className="flex flex-col gap-0.5 mt-0.5">
+    <span className="text-xs text-slate-500 font-medium">{v.cantidad} despachos únicos</span>
+    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5 w-fit">
+      💼 Externo (+{v.markup_pct}%)
+    </span>
+  </div>
+</div>
+<button
+  onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
+  title="Descargar reporte individual"
+  className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all active:scale-95 duration-200"
+>
+  <Download size={14} />
+</button>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 mt-2">
-                            <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
-                              <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
-                              <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
-                            </div>
-                            <div className="bg-amber-50/50 rounded-xl p-2.5 text-center border border-amber-100/50">
-                              <p className="text-[10px] text-amber-600/70 font-bold uppercase mb-0.5">Pendiente</p>
-                              <p className="font-bold text-amber-600">{fmtUsd(v.pendSoloComisUsd)}</p>
-                            </div>
+<div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
+  <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Total USD</p>
+  <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+</div>
+<div className="bg-emerald-50/50 rounded-xl p-2.5 text-center border border-emerald-100/50">
+  <p className="text-[10px] text-emerald-600/70 font-bold uppercase mb-0.5">Generada</p>
+  <p className="font-bold text-slate-900">{fmtUsd(v.totalUsd)}</p>
+</div>
                           </div>
 
                           <div className="flex justify-between items-center px-1 pt-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
-                            <span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
+<span className="text-[10px] font-bold text-slate-400 uppercase">Equiv. Bs</span>
+<span className="text-xs font-bold text-indigo-600">{fmtBs(v.totalBs)}</span>
                           </div>
 
-                          {puedePagarComisiones && v.pendSoloComisUsd > 0.01 && (
-                            <div className="flex flex-col gap-2 mt-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePagarTodoVendedor(v, false);
-                                }}
-                                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] border border-emerald-500/20"
-                              >
-                                <CheckCircle size={14} className="text-white" />
-                                <span>Pagar Todo ({fmtUsd(v.pendSoloComisUsd)})</span>
-                              </button>
-                            </div>
-                          )}
+
+
+    
+
+
                         </div>
                       ))}
                     </div>
@@ -2422,39 +1753,6 @@ function TabComisiones({ configNeg }) {
           {comisiones.length === 0 && (
             <EmptyState icon={Percent} title="Sin comisiones" description="No hay comisiones en el periodo seleccionado." />
           )}
-
-          {/* Confirmar Pago Masivo desde Tarjeta del Dashboard */}
-          <ConfirmModal
-            isOpen={!!pagoMasivoData}
-            onConfirm={async () => {
-              if (!pagoMasivoData) return
-              setPagandoMasivo(true)
-              const { pendientes: items } = pagoMasivoData
-              for (const c of items) {
-                const m = c.estado === 'cta_cobrar' ? Number(c.comision_liberada || 0) : Number(c.totalcomision || 0)
-                const saldo = Math.max(0, m - Number(c.montopagado || 0))
-                if (saldo > 0) {
-                  try {
-                    await marcar.mutateAsync({ comisionid: c.id, montopagado: saldo })
-                  } catch (e) {
-                    console.error('Error pagando comisión', c.id, e)
-                  }
-                }
-              }
-              setPagandoMasivo(false)
-              setPagoMasivoData(null)
-              refetch() // Refrescar los datos para actualizar el pendUsd en las tarjetas
-            }}
-            onClose={() => setPagoMasivoData(null)}
-            title={pagoMasivoData?.title || "Pagar Todas las Comisiones"}
-            message={
-              pagoMasivoData 
-                ? `Se registrará el pago de ${pagoMasivoData.pendientes.length} comisiones (${pagoMasivoData.desc || 'pendientes'}) de ${pagoMasivoData.vendedor?.nombre || 'este vendedor'} por un total de ${fmtUsd(pagoMasivoData.montoPendiente)}. Esta acción es secuencial y final.` 
-                : ''
-            }
-            confirmText={pagoMasivoData?.confirmText || "Confirmar Pago Total"}
-            variant="success"
-          />
         </>
       )}
     </div>
@@ -2875,7 +2173,7 @@ function TabCredito() {
                         {/* Días Restantes */}
                         <td className="px-3 py-3 text-center">
                           {c.diasRestantes === null ? (
-                            <span className="text-slate-300">—</span>
+<span className="text-slate-300">—</span>
                           ) : c.diasRestantes < 0 ? (
                             <span className="inline-flex px-2 py-1 rounded-full text-[10px] font-black bg-red-100 text-red-700">
                               Vencido ({Math.abs(c.diasRestantes)}d)
@@ -2907,7 +2205,7 @@ function TabCredito() {
                         {/* Saldo */}
                         <td className="px-3 py-3 text-right">
                           <span className={`font-black text-sm ${saldo > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                            {fmtUsd(saldo)}
+{fmtUsd(saldo)}
                           </span>
                         </td>
                       </tr>
