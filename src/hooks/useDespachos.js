@@ -57,7 +57,13 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
         if (session?.access_token) {
           promises.push(
             fetch(apiUrl(`/api/clientes?busqueda=${encodeURIComponent(q)}`), {
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+                // Respaldo del operador: si el JWT aún no trae app_metadata.operator_id
+                // (refresh pendiente), el Worker respondería 400 y esta rama moriría en [].
+                'X-Operator-Id': perfil?.id || '',
+              }
             })
             .then(r => r.ok ? r.json() : [])
             .then(async clients => {
