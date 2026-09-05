@@ -468,6 +468,40 @@ export async function handleSaveConfig(request, env) {
   }
 
   const campos = await request.json();
+
+  // G8 (plan split v3 sábados): validación server-side de los campos nuevos.
+  // Debe ir ANTES del filtro por columnas existentes: si las columnas split aún
+  // no existen en la BD, la config se rechaza aquí en lugar de guardarse muda.
+  if (campos.comision_split_activo !== undefined && typeof campos.comision_split_activo !== 'boolean') {
+    return jsonError('comision_split_activo debe ser booleano', 400, request);
+  }
+  for (const pctField of ['comision_split_pct_vendedor', 'comision_split_pct_dueno']) {
+    if (campos[pctField] !== undefined) {
+      const n = Number(campos[pctField]);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        return jsonError(`${pctField} debe estar entre 0 y 100`, 400, request);
+      }
+      campos[pctField] = n;
+    }
+  }
+  // G8-v3: los % del split NUNCA pueden superar el % general vigente (hoy 2% cabilla /
+  // 3% otros por defecto; se valida contra los valores finales que se guardarán).
+  {
+    const pctCabilla = Number(campos.comision_pct_cabilla) || 2;
+    const pctOtros = Number(campos.comision_pct_otros) || 3;
+    for (const pctField of ['comision_split_pct_vendedor', 'comision_split_pct_dueno']) {
+      if (campos[pctField] !== undefined && campos[pctField] > Math.min(pctCabilla, pctOtros)) {
+        return jsonError(`${pctField} no puede ser mayor al % general (${Math.min(pctCabilla, pctOtros)}%)`, 400, request);
+      }
+    }
+  }
+  if (campos.comision_split_dias !== undefined) {
+    const dias = String(campos.comision_split_dias).trim();
+    if (dias !== '' && !dias.split(',').every(d => /^[0-6]$/.test(d.trim()))) {
+      return jsonError('comision_split_dias debe ser días 0-6 separados por coma (0=domingo … 6=sábado) o vacío para todos', 400, request);
+    }
+  }
+
   const existingColumns = await getExistingColumns(env, user.id);
 
   // Filtrar campos para enviar solo los que existen en la BD
@@ -526,6 +560,137 @@ export async function handleSaveConfig(request, env) {
   } catch { /* auditoría secundaria no debe bloquear la operación */ }
 
   return json({ ok: true }, 200, request);
+}
+
+// ─── Designación del "vendedor del día" (split sábado v3) ────────────────────
+// Solo el rol JEFE puede designar/quitar al designado de una fecha.
+// El designado debe ser vendedor o supervisor ACTIVO, NO EXTERNO, de la misma cuenta.
+// Puerto v3 → principal. Fix P0 respecto a staging: `es_externo` excluido también
+// en el endpoint (además del trigger de BD), coherente con la regla del negocio:
+// los externos no participan del split.
+async function getRolOperador(operatorId, env) {
+  if (!operatorId) return null;
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operatorId}&activo=eq.true&select=rol`,
+    { headers: supaServiceHeaders(env) }
+  );
+  if (!res.ok) return null;
+  const rows = await res.json();
+  return rows.length === 1 ? rows[0].rol : null;
+}
+
+export async function handleDesignacion(request, env, url) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  // SOLO el rol jefe designa (regla del negocio 2026-09-04)
+  const rol = await getRolOperador(user.operator_id, env);
+  if (rol !== 'jefe') {
+    return jsonError('Solo el jefe puede designar al vendedor del día', 403, request);
+  }
+
+  // GET: listar designaciones (rango opcional desde/hasta ISO)
+  if (request.method === 'GET') {
+    const desde = url.searchParams.get('desde');
+    const hasta = url.searchParams.get('hasta');
+    let query = `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${user.id}` +
+      `&select=id,fecha,designado_id,creado_por,creado_en,designado:usuarios!comision_designacion_diaria_designado_id_fkey(id,nombre,color,rol)` +
+      `&order=fecha.desc`;
+    if (desde && /^\d{4}-\d{2}-\d{2}$/.test(desde)) query += `&fecha=gte.${desde}`;
+    if (hasta && /^\d{4}-\d{2}-\d{2}$/.test(hasta)) query += `&fecha=lte.${hasta}`;
+    const res = await fetch(query, { headers: supaServiceHeaders(env) });
+    if (!res.ok) return jsonError('Error al leer designaciones', res.status, request);
+    return json(await res.json(), 200, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { body = {}; }
+
+  // POST: designar (upsert por cuenta+fecha)
+  if (request.method === 'POST') {
+    const { fecha, designado_id: designadoId } = body || {};
+    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
+      return jsonError('fecha inválida (formato YYYY-MM-DD)', 400, request);
+    }
+    if (!designadoId || !isValidUuid(String(designadoId))) {
+      return jsonError('designado_id inválido', 400, request);
+    }
+    // El designado debe ser vendedor o supervisor ACTIVO y NO EXTERNO de la misma cuenta (fix P0)
+    const disRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${designadoId}&activo=eq.true&cuenta_id=eq.${user.id}&rol=in.(vendedor,supervisor)&es_externo=is.false&select=id,nombre,rol`,
+      { headers: supaServiceHeaders(env) }
+    );
+    if (!disRes.ok) return jsonError('Error al validar el designado', 500, request);
+    const dis = await disRes.json();
+    if (!dis.length) {
+      return jsonError('El designado debe ser un vendedor o supervisor activo (no externo) de esta cuenta', 400, request);
+    }
+
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?on_conflict=cuenta_id,fecha`, {
+      method: 'POST',
+      headers: { ...supaServiceHeaders(env), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify({
+        cuenta_id: user.id,
+        fecha,
+        designado_id: designadoId,
+        creado_por: user.operator_id || user.id,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      const msg = text.includes('DESIGNADO_INVALIDO')
+        ? 'El designado debe ser un vendedor o supervisor activo (no externo)'
+        : (text || `Error ${res.status}`);
+      return jsonError(msg, res.status, request);
+    }
+    const [row] = await res.json();
+
+    try {
+      await registrarAuditoria(env, supaServiceHeaders(env), {
+        usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
+        categoria: 'COMISIONES', accion: 'DESIGNAR_VENDEDOR_DIA',
+        descripcion: `Designó a ${dis[0].nombre} como vendedor del día ${fecha}`,
+        entidadTipo: 'comision_designacion_diaria', entidadId: row?.id || fecha,
+        meta: { fecha, designado_id: designadoId, designado_nombre: dis[0].nombre, rol_designado: dis[0].rol },
+        ip: request.headers.get('CF-Connecting-IP') || null,
+      });
+    } catch { /* best-effort */ }
+
+    return json({ ok: true, designacion: row }, 200, request);
+  }
+
+  // DELETE: quitar la designación de una fecha
+  if (request.method === 'DELETE') {
+    const fecha = body?.fecha;
+    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
+      return jsonError('fecha inválida (formato YYYY-MM-DD)', 400, request);
+    }
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${user.id}&fecha=eq.${fecha}`,
+      {
+        method: 'DELETE',
+        headers: { ...supaServiceHeaders(env), Prefer: 'return=representation' },
+      }
+    );
+    if (!res.ok) return jsonError('Error al quitar la designación', res.status, request);
+    const rows = await res.json();
+    if (rows.length) {
+      try {
+        await registrarAuditoria(env, supaServiceHeaders(env), {
+          usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
+          categoria: 'COMISIONES', accion: 'QUITAR_DESIGNACION_DIA',
+          descripcion: `Quitó la designación del día ${fecha}`,
+          entidadTipo: 'comision_designacion_diaria', entidadId: rows[0].id,
+          meta: { fecha, designado_id: rows[0].designado_id },
+          ip: request.headers.get('CF-Connecting-IP') || null,
+        });
+      } catch { /* best-effort */ }
+    }
+    return json({ ok: true, eliminadas: rows.length }, 200, request);
+  }
+
+  return jsonError('Method not allowed', 405, request);
 }
 
 export async function handleGetConfig(request, env) {
@@ -1333,7 +1498,26 @@ export async function handleCrearTransportista(request, env) {
   }
 
   const data = await res.json();
-  return json({ ok: true, transportista: data[0] }, 201, request);
+  const creado = data[0] || {};
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
+  registrarAuditoria(env, {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  }, {
+    usuarioId: operador.id,
+    usuarioNombre: operador.nombre,
+    usuarioRol: operador.rol,
+    categoria: 'TRANSPORTISTA',
+    accion: 'CREAR_TRANSPORTISTA',
+    descripcion: `Transportista ${nombre} creado`,
+    entidadTipo: 'transportista',
+    entidadId: creado.id,
+    meta: { nombre, rif, es_local: !!es_local },
+    ip,
+  }).catch(() => {});
+
+  return json({ ok: true, transportista: creado }, 201, request);
 }
 
 export async function handleActualizarTransportista(request, env) {
@@ -1385,5 +1569,76 @@ export async function handleActualizarTransportista(request, env) {
   }
 
   const data = await res.json();
-  return json({ ok: true, transportista: data[0] }, 200, request);
+  const actualizado = data[0] || {};
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
+  registrarAuditoria(env, {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  }, {
+    usuarioId: operador.id,
+    usuarioNombre: operador.nombre,
+    usuarioRol: operador.rol,
+    categoria: 'TRANSPORTISTA',
+    accion: 'ACTUALIZAR_TRANSPORTISTA',
+    descripcion: `Transportista ${actualizado.nombre || id} actualizado`,
+    entidadTipo: 'transportista',
+    entidadId: id,
+    meta: { campos_modificados: Object.keys(updateData) },
+    ip,
+  }).catch(() => {});
+
+  return json({ ok: true, transportista: actualizado }, 200, request);
+}
+
+export async function handleDesactivarTransportista(request, env) {
+  const { operador, error } = await validateOperator(request, env);
+  if (error) return error;
+
+  const ROLES_DESACTIVAR = ['supervisor', 'jefe', 'desarrollador', 'administracion'];
+  if (!ROLES_DESACTIVAR.includes(operador.rol)) {
+    return jsonError('Acceso denegado: no tienes permiso para desactivar transportistas', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { id } = body;
+  if (!id || !isValidUuid(id)) return jsonError('id inválido', 400, request);
+  if (!operador.cuenta_id) return jsonError('Cuenta del operador no disponible', 403, request);
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/transportistas?id=eq.${id}&cuenta_id=eq.${operador.cuenta_id}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({ activo: false }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    return jsonError(`Error al desactivar: ${err}`, 500, request);
+  }
+
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
+  registrarAuditoria(env, {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  }, {
+    usuarioId: operador.id,
+    usuarioNombre: operador.nombre,
+    usuarioRol: operador.rol,
+    categoria: 'TRANSPORTISTA',
+    accion: 'DESACTIVAR_TRANSPORTISTA',
+    descripcion: `Transportista ${id} desactivado`,
+    entidadTipo: 'transportista',
+    entidadId: id,
+    meta: { activo: false },
+    ip,
+  }).catch(() => {});
+
+  return json({ ok: true }, 200, request);
 }

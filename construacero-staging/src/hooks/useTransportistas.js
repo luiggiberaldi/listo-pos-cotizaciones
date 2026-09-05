@@ -181,6 +181,7 @@ export function useActualizarTransportista() {
 
       showToast.success('Transportista actualizado')
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
     },
   })
 }

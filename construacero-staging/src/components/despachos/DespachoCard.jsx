@@ -805,7 +805,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     if (canCambiarTransportista) {
       const tieneTransportista = !!despacho?.transportista_id
       actions.push({
-        label: tieneTransportista ? 'Cambiar Transportista' : 'Agregar Transportista',
+        label: tieneTransportista ? 'Editar Transportista' : 'Agregar Transportista',
         icon: Truck,
         onClick: () => setShowCambiarTransportista(true),
         textColor: 'text-indigo-600'
@@ -865,6 +865,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     act.label !== 'No entregado' && 
     act.label !== 'No entregado / Devolver' &&
     act.label !== 'Cambiar Transportista' &&
+    act.label !== 'Editar Transportista' &&
     act.label !== 'Agregar Transportista' &&
     act.label !== 'Marcar COD como pagado' &&
     act.label !== 'Devolución Parcial' &&

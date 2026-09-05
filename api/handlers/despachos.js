@@ -403,8 +403,8 @@ export async function handleEditarPagoDespacho(request, env) {
       direccionEnvioCiudad === undefined && 
       direccionEnvioEstado === undefined;
 
-    // Logística/admin puede editar transportista y flete en despachos ya entregados
-    // pero NO puede tocar campos financieros, cliente ni dirección
+    // Logística/admin puede editar transportista, flete y destino en despachos ya entregados
+    // pero NO puede tocar campos financieros (forma de pago, corte) ni cliente ni dirección física
     const editandoTransportista = esAdmin &&
       formaPago === undefined &&
       formaPagoCliente === undefined &&
@@ -412,8 +412,6 @@ export async function handleEditarPagoDespacho(request, env) {
       corteUsd === undefined &&
       clienteId === undefined &&
       direccionEnvioDireccion === undefined &&
-      direccionEnvioCiudad === undefined &&
-      direccionEnvioEstado === undefined &&
       (transportistaId !== undefined || fleteUsd !== undefined || notas !== undefined);
 
     if (!editandoSoloNotas && !editandoTransportista) {

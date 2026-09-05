@@ -1,7 +1,7 @@
 // src/views/TransportistasView.jsx
 // Gestión de transportistas — solo supervisores pueden crear/editar/desactivar
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale, FileText, Printer } from 'lucide-react'
+import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale, FileText, Printer, Phone } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import {
@@ -28,6 +28,7 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
   const [campos, setCampos] = useState({
     nombre:          inicial.nombre          ?? '',
     rif:             rifNumeroInit,
+    telefono:        inicial.telefono        ?? '',
     color:           inicial.color           ?? '',
     color_batea:     inicial.color_batea     ?? '',
     vehiculo:        inicial.vehiculo        ?? '',
@@ -35,6 +36,7 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     placa_batea:     inicial.placa_batea     ?? '',
     zona_cobertura:  inicial.zona_cobertura  ?? '',
     capacidad:       inicial.capacidad       ?? '',
+    notas:           inicial.notas           ?? '',
     es_local:        inicial.es_local        ?? false,
   })
   const [error, setError] = useState('')
@@ -97,6 +99,11 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           </div>
         </div>
         <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Teléfono</label>
+          <input value={campos.telefono} onChange={e => cambiar('telefono', e.target.value)}
+            placeholder="Ej: 0414-1234567" className={inputCls} disabled={cargando} inputMode="tel" />
+        </div>
+        <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Color *</label>
           <input value={campos.color} onChange={e => cambiar('color', e.target.value)}
             placeholder="Ej: Rojo, Blanco" className={inputCls} disabled={cargando} />
@@ -130,6 +137,11 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <label className="text-sm font-medium text-slate-700">Capacidad de Carga</label>
           <input value={campos.capacidad} onChange={e => cambiar('capacidad', e.target.value)}
             placeholder="Ej: 30 Toneladas, 350 Sacos" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <label className="text-sm font-medium text-slate-700">Notas / Observaciones</label>
+          <input value={campos.notas} onChange={e => cambiar('notas', e.target.value)}
+            placeholder="Observaciones operativas, requerimientos especiales, etc." className={inputCls} disabled={cargando} />
         </div>
       </div>
 
@@ -257,6 +269,12 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
 
       {/* ── Detalles ── */}
       <div className="px-4 pb-3 mt-1 space-y-1.5">
+        {transportista.telefono && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Phone size={11} className="text-slate-400 shrink-0" />
+            <span className="font-mono">{transportista.telefono}</span>
+          </div>
+        )}
         {transportista.color && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <span className="font-medium text-slate-400">Color:</span>
@@ -341,7 +359,7 @@ function SkeletonTransportistas() {
 export default function TransportistasView() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
-  const puedeCrear = esSupervisor || ['vendedor', 'vendedor_sin_comision', 'administracion', 'desarrollador'].includes(perfil?.rol)
+  const puedeCrear = esSupervisor || ['vendedor', 'vendedor_sin_comision', 'administracion', 'desarrollador', 'logistica'].includes(perfil?.rol)
 
   const [modalAbierto,          setModalAbierto]          = useState(false)
   const [editando,              setEditando]              = useState(null)

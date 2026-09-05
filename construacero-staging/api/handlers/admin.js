@@ -1334,7 +1334,26 @@ export async function handleCrearTransportista(request, env) {
   }
 
   const data = await res.json();
-  return json({ ok: true, transportista: data[0] }, 201, request);
+  const creado = data[0] || {};
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
+  registrarAuditoria(env, {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  }, {
+    usuarioId: operador.id,
+    usuarioNombre: operador.nombre,
+    usuarioRol: operador.rol,
+    categoria: 'TRANSPORTISTA',
+    accion: 'CREAR_TRANSPORTISTA',
+    descripcion: `Transportista ${nombre} creado`,
+    entidadTipo: 'transportista',
+    entidadId: creado.id,
+    meta: { nombre, rif, es_local: !!es_local },
+    ip,
+  }).catch(() => {});
+
+  return json({ ok: true, transportista: creado }, 201, request);
 }
 
 export async function handleActualizarTransportista(request, env) {
@@ -1383,7 +1402,26 @@ export async function handleActualizarTransportista(request, env) {
   }
 
   const data = await res.json();
-  return json({ ok: true, transportista: data[0] }, 200, request);
+  const actualizado = data[0] || {};
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
+  registrarAuditoria(env, {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  }, {
+    usuarioId: operador.id,
+    usuarioNombre: operador.nombre,
+    usuarioRol: operador.rol,
+    categoria: 'TRANSPORTISTA',
+    accion: 'ACTUALIZAR_TRANSPORTISTA',
+    descripcion: `Transportista ${actualizado.nombre || id} actualizado`,
+    entidadTipo: 'transportista',
+    entidadId: id,
+    meta: { campos_modificados: Object.keys(updateData) },
+    ip,
+  }).catch(() => {});
+
+  return json({ ok: true, transportista: actualizado }, 200, request);
 }
 
 export async function handleDesactivarTransportista(request, env) {
@@ -1416,6 +1454,24 @@ export async function handleDesactivarTransportista(request, env) {
     const err = await res.text();
     return jsonError(`Error al desactivar: ${err}`, 500, request);
   }
+
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
+  registrarAuditoria(env, {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  }, {
+    usuarioId: operador.id,
+    usuarioNombre: operador.nombre,
+    usuarioRol: operador.rol,
+    categoria: 'TRANSPORTISTA',
+    accion: 'DESACTIVAR_TRANSPORTISTA',
+    descripcion: `Transportista ${id} desactivado`,
+    entidadTipo: 'transportista',
+    entidadId: id,
+    meta: { activo: false },
+    ip,
+  }).catch(() => {});
 
   return json({ ok: true }, 200, request);
 }

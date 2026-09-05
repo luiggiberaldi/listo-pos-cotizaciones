@@ -26,7 +26,7 @@ import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizac
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleGetRates } from './api/handlers/rates.js'
-import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterCleanupFixtures, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista } from './api/handlers/admin.js'
+import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterCleanupFixtures, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
 import { handleReporteTransportistas, handleDetalleTransportista, handlePagarTransportista, handleRevertirPagoTransportista } from './api/handlers/transportistas.js'
 import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
 import {
@@ -341,6 +341,11 @@ export default {
 
     if (url.pathname === '/api/transportistas/revertir-pago' && request.method === 'POST') {
       return handleRevertirPagoTransportista(request, env);
+    }
+
+    // ── API: desactivar transportista (bypass RLS) ───────────────────────────
+    if (url.pathname === '/api/transportistas/desactivar' && request.method === 'POST') {
+      return handleDesactivarTransportista(request, env);
     }
 
     if (url.pathname === '/api/comisiones/lista' && request.method === 'GET') {
