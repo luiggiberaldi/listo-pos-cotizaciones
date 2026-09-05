@@ -562,8 +562,13 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                   <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 text-xs flex items-start gap-2">
                     <AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
                     <div>
-                      <p className="font-bold">Todos los productos de este despacho han sido devueltos en su totalidad.</p>
-                      <p className="mt-0.5 text-[11px] opacity-80">No hay unidades disponibles para registrar una nueva devolución.</p>
+                      <p className="font-bold">Despacho totalmente devuelto — venta anulada económicamente.</p>
+                      <p className="mt-0.5 text-[11px] opacity-80">
+                        {deudaDespacho != null && deudaDespacho > 0.009
+                          ? `La deuda de este despacho quedó en $${deudaDespacho.toFixed(2)} tras los ajustes de devolución. Si lo que buscas es revertir la entrega por completo (devolver stock y anular estos ajustes), usa "Reabrir despacho" desde la tarjeta.`
+                          : 'Todos los productos fueron devueltos y la CxC de este despacho quedó saldada. Para revertir la entrega por completo, usa "Reabrir despacho" desde la tarjeta.'}
+                      </p>
+                      <p className="mt-1 text-[11px] opacity-80">No hay unidades disponibles para registrar una nueva devolución.</p>
                     </div>
                   </div>
                   {itemsList.length > 0 && (

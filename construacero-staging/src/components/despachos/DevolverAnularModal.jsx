@@ -2,20 +2,42 @@ import { useState, useEffect } from 'react'
 import { Modal } from '../ui/Modal'
 import { AlertCircle } from 'lucide-react'
 import CustomSelect from '../ui/CustomSelect'
+import supabase from '../../services/supabase/client'
 
-export default function DevolverAnularModal({ isOpen, onClose, onConfirm, accion, despachoNum, isLoading, tieneDevoluciones }) {
+export default function DevolverAnularModal({ isOpen, onClose, onConfirm, accion, despachoNum, isLoading, tieneDevoluciones, despachoId }) {
   const [motivoSelect, setMotivoSelect] = useState('')
   const [motivoText, setMotivoText] = useState('')
   const [entendido, setEntendido] = useState(false)
+  // B2 — información CxC del despacho para la confirmación inteligente
+  const [cxcInfo, setCxcInfo] = useState(null) // { abonosDevolucion, abonosReales, montoReal }
 
-  // Reset state on open
   useEffect(() => {
     if (isOpen) {
       setMotivoSelect('')
       setMotivoText('')
       setEntendido(false)
+      setCxcInfo(null)
+      // Consulta las filas CxC del despacho para distinguir ajustes de
+      // devolución (abonos 'Devolución' / 'Saldo a favor', que la reversión
+      // anula automáticamente) de cobros reales (que bloquean).
+      if (despachoId && accion?.estado === 'pendiente') {
+        supabase
+          .from('cuentas_por_cobrar')
+          .select('tipo,monto_usd,forma_pago_abono')
+          .eq('despacho_id', despachoId)
+          .then(({ data }) => {
+            if (!Array.isArray(data)) return
+            const abonos = data.filter(r => r.tipo === 'abono')
+            const abonosDevolucion = abonos.filter(a => a.forma_pago_abono === 'Devolución' || a.forma_pago_abono === 'Saldo a favor')
+            const reales = abonos.filter(a => !a.forma_pago_abono || (a.forma_pago_abono !== 'Devolución' && a.forma_pago_abono !== 'Saldo a favor'))
+            setCxcInfo({
+              abonosDevolucion: abonosDevolucion.reduce((s, a) => s + Number(a.monto_usd || 0), 0),
+              abonosReales: reales.reduce((s, a) => s + Number(a.monto_usd || 0), 0),
+            })
+          })
+      }
     }
-  }, [isOpen])
+  }, [isOpen, despachoId, accion?.estado])
 
   const isDevolver = accion?.estado === 'pendiente' // de despachada a pendiente
   const isAnular = accion?.estado === 'anulada'
@@ -41,6 +63,14 @@ export default function DevolverAnularModal({ isOpen, onClose, onConfirm, accion
     'Otro'
   ]
 
+  // B2 — mensaje inteligente según el contenido CxC del despacho
+  const soloAjustesDevolucion = cxcInfo && cxcInfo.abonosReales <= 0.009 && cxcInfo.abonosDevolucion > 0.009
+  const mensajeReversion = soloAjustesDevolucion
+    ? `Este despacho solo registra ajustes de devolución ($${cxcInfo.abonosDevolucion.toFixed(2)} en CxC). La reversión los anulará automáticamente y la CxC quedará como antes de la(s) devolución(es).`
+    : cxcInfo && cxcInfo.abonosReales > 0.009
+      ? `Este despacho tiene cobros reales registrados ($${cxcInfo.abonosReales.toFixed(2)}). La reversión será bloqueada: anule esos cobros primero.`
+      : null
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={accion?.actionConfig?.confirmTitle || 'Confirmar acción'}>
       <div className="space-y-4">
@@ -49,6 +79,11 @@ export default function DevolverAnularModal({ isOpen, onClose, onConfirm, accion
           <div>
             <p className="font-semibold">{accion?.actionConfig?.confirmMessage}</p>
             {accion?.actionConfig?.confirmDetails && <p className="mt-1 opacity-90">{accion.actionConfig.confirmDetails}</p>}
+            {mensajeReversion && (
+              <p className={`mt-1.5 text-xs font-semibold p-1.5 rounded-lg border ${soloAjustesDevolucion ? 'text-emerald-900 bg-emerald-100/80 border-emerald-300/50' : 'text-red-900 bg-red-100/80 border-red-300/50'}`}>
+                {soloAjustesDevolucion ? '↩️ ' : '⛔ '}{mensajeReversion}
+              </p>
+            )}
             {tieneDevoluciones && (
               <p className="mt-1.5 text-xs font-semibold text-amber-900 bg-amber-100/80 p-1.5 rounded-lg border border-amber-300/50">
                 📦 Este despacho tiene devoluciones e intercambios previos. Se reingresará el stock neto entregado y se revertirán los saldos en CxC de forma segura.

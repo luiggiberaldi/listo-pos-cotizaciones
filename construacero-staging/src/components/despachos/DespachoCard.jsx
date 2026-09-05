@@ -1644,6 +1644,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       <DevolverAnularModal
         isOpen={!!accionPendiente && (accionPendiente.isDevolver || accionPendiente.isAnular)}
         tieneDevoluciones={despacho.tiene_devoluciones}
+        despachoId={despacho.id}
         onClose={() => setAccionPendiente(null)}
         onConfirm={async (estadoDestino, motivo) => {
           if (!accionPendiente) return

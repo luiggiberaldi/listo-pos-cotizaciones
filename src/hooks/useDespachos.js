@@ -374,7 +374,7 @@ export function useActualizarEstadoDespacho() {
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al cambiar estado del despacho')
-      return { nuevoEstado, numeroCotizacion, clienteNombre, vendedorId }
+      return { nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados: result.abonos_devolucion_anulados ?? null, creditoAnuladoUsd: result.credito_anulado_usd ?? null }
     },
     // Optimistic update: reflect state change immediately in UI
     onMutate: async ({ despachoId, nuevoEstado }) => {
@@ -398,8 +398,16 @@ export function useActualizarEstadoDespacho() {
       }
       showToast(error.message || 'Error al cambiar estado del despacho', 'error')
     },
-    onSuccess: ({ nuevoEstado, numeroCotizacion, clienteNombre, vendedorId }) => {
-      showToast(`Despacho marcado como ${ESTADO_LABELS[nuevoEstado] || nuevoEstado}`, 'success')
+    onSuccess: ({ nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados, creditoAnuladoUsd }) => {
+      // Reversión consciente de devoluciones (release 06): toast con el efecto exacto en CxC.
+      if (['pendiente', 'anulada'].includes(nuevoEstado) && (abonosDevolucionAnulados > 0 || (creditoAnuladoUsd ?? 0) > 0)) {
+        const partes = []
+        if (abonosDevolucionAnulados > 0) partes.push(`${abonosDevolucionAnulados} abono${abonosDevolucionAnulados !== 1 ? 's' : ''} de devolución anulado${abonosDevolucionAnulados !== 1 ? 's' : ''}`)
+        if ((creditoAnuladoUsd ?? 0) > 0) partes.push(`crédito de $${Number(creditoAnuladoUsd).toFixed(2)} anulado`)
+        showToast(`Despacho revertido · ${partes.join(' · ')} · CxC como antes de la devolución`, 'success', 5000)
+      } else {
+        showToast(`Despacho marcado como ${ESTADO_LABELS[nuevoEstado] || nuevoEstado}`, 'success')
+      }
 
       const num = numeroCotizacion ? (typeof numeroCotizacion === 'number' ? String(numeroCotizacion).padStart(5, '0') : String(numeroCotizacion).replace(/^(COT-|DES-)/i, '')) : '—'
       const cliente = clienteNombre || 'cliente'
