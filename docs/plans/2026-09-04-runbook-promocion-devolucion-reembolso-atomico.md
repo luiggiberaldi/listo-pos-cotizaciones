@@ -67,3 +67,24 @@ La restauración devuelve la función de finanzas sin GUC y el wrapper de 14 arg
 
 - La ruta REST legacy post-RPC de staging (líneas 2795+, sin atomicidad) queda intacta — es código muerto alcanzable solo si la RPC falla antes; se limpia en un commit posterior si procede.
 - Migraciones de `supabase/migrations/` numeradas: la release va por `supabase/release/principal/` siguiendo la convención de los últimos releases (02–04).
+
+
+---
+
+## 11. Registro de ejecución (2026-09-05)
+
+| Fase | Resultado |
+|---|---|
+| **F0 Backup** | dump `tmp/backups/kardex-principal-pre-correctivos-2026-09-05T03-15-00-970Z.dump` (3.52 MB), SHA-256 `1b0c08778dc27acc36a8097100a0887b2685031b21c32726ae460716032f61c8` |
+| **F1 Preflight** | PASS: 3 firmas presentes (finanzas 5 args, wrapper 14, profunda 13), 4/4 columnas de la migración 134, 0 devoluciones históricas con reembolso |
+| **F2 Apply** | release 05 aplicada sin excepciones (transacción única, NOTIFY incluido) |
+| **F3 Smoke** | Rama A (sin GUC): `credito_monto 1.9`, destino `saldo_a_favor`, sin egresos ✓. Rama B (reembolso, GUC+statement único): destino `reembolso`, `reembolso_total 1.9`, `credito_monto 1.9`, fila `devolucion_credito $1.90` creada, deuda intacta (sin `abono`) ✓. ROLLBACK: 0 residuos ✓ |
+| **F4 Postflight** | Firma de 16 args visible en PostgREST: probe anónima pasa de `PGRST202` (no encontrada) a `42501 permission denied` (encontrada, sin grant a anon) ✓ |
+| **F5 Deploy** | Vercel producción Ready (22s), `https://listo-pos-cotizaciones.vercel.app` responde 200 ✓ |
+
+**Lecciones registradas:**
+1. `set_config(..., is_local=true)` desde autocommit no sobrevive al statement: en smokes, enviar GUC + llamada en un solo statement (en producción la RPC real lo hace el wrapper en una sola transacción).
+2. PostgREST nunca cacheó la firma de 14 args de la release 02 en el principal (cero reembolsos históricos = nunca se invocó); el probe con argumentos parciales siempre devuelve `PGRST202` y no sirve de señal — usar probe con firma completa.
+3. La primera ejecución de F3 mostró rama B como `saldo_a_favor` por la lección 1; se re-ejecutó el smoke corregido (`tmp/smoke-reembolso-fix.mjs`) con resultado correcto.
+
+**Estado final: promoción completa.** Pendiente opcional: aplicar espejo 262 en staging y correr E2E F6.

@@ -3933,3 +3933,22 @@ Plan aprobado de 9 mejoras (3 fases) sobre el flujo de devolución parcial. Fase
 ### Notas
 * La semántica nueva de Reembolso (deuda intacta + efectivo) aplica solo a operaciones nuevas; el histórico queda intacto.
 * En staging persiste una ruta REST legacy post-RPC (líneas ~2795+) alcanzable solo si la RPC falla antes; limpieza diferida.
+
+---
+
+## 2026-09-05 — Runbook Fase 3 ejecutado en producción (reembolso atómico)
+
+### Ejecución
+1. **F0 Backup:** `kardex-principal-pre-correctivos-2026-09-05T03-15-00-970Z.dump` (3.52 MB), SHA-256 `1b0c0877…2f61c8`.
+2. **F1 Preflight PASS:** firmas de finanzas (5 args), wrapper (14) y RPC profunda (13) presentes; 4/4 columnas de reembolso (migración 134); 0 reembolsos históricos (sin migración de datos).
+3. **F2 Apply:** release `05_devolucion_reembolso_atomico.sql` aplicada sin excepciones — finanzas destino-aware IN-PLACE (GUC `app.devolucion_*`) + wrapper de 16 params.
+4. **F3 Smoke (ROLLBACK, 0 residuos):** rama sin GUC = comportamiento histórico; rama reembolso = destino `reembolso`, `credito_monto 1.9` + fila `devolucion_credito $1.90` dentro de la transacción, deuda intacta (sin `abono`) — doble beneficio eliminado.
+5. **F4 Postflight:** firma de 16 args visible en PostgREST (probe anónima: `PGRST202` → `42501 permission denied`).
+6. **F5 Deploy:** Vercel producción Ready, `https://listo-pos-cotizaciones.vercel.app` → 200. Incluye Fases 1–2 (UX + guardarraíl) y Fase 3 (Workers).
+
+### Lecciones
+* `set_config(is_local=true)` en autocommit muere al cerrar el statement: en smokes, GUC + llamada en un solo statement (la RPC real lo resuelve el wrapper en una sola transacción).
+* El probe PostgREST con argumentos parciales siempre responde `PGRST202` y no sirve de señal de caché; la firma de 14 args de la release 02 nunca llegó a cachearse en el principal.
+
+### Estado
+Producción completa con las 3 fases. Pendiente opcional: espejo 262 en staging + E2E F6.
