@@ -1,5 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+function fechaCaracas(offsetDays = 0) {
+  // Fecha (YYYY-MM-DD) y dow en hora Venezuela (UTC-4), no UTC
+  const d = new Date(Date.now() + offsetDays * 86400000 - 4 * 3600000)
+  return { fecha: d.toISOString().slice(0, 10), dow: d.getUTCDay() }
+}
+
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -295,12 +301,7 @@ class StagingE2ERunner {
 
   async initLog() {
     await mkdir(this.config.logDir, { recursive: true })
-    function fechaCaracas(offsetDays = 0) {
-  // Fecha (YYYY-MM-DD) y dow en hora Venezuela (UTC-4), no UTC
-  const d = new Date(Date.now() + offsetDays * 86400000 - 4 * 3600000)
-  return { fecha: d.toISOString().slice(0, 10), dow: d.getUTCDay() }
-}
-const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
     this.logFile = path.join(this.config.logDir, `tester-${stamp}.log`)
     await this.persist()
   }
