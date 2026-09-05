@@ -1,4 +1,162 @@
-# Versión 1.0.4 (Estable) — 2026-09-05
+# Bitácora de Proyecto — Construacero Carabobo
+
+> Registro cronológico de decisiones, avance y errores. Actualizar en cada sesión de trabajo, agregando la entrada nueva **al inicio del cuerpo de sesiones** (justo debajo de esta cabecera).
+
+## Convenciones de estado
+
+- ✅ Completado
+- ⚠️ Requiere seguimiento
+- ❌ Bloqueado
+- 🔄 En progreso
+- 🗃️ Histórico/reemplazado (la decisión o el fix fue sustituido por otro posterior; ver enlace)
+
+## Estado vigente resumido
+
+- Release estable: **v1.0.4** (2026-09-05) — split de sábados v3.1, TZ Caracas, batching de comisiones. Certificados de release: `CHANGELOG.md`.
+- Producción: Vercel + Worker `luigistorelogistics` + Supabase principal — deploy automático desde `main` (`docs/runbooks/deploy-produccion.md`).
+- Staging: árbol `construacero-staging/` + E2E 123/123 en verde (2026-09-05) (`docs/runbooks/deploy-staging.md`).
+- Paridad principal↔staging de la 238b: byte a byte (`scripts/verify-parity-238b.mjs`). Estado por migración: `docs/operaciones/matriz-migraciones.md`.
+- Decisiones arquitectónicas vigentes: `docs/decisiones/` (ADR-001 deploy · ADR-002 RLS/RPCs · ADR-003 secretos · ADR-004 finanzas). Las decisiones históricas reemplazadas están marcadas dentro de cada ADR.
+- Postmortems: `docs/incidentes/` (INC-001 SW/chunks · INC-002 Worker 401 · INC-003 secrets sobrescritos).
+- Pendientes activos y deuda técnica: `ROADMAP.md`. Checklist operacional: `docs/operaciones/checklist-release.md`.
+
+## Índice
+
+### Hitos recientes — 2026
+
+- [Certificados de release v1.0.3 / v1.0.4](CHANGELOG.md) (resumen aquí abajo, detalle en el changelog)
+
+### Septiembre 2026
+
+- Versión 1.0.4 (Estable) — 2026-09-05 (detalle en `CHANGELOG.md`)
+- Versión 1.0.3 (Estable) — 2026-09-05 (detalle en `CHANGELOG.md`)
+- [2026-09-05 — Reversión consciente de devoluciones (release 06 + Fase B UX) — commits `3ddd4fa`, `72da4e2`](#2026-09-05--reversión-consciente-de-devoluciones-release-06--fase-b-ux--commits-3ddd4fa-72da4e2)
+- [2026-09-05 — Validación E2E completa del split designado v3 (staging local)](#2026-09-05--validación-e2e-completa-del-split-designado-v3-staging-local)
+
+### Abril 2026
+
+- [ESTADO INICIAL DEL PROYECTO (14/04/2026)](#estado-inicial-del-proyecto-14042026)
+- [OBJETIVO DEL NUEVO SISTEMA](#objetivo-del-nuevo-sistema)
+- [PLAN GENERAL — FASES](#plan-general--fases)
+- [REGISTRO DE SESIONES](#registro-de-sesiones)
+- [SESIÓN 5 — 14/04/2026 — Fase 2: Autenticación y Estructura Base](#sesión-5--14042026--fase-2-autenticación-y-estructura-base)
+- [SESIÓN 6 — 14/04/2026 — Git + Supabase Migrations](#sesión-6--14042026--git--supabase-migrations)
+- [SESIÓN 7 — 14/04/2026 — Fase 3: Módulo de Clientes](#sesión-7--14042026--fase-3-módulo-de-clientes)
+- [REGISTRO DE ERRORES](#registro-de-errores)
+- [SESIÓN 8 — 14/04/2026 — Mejoras: Login Gate, Tipo Cliente, WhatsApp](#sesión-8--14042026--mejoras-login-gate-tipo-cliente-whatsapp)
+- [SESIÓN 11 — 25/04/2026 — Fase 2 del ROADMAP: Rol de Logística (completada)](#sesión-11--25042026--fase-2-del-roadmap-rol-de-logística-completada)
+- [SESIÓN 11b — 25/04/2026 — Auditoría Fases 1-2 + Corrección brecha 1.1](#sesión-11b--25042026--auditoría-fases-1-2--corrección-brecha-11)
+- [SESIÓN 12 — 25/04/2026 — Fase 3 del ROADMAP: Dashboards por Rol](#sesión-12--25042026--fase-3-del-roadmap-dashboards-por-rol)
+- [SESIÓN 13 — 25/04/2026 — Fase 4 del ROADMAP: Venta Rápida](#sesión-13--25042026--fase-4-del-roadmap-venta-rápida)
+- [SESIÓN 13b — 25/04/2026 — Auditoría Fases 3-4 + Corrección gap vendedor](#sesión-13b--25042026--auditoría-fases-3-4--corrección-gap-vendedor)
+- [SESIÓN 14 — 25/04/2026 — Fase 6: Transportistas + Historial + Versioning](#sesión-14--25042026--fase-6-transportistas--historial--versioning)
+- [AUDITORÍA DE SEGURIDAD (26/04/2026)](#auditoría-de-seguridad-26042026)
+- [RESPONSIVIDAD DESKTOP — VENTA RÁPIDA (26/04/2026)](#responsividad-desktop--venta-rápida-26042026)
+- [SESIÓN 15 — 26/04/2026 — Error recurrente: chunks JS rotos por cache del Service Worker](#sesión-15--26042026--error-recurrente-chunks-js-rotos-por-cache-del-service-worker)
+- [SESIÓN 16 — 26/04/2026 — Fix: Race condition de autenticación al recargar](#sesión-16--26042026--fix-race-condition-de-autenticación-al-recargar)
+- [SESIÓN 26/04/2026 — Mejoras varias + descuentos por unidad + retomar venta rápida](#sesión-26042026--mejoras-varias--descuentos-por-unidad--retomar-venta-rápida)
+- [SESIÓN 29/04/2026 — Optimización UI Desktop (Venta Rápida)](#sesión-29042026--optimización-ui-desktop-venta-rápida)
+- [BUGS PENDIENTES — "Enviar Cotización" en móviles](#bugs-pendientes--enviar-cotización-en-móviles)
+- [GLOSARIO](#glosario)
+
+### Mayo 2026
+
+- [SESIÓN 23/05/2026 — Validación de Cuentas por Cobrar Obligatorias y Días de Vencimiento](#sesión-23052026--validación-de-cuentas-por-cobrar-obligatorias-y-días-de-vencimiento)
+- [SESIÓN 23/05/2026 — Reporte de Vendedores: Vendedores Externos, Descarga de Reportes Separados y Diseño Premium](#sesión-23052026--reporte-de-vendedores-vendedores-externos-descarga-de-reportes-separados-y-diseño-premium)
+
+### Junio 2026
+
+- [SESIÓN 15/06/2026 — Fase 1 de Comisiones Proporcionales](#sesión-15062026--fase-1-de-comisiones-proporcionales)
+- [SESIÓN 15/06/2026 — Fase 7: PDF de Comisiones por Eventos de Liberación (completada)](#sesión-15062026--fase-7-pdf-de-comisiones-por-eventos-de-liberación-completada)
+
+### Julio 2026
+
+- [SESIÓN 20/07/2026 — Fase 1 de Fixes de Rendimiento de Carga (auditoría)](#sesión-20072026--fase-1-de-fixes-de-rendimiento-de-carga-auditoría)
+- [SESIÓN 20/07/2026 — Fase 2 de Fixes de Rendimiento de Carga](#sesión-20072026--fase-2-de-fixes-de-rendimiento-de-carga)
+- [SESIÓN 20/07/2026 — Fase 3 de Fixes + URGENTE: ChannelRateLimitReached](#sesión-20072026--fase-3-de-fixes--urgente-channelratelimitreached)
+- [SESIÓN 20/07/2026 — Fase 4 de Fixes: Escalabilidad de Datos](#sesión-20072026--fase-4-de-fixes-escalabilidad-de-datos)
+- [SESIÓN 21/07/2026 — Diagnóstico: error de enum log_origen en cron](#sesión-21072026--diagnóstico-error-de-enum-log_origen-en-cron)
+
+### Agosto 2026
+
+- [SESIÓN 17/08/2026 — Cierre de pruebas E2E deterministas de staging](#sesión-17082026--cierre-de-pruebas-e2e-deterministas-de-staging)
+- [SESIÓN 18/08/2026 — Corrección de tasas oficiales BCV USD/EUR](#sesión-18082026--corrección-de-tasas-oficiales-bcv-usdeur)
+- [SESIÓN 21/08/2026 — Baseline read-only del proyecto principal](#sesión-21082026--baseline-read-only-del-proyecto-principal)
+- [SESIÓN 21/08/2026 — Diff neutral SQL 01–02 contra el baseline principal](#sesión-21082026--diff-neutral-sql-0102-contra-el-baseline-principal)
+- [SESIÓN 21/08/2026 — Port del handler de inventario contra SQL neutral 01–02](#sesión-21082026--port-del-handler-de-inventario-contra-sql-neutral-0102)
+- [SESIÓN 21/08/2026 — Validación de SQL 01–02 en staging restaurado](#sesión-21082026--validación-de-sql-0102-en-staging-restaurado)
+- [SESIÓN 21/08/2026 — Dry-run detallado de brechas Kardex en staging](#sesión-21082026--dry-run-detallado-de-brechas-kardex-en-staging)
+- [SESIÓN 21/08/2026 — Correlación read-only de brechas Kardex por confianza](#sesión-21082026--correlación-read-only-de-brechas-kardex-por-confianza)
+- [SESIÓN 21/08/2026 — Lote de 24 brechas de alta confianza en staging](#sesión-21082026--lote-de-24-brechas-de-alta-confianza-en-staging)
+- [SESIÓN 21/08/2026 — Evaluación de las 6 brechas de confianza media](#sesión-21082026--evaluación-de-las-6-brechas-de-confianza-media)
+- [SESIÓN 21/08/2026 — Preparación de promoción de guardrails flujo-futuro al principal](#sesión-21082026--preparación-de-promoción-de-guardrails-flujo-futuro-al-principal)
+- [SESIÓN 21/08/2026 — Re-auditoría Kardex staging tras lote de 24 de alta confianza](#sesión-21082026--re-auditoría-kardex-staging-tras-lote-de-24-de-alta-confianza)
+- [SESIÓN 21/08/2026 — Paquete final de correctivos para el principal (sin aplicar)](#sesión-21082026--paquete-final-de-correctivos-para-el-principal-sin-aplicar)
+- [SESIÓN 21/08/2026 — Matriz mutable de 03–04 en staging (finanzas + wrappers)](#sesión-21082026--matriz-mutable-de-0304-en-staging-finanzas--wrappers)
+- [SESIÓN 21/08/2026 — Promoción de guardrails al principal (EJECUTADO)](#sesión-21082026--promoción-de-guardrails-al-principal-ejecutado)
+- [SESIÓN 21/08/2026 — Re-baseline y re-correlación del principal post-guardrails](#sesión-21082026--re-baseline-y-re-correlación-del-principal-post-guardrails)
+- [SESIÓN 21/08/2026 — Preparación del tramo 05b de reconciliación (revisable, no aplicado)](#sesión-21082026--preparación-del-tramo-05b-de-reconciliación-revisable-no-aplicado)
+- [SESIÓN 21/08/2026 — Runner de correctivos para el principal (plan/apply/rollback)](#sesión-21082026--runner-de-correctivos-para-el-principal-planapplyrollback)
+- [SESIÓN 21/08/2026 — Correctivos de alta confianza APLICADOS al principal](#sesión-21082026--correctivos-de-alta-confianza-aplicados-al-principal)
+- [SESIÓN 21/08/2026 — Revisión del Worker portado + pre-flight de deploy](#sesión-21082026--revisión-del-worker-portado--pre-flight-de-deploy)
+- [SESIÓN 21/08/2026 — Limpieza de lint en los handlers portados](#sesión-21082026--limpieza-de-lint-en-los-handlers-portados)
+- [SESIÓN 21/08/2026 — Worker DESPLEGADO a producción](#sesión-21082026--worker-desplegado-a-producción)
+- [SESIÓN 21/08/2026 — Preparación de 06 (grants de seguridad)](#sesión-21082026--preparación-de-06-grants-de-seguridad)
+- [SESIÓN 21/08/2026 — Aplicación de 06a (subconjunto seguro de grants)](#sesión-21082026--aplicación-de-06a-subconjunto-seguro-de-grants)
+- [SESIÓN 21/08/2026 — Migración imagen_url/activo al Worker (destrabar 06 completo)](#sesión-21082026--migración-imagen_urlactivo-al-worker-destrabar-06-completo)
+- [SESIÓN 21/08/2026 — Diagnóstico de lentitud del dump + backup fresco completo](#sesión-21082026--diagnóstico-de-lentitud-del-dump--backup-fresco-completo)
+- [SESIÓN 22/08/2026 — Deploy Worker + frontend con endpoint de metadatos](#sesión-22082026--deploy-worker--frontend-con-endpoint-de-metadatos)
+- [SESIÓN 22/08/2026 — Timeout de backup ampliado y procedimiento nativo](#sesión-22082026--timeout-de-backup-ampliado-y-procedimiento-nativo)
+- [SESIÓN 22/08/2026 — Migración de crear/actualizar/borrar producto al Worker](#sesión-22082026--migración-de-crearactualizarborrar-producto-al-worker)
+- [SESIÓN 22/08/2026 — Deploy y smoke test controlado de productos con Kardex](#sesión-22082026--deploy-y-smoke-test-controlado-de-productos-con-kardex)
+- [SESIÓN 22/08/2026 — Aplicación de 06 completo y postflight](#sesión-22082026--aplicación-de-06-completo-y-postflight)
+- [SESIÓN 22/08/2026 — Cleanup del Tester vía Worker](#sesión-22082026--cleanup-del-tester-vía-worker)
+- [SESIÓN 22/08/2026 — Fix de atribución de vendedor para el Tester determinista](#sesión-22082026--fix-de-atribución-de-vendedor-para-el-tester-determinista)
+- [SESIÓN 22/08/2026 — Cierre del gate E2E TesterFlowView (verificación por base de datos)](#sesión-22082026--cierre-del-gate-e2e-testerflowview-verificación-por-base-de-datos)
+- [SESIÓN 22/08/2026 — Plan de reconciliación de los 66 saltos (solo preparación, nada ejecutado)](#sesión-22082026--plan-de-reconciliación-de-los-66-saltos-solo-preparación-nada-ejecutado)
+- [SESIÓN 22/08/2026 — Fix: PDF "Resumido" de comisiones no diferenciaba del detallado](#sesión-22082026--fix-pdf-resumido-de-comisiones-no-diferenciaba-del-detallado)
+- [SESIÓN 22/08/2026 — Plan: Eliminar flujo de pago de comisiones + Excluir CxC](#sesión-22082026--plan-eliminar-flujo-de-pago-de-comisiones--excluir-cxc)
+- [SESIÓN 22/08/2026 — Ejecución: Eliminar flujo de pago de comisiones + Excluir CxC](#sesión-22082026--ejecución-eliminar-flujo-de-pago-de-comisiones--excluir-cxc)
+- [SESIÓN 22/08/2026 — Deploy post-commit comisiones](#sesión-22082026--deploy-post-commit-comisiones)
+- [SESIÓN 22/08/2026 — Plan de fixeo E2E de comisiones y flujo de pago legacy](#sesión-22082026--plan-de-fixeo-e2e-de-comisiones-y-flujo-de-pago-legacy)
+- [SESIÓN 23/08/2026 — Cierre del paquete de release principal](#sesión-23082026--cierre-del-paquete-de-release-principal)
+- [SESION 23/08/2026 - Validacion local del paquete 238b](#sesion-23082026---validacion-local-del-paquete-238b)
+- [SESION 23/08/2026 - Preparacion de push del proyecto principal](#sesion-23082026---preparacion-de-push-del-proyecto-principal)
+- [SESION 23/08/2026 - Preflight read-only del principal](#sesion-23082026---preflight-read-only-del-principal)
+- [SESION 23/08/2026 - Auditoria enriquecida de los 12 residuales 238b](#sesion-23082026---auditoria-enriquecida-de-los-12-residuales-238b)
+- [SESION 23/08/2026 - Confirmacion de fletes y residuales 100% no-CxC](#sesion-23082026---confirmacion-de-fletes-y-residuales-100-no-cxc)
+- [SESION 23/08/2026 - Conciliacion de los 10 mayores residuales 238b](#sesion-23082026---conciliacion-de-los-10-mayores-residuales-238b)
+- [SESION 24/08/2026 - Ciclo controlado 238b tasa 2% en staging](#sesion-24082026---ciclo-controlado-238b-tasa-2-en-staging)
+- [SESION 24/08/2026 - Aplicacion 238a neutral en principal](#sesion-24082026---aplicacion-238a-neutral-en-principal)
+- [SESION 24/08/2026 - Auditoria post-238a y fases 238b](#sesion-24082026---auditoria-post-238a-y-fases-238b)
+- [SESION 24/08/2026 - Aplicacion de guardrails futuros 238b en principal](#sesion-24082026---aplicacion-de-guardrails-futuros-238b-en-principal)
+- [SESION 24/08/2026 - Prueba de contrato histórico 238b en staging](#sesion-24082026---prueba-de-contrato-histórico-238b-en-staging)
+- [SESION 28/08/2026 - Despliegue a producción: cobro de la diferencia en devolución parcial](#sesion-28082026---despliegue-a-producción-cobro-de-la-diferencia-en-devolución-parcial)
+- [SESION 28/08/2026 - E2E staging completo y correcciones 255/256](#sesion-28082026---e2e-staging-completo-y-correcciones-255256)
+- [SESION 28/08/2026 - Comision split por cliente ajeno (sabados) en staging](#sesion-28082026---comision-split-por-cliente-ajeno-sabados-en-staging)
+- [2026-08-28 — Fix `consumo_credito` para Saldo a Favor + COD (staging validado)](#2026-08-28--fix-consumo_credito-para-saldo-a-favor--cod-staging-validado)
+- [2026-08-28 — PROMOCION 04 AL PRINCIPAL COMPLETADA (con rollback verificado)](#2026-08-28--promocion-04-al-principal-completada-con-rollback-verificado)
+- [2026-08-29 — Auditoría E2E, Resiliencia de Autenticación, PINs Reales y Optimización de Cambio de Operador](#2026-08-29--auditoría-e2e-resiliencia-de-autenticación-pins-reales-y-optimización-de-cambio-de-operador)
+- [2026-08-30 — Identificadores / Códigos Únicos de Trabajadores y Propagación en PDFs](#2026-08-30--identificadores--códigos-únicos-de-trabajadores-y-propagación-en-pdfs)
+- [2026-08-30 — Unificación de Cuenta en Usuarios y Persistencia de Teléfonos (con Rollback)](#2026-08-30--unificación-de-cuenta-en-usuarios-y-persistencia-de-teléfonos-con-rollback)
+- [2026-08-30 — Eliminación Segura y Transaccional de Usuarios de Prueba (admin, logist, luigi)](#2026-08-30--eliminación-segura-y-transaccional-de-usuarios-de-prueba-admin-logist-luigi)
+- [2026-08-30 — Tipografía y Jerarquía Visual Sutil para Códigos en Reportes PDF](#2026-08-30--tipografía-y-jerarquía-visual-sutil-para-códigos-en-reportes-pdf)
+- [2026-08-31 — Venta Anticipada (Stock Negativo) activada y validada en staging](#2026-08-31--venta-anticipada-stock-negativo-activada-y-validada-en-staging)
+
+### Septiembre 2026
+
+- [2026-09-01 — Promoción a Producción: `permitir_stock_negativo = true` (Venta Anticipada)](#2026-09-01--promoción-a-producción-permitir_stock_negativo--true-venta-anticipada)
+- [2026-09-01 — Commit selectivo del working tree: Códigos de Trabajadores + Endpoint Finanzas-Sync + UI Stock Negativo](#2026-09-01--commit-selectivo-del-working-tree-códigos-de-trabajadores--endpoint-finanzas-sync--ui-stock-negativo)
+- [2026-09-03 — Versión 1.0.1: Destino de Saldo en Devoluciones (Saldo a Favor vs. Reembolso)](#2026-09-03--versión-101-destino-de-saldo-en-devoluciones-saldo-a-favor-vs-reembolso)
+- [2026-09-03 — Versión 1.0.2: Reembolso Multi-Método y Liquidación Mixta en Devoluciones Parciales](#2026-09-03--versión-102-reembolso-multi-método-y-liquidación-mixta-en-devoluciones-parciales)
+- [2026-09-04 — Comisión split por "designado del día" (sábados) v3 en staging](#2026-09-04--comisión-split-por-designado-del-día-sábados-v3-en-staging)
+- [2026-09-04 — Fase 3: reembolso atómico y destino coherente del balance en devoluciones CxC](#2026-09-04--fase-3-reembolso-atómico-y-destino-coherente-del-balance-en-devoluciones-cxc)
+- [2026-09-05 — Runbook Fase 3 ejecutado en producción (reembolso atómico)](#2026-09-05--runbook-fase-3-ejecutado-en-producción-reembolso-atómico)
+- [2026-09-05 — Split de sábados v3 ("designado del día") portado y aplicado al PRINCIPAL (toggle OFF)](#2026-09-05--split-de-sábados-v3-designado-del-día-portado-y-aplicado-al-principal-toggle-off)
+
+---
+
+## Versión 1.0.4 (Estable) — 2026-09-05
 
 **Certificación de Estabilidad**:
 - **Pruebas Unitarias**: 36/36 suites aprobadas, 319/319 tests en verde (100% de cobertura en proyecto principal) y 29/29 suites en staging (265/265 tests).
@@ -24,7 +182,7 @@
 
 ---
 
-# Versión 1.0.3 (Estable) — 2026-09-05
+## Versión 1.0.3 (Estable) — 2026-09-05
 
 **Certificación de Estabilidad**:
 - **Pruebas Unitarias**: 36/36 suites aprobadas, 319/319 tests en verde (100% de cobertura funcional en proyecto principal) y 29/29 suites en staging (265/265 tests).
@@ -45,7 +203,7 @@
 
 ---
 
-## 2026-09-05 — Reversión consciente de devoluciones (release 06 + Fase B UX) — commits `3ddd4fa`, `72da4e2`
+### 2026-09-05 — Reversión consciente de devoluciones (release 06 + Fase B UX) — commits `3ddd4fa`, `72da4e2`
 
 ### Resumen del Requerimiento
 * Un despacho entregado y devuelto al 100% registra en CxC abonos `forma_pago_abono='Devolución'` (ajustes contables, no cobros). La guarda de reversión (migración 232 + Worker) los trataba como cobros reales y bloqueaba la reapertura con "Anule los cobros primero" — callejón sin salida que obligaba a anular abonos a mano.
@@ -71,7 +229,7 @@
 ### Pendiente
 * Aplicar espejo 264 en staging y correr el E2E de devolución/reversión (producción ya está promovida).
 
-## 2026-09-05 — Validación E2E completa del split designado v3 (staging local)
+### 2026-09-05 — Validación E2E completa del split designado v3 (staging local)
 
 - **Entorno**: vite 5174 + worker 8789 desde el workspace; migraciones 260 (split designado), 262 (reembolso atómico) y 263 (fix multi-fila) aplicadas en staging DB.
 - **Fix de regresión en despachos.js (devolución parcial)**: el árbol de trabajo había perdido el cálculo de descuentos por línea (despacho_descuentos) de HEAD; restaurado conservando las funciones v1.0.2 (pagosDiferencia, reembolso multi-método, RPC atómica con idempotencia).
@@ -82,10 +240,6 @@
 - **Vitest**: 265/265 (incluye despachosPartialAtomic actualizado al contrato RPC 16-arg de 262). **Build**: OK.
 - **Lección**: al redefinir una función con CREATE OR REPLACE en una migración nueva, auditar qué otras migraciones ya la tocaron (262 perdió el fix de 257).
 
-# Bitácora de Proyecto — Construacero Carabobo
-
-> Registro cronológico de decisiones, avance y errores.
-> Actualizar en cada sesión de trabajo.
 
 ---
 
@@ -595,7 +749,9 @@ Implementar el módulo completo de gestión de clientes con lógica anti-robo.
 
 ---
 
-### SESIÓN 10 — 24/04/2026 — Fix: Error 401 en página de Clientes (Vercel)
+> 🗃️ **Histórico con lección vigente.** El deploy manual del Worker que causó este incidente fue reemplazado por CI/CD automático (`docs/decisiones/ADR-001-arquitectura-deploy.md`). Postmortem completo: `docs/incidentes/INC-002-worker-desactualizado-y-401.md`. La decisión temporal de apuntar el frontend a camelAI (`VITE_WORKER_ORIGIN`) fue reemplazada por el proxy de `vercel.json` al Worker primario.
+
+## SESIÓN 10 — 24/04/2026 — Fix: Error 401 en página de Clientes (Vercel)
 
 **Objetivo de la sesión:** Diagnosticar y corregir error 401 (Unauthorized) en `/api/clientes` y `/api/clientes/lookup` que impedía cargar la página de Clientes desde el deploy de Vercel.
 
@@ -1222,6 +1378,8 @@ Fase 6 era la última fase funcional pendiente del plan general original, marcad
 
 ---
 
+> 🗃️ **Histórico con lección vigente.** Las reglas de secretos de esta auditoría quedaron formalizadas en `docs/decisiones/ADR-003-gestion-de-secretos.md` y la arquitectura de deploy en `docs/decisiones/ADR-001-arquitectura-deploy.md`. El incidente de secrets sobrescritos: `docs/incidentes/INC-003-secrets-sobrescritos-en-deploy.md`. La tabla de dos Workers de esta sección es histórica; la regla vigente es un único Worker primario desplegado por GitHub Actions.
+
 ## AUDITORÍA DE SEGURIDAD (26/04/2026)
 
 ### Contexto
@@ -1253,7 +1411,7 @@ El Worker de camelAI NO tiene los secrets de Supabase y causará errores 500.
 **Cloudflare Dashboard** (Worker `listo-pos-cotizaciones` en cuenta `luigistorelogistics`):
 - `SUPABASE_SERVICE_KEY` — Secreto cifrado
 - `VAPID_PRIVATE_KEY` — Secreto cifrado
-- `DEV_SUPER_CODE` — Secreto cifrado (`24457713`)
+- `DEV_SUPER_CODE` — Secreto cifrado (`<CONFIGURADO_EN_SECRET_MANAGER>`)
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VAPID_PUBLIC_KEY` — Texto plano (no sensibles)
 - `GROQ_KEYS_A/B/C` — Se inyectan desde `deploy.sh` vía `.dev.vars` (solo en camelAI)
 
@@ -1275,12 +1433,12 @@ NO en `wrangler.jsonc`. Los secrets en `wrangler.jsonc` quedan expuestos en el r
 - Los 3 dominios permitidos: `.camelai.app`, `.apps.camelai.dev`, `.vercel.app`
 
 #### 2. Super admin code movido a secret (`worker.js`)
-- **Antes:** `const SUPER_ADMIN_CODE = '24457713'` hardcodeado
+- **Antes:** `const SUPER_ADMIN_CODE = '<NO_DOCUMENTAR_VALOR_REAL>'` hardcodeado
 - **Después:** Usa `env.DEV_SUPER_CODE` (secret en Cloudflare Dashboard)
 - `wrangler.jsonc` tiene `DEV_SUPER_CODE` temporal en `vars` hasta que se configure como secret
 
 #### 3. Validación de super PIN en frontend (`LoginPage.jsx`)
-- **Antes:** Comparación local `if (superPin !== '24457713')` — bypass del servidor
+- **Antes:** Comparación local `if (superPin !== '<NO_DOCUMENTAR_VALOR_REAL>')` — bypass del servidor
 - **Después:** Solo valida vía `fetch('/api/auth/super-admin')` con `await` + `if (!res.ok)`
 
 #### 4. IP tracking en auditoría (`worker.js`)
@@ -1422,6 +1580,8 @@ camelAI:     SUPABASE_SERVICE_KEY_len: 219 ← correcto
 ```
 
 ---
+
+> 🗃️ **Histórico con lección vigente.** Postmortem completo: `docs/incidentes/INC-001-service-worker-cache-y-chunks.md`. La prevención definitiva del cache de `index.html` sigue en el roadmap (`ROADMAP.md`).
 
 ## SESIÓN 15 — 26/04/2026 — Error recurrente: chunks JS rotos por cache del Service Worker
 
@@ -1673,30 +1833,30 @@ AppLayout content → flex-1 min-h-0
 
 ### BUG-01 — Botón deshabilitado silenciosamente si la tasa no ha cargado 🔴
 
-**Severidad:** Crítica  
-**Síntoma:** En dispositivos con red lenta o sin caché, al llegar al Paso 3 el botón "Enviar cotización" aparece deshabilitado sin ningún mensaje explicativo. El usuario cree que el botón no funciona.  
-**Causa raíz:** La condición `disabled={cargando || tasaHook.tasaEfectiva <= 0}` deshabilita el botón cuando la tasa BCV/USDT todavía está cargando. En móviles con datos lentos o sin caché de React Query, la tasa puede tardar varios segundos en llegar.  
-**Archivo:** `CotizacionBuilder.jsx` líneas 1169-1175 (móvil) y 1298-1304 (desktop)  
+**Severidad:** Crítica
+**Síntoma:** En dispositivos con red lenta o sin caché, al llegar al Paso 3 el botón "Enviar cotización" aparece deshabilitado sin ningún mensaje explicativo. El usuario cree que el botón no funciona.
+**Causa raíz:** La condición `disabled={cargando || tasaHook.tasaEfectiva <= 0}` deshabilita el botón cuando la tasa BCV/USDT todavía está cargando. En móviles con datos lentos o sin caché de React Query, la tasa puede tardar varios segundos en llegar.
+**Archivo:** `CotizacionBuilder.jsx` líneas 1169-1175 (móvil) y 1298-1304 (desktop)
 **Solución propuesta:** Mostrar un mensaje visible tipo "Cargando tasa de cambio..." o un spinner cuando `tasaHook.cargando === true`, en lugar de solo deshabilitar el botón silenciosamente. Considerar también mostrar un toast si la tasa falla.
 
 ---
 
 ### BUG-02 — Spinner no aparece durante el guardado previo al envío 🟡
 
-**Severidad:** UX media  
-**Síntoma:** Al pulsar "Enviar", `handleEnviar` primero ejecuta `guardarBorrador.mutateAsync()` (puede tardar 1-3s en red lenta) antes de ejecutar el envío. Durante ese tiempo el botón no muestra ningún spinner ni feedback. El usuario cree que nada ocurrió y pulsa otra vez, generando múltiples llamadas.  
-**Causa raíz:** El icono del botón usa `enviarCotizacion.isPending` para el spinner, pero no contempla `guardarBorrador.isPending`. Sin embargo, `cargando` en línea 831 sí incluye ambos: `const cargando = guardarBorrador.isPending || enviarCotizacion.isPending`. El botón se deshabilita correctamente pero el spinner solo aparece en la fase de envío, no en la de guardado.  
-**Archivo:** `CotizacionBuilder.jsx` líneas 1173 y 1302  
+**Severidad:** UX media
+**Síntoma:** Al pulsar "Enviar", `handleEnviar` primero ejecuta `guardarBorrador.mutateAsync()` (puede tardar 1-3s en red lenta) antes de ejecutar el envío. Durante ese tiempo el botón no muestra ningún spinner ni feedback. El usuario cree que nada ocurrió y pulsa otra vez, generando múltiples llamadas.
+**Causa raíz:** El icono del botón usa `enviarCotizacion.isPending` para el spinner, pero no contempla `guardarBorrador.isPending`. Sin embargo, `cargando` en línea 831 sí incluye ambos: `const cargando = guardarBorrador.isPending || enviarCotizacion.isPending`. El botón se deshabilita correctamente pero el spinner solo aparece en la fase de envío, no en la de guardado.
+**Archivo:** `CotizacionBuilder.jsx` líneas 1173 y 1302
 **Solución propuesta:** Cambiar `{enviarCotizacion.isPending ? <Loader2 .../> : <Send />}` por `{cargando ? <Loader2 .../> : <Send />}` en ambos botones de envío.
 
 ---
 
 ### BUG-03 — `ModalEnvio` existe en el JSX pero nunca se abre 🟡
 
-**Severidad:** Inconsistencia / código muerto  
-**Síntoma:** El componente `ModalEnvio` (línea 1476) está montado con `isOpen={modalEnvio}` pero `setModalEnvio(true)` nunca se llama desde ningún botón del paso 3. El flujo original fue refactorizado para llamar `handleEnviar` directamente, pero el modal quedó en el JSX sin conectar.  
-**Causa raíz:** Refactor incompleto. El modal fue diseñado para que el usuario confirmara la tasa antes de enviar, pero los botones fueron cambiados para llamar `handleEnviar(tasaHook.tasaEfectiva)` directamente.  
-**Archivo:** `CotizacionBuilder.jsx` líneas 425, 1476-1482  
+**Severidad:** Inconsistencia / código muerto
+**Síntoma:** El componente `ModalEnvio` (línea 1476) está montado con `isOpen={modalEnvio}` pero `setModalEnvio(true)` nunca se llama desde ningún botón del paso 3. El flujo original fue refactorizado para llamar `handleEnviar` directamente, pero el modal quedó en el JSX sin conectar.
+**Causa raíz:** Refactor incompleto. El modal fue diseñado para que el usuario confirmara la tasa antes de enviar, pero los botones fueron cambiados para llamar `handleEnviar(tasaHook.tasaEfectiva)` directamente.
+**Archivo:** `CotizacionBuilder.jsx` líneas 425, 1476-1482
 **Solución propuesta:** Opciones:
 - **A)** Reconectar el modal: que el botón haga `setModalEnvio(true)` y el modal confirme la tasa antes de enviar (flujo original correcto).
 - **B)** Eliminar el modal y el estado `modalEnvio` si se decide no usarlo más.
@@ -1706,10 +1866,10 @@ AppLayout content → flex-1 min-h-0
 
 ### BUG-04 — Feedback visual insuficiente de botón deshabilitado en móviles 🟡
 
-**Severidad:** UX baja  
-**Síntoma:** El botón deshabilitado usa `disabled:opacity-50` — en pantallas de móvil con brillo alto o bajo, la diferencia de opacidad es imperceptible y el usuario no sabe que no puede pulsar.  
-**Causa raíz:** Solo se usa opacidad como indicador visual. No hay texto, tooltip ni color diferente.  
-**Archivo:** `CotizacionBuilder.jsx` líneas 1171 y 1300  
+**Severidad:** UX baja
+**Síntoma:** El botón deshabilitado usa `disabled:opacity-50` — en pantallas de móvil con brillo alto o bajo, la diferencia de opacidad es imperceptible y el usuario no sabe que no puede pulsar.
+**Causa raíz:** Solo se usa opacidad como indicador visual. No hay texto, tooltip ni color diferente.
+**Archivo:** `CotizacionBuilder.jsx` líneas 1171 y 1300
 **Solución propuesta:** Agregar un `title` dinámico al botón que explique por qué está deshabilitado: `title={tasaHook.tasaEfectiva <= 0 ? 'Esperando tasa de cambio...' : undefined}`.
 
 ---
@@ -3649,7 +3809,7 @@ Ejecutado el runbook `docs/plans/2026-08-28-runbook-promocion-04-consumo-credito
 
 Tras auditoría integral de infraestructura (Supabase `oyfyuszgjwcepjpngclv`, Cloudflare Worker y Vercel), se identificaron cinco cuellos de botella que causaban intermitencia y lentitud en el acceso:
 
-1. **Desalineación Criptográfica de PINs:** El registro de `ADMINISTRADOR` en Supabase contenía un hash PBKDF2 que no correspondía al PIN `676767`.
+1. **Desalineación Criptográfica de PINs:** El registro de `ADMINISTRADOR` en Supabase contenía un hash PBKDF2 que no correspondía a su PIN vigente (`<NO_DOCUMENTAR_VALOR_REAL>`).
 2. **Confusión de Error 401 en Frontend:** `useAuthStore.js` interpretaba todo código 401 como sesión expirada del usuario negocio, ejecutando un intento de refresco de sesión con timeout de 8s antes de consultar el validador offline, congelando la pantalla por más de 20s.
 3. **Bloqueo por Timeout en Auditoría del Worker:** `registrarAuditoria()` en `api/lib/audit.js` lanzaba excepción tras 2s si la conexión a Supabase se ralentizaba en Windows, abortando la petición de login con error 500 (`The operation was aborted`).
 4. **Lock de 30s en Supabase JS SDK:** Con llamadas rápidas de cambio de usuario, `@supabase/supabase-js` ejecutaba un bloqueo interno (`TimeoutError: Tiempo de espera agotado (30s)`), haciendo que `supabase.auth.getSession()` congelara las funciones dependientes.
@@ -3663,7 +3823,7 @@ Tras auditoría integral de infraestructura (Supabase `oyfyuszgjwcepjpngclv`, Cl
 #### 1. Backend / Cloudflare Worker
 * **`api/lib/auth.js`:** Implementada función `decodeJwtPayload(token)` para validar localmente los JWTs emitidos por Supabase en 0ms, eliminando round-trips innecesarios hacia `/auth/v1/user`.
 * **`api/lib/audit.js`:** `registrarAuditoria` envuelto en `try/catch` seguro con despacho no bloqueante (`void audit(...)`) para que ningún fallo de telemetría interrumpa la autenticación.
-* **`api/handlers/auth-operators.js`:** 
+* **`api/handlers/auth-operators.js`:**
   - Consultas internas a Supabase (`usuarios`, `metadata`, `configuracion_negocio`) protegidas con `fetchConTimeout` (12s).
   - Eliminado el bypass maestro `isMasterPin`. Validación estricta y exclusiva contra el hash PBKDF2 de la base de datos.
   - `handleClearOperator` protegido con timeout seguro de 5s.
@@ -3678,19 +3838,19 @@ Tras auditoría integral de infraestructura (Supabase `oyfyuszgjwcepjpngclv`, Cl
 
 #### 3. Base de Datos / Supabase
 Se recalcularon los hashes PBKDF2 (10,000 iteraciones, salt criptográfico nuevo, SHA-256) y se actualizaron en la tabla `usuarios`:
-* **Enzo Patti & Gabi (Jefe):** `010101` (6 dígitos)
-* **Administrador (Administración):** `676767` (6 dígitos)
-* **Logística (Logística):** `000000` (6 dígitos)
-* **Niki Ramírez (Jefe de Ventas / Supervisor):** `010203` (6 dígitos)
-* **Edgar Ramírez, Josué Marciales & Empresa (Vendedores):** `0000` (4 dígitos)
-* **Acceso Desarrollador:** `24457713` (8 dígitos)
+* **Enzo Patti & Gabi (Jefe):** PIN de 6 dígitos (`<NO_DOCUMENTAR_VALOR_REAL>`)
+* **Administrador (Administración):** PIN de 6 dígitos (`<NO_DOCUMENTAR_VALOR_REAL>`)
+* **Logística (Logística):** PIN de 6 dígitos (`<NO_DOCUMENTAR_VALOR_REAL>`)
+* **Niki Ramírez (Jefe de Ventas / Supervisor):** PIN de 6 dígitos (`<NO_DOCUMENTAR_VALOR_REAL>`)
+* **Edgar Ramírez, Josué Marciales & Empresa (Vendedores):** PIN de 4 dígitos (`<NO_DOCUMENTAR_VALOR_REAL>`)
+* **Acceso Desarrollador:** PIN de 8 dígitos (`<NO_DOCUMENTAR_VALOR_REAL>`)
 
 ---
 
 ### Verificación y Despliegue
 
 * **Prueba Automatizada Multi-Operador:** 100% de los operadores probados con `switch-operator` devolvieron HTTP 200 OK.
-* **Prueba de Seguridad Estricta:** Administrador con `000000` devuelve `401 PIN incorrecto` ❌; con `676767` devuelve `200 OK` ✅.
+* **Prueba de Seguridad Estricta:** Administrador con un PIN errado (`000000` en su momento) devuelve `401 PIN incorrecto` ❌; con su PIN vigente (`<NO_DOCUMENTAR_VALOR_REAL>`) devuelve `200 OK` ✅.
 * **Carga de Módulos:** Verificados endpoints de Cotizaciones, Productos/Kardex, Despachos, Clientes y Configuración con 200 OK.
 * **Suite de Tests:** `32 passed (32)`, `283 passed (283)`.
 * **Commits Pusheados a `origin/main`:**

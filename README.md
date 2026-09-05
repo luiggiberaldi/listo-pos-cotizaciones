@@ -44,7 +44,7 @@ src/
     └── dateHelpers.js # Formateo de fechas
 
 supabase/
-└── migrations/        # 15 migrations SQL (ver ARQUITECTURA.md)
+└── migrations/        # Migraciones SQL incrementales (ver docs/operaciones/matriz-migraciones.md)
 ```
 
 ## Despliegue (Producción)
@@ -80,8 +80,8 @@ La aplicación usa una arquitectura de dos capas:
 # Frontend → Vercel (auto-deploy al hacer push a GitHub)
 git push origin main
 
-# API → Cloudflare Worker (manual)
-wrangler deploy --dispatch-namespace chiridion
+# API → Cloudflare Worker (automático vía GitHub Actions en push a main)
+# .github/workflows/deploy-worker.yml (ver docs/runbooks/deploy-produccion.md)
 ```
 
 ### vercel.json
@@ -118,5 +118,11 @@ En desarrollo local, el Worker corre en `localhost:8787` (via `wrangler dev`) y 
 
 ## Documentación interna
 
-- **`ARQUITECTURA.md`** — Esquema de BD, RLS, RPCs, reglas de negocio (v1.1)
+- **[`ARQUITECTURA.md`](docs/architecture/ARQUITECTURA.md)** — Esquema de BD, RLS, RPCs, reglas de negocio (v1.1)
+- **`CHANGELOG.md`** — Releases por versión, con validación real y notas de deploy
+- **`ROADMAP.md`** — Pendientes activos, deuda técnica y mejoras futuras
+- **`docs/runbooks/`** — Deploy producción/staging, rollback de BD, promoción de releases
+- **`docs/decisiones/`** — ADRs (arquitectura de deploy, seguridad, secretos, finanzas)
+- **`docs/incidentes/`** — Postmortems (INC-001..003)
+- **`docs/operaciones/`** — Matrices de entornos y migraciones, checklist de release
 - **`BITACORA.md`** — Registro cronológico de decisiones y sesiones de trabajo

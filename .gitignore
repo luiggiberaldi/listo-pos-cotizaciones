@@ -77,6 +77,12 @@ __tests__/
 !ARQUITECTURA.md
 !ROADMAP.md
 !BITACORA.md
+!CHANGELOG.md
+!docs/runbooks/*.md
+!docs/decisiones/*.md
+!docs/incidentes/*.md
+!docs/operaciones/*.md
+!docs/history/2026-04-25-roadmap-fases-producto.md
 
 # Release evidence and selected commission regressions
 !docs/plans/2026-08-23-paquete-release-principal-comisiones.md
@@ -88,8 +94,8 @@ __tests__/
 !src/utils/__tests__/comisionUtils.test.js
 !src/utils/__tests__/comisionesGeneradasPDF.test.js
 !src/utils/__tests__/pdfSharedHeader.test.js
-!src/utils/__tests__/expandPctNominal.test.js
 !src/utils/__tests__/comisionesTasa.test.js
+!src/utils/__tests__/expandPctNominal.test.js
 
 # Revisión SQL 238b del proyecto principal
 !scripts/
