@@ -21,6 +21,7 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import Skeleton    from '../components/ui/Skeleton'
 import EmptyState  from '../components/ui/EmptyState'
 import PageHeader  from '../components/ui/PageHeader'
+import { showToast } from '../components/ui/Toast'
 import { apiUrl } from '../services/apiBase'
 
 const ROL_CONFIG = {
@@ -809,8 +810,12 @@ export default function UsuariosView() {
 
   async function confirmarCambioActivo() {
     if (!confirmCambio) return
+    const { usuario, activo } = confirmCambio
     try {
-      await cambiarActivo.mutateAsync({ id: confirmCambio.usuario.id, activo: confirmCambio.activo })
+      await cambiarActivo.mutateAsync({ id: usuario.id, activo })
+      showToast(activo ? `Usuario "${usuario.nombre}" activado exitosamente` : `Usuario "${usuario.nombre}" desactivado exitosamente`, 'success')
+    } catch (err) {
+      showToast(err.message || 'Error al cambiar estado del usuario', 'error')
     } finally {
       setConfirmCambio(null)
     }
@@ -818,8 +823,12 @@ export default function UsuariosView() {
 
   async function confirmarBorrar() {
     if (!confirmBorrar) return
+    const usuario = confirmBorrar
     try {
-      await eliminar.mutateAsync({ id: confirmBorrar.id })
+      await eliminar.mutateAsync({ id: usuario.id })
+      showToast(`Usuario "${usuario.nombre}" eliminado permanentemente`, 'success')
+    } catch (err) {
+      showToast(err.message || 'Error al eliminar usuario', 'error')
     } finally {
       setConfirmBorrar(null)
     }

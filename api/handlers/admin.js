@@ -154,6 +154,16 @@ export async function handleAdmin(request, env, url) {
     if ('comision_pct' in body) updateData.comision_pct = comision_pct != null && comision_pct !== '' ? Number(comision_pct) : null;
     if ('comision_pct_cabilla' in body) updateData.comision_pct_cabilla = comision_pct_cabilla != null && comision_pct_cabilla !== '' ? Number(comision_pct_cabilla) : null;
 
+    // Soporte para activar/desactivar usuario
+    if ('activo' in body) {
+      const activoVal = Boolean(body.activo);
+      // No permitir que un usuario se desactive a sí mismo
+      if (activoVal === false && (userId === user.id || userId === user.operator_id)) {
+        return jsonError('No puedes desactivar tu propio usuario', 400, request);
+      }
+      updateData.activo = activoVal;
+    }
+
     // Hash new PIN if provided
     if (pin) {
       const pinLen = (rol === 'vendedor' || rol === 'vendedor_sin_comision' || (rol || 'vendedor') === 'vendedor') ? 4 : 6;
@@ -191,10 +201,16 @@ export async function handleAdmin(request, env, url) {
 
     // Auditoría
     try {
+      const accionAuditoria = ('activo' in updateData)
+        ? (updateData.activo ? 'ACTIVAR_USUARIO' : 'DESACTIVAR_USUARIO')
+        : 'EDITAR_USUARIO';
+      const descAuditoria = ('activo' in updateData)
+        ? `Usuario ${userId} ${updateData.activo ? 'activado' : 'desactivado'}`
+        : `Usuario ${userId} actualizado`;
       await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
         usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
-        categoria: 'USUARIO', accion: 'EDITAR_USUARIO', descripcion: `Usuario ${userId} actualizado`,
-        entidadTipo: 'usuario', entidadId: userId, meta: { campos_actualizados: Object.keys(updateData), rol: updateData.rol, nombre: updateData.nombre }, ip,
+        categoria: 'USUARIO', accion: accionAuditoria, descripcion: descAuditoria,
+        entidadTipo: 'usuario', entidadId: userId, meta: { campos_actualizados: Object.keys(updateData), rol: updateData.rol, nombre: updateData.nombre, activo: updateData.activo }, ip,
       });
     } catch { /* auditoría secundaria no debe bloquear la operación */ }
 

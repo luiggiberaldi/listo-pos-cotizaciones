@@ -124,6 +124,16 @@ export async function handleAdmin(request, env, url) {
     if ('comision_pct' in body) updateData.comision_pct = comision_pct != null && comision_pct !== '' ? Number(comision_pct) : null;
     if ('comision_pct_cabilla' in body) updateData.comision_pct_cabilla = comision_pct_cabilla != null && comision_pct_cabilla !== '' ? Number(comision_pct_cabilla) : null;
 
+    // Soporte para activar/desactivar usuario
+    if ('activo' in body) {
+      const activoVal = Boolean(body.activo);
+      // No permitir que un usuario se desactive a sí mismo
+      if (activoVal === false && (userId === user.id || userId === user.operator_id)) {
+        return jsonError('No puedes desactivar tu propio usuario', 400, request);
+      }
+      updateData.activo = activoVal;
+    }
+
     // Hash new PIN if provided
     if (pin) {
       const pinLen = (rol === 'vendedor' || rol === 'vendedor_sin_comision' || (rol || 'vendedor') === 'vendedor') ? 4 : 6;
@@ -161,10 +171,16 @@ export async function handleAdmin(request, env, url) {
 
     // Auditoría
     try {
+      const accionAuditoria = ('activo' in updateData)
+        ? (updateData.activo ? 'ACTIVAR_USUARIO' : 'DESACTIVAR_USUARIO')
+        : 'EDITAR_USUARIO';
+      const descAuditoria = ('activo' in updateData)
+        ? `Usuario ${userId} ${updateData.activo ? 'activado' : 'desactivado'}`
+        : `Usuario ${userId} actualizado`;
       await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
         usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
-        categoria: 'USUARIO', accion: 'EDITAR_USUARIO', descripcion: `Usuario ${userId} actualizado`,
-        entidadTipo: 'usuario', entidadId: userId, meta: { campos_actualizados: Object.keys(updateData), rol: updateData.rol, nombre: updateData.nombre }, ip,
+        categoria: 'USUARIO', accion: accionAuditoria, descripcion: descAuditoria,
+        entidadTipo: 'usuario', entidadId: userId, meta: { campos_actualizados: Object.keys(updateData), rol: updateData.rol, nombre: updateData.nombre, activo: updateData.activo }, ip,
       });
     } catch {
       // La auditoría es best-effort y no debe bloquear la operación principal.
@@ -456,6 +472,17 @@ export async function handleSaveConfig(request, env) {
       campos[pctField] = n;
     }
   }
+  // G8-v3: los % del split NUNCA pueden superar el % general vigente (hoy 2% cabilla /
+  // 3% otros por defecto; se valida contra los valores finales que se guardarán).
+  {
+    const pctCabilla = Number(campos.comision_pct_cabilla) || 2;
+    const pctOtros = Number(campos.comision_pct_otros) || 3;
+    for (const pctField of ['comision_split_pct_vendedor', 'comision_split_pct_dueno']) {
+      if (campos[pctField] !== undefined && campos[pctField] > Math.min(pctCabilla, pctOtros)) {
+        return jsonError(`${pctField} no puede ser mayor al % general (${Math.min(pctCabilla, pctOtros)}%)`, 400, request);
+      }
+    }
+  }
   if (campos.comision_split_dias !== undefined) {
     const dias = String(campos.comision_split_dias).trim();
     if (dias !== '' && !dias.split(',').every(d => /^[0-6]$/.test(d.trim()))) {
@@ -552,6 +579,145 @@ export async function handleGetConfig(request, env) {
   }
 
   return json(config, 200, request);
+}
+
+// ─── Designación del "vendedor del día" (split sábado v3) ────────────────────
+// Solo el rol JEFE puede designar/quitar al designado de una fecha.
+// El designado debe ser vendedor o supervisor activo de la misma cuenta.
+async function getRolOperador(operatorId, env) {
+  if (!operatorId) return null;
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operatorId}&activo=eq.true&select=rol`,
+    { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } }
+  );
+  if (!res.ok) return null;
+  const rows = await res.json();
+  return rows.length === 1 ? rows[0].rol : null;
+}
+
+export async function handleDesignacion(request, env, url) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const user = await verifyAuth(request, env);
+  if (!user?.id) return jsonError('No autenticado', 401, request);
+
+  // SOLO el rol jefe designa (regla del negocio 2026-09-04)
+  const rol = await getRolOperador(user.operator_id, env);
+  if (rol !== 'jefe') {
+    return jsonError('Solo el jefe puede designar al vendedor del día', 403, request);
+  }
+
+  // GET: listar designaciones (rango opcional desde/hasta ISO)
+  if (request.method === 'GET') {
+    const desde = url.searchParams.get('desde');
+    const hasta = url.searchParams.get('hasta');
+    let query = `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${user.id}` +
+      `&select=id,fecha,designado_id,creado_por,creado_en,designado:usuarios!comision_designacion_diaria_designado_id_fkey(id,nombre,color,rol)` +
+      `&order=fecha.desc`;
+    if (desde && /^\d{4}-\d{2}-\d{2}$/.test(desde)) query += `&fecha=gte.${desde}`;
+    if (hasta && /^\d{4}-\d{2}-\d{2}$/.test(hasta)) query += `&fecha=lte.${hasta}`;
+    const res = await fetch(query, {
+      headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+    });
+    if (!res.ok) return jsonError('Error al leer designaciones', res.status, request);
+    return json(await res.json(), 200, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { body = {}; }
+
+  // POST: designar (upsert por cuenta+fecha)
+  if (request.method === 'POST') {
+    const { fecha, designado_id: designadoId } = body || {};
+    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
+      return jsonError('fecha inválida (formato YYYY-MM-DD)', 400, request);
+    }
+    if (!designadoId || !isValidUuid(String(designadoId))) {
+      return jsonError('designado_id inválido', 400, request);
+    }
+    // El designado debe ser vendedor o supervisor activo de la misma cuenta
+    const disRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${designadoId}&activo=eq.true&cuenta_id=eq.${user.id}&rol=in.(vendedor,supervisor)&select=id,nombre,rol`,
+      { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } }
+    );
+    if (!disRes.ok) return jsonError('Error al validar el designado', 500, request);
+    const dis = await disRes.json();
+    if (!dis.length) {
+      return jsonError('El designado debe ser un vendedor o supervisor activo de esta cuenta', 400, request);
+    }
+
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?on_conflict=cuenta_id,fecha`, {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=representation',
+      },
+      body: JSON.stringify({
+        cuenta_id: user.id,
+        fecha,
+        designado_id: designadoId,
+        creado_por: user.operator_id || user.id,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      const msg = text.includes('DESIGNADO_INVALIDO')
+        ? 'El designado debe ser un vendedor o supervisor activo'
+        : (text || `Error ${res.status}`);
+      return jsonError(msg, res.status, request);
+    }
+    const [row] = await res.json();
+
+    try {
+      await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+        usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
+        categoria: 'COMISIONES', accion: 'DESIGNAR_VENDEDOR_DIA',
+        descripcion: `Designó a ${dis[0].nombre} como vendedor del día ${fecha}`,
+        entidadTipo: 'comision_designacion_diaria', entidadId: row?.id || fecha,
+        meta: { fecha, designado_id: designadoId, designado_nombre: dis[0].nombre, rol_designado: dis[0].rol },
+        ip: request.headers.get('CF-Connecting-IP') || null,
+      });
+    } catch { /* best-effort */ }
+
+    return json({ ok: true, designacion: row }, 200, request);
+  }
+
+  // DELETE: quitar la designación de una fecha
+  if (request.method === 'DELETE') {
+    const fecha = body?.fecha;
+    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
+      return jsonError('fecha inválida (formato YYYY-MM-DD)', 400, request);
+    }
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${user.id}&fecha=eq.${fecha}`,
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+          Prefer: 'return=representation',
+        },
+      }
+    );
+    if (!res.ok) return jsonError('Error al quitar la designación', res.status, request);
+    const rows = await res.json();
+    if (rows.length) {
+      try {
+        await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+          usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
+          categoria: 'COMISIONES', accion: 'QUITAR_DESIGNACION_DIA',
+          descripcion: `Quitó la designación del día ${fecha}`,
+          entidadTipo: 'comision_designacion_diaria', entidadId: rows[0].id,
+          meta: { fecha, designado_id: rows[0].designado_id },
+          ip: request.headers.get('CF-Connecting-IP') || null,
+        });
+      } catch { /* best-effort */ }
+    }
+    return json({ ok: true, eliminadas: rows.length }, 200, request);
+  }
+
+  return jsonError('Method not allowed', 405, request);
 }
 
 export async function handleResetOperacional(request, env) {

@@ -83,15 +83,12 @@ export function useCambiarActivoUsuario() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, activo }) => {
-      const { error } = await supabase
-        .from('usuarios')
-        .update({ activo })
-        .eq('id', id)
-      if (error) throw error
+      await adminAPI.updateUser(id, { activo })
     },
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: KEY })
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      qc.invalidateQueries({ queryKey: ['vendedores'], exact: false })
     },
   })
 }
