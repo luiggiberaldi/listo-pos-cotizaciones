@@ -74,10 +74,16 @@ Espejo `264_staging_reversion_con_devoluciones.sql` (+ rollback). Aplicar a la B
 
 ## 7. Checklist de cierre
 
-- [ ] F0 backup con SHA-256 registrado en BITACORA
-- [ ] F1 preflight PASS
-- [ ] F2 apply sin excepciones
-- [ ] F3 smoke con ROLLBACK y 0 residuos (ramas: abono Devolución OK / abono real bloqueado)
-- [ ] F4 postflight PASS (privilegios correctos)
-- [ ] F5 deploy Vercel Ready + URL 200
-- [ ] BITACORA actualizada con resultados y lecciones
+- [x] F0 backup con SHA-256 registrado en BITACORA — `tmp/kardex-principal-pre-release06-2026-09-05T04-04-19-108Z.dump` (3.74 MB), SHA-256 `62768b0dfeb46d0cc6023688904f1441f6e1dafaf9f357156fdd6c2c9e76aa2c`
+- [x] F1 preflight PASS — firma 232 vigente; 5 abonos 'Devolución' ($10,197.40) quedan desbloqueados; 6 reembolsos históricos seguirán bloqueados (por diseño)
+- [x] F2 apply sin excepciones (intento 1; `CREATE OR REPLACE` idempotente)
+- [x] F3 smoke con ROLLBACK y 0 residuos — rama A: abono Devolución → reversión OK (`abonos_devolucion_anulados: 2`, deuda $2.00 → $0.00); rama B: cobro real → `CXC_CON_ABONOS`; rama C: reembolso efectivo → `REEMBOLSO_EFECTIVO_REGISTRADO`
+- [x] F4 postflight PASS — anon/authenticated sin EXECUTE; service_role con EXECUTE (RPC + wrapper idempotente)
+- [x] F5 deploy Vercel Ready — `https://listo-pos-cotizaciones.vercel.app` → 200
+- [x] BITACORA actualizada con resultados y lecciones
+
+## 8. Lecciones de la ejecución (2026-09-05)
+
+1. **`cuentas_por_cobrar` exige INSERT estricto**: `saldo_usd`, `descripcion` y `registrado_por` son NOT NULL — el smoke necesitó 3 iteraciones para calibrar el INSERT sintético. Las ramas B/C de error esperado requieren `SAVEPOINT` por rama (un fallo de guarda aborta la transacción entera en PostgreSQL).
+2. **El cliente pg muere en el primer error** aunque se capture en JS: la transacción queda `aborted` (25P02) para todo statement posterior. `SAVEPOINT ... ROLLBACK TO` es la única forma de continuar.
+3. La transacción abortada del intento 1 se revirtió sola al cerrar la conexión — 0 residuos verificados antes de repetir el smoke.
