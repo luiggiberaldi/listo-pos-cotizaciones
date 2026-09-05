@@ -63,6 +63,39 @@ function PanelDesignacion({ perfil, vendedores }) {
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState(null)
 
+  const [modalQuitar, setModalQuitar] = useState({ isOpen: false, fecha: '', nombre: '' })
+
+  const elegibles = useMemo(() => {
+    return (vendedores || []).filter(u => ['vendedor', 'supervisor'].includes(u.rol) && !u.es_externo)
+  }, [vendedores])
+
+  const nombreElegido = useMemo(() => {
+    return (vendedores || []).find(u => u.id === designado)?.nombre || ''
+  }, [vendedores, designado])
+
+  const designadoDelDia = designaciones[fecha]
+  const esSabado = fecha ? new Date(`${fecha}T12:00:00`).getDay() === 6 : true
+
+  const proximos = useMemo(() => {
+    return Object.values(designaciones)
+      .filter(r => r?.fecha && r.designado)
+      .sort((a, b) => a.fecha.localeCompare(b.fecha))
+      .slice(0, 6)
+  }, [designaciones])
+
+  const fechaLegibleModal = useMemo(() => {
+    if (!modalQuitar.fecha) return ''
+    try {
+      const parts = modalQuitar.fecha.split('-').map(Number)
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0)
+        const str = d.toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+        return str.charAt(0).toUpperCase() + str.slice(1)
+      }
+    } catch {}
+    return modalQuitar.fecha
+  }, [modalQuitar.fecha])
+
   const cargarDesignaciones = useCallback(async () => {
     if (!esJefe) return
     try {
@@ -109,21 +142,6 @@ function PanelDesignacion({ perfil, vendedores }) {
     }
   }, [designado, fecha])
 
-  const [modalQuitar, setModalQuitar] = useState({ isOpen: false, fecha: '', nombre: '' })
-
-  const fechaLegibleModal = useMemo(() => {
-    if (!modalQuitar.fecha) return ''
-    try {
-      const parts = modalQuitar.fecha.split('-').map(Number)
-      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-        const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0)
-        const str = d.toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-        return str.charAt(0).toUpperCase() + str.slice(1)
-      }
-    } catch {}
-    return modalQuitar.fecha
-  }, [modalQuitar.fecha])
-
   const solicitarQuitar = useCallback((f, nombre) => {
     const fechaQuitar = f || fecha
     const nombreDesignado = nombre || designaciones[fechaQuitar]?.designado?.nombre || nombreElegido || ''
@@ -163,15 +181,6 @@ function PanelDesignacion({ perfil, vendedores }) {
   }, [modalQuitar.fecha])
 
   if (!esJefe) return null
-
-  const designadoDelDia = designaciones[fecha]
-  const elegibles = (vendedores || []).filter(u => ['vendedor', 'supervisor'].includes(u.rol) && !u.es_externo)
-  const nombreElegido = (vendedores || []).find(u => u.id === designado)?.nombre
-  const esSabado = fecha ? new Date(`${fecha}T12:00:00`).getDay() === 6 : true
-  const proximos = Object.values(designaciones)
-    .filter(r => r?.fecha && r.designado)
-    .sort((a, b) => a.fecha.localeCompare(b.fecha))
-    .slice(0, 6)
 
   return (
     <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-emerald-200/80 p-4 space-y-3 shadow-sm">
