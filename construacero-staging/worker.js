@@ -26,7 +26,7 @@ import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizac
 import { handleCrearDespacho, handleCambiarFechaEntregaDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleGetRates } from './api/handlers/rates.js'
-import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
+import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleDesignacion, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
 import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
 import {
   handleListarProveedores,
@@ -423,6 +423,11 @@ export default {
     // ── API: guardar configuración (bypass RLS) ──────────────────────────
     if (url.pathname === '/api/admin/config' && request.method === 'PUT') {
       return handleSaveConfig(request, env);
+    }
+
+    // ── API: designación del vendedor del día (solo jefe) ────────────────
+    if (url.pathname === '/api/comisiones/designacion') {
+      return handleDesignacion(request, env, url);
     }
 
     // ── API: tester (seed demo + stress) ─────────────────────────────────

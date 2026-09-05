@@ -141,6 +141,9 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
     cambiar('comision_split_dias', [...set].sort().join(','))
   }
 
+  // Guard espejo del SQL: cada fila del split nunca supera el % general vigente
+  const pctGeneralMaximo = Number(campos.comision_pct_cabilla ?? 2)
+
   const catsDisponibles = categorias.filter(c => !catsEspeciales.includes(c.value))
   const catsDisponiblesExt = categorias.filter(c => !catsEspecialesExt.includes(c.value))
 
@@ -282,26 +285,26 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
               </p>
             </div>
 
-            {/* Tarjeta "Cliente ajeno" (split de comisión) */}
+            {/* Tarjeta "Vendedor designado del día" (split sábado v3) */}
             <div className={`bg-gradient-to-br rounded-xl border p-4 space-y-3 shadow-sm hover:scale-[1.01] hover:shadow-md transition-all duration-300 ${campos.comision_split_activo ? 'from-emerald-50 to-teal-50 border-emerald-200' : 'from-slate-50 to-slate-100 border-slate-200'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className={`w-2.5 h-2.5 rounded-full ${campos.comision_split_activo ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Cliente ajeno</span>
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Sábado — Vendedor designado</span>
                 </div>
                 <button type="button" onClick={() => cambiar('comision_split_activo', !campos.comision_split_activo)} disabled={disabled}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${campos.comision_split_activo ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                   <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${campos.comision_split_activo ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">Cuando un vendedor vende un cliente ajeno: él recibe el primer % y el dueño del cliente el segundo. Solo los días seleccionados.</p>
+              <p className="text-[11px] text-slate-400 font-medium">El jefe designa un vendedor/supervisor del día. Las ventas a cliente ajeno se dividen: % designado + % dueño del cliente (el vendedor que vende no cobra ese día). Cliente propio → % normal.</p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] font-bold text-emerald-700 uppercase">Vendedor</label>
+                  <label className="text-[10px] font-bold text-emerald-700 uppercase">Designado</label>
                   <div className="flex items-baseline gap-1">
                     <input type="number" min="0" max="100" step="0.01" value={campos.comision_split_pct_vendedor} onFocus={selectOnFocus}
-                      onChange={e => cambiar('comision_split_pct_vendedor', Math.max(0, Math.min(100, Number(e.target.value))))}
-                      className="w-16 px-2 py-2 rounded-xl border border-emerald-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-300 text-right font-bold shadow-inner" disabled={disabled || !campos.comision_split_activo} />
+                      onChange={e => cambiar('comision_split_pct_vendedor', Math.max(0, Math.min(pctGeneralMaximo, Number(e.target.value))))}
+                      className={`w-16 px-2 py-2 rounded-xl border bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 text-right font-bold shadow-inner ${(campos.comision_split_pct_vendedor ?? 0) > pctGeneralMaximo ? 'border-red-300 focus:ring-red-300' : 'border-emerald-200 focus:ring-emerald-300'}`} disabled={disabled || !campos.comision_split_activo} />
                     <span className="text-sm font-bold text-emerald-500">%</span>
                   </div>
                 </div>
@@ -309,12 +312,15 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
                   <label className="text-[10px] font-bold text-teal-700 uppercase">Dueño</label>
                   <div className="flex items-baseline gap-1">
                     <input type="number" min="0" max="100" step="0.01" value={campos.comision_split_pct_dueno} onFocus={selectOnFocus}
-                      onChange={e => cambiar('comision_split_pct_dueno', Math.max(0, Math.min(100, Number(e.target.value))))}
-                      className="w-16 px-2 py-2 rounded-xl border border-teal-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-300 text-right font-bold shadow-inner" disabled={disabled || !campos.comision_split_activo} />
+                      onChange={e => cambiar('comision_split_pct_dueno', Math.max(0, Math.min(pctGeneralMaximo, Number(e.target.value))))}
+                      className={`w-16 px-2 py-2 rounded-xl border bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 text-right font-bold shadow-inner ${(campos.comision_split_pct_dueno ?? 0) > pctGeneralMaximo ? 'border-red-300 focus:ring-red-300' : 'border-teal-200 focus:ring-teal-300'}`} disabled={disabled || !campos.comision_split_activo} />
                     <span className="text-sm font-bold text-teal-500">%</span>
                   </div>
                 </div>
               </div>
+              {((campos.comision_split_pct_vendedor ?? 0) > pctGeneralMaximo || (campos.comision_split_pct_dueno ?? 0) > pctGeneralMaximo) && (
+                <p className="text-[11px] text-red-600 font-bold">⚠ No puede superar el % general ({pctGeneralMaximo}%)</p>
+              )}
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Días que aplica</label>
                 <div className="flex flex-wrap gap-1 mt-1">
@@ -332,7 +338,7 @@ function ComisionesTab({ campos, cambiar, isLoading, cargando }) {
               </div>
               {campos.comision_split_activo && (
                 <p className="text-xs text-emerald-600 font-semibold">
-                  $1,000 → vendedor <strong>{fmtUsd(1000 * (campos.comision_split_pct_vendedor ?? 0.5) / 100)}</strong> · dueño <strong>{fmtUsd(1000 * (campos.comision_split_pct_dueno ?? 1.5) / 100)}</strong>
+                  $1,000 cliente ajeno → designado <strong>{fmtUsd(1000 * (campos.comision_split_pct_vendedor ?? 0.5) / 100)}</strong> · dueño <strong>{fmtUsd(1000 * (campos.comision_split_pct_dueno ?? 1.5) / 100)}</strong>
                 </p>
               )}
             </div>

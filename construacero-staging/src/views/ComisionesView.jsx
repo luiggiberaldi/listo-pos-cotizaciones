@@ -2,7 +2,7 @@
 // Vista de comisiones agrupadas por vendedor con soporte para paginación y resumen SQL
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, FileText, Download, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, User, Briefcase } from 'lucide-react'
+import { DollarSign, CheckCircle, Clock, Filter, TrendingUp, FileText, Download, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, User, Briefcase, Star, Loader2, X } from 'lucide-react'
 import { useComisiones, useComisionesResumen, useMarcarComisionPagada, useLiberarComisionCxc } from '../hooks/useComisiones'
 import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -251,12 +251,19 @@ function VendedorCard({ vendedor, comisiones, esSupervisor, onMarcarPagada, onPa
                             {(c.despacho?.cliente_nombre || c.cotizacion?.cliente_nombre || '---').toUpperCase()}
                           </span>
                           <span className="font-mono text-[10px] text-slate-500 mt-0.5">#{c.despacho?.numero ?? '---'}</span>
-                          {c.tipo?.startsWith('cliente_ajeno') && (
+                          {(c.tipo?.startsWith('cliente_ajeno') || c.tipo === 'designado') && (
                             <span
-                              className="text-[9px] font-bold text-violet-700 bg-violet-50 px-1 py-0.1 rounded border border-violet-200/60 w-fit mt-0.5"
-                              title={c.tipo === 'cliente_ajeno_vendedor' ? 'Venta a cliente ajeno: comisión reducida del vendedor que vendió' : 'Cliente ajeno: comisión como dueño del cliente'}
+                              className={`text-[9px] font-bold px-1 py-0.1 rounded border w-fit mt-0.5 ${
+                                c.tipo === 'designado'
+                                  ? 'text-emerald-700 bg-emerald-50 border-emerald-200/60'
+                                  : 'text-violet-700 bg-violet-50 border-violet-200/60'
+                              }`}
+                              title={c.tipo === 'designado'
+                                ? 'Vendedor designado del día: 0.5% por venta a cliente ajeno'
+                                : (c.tipo === 'cliente_ajeno_vendedor' ? 'Venta a cliente ajeno: comisión reducida del vendedor que vendió' : 'Cliente ajeno: comisión como dueño del cliente')}
                             >
-                              {c.tipo === 'cliente_ajeno_vendedor' ? 'Cliente ajeno · vendió' : 'Cliente ajeno · dueño'}
+                              {c.tipo === 'designado' ? 'Designado sábado'
+                                : (c.tipo === 'cliente_ajeno_vendedor' ? 'Cliente ajeno · vendió' : 'Cliente ajeno · dueño')}
                             </span>
                           )}
                           <span className="text-[9px] text-slate-400">{fmtFecha(c.creadoen)}</span>
@@ -483,6 +490,144 @@ function TablaLiquidacionInteractiva({ sellers, ajustes, onChange, tasaSeleccion
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+// ─── Panel de designación del vendedor del día (solo jefe) ─────────────────
+function PanelDesignacion({ perfil, vendedores }) {
+  const esJefe = perfil?.rol === 'jefe'
+  const hoy = new Date().toISOString().slice(0, 10)
+  const [fecha, setFecha] = useState(hoy)
+  const [designado, setDesignado] = useState('')
+  const [designaciones, setDesignaciones] = useState({})
+  const [cargando, setCargando] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+  const [mensaje, setMensaje] = useState(null)
+
+  const cargarDesignaciones = useCallback(async () => {
+    if (!esJefe) return
+    try {
+      setCargando(true)
+      const headers = await getAuthHeaders()
+      const res = await fetch(apiUrl(`/api/comisiones/designacion?desde=${hoy}`), { headers })
+      if (!res.ok) throw new Error('Error al cargar designaciones')
+      const rows = await res.json()
+      setDesignaciones(Object.fromEntries((rows || []).map(r => [r.fecha, r])))
+    } catch (e) {
+      console.error('Error cargando designaciones:', e)
+    } finally {
+      setCargando(false)
+    }
+  }, [esJefe, hoy])
+
+  useEffect(() => { cargarDesignaciones() }, [cargarDesignaciones])
+
+  const guardar = useCallback(async () => {
+    if (!designado) {
+      setMensaje({ tipo: 'error', texto: 'Selecciona el vendedor o supervisor designado.' })
+      return
+    }
+    try {
+      setGuardando(true)
+      const headers = await getAuthHeaders()
+      const res = await fetch(apiUrl('/api/comisiones/designacion'), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ fecha, designado_id: designado })
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Error al designar')
+      setDesignaciones(prev => ({ ...prev, [fecha]: json.designacion }))
+      setMensaje({ tipo: 'ok', texto: `Designación guardada para ${fecha}.` })
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: e.message || 'Error al designar' })
+    } finally {
+      setGuardando(false)
+    }
+  }, [designado, fecha])
+
+  const quitar = useCallback(async () => {
+    try {
+      setGuardando(true)
+      const headers = await getAuthHeaders()
+      const res = await fetch(apiUrl('/api/comisiones/designacion'), {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ fecha })
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Error al quitar la designación')
+      setDesignaciones(prev => {
+        const next = { ...prev }
+        delete next[fecha]
+        return next
+      })
+      setMensaje({ tipo: 'ok', texto: `Designación de ${fecha} eliminada.` })
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: e.message || 'Error al quitar la designación' })
+    } finally {
+      setGuardando(false)
+    }
+  }, [fecha])
+
+  if (!esJefe) return null
+
+  const designadoDelDia = designaciones[fecha]
+  const elegibles = (vendedores || []).filter(u => ['vendedor', 'supervisor'].includes(u.rol))
+
+  return (
+    <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-emerald-200/80 p-4 space-y-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-emerald-100">
+            <Star size={14} className="text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Designado del día (sábado)</h3>
+            <p className="text-[10px] text-slate-500">Ese día, las ventas a cliente ajeno se dividen: el designado cobra su % y el dueño del cliente el suyo.</p>
+          </div>
+        </div>
+        {cargando && <Loader2 size={14} className="text-slate-400 animate-spin" />}
+      </div>
+
+      <div className="flex items-end gap-2 flex-wrap">
+        <div className="flex flex-col">
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Fecha</span>
+          <input type="date" value={fecha} min={hoy} onChange={e => { setFecha(e.target.value); setMensaje(null) }}
+            className="bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+        </div>
+        <div className="flex flex-col min-w-[220px]">
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Designado</span>
+          <select value={designado} onChange={e => { setDesignado(e.target.value); setMensaje(null) }}
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none hover:bg-slate-50 transition-all">
+            <option value="">Seleccionar vendedor / supervisor…</option>
+            {elegibles.map(u => <option key={u.id} value={u.id}>{u.nombre} ({u.rol === 'supervisor' ? 'supervisor' : 'vendedor'})</option>)}
+          </select>
+        </div>
+        <button type="button" onClick={guardar} disabled={guardando || !designado}
+          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm active:scale-95 transition-all">
+          {guardando ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}
+          Designar
+        </button>
+        {designadoDelDia && (
+          <button type="button" onClick={quitar} disabled={guardando}
+            className="flex items-center gap-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-50 transition-all">
+            <X size={13} /> Quitar
+          </button>
+        )}
+      </div>
+
+      {designadoDelDia?.designado && (
+        <p className="text-xs text-slate-600">
+          <span className="font-bold text-emerald-700">Designado actual:</span>{' '}
+          {designadoDelDia.designado?.nombre || designadoDelDia.designado_id}
+          {designadoDelDia.designado?.rol ? ` · ${designadoDelDia.designado.rol}` : ''}
+        </p>
+      )}
+      {mensaje && (
+        <p className={`text-xs font-bold ${mensaje.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>{mensaje.texto}</p>
+      )}
     </div>
   )
 }
@@ -734,6 +879,9 @@ export default function ComisionesView() {
         title="Comisiones"
         subtitle="Reporte financiero de ventas y liquidaciones"
       />
+
+      {/* v3: designación del vendedor del día — visible y operable solo por jefe */}
+      <PanelDesignacion perfil={perfil} vendedores={vendedores} />
 
       {esDev && (
         <div className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-[11px] text-violet-800">

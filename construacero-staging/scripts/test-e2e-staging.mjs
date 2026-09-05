@@ -247,21 +247,33 @@ const STEPS = [
   ['health_nav_routes', '65. Health: rutas principales existen'],
   ['health_kardex_continuity', '66. Health: continuidad matemática de Kardex'],
   ['health_stock_negativo_guard', '67. Health: guardarraíl stock negativo operativo'],
-  ['split_setup', '29.4. Split cliente ajeno: fixture y config'],
-  ['split_t1_crear', '29.5. Split T1: venta a cliente ajeno en día configurado'],
-  ['split_assert_t1', '29.6. Split T1: 2 filas (vendedor 0.5% / dueño 1.5%)'],
-  ['split_t2_replay', '29.7. Split T2: replay de entrega no duplica filas'],
-  ['split_t3_cliente_propio', '29.8. Split T3: cliente propio → 1 fila normal'],
-  ['split_t4_dia_no_config', '29.9. Split T4: día no configurado → sin split'],
-  ['split_t5_switch_off', '29.10. Split T5: switch apagado → sin split'],
-  ['split_t6_devolucion', '29.11. Split T6: devolución escala ambas filas'],
-  ['split_assert_t6', '29.12. Split T6: factor aplicado a las 2 filas'],
-  ['split_t7_pago_fila', '29.13. Split T7: pagar fila del vendedor no toca la del dueño'],
-  ['split_assert_t7', '29.14. Split T7: estados independientes'],
-  ['split_t8_cxc', '29.15. Split T8: CxC → ambas filas excluidas 238b'],
-  ['split_assert_t8', '29.16. Split T8: comisión 0 + excluida proporcional'],
-  ['split_assert_lista', '29.17. Split: campo tipo visible en lista API'],
-  ['split_restore_config', '29.18. Split: restaurar configuración'],
+  ['split_setup', '29.4. Split designado v3: fixture (jefe, designado, dueño) y config'],
+  ['split_t0_designar', '29.5. Designación: jefe designa vendedor del día (POST)'],
+  ['split_assert_t0', '29.6. Designación: upsert idempotente, una fila por fecha'],
+  ['split_t0b_no_jefe', '29.7. Designación: un vendedor NO puede designar (403)'],
+  ['split_t0c_invalido', '29.8. Designación: un jefe no puede ser designado (400)'],
+  ['split_t1_crear', '29.9. Split T1: venta a cliente ajeno en día designado'],
+  ['split_assert_t1', '29.10. Split T1: 2 filas (dueño 1.5% / designado 0.5%), vendedor que vendió no cobra'],
+  ['split_t2_replay', '29.11. Split T2: replay de entrega no duplica filas'],
+  ['split_t3_cliente_propio', '29.12. Split T3: cliente propio → 1 fila normal del vendedor'],
+  ['split_assert_t3', '29.12.1 Assert T3: 1 fila normal del vendedor que vendió'],
+  ['split_t4_dia_no_config', '29.13. Split T4: día no configurado → sin split aunque haya designado'],
+  ['split_assert_t4', '29.13.1 Assert T4: 1 fila del dueño con % normal'],
+  ['split_t4b_sin_designacion', '29.14. Split T4b: día configurado sin designación → sin split'],
+  ['split_assert_t4b', '29.14.1 Assert T4b: 1 fila del dueño con % normal'],
+  ['split_t5_switch_off', '29.15. Split T5: switch apagado → sin split'],
+  ['split_assert_t5', '29.15.1 Assert T5: 1 fila del dueño'],
+  ['split_t6_devolucion', '29.16. Split T6: devolución escala ambas filas'],
+  ['split_assert_t6', '29.17. Split T6: factor aplicado a las 2 filas'],
+  ['split_t7_pago_fila', '29.18. Split T7: pagar fila del designado no toca la del dueño'],
+  ['split_assert_t7', '29.19. Split T7: estados independientes'],
+  ['split_t8_cxc', '29.20. Split T8: CxC → ambas filas excluidas 238b'],
+  ['split_assert_t8', '29.21. Split T8: comisión 0 + excluida proporcional'],
+  ['split_t9_designado_dueno', '29.22. Split T9: designado = dueño del cliente → 1 fila con % normal'],
+  ['split_assert_t9', '29.23. Split T9: fila única al dueño sin evidencia split'],
+  ['split_assert_lista', '29.24. Split: tipos designado/cliente_ajeno_dueno visibles en lista API'],
+  ['split_cleanup_designacion', '29.25. Split: quitar designación (DELETE)'],
+  ['split_restore_config', '29.26. Split: restaurar configuración'],
   ['cleanup', '68. Limpiar datos de prueba'],
   ['assert_cleanup', '69. Assert: datos eliminados completamente'],
 ].map(([id, label]) => ({ id, label }))
@@ -296,6 +308,13 @@ class StagingE2ERunner {
     const line = `[${new Date().toISOString()}] [${type}]${step ? ` [${step}]` : ''} ${message}`
     this.lines.push(line)
     console.log(line)
+  }
+
+  // v3: las designaciones las autoriza el rol jefe — el E2E actúa como jefe
+  // usando el header X-Operator-Id (verifyAuth resuelve el rol desde usuarios).
+  async apiAsJefe(pathname, method = 'GET', body = null) {
+    if (!this.data?.splitJefeId) throw new Error('apiAsJefe: no hay jefe fixture')
+    return this.api(pathname, method, body, this.data.splitJefeId)
   }
 
   async api(pathname, method = 'GET', body = null, operatorId = null) {
@@ -513,21 +532,52 @@ class StagingE2ERunner {
     return row.id
   }
 
+  async ensureSplitUser(nombre, rol, pin) {
+    const rows = await this.db(
+      this.supabase.from('usuarios').select('id,nombre,rol').eq('cuenta_id', this.user.id).eq('nombre', nombre).limit(1),
+      `buscar usuario split ${nombre}`
+    )
+    if (rows?.length) return rows[0].id
+    // El rol jefe es el único que puede designar; el E2E opera como él vía
+    // X-Operator-Id. Los usuarios live en public.usuarios (sin auth.users),
+    // así que se crean vía el endpoint admin del Worker.
+    const created = await this.api('/api/admin/users', 'POST', { nombre, rol, pin, color: rol === 'jefe' ? '#059669' : '#7C3AED' })
+    const createdRows = await this.db(
+      this.supabase.from('usuarios').select('id').eq('cuenta_id', this.user.id).eq('nombre', nombre).limit(1),
+      `leer usuario split ${nombre}`
+    )
+    if (!createdRows?.length) throw new Error(`No se pudo crear el usuario split ${nombre} (rol ${rol})`)
+    this.log(`Usuario split creado: ${nombre} (${rol}) ${id8(createdRows[0].id)}`, 'OK')
+    return createdRows[0].id
+  }
+
   async splitSetup() {
     const d = this.data
     d.splitCotizacionIds = []
     d.splitDespachoIds = []
+    d.splitDesignacionesCreadas = []
     const sellers = await this.db(
-      this.supabase.from('usuarios').select('id,nombre,es_externo').eq('cuenta_id', this.user.id).eq('rol', 'vendedor').eq('activo', true).order('nombre'),
+      this.supabase.from('usuarios').select('id,nombre,es_externo,rol').eq('cuenta_id', this.user.id).eq('rol', 'vendedor').eq('activo', true).order('nombre'),
       'buscar vendedores para split'
     )
-    const other = (sellers || []).find(s => s.id !== this.salesperson.id && !s.es_externo)
+    // Excluir usuarios fixture del propio split (p. ej. 'Vendedor E2E
+    // Designado' sobreviviente de una corrida interrumpida): nunca deben
+    // salir como candidatos a dueño de cliente.
+    const other = (sellers || []).find(s => s.id !== this.salesperson.id && !s.es_externo && !/E2E Designado/.test(s.nombre || ''))
     if (!other) {
       d.splitSkip = 'no hay segundo vendedor interno activo en staging'
       this.log(`SKIP split: ${d.splitSkip}`, 'WARN')
       return
     }
     d.splitDuenoId = other.id
+    // Tercer vendedor interno: será el designado del día (≠ vendedor que vende, ≠ dueño)
+    d.splitDesignadoId = await this.ensureSplitUser('Vendedor E2E Designado', 'vendedor', '4821')
+    if (d.splitDesignadoId === this.salesperson.id || d.splitDesignadoId === d.splitDuenoId) {
+      d.splitSkip = 'el designado colisiona con los vendedores existentes'
+      this.log(`SKIP split: ${d.splitSkip}`, 'WARN')
+      return
+    }
+    d.splitJefeId = await this.ensureSplitUser('Jefe E2E Staging', 'jefe', '482160')
     d.splitTodayDow = new Date().getUTCDay()
     const cfg = await this.db(
       this.supabase.from('configuracion_negocio').select('comision_split_activo,comision_split_pct_vendedor,comision_split_pct_dueno,comision_split_dias').eq('cuenta_id', this.user.id).limit(1).maybeSingle(),
@@ -544,23 +594,25 @@ class StagingE2ERunner {
     d.splitPctD = 1.5
     d.splitClienteAjenoId = await this.ensureSplitClient(`V-${id8(d.splitDuenoId)}1`, 'Cliente Ajeno Split E2E', d.splitDuenoId)
     d.splitClientePropioId = await this.ensureSplitClient(`V-${id8(this.salesperson.id)}1`, 'Cliente Propio Split E2E', this.salesperson.id)
-    this.log(`Split activo HOY (dow=${d.splitTodayDow}); dueño alterno ${id8(d.splitDuenoId)}`, 'OK')
+    d.splitClienteDesignadoId = await this.ensureSplitClient(`V-${id8(d.splitDesignadoId)}1`, 'Cliente Designado Split E2E', d.splitDesignadoId)
+    this.log(`Split v3 activo HOY (dow=${d.splitTodayDow}); jefe ${id8(d.splitJefeId)}, designado ${id8(d.splitDesignadoId)}, dueño ${id8(d.splitDuenoId)}`, 'OK')
   }
 
   async splitSetConfig(patch) {
     await this.api('/api/admin/config', 'PUT', patch)
   }
 
-  async runSplitSale({ cantidad, formaPago, clienteId }) {
+  async runSplitSale({ cantidad, formaPago, clienteId, vendedorId }) {
     const d = this.data
+    const sellerId = vendedorId || this.salesperson.id
     const total = round2(cantidad * 25)
     const cot = await this.api('/api/cotizaciones/guardar', 'POST', {
-      headerData: { cliente_id: clienteId, vendedor_id: this.salesperson.id, notas_cliente: 'Split E2E', notas_internas: 'Split E2E', descuento_global_pct: 0, costo_envio_usd: 0, subtotal_usd: total, descuento_usd: 0, total_usd: total },
+      headerData: { cliente_id: clienteId, vendedor_id: sellerId, notas_cliente: 'Split E2E', notas_internas: 'Split E2E', descuento_global_pct: 0, costo_envio_usd: 0, subtotal_usd: total, descuento_usd: 0, total_usd: total },
       items: [{ producto_id: d.productoId, codigo_snap: TEST.producto.codigo, nombre_snap: TEST.producto.nombre, unidad_snap: TEST.producto.unidad, cantidad, precio_unit_usd: 25, descuento_pct: 0, total_linea_usd: total }],
-    }, this.salesperson.id)
-    await this.api('/api/cotizaciones/enviar', 'POST', { cotizacionId: cot.id, tasaBcv: 100 }, this.salesperson.id)
+    }, sellerId)
+    await this.api('/api/cotizaciones/enviar', 'POST', { cotizacionId: cot.id, tasaBcv: 100 }, sellerId)
     await this.db(this.supabase.from('cotizaciones').update({ estado: 'aceptada' }).eq('id', cot.id), 'aceptar split')
-    const desp = await this.api('/api/despachos/crear', 'POST', { cotizacionId: cot.id, formaPago, transportistaId: null, fleteUsd: 0 }, this.salesperson.id)
+    const desp = await this.api('/api/despachos/crear', 'POST', { cotizacionId: cot.id, formaPago, transportistaId: null, fleteUsd: 0 }, sellerId)
     await this.api('/api/despachos/estado', 'POST', { despachoId: desp.id, nuevoEstado: 'despachada' })
     await this.api('/api/despachos/estado', 'POST', { despachoId: desp.id, nuevoEstado: 'entregada' })
     d.splitCotizacionIds.push(cot.id)
@@ -578,6 +630,24 @@ class StagingE2ERunner {
     }
     if (d.splitClientePropioId) {
       await this.db(this.supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', d.splitClientePropioId).eq('cuenta_id', this.user.id), 'desactivar cliente propio split')
+    }
+    if (d.splitClienteDesignadoId) {
+      await this.db(this.supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', d.splitClienteDesignadoId).eq('cuenta_id', this.user.id), 'desactivar cliente designado split')
+    }
+    if (d.splitFechaHoy) {
+      // La designación del día se elimina (si quedó) y luego los usuarios fixture
+      const del = await this.supabase.from('comision_designacion_diaria').delete().eq('cuenta_id', this.user.id).eq('fecha', d.splitFechaHoy)
+      if (del.error) this.log(`Detalle limpieza designación: ${del.error.message}`, 'WARN')
+    }
+    if (d.splitDesignadoId) {
+      const delU = await this.supabase.from('usuarios').delete().eq('id', d.splitDesignadoId).eq('cuenta_id', this.user.id)
+      if (delU.error) this.log(`Detalle limpieza designado: ${delU.error.message}`, 'WARN')
+      d.splitDesignadoId = null
+    }
+    if (d.splitJefeId) {
+      const delJ = await this.supabase.from('usuarios').delete().eq('id', d.splitJefeId).eq('cuenta_id', this.user.id)
+      if (delJ.error) this.log(`Detalle limpieza jefe: ${delJ.error.message}`, 'WARN')
+      d.splitJefeId = null
     }
     const cotizaciones = [d.cotizacionDesdeDespachoId, d.ventaRapidaCotizacionId, d.cotizacionVersionId, d.cotizacionRecicladaId, d.cotizacion2Id, d.cotizacionId]
     const unique = [...new Set(cotizaciones.filter(Boolean))]
@@ -635,6 +705,18 @@ class StagingE2ERunner {
       await this.db(this.supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', client.id).eq('cuenta_id', this.user.id), 'desactivar cliente residual')
     }
     await this.db(this.supabase.from('transportistas').update({ activo: false }).eq('nombre', TEST.transportista.nombre).eq('cuenta_id', this.user.id), 'desactivar transportistas residuales')
+    // Usuarios fixture del split v3 que pudieron quedar de corridas
+    // interrumpidas antes de llegar a su limpieza.
+    for (const nombre of ['Vendedor E2E Designado', 'Jefe E2E Staging']) {
+      const rows = await this.db(this.supabase.from('usuarios').select('id').eq('cuenta_id', this.user.id).eq('nombre', nombre), `buscar usuario split residual ${nombre}`)
+      const ids = (rows || []).map(r => r.id)
+      if (!ids.length) continue
+      const delDesig = await this.supabase.from('comision_designacion_diaria').delete().in('designado_id', ids)
+      if (delDesig.error) this.log(`Detalle limpieza designaciones residuales: ${delDesig.error.message}`, 'WARN')
+      const delU = await this.supabase.from('usuarios').delete().in('id', ids)
+      if (delU.error) this.log(`Detalle limpieza usuario split residual ${nombre}: ${delU.error.message}`, 'WARN')
+      else this.log(`Usuario split residual eliminado: ${nombre}`, 'OK')
+    }
     this.log(`Pre-limpieza completa (${products?.length || 0} productos, ${clients?.length || 0} clientes residuales)`, 'OK')
   }
 
@@ -939,6 +1021,8 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
       motivo: 'Devolución E2E por descuento aplicado',
       generarReemplazo: false,
       exchangeItems: [{ producto_id: d.productoId, cantidad: 1, precio_unit_usd: d.exchangePrecioUnit }],
+      // La diferencia neta ($2) queda a cargo del cliente y se abona con dos
+      // métodos: el cargo completo se registra y los pagos cubren parte.
       pagosDiferencia: [
         { metodo: 'Efectivo $', monto: 1 },
         { metodo: 'Zelle', monto: 0.75, referencia: 'E2E-ZELLE-DIF' },
@@ -1386,25 +1470,71 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
   f.cleanup = async () => { if (this.config.keepData) { this.log('SKIP por --keep-data', 'WARN'); return } await this.cleanupFixtures() }
   f.assert_cleanup = async () => { if (this.config.keepData) { this.log('SKIP por --keep-data', 'WARN'); return } for (const [table, id] of [['productos', d.productoId], ['productos', d.producto2Id], ['cotizaciones', d.cotizacionId], ['cotizaciones', d.cotizacion2Id], ['notas_despacho', d.despachoId], ['notas_despacho', d.ventaRapidaDespachoId]]) { if (!id) continue; const rows = await this.db(this.supabase.from(table).select('id').eq('id', id), `verificar ${table}`); assert(!rows?.length, 0, rows?.length, `${table}.${id8(id)} eliminado`) } const client = await this.db(this.supabase.from('clientes').select('activo').eq('id', d.clienteId), 'verificar cliente'); assert(!client?.length || client[0].activo === false, 'inactivo/eliminado', client?.[0]?.activo, 'cliente limpio') }
   f.split_setup = async () => { await this.splitSetup() }
+  // ── T0: designación del vendedor del día (solo jefe) ──────────────────
+  f.split_t0_designar = async () => {
+    if (d.splitSkip) return
+    d.splitFechaHoy = new Date().toISOString().slice(0, 10)
+    const res = await this.apiAsJefe('/api/comisiones/designacion', 'POST', { fecha: d.splitFechaHoy, designado_id: d.splitDesignadoId })
+    assert(res?.ok === true && res.designacion?.designado_id === d.splitDesignadoId, res, 'T0: designación creada')
+  }
+  f.split_assert_t0 = async () => {
+    if (d.splitSkip) return
+    const rows = await this.db(
+      this.supabase.from('comision_designacion_diaria').select('*').eq('cuenta_id', this.user.id).eq('fecha', d.splitFechaHoy),
+      'designación hoy'
+    )
+    assert(rows?.length === 1, 1, rows?.length, 'T0: una sola designación para la fecha (UNIQUE cuenta+fecha)')
+    assert(rows[0].designado_id === d.splitDesignadoId && rows[0].creado_por === d.splitJefeId, rows[0], 'T0: designado y creado_por')
+  }
+  f.split_t0b_no_jefe = async () => {
+    if (d.splitSkip) return
+    try {
+      await this.api('/api/comisiones/designacion', 'POST', { fecha: d.splitFechaHoy, designado_id: d.splitDesignadoId }, this.salesperson.id)
+      throw new Error('ASSERTION FAILED: un vendedor pudo designar')
+    } catch (error) {
+      if (String(error.message || '').includes('ASSERTION FAILED')) throw error
+      assert(error instanceof ApiError && error.status === 403, '403', { status: error.status, message: error.message }, 'T0b: vendedor no puede designar')
+    }
+  }
+  f.split_t0c_invalido = async () => {
+    if (d.splitSkip) return
+    try {
+      await this.apiAsJefe('/api/comisiones/designacion', 'POST', { fecha: d.splitFechaHoy, designado_id: d.splitJefeId })
+      throw new Error('ASSERTION FAILED: se designó a un jefe')
+    } catch (error) {
+      if (String(error.message || '').includes('ASSERTION FAILED')) throw error
+      assert(error instanceof ApiError && error.status === 400, '400', { status: error.status, message: error.message }, 'T0c: jefe no puede ser designado')
+    }
+    // G8 del Worker: los % del split nunca superan el % general vigente
+    try {
+      await this.api('/api/admin/config', 'PUT', { comision_split_pct_vendedor: 9 })
+      throw new Error('ASSERTION FAILED: G8 aceptó pct split 9% > general')
+    } catch (error) {
+      if (String(error.message || '').includes('ASSERTION FAILED')) throw error
+      assert(error instanceof ApiError && error.status === 400, '400', { status: error.status, message: error.message }, 'T0c: G8 rechaza % split > % general')
+    }
+  }
   f.split_t1_crear = async () => { if (d.splitSkip) return; d.splitT1 = await this.runSplitSale({ cantidad: 4, formaPago: 'Efectivo $', clienteId: d.splitClienteAjenoId }) }
   f.split_assert_t1 = async () => {
-      if (d.splitSkip) { this.log('SKIP: split T1', 'WARN'); return }
-      const rows = await this.db(this.supabase.from('comisiones').select('*').eq('despachoid', d.splitT1.despachoId), 'comisiones T1')
-      assert(rows?.length === 2, 2, rows?.length, 'T1: exactamente 2 filas')
-      const owner = rows.find(r => r.vendedorid === d.splitDuenoId)
-      const seller = rows.find(r => r.vendedorid === this.salesperson.id)
-      assert(!!owner && !!seller, 'dueño+vendedor', rows.map(r => r.vendedorid), 'T1 beneficiarios')
-      const base = 100
-      const expOwner = round2(base * d.splitPctD / 100)
-      const expSeller = round2(base * d.splitPctV / 100)
-      assert(Number(owner.totalcomision) === expOwner, expOwner, owner.totalcomision, 'T1 comisión dueño')
-      assert(Number(seller.totalcomision) === expSeller, expSeller, seller.totalcomision, 'T1 comisión vendedor')
-      assert(Number(owner.pctcabilla) === d.splitPctD && Number(seller.pctcabilla) === d.splitPctV, 'pcts planos', rows.map(r => r.pctcabilla), 'T1 pcts')
-      assert(owner.calculo_evidencia?.split_cliente_ajeno === true && seller.calculo_evidencia?.split_cliente_ajeno === true, true, 'evidencia', 'T1 evidencia split')
-      assert(owner.estado === 'generada' && seller.estado === 'generada', 'generada', rows.map(r => r.estado), 'T1 estado')
-      assert(Number(owner.comision_liberada) === expOwner && Number(seller.comision_liberada) === expSeller, 'liberada=total', rows, 'T1 liberada')
-      d.splitT1OwnerId = owner.id
-      d.splitT1SellerId = seller.id
+    if (d.splitSkip) return
+    const rows = await this.db(this.supabase.from('comisiones').select('*').eq('despachoid', d.splitT1.despachoId), 'comisiones T1')
+    assert(rows?.length === 2, 2, rows?.length, 'T1: exactamente 2 filas')
+    const owner = rows.find(r => r.vendedorid === d.splitDuenoId)
+    const designated = rows.find(r => r.vendedorid === d.splitDesignadoId)
+    assert(!!owner && !!designated, 'dueño+designado', rows.map(r => r.vendedorid), 'T1 beneficiarios')
+    const base = 100
+    const expOwner = round2(base * d.splitPctD / 100)
+    const expDesig = round2(base * d.splitPctV / 100)
+    assert(Number(owner.totalcomision) === expOwner, expOwner, owner.totalcomision, 'T1 comisión dueño (1.5%)')
+    assert(Number(designated.totalcomision) === expDesig, expDesig, designated.totalcomision, 'T1 comisión designado (0.5%)')
+    assert(!rows.some(r => r.vendedorid === this.salesperson.id), 'sin fila del vendedor que vendió', rows.map(r => r.vendedorid), 'T1: el vendedor que vendió NO cobra')
+    assert(Number(owner.pctcabilla) === d.splitPctD && Number(designated.pctcabilla) === d.splitPctV, 'pcts planos', rows.map(r => r.pctcabilla), 'T1 pcts')
+    assert(owner.calculo_evidencia?.split_cliente_ajeno === true && designated.calculo_evidencia?.split_cliente_ajeno === true, true, 'evidencia', 'T1 evidencia split')
+    assert(owner.calculo_evidencia?.split_designado_id === d.splitDesignadoId, d.splitDesignadoId, owner.calculo_evidencia?.split_designado_id, 'T1 evidencia designado')
+    assert(rows.every(r => r.estado === 'generada'), 'generada', rows.map(r => r.estado), 'T1 estado')
+    assert(Number(owner.comision_liberada) === expOwner && Number(designated.comision_liberada) === expDesig, 'liberada=total', rows, 'T1 liberada')
+    d.splitT1OwnerId = owner.id
+    d.splitT1DesignadoId = designated.id
   }
   f.split_t2_replay = async () => {
       if (d.splitSkip) return
@@ -1433,9 +1563,22 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
   f.split_assert_t4 = async () => {
       if (d.splitSkip) return
       const rows = await this.db(this.supabase.from('comisiones').select('*').eq('despachoid', d.splitT4.despachoId), 'comisiones T4')
-      assert(rows?.length === 1, 1, rows?.length, 'T4: día no configurado → sin split')
+      assert(rows?.length === 1, 1, rows?.length, 'T4: día no configurado → sin split (aunque haya designado)')
       assert(rows[0].vendedorid === d.splitDuenoId, d.splitDuenoId, rows[0].vendedorid, 'T4 dueño con % normal')
       assert(rows[0].calculo_evidencia?.split_cliente_ajeno !== true, false, rows[0].calculo_evidencia?.split_cliente_ajeno, 'T4 sin split')
+      await this.splitSetConfig({ comision_split_dias: String(d.splitTodayDow) })
+  }
+  f.split_t4b_sin_designacion = async () => {
+      if (d.splitSkip) return
+      await this.apiAsJefe('/api/comisiones/designacion', 'DELETE', { fecha: d.splitFechaHoy })
+      d.splitT4b = await this.runSplitSale({ cantidad: 2, formaPago: 'Efectivo $', clienteId: d.splitClienteAjenoId })
+  }
+  f.split_assert_t4b = async () => {
+      if (d.splitSkip) return
+      const rows = await this.db(this.supabase.from('comisiones').select('*').eq('despachoid', d.splitT4b.despachoId), 'comisiones T4b')
+      assert(rows?.length === 1, 1, rows?.length, 'T4b: sin designación → sin split')
+      assert(rows[0].vendedorid === d.splitDuenoId, d.splitDuenoId, rows[0].vendedorid, 'T4b: el dueño cobra su % normal completo')
+      assert(rows[0].calculo_evidencia?.split_cliente_ajeno !== true, false, rows[0].calculo_evidencia?.split_cliente_ajeno, 'T4b sin split')
   }
   f.split_t5_switch_off = async () => {
       if (d.splitSkip) return
@@ -1451,6 +1594,8 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
   }
   f.split_t6_devolucion = async () => {
       if (d.splitSkip) return
+      // Re-designar (T4b quitó la designación) para probar la devolución sobre un despacho split activo
+      await this.apiAsJefe('/api/comisiones/designacion', 'POST', { fecha: d.splitFechaHoy, designado_id: d.splitDesignadoId })
       const item = await this.db(this.supabase.from('notas_despacho_items').select('id,producto_id').eq('despacho_id', d.splitT1.despachoId).single(), 'item T6')
       d.splitT6Key = globalThis.crypto?.randomUUID?.()
       await this.api('/api/despachos/devolucion-parcial', 'POST', {
@@ -1469,23 +1614,23 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
       assert(rows?.length === 2, 2, rows?.length, 'T6: 2 filas tras devolución')
       const factor = 0.75
       const expOwner = round2(round2(100 * d.splitPctD / 100) * factor)
-      const expSeller = round2(round2(100 * d.splitPctV / 100) * factor)
+      const expDesig = round2(round2(100 * d.splitPctV / 100) * factor)
       const owner = rows.find(r => r.id === d.splitT1OwnerId)
-      const seller = rows.find(r => r.id === d.splitT1SellerId)
+      const designated = rows.find(r => r.id === d.splitT1DesignadoId)
       assert(Number(owner.totalcomision) === expOwner, expOwner, owner.totalcomision, 'T6 dueño escalada')
-      assert(Number(seller.totalcomision) === expSeller, expSeller, seller.totalcomision, 'T6 vendedor escalada')
-      assert(owner.estado === 'pendiente' && seller.estado === 'pendiente', 'pendiente', rows.map(r => r.estado), 'T6 estado tras devolución')
+      assert(Number(designated.totalcomision) === expDesig, expDesig, designated.totalcomision, 'T6 designado escalada')
+      assert(owner.estado === 'pendiente' && designated.estado === 'pendiente', 'pendiente', rows.map(r => r.estado), 'T6 estado tras devolución')
   }
   f.split_t7_pago_fila = async () => {
       if (d.splitSkip) return
-      await this.api('/api/comisiones/pagar', 'POST', { comisionId: d.splitT1SellerId })
+      await this.api('/api/comisiones/pagar', 'POST', { comisionId: d.splitT1DesignadoId })
   }
   f.split_assert_t7 = async () => {
       if (d.splitSkip) return
       const rows = await this.db(this.supabase.from('comisiones').select('id,estado,montopagado').eq('despachoid', d.splitT1.despachoId), 'comisiones T7')
-      const seller = rows.find(r => r.id === d.splitT1SellerId)
+      const designated = rows.find(r => r.id === d.splitT1DesignadoId)
       const owner = rows.find(r => r.id === d.splitT1OwnerId)
-      assert(seller.estado === 'pagada' && Number(seller.montopagado) > 0, 'pagada', seller, 'T7 fila vendedor pagada')
+      assert(designated.estado === 'pagada' && Number(designated.montopagado) > 0, 'pagada', designated, 'T7 fila designado pagada')
       assert(owner.estado !== 'pagada' && Number(owner.montopagado || 0) === 0, 'intacta', owner, 'T7 fila dueño intacta')
   }
   f.split_t8_cxc = async () => { if (d.splitSkip) return; d.splitT8 = await this.runSplitSale({ cantidad: 2, formaPago: 'Cta por cobrar', clienteId: d.splitClienteAjenoId }) }
@@ -1494,14 +1639,31 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
       const rows = await this.db(this.supabase.from('comisiones').select('*').eq('despachoid', d.splitT8.despachoId), 'comisiones T8')
       assert(rows?.length === 2, 2, rows?.length, 'T8: 2 filas CxC')
       const owner = rows.find(r => r.vendedorid === d.splitDuenoId)
-      const seller = rows.find(r => r.vendedorid === this.salesperson.id)
+      const designated = rows.find(r => r.vendedorid === d.splitDesignadoId)
       for (const r of rows) {
         assert(Number(r.totalcomision) === 0, 0, r.totalcomision, 'T8 comisión 0')
         assert(Number(r.fraccion_no_cxc) === 0, 0, r.fraccion_no_cxc, 'T8 fracción 0')
         assert(r.calculo_evidencia?.payment_split?.fraction === 0, 0, r.calculo_evidencia?.payment_split, 'T8 payment_split')
       }
       assert(Number(owner.comision_cxc_excluida) === round2(50 * d.splitPctD / 100), round2(50 * d.splitPctD / 100), owner.comision_cxc_excluida, 'T8 excluida dueño')
-      assert(Number(seller.comision_cxc_excluida) === round2(50 * d.splitPctV / 100), round2(50 * d.splitPctV / 100), seller.comision_cxc_excluida, 'T8 excluida vendedor')
+      assert(Number(designated.comision_cxc_excluida) === round2(50 * d.splitPctV / 100), round2(50 * d.splitPctV / 100), designated.comision_cxc_excluida, 'T8 excluida designado')
+  }
+  f.split_t9_designado_dueno = async () => {
+      if (d.splitSkip) return
+      // El designado del día vende a SU PROPIO cliente → cobra su % normal (es dueño), sin split
+      d.splitT9 = await this.runSplitSale({ cantidad: 2, formaPago: 'Efectivo $', clienteId: d.splitClienteDesignadoId, vendedorId: d.splitDesignadoId })
+  }
+  f.split_assert_t9 = async () => {
+      if (d.splitSkip) return
+      const rows = await this.db(this.supabase.from('comisiones').select('*').eq('despachoid', d.splitT9.despachoId), 'comisiones T9')
+      assert(rows?.length === 1, 1, rows?.length, 'T9: designado=dueño → 1 fila')
+      const cfg = await this.db(this.supabase.from('configuracion_negocio').select('comision_pct_cabilla,comision_pct_otros,comision_categoria_cabilla').eq('cuenta_id', this.user.id).limit(1).maybeSingle(), 'config T9')
+      const isCab = TEST.producto.categoria.toLowerCase() === String(cfg?.comision_categoria_cabilla || '').toLowerCase().trim()
+      const pct = Number(isCab ? cfg?.comision_pct_cabilla : cfg?.comision_pct_otros)
+      const exp = round2(50 * pct / 100)
+      assert(Number(rows[0].totalcomision) === exp, exp, rows[0].totalcomision, 'T9 comisión normal del dueño')
+      assert(rows[0].vendedorid === d.splitDesignadoId, d.splitDesignadoId, rows[0].vendedorid, 'T9 beneficiario=designado/dueño')
+      assert(rows[0].calculo_evidencia?.split_cliente_ajeno !== true, false, rows[0].calculo_evidencia?.split_cliente_ajeno, 'T9 sin split')
   }
   f.split_assert_lista = async () => {
       if (d.splitSkip) return
@@ -1509,9 +1671,16 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
       const items = lista?.data || []
       assert(items.length === 2, 2, items.length, 'lista: 2 filas T1')
       const dueno = items.find(i => i.vendedorid === d.splitDuenoId)
-      const vendedor = items.find(i => i.vendedorid === this.salesperson.id)
+      const designado = items.find(i => i.vendedorid === d.splitDesignadoId)
       assert(dueno?.tipo === 'cliente_ajeno_dueno', 'cliente_ajeno_dueno', dueno?.tipo, 'lista tipo dueño')
-      assert(vendedor?.tipo === 'cliente_ajeno_vendedor', 'cliente_ajeno_vendedor', vendedor?.tipo, 'lista tipo vendedor')
+      assert(designado?.tipo === 'designado', 'designado', designado?.tipo, 'lista tipo designado')
+  }
+  f.split_cleanup_designacion = async () => {
+      if (d.splitSkip) return
+      const res = await this.apiAsJefe('/api/comisiones/designacion', 'DELETE', { fecha: d.splitFechaHoy })
+      assert(res?.ok === true, res, 'designación eliminada')
+      const rows = await this.db(this.supabase.from('comision_designacion_diaria').select('id').eq('cuenta_id', this.user.id).eq('fecha', d.splitFechaHoy), 'designación tras DELETE')
+      assert(!rows?.length, 0, rows?.length, 'designación eliminada en BD')
   }
   f.split_restore_config = async () => {
       if (!d.splitCfgOriginal) return

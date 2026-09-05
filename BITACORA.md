@@ -1,3 +1,24 @@
+# Versión 1.0.3 (Estable) — 2026-09-05
+
+**Certificación de Estabilidad**:
+- **Pruebas Unitarias**: 36/36 suites aprobadas, 319/319 tests en verde (100% de cobertura funcional en proyecto principal) y 29/29 suites en staging (265/265 tests).
+- **Compilación de Producción**: `vite build` + Service Worker PWA completados sin errores en ambos entornos.
+- **Validación en Producción y Staging**: Smoke tests F0–F5 ejecutados con 0 residuos, rollbacks atómicos verificados, deploy en producción activo en Vercel.
+
+### Cambios Clave Incluidos en el Release 1.0.3:
+1. **Reembolsos Atómicos en Devolución Parcial (RPC Transaccional)**:
+   - Eliminación de mutaciones REST manuales post-transacción que provocaban inconsistencias financieras.
+   - Parámetros `p_reembolso_metodo`, `p_reembolso_referencia` y `p_reembolso_monto` encapsulados en la transacción atómica de la base de datos con clave de idempotencia.
+   - Guardarraíles de balance: control coherente entre saldo a favor y desembolso multi-método (Efectivo, Zelle, Transferencia, Pago Móvil).
+2. **Reversión Consciente de Devoluciones (Release 06 + Fase B UX)**:
+   - Desbloqueo inteligente de reversión para despachos devueltos: anulación atómica de abonos de ajuste contable (`Devolución`, `Saldo a favor`, `NULL-devolu`) sin obligar a borrarlos manualmente.
+   - Guardas estrictas de integridad: bloqueo preventivo si existen cobros reales o desembolsos de efectivo ya efectuados.
+   - UX adaptativa: diagnóstico en tiempo real en modal de reversión con advertencias contextuales y confirmación protegida.
+3. **Gestión Segura de Operadores**:
+   - Corrección de restricción RLS en activación y desactivación de usuarios mediante endpoint backend con service role y feedback inmediato en interfaz de administración.
+
+---
+
 ## 2026-09-05 — Reversión consciente de devoluciones (release 06 + Fase B UX) — commits `3ddd4fa`, `72da4e2`
 
 ### Resumen del Requerimiento
@@ -23,6 +44,17 @@
 
 ### Pendiente
 * Aplicar espejo 264 en staging y correr el E2E de devolución/reversión (producción ya está promovida).
+
+## 2026-09-05 — Validación E2E completa del split designado v3 (staging local)
+
+- **Entorno**: vite 5174 + worker 8789 desde el workspace; migraciones 260 (split designado), 262 (reembolso atómico) y 263 (fix multi-fila) aplicadas en staging DB.
+- **Fix de regresión en despachos.js (devolución parcial)**: el árbol de trabajo había perdido el cálculo de descuentos por línea (despacho_descuentos) de HEAD; restaurado conservando las funciones v1.0.2 (pagosDiferencia, reembolso multi-método, RPC atómica con idempotencia).
+- **Fix de actor FK**: la RPC atómica de devolución recibía user.operator_id (id de auth, inexistente en usuarios para el desarrollador virtual) → USUARIO_FUERA_DE_TENANT. Ahora usa operador.actor_id || operador.id, igual que las demás RPC financieras.
+- **GRANTs de comision_designacion_diaria** para service_role/authenticated aplicados y añadidos a la migración 260.
+- **Migración 263**: corrige regresión de 262 que escalaba solo UNA fila de comisión en devoluciones; restaura el bucle multi-fila de 257 (split de sábados) conservando reembolso atómico y destino_saldo.
+- **E2E**: suite completa 123/123 en DOS corridas consecutivas, split v3 activo en sábado real (dow=6), 0 SKIPs, T1–T9 de designado ejecutados con trabajo real de BD.
+- **Vitest**: 265/265 (incluye despachosPartialAtomic actualizado al contrato RPC 16-arg de 262). **Build**: OK.
+- **Lección**: al redefinir una función con CREATE OR REPLACE en una migración nueva, auditar qué otras migraciones ya la tocaron (262 perdió el fix de 257).
 
 # Bitácora de Proyecto — Construacero Carabobo
 

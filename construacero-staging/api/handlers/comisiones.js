@@ -447,8 +447,8 @@ export async function handleGetComisiones(request, env) {
     }, 200, request);
   }
 
-  // split:calculo_evidencia->split_cliente_ajeno identifica filas del split por cliente ajeno
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,montopagado,comision_liberada,comision_retenida,estado,pagadaen,pagadapor,creadoen,actualizadoen,split:calculo_evidencia->>split_cliente_ajeno,despacho:notas_despacho!inner(creado_en,despachada_en,entregada_en,entregada_en_ajustada)&order=creadoen.desc`
+  // split:calculo_evidencia->split_cliente_ajeno identifica filas del split (v2 y v3/designado)
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,montopagado,comision_liberada,comision_retenida,estado,pagadaen,pagadapor,creadoen,actualizadoen,split:calculo_evidencia->>split_cliente_ajeno,designado_ev:calculo_evidencia->>split_designado_id,despacho:notas_despacho!inner(creado_en,despachada_en,entregada_en,entregada_en_ajustada)&order=creadoen.desc`
   
   const userContext = { ...user, operator_rol: operador.rol, operator_id: operador.id };
   let query = aplicarFiltrosComisiones(baseUrl, url.searchParams, userContext)
@@ -473,13 +473,37 @@ export async function handleGetComisiones(request, env) {
   const despachos = await fetchByIds(env, headers, 'notas_despacho', rows.map(c => c.despachoid), 'id,numero,total_usd,tasa_snapshot,entregada_en,entregada_en_ajustada,despachada_en,creado_en,vendedor_id,cliente_id,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre),productos:notas_despacho_items(nombre_snap,codigo_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,origen,producto_id,producto:productos(categoria))')
   const cotizaciones = await fetchByIds(env, headers, 'cotizaciones', rows.map(c => c.cotizacionid), 'id,numero,tasa_bcv_snapshot,cliente_id,cliente:clientes(id,nombre)')
   const vendedores = await fetchByIds(env, headers, 'usuarios', rows.map(c => c.vendedorid), 'id,nombre,color,markup_pct,rol,es_externo')
+
+  // Designaciones del día (v3): mapa fecha → designado_id para derivar el tipo de fila
+  const fechasDespachos = [...new Set(rows
+    .filter(c => c.split === true || c.split === 'true')
+    .map(c => (despachos[c.despachoid]?.creado_en || '').slice(0, 10))
+    .filter(Boolean))]
+  const designacionPorFecha = {}
+  if (fechasDespachos.length) {
+    try {
+      const desigRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${user.id}&fecha=in.(${fechasDespachos.map(f => `"${f}"`).join(',')})&select=fecha,designado_id`,
+        { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } }
+      );
+      if (desigRes.ok) {
+        for (const d of await desigRes.json()) designacionPorFecha[d.fecha] = d.designado_id;
+      }
+    } catch { /* si falla, las filas split caen a 'cliente_ajeno_dueno' */ }
+  }
+
   const data = rows.map(c => {
     const despacho = despachos[c.despachoid]
     const cotizacion = cotizaciones[c.cotizacionid]
     const esSplit = c.split === true || c.split === 'true'
-    const tipo = !esSplit
-      ? 'venta'
-      : (c.vendedorid === despacho?.vendedor_id ? 'cliente_ajeno_vendedor' : 'cliente_ajeno_dueno')
+    let tipo = 'venta'
+    if (esSplit) {
+      const fechaDespacho = (despacho?.creado_en || '').slice(0, 10)
+      const designadoDelDia = c.designado_ev || designacionPorFecha[fechaDespacho] || null
+      tipo = (designadoDelDia && c.vendedorid === designadoDelDia)
+        ? 'designado'
+        : 'cliente_ajeno_dueno'
+    }
     return {
       id: c.id,
       despachoid: c.despachoid,

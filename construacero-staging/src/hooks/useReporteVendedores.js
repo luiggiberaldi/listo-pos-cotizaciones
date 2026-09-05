@@ -372,7 +372,8 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
                 pctcabilla: Number(c.pctcabilla || 0),
                 pctotros: Number(c.pctotros || 0),
                 estado: c.estado || 'pendiente',
-                es_split: typeof c.tipo === 'string' && c.tipo.startsWith('cliente_ajeno'),
+                // v3: filas split llegan como 'designado' (0.5% al designado del día) o 'cliente_ajeno_dueno' (1.5% al dueño)
+                es_split: typeof c.tipo === 'string' && (c.tipo.startsWith('cliente_ajeno') || c.tipo === 'designado'),
                 vendedorid: c.vendedorid || d.asesor_id || d.vendedor_id,
                 despachoid: d.despacho_id,
                 vendedor: seller
