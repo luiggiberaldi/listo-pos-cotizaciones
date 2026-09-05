@@ -819,7 +819,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.06] border border-white/[0.1] backdrop-blur-md shadow-lg shadow-black/20">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           <span className="text-[10px] sm:text-xs font-semibold tracking-wider text-slate-300 font-mono">
-            v1.0.3
+            v1.0.4
           </span>
         </div>
       </div>

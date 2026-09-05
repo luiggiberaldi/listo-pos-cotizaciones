@@ -670,7 +670,7 @@ export default function AppLayout() {
           {!collapsed && (
             <div className="pt-2 pb-1 text-center">
               <span className="text-[10px] font-mono font-medium text-white/20 tracking-wider">
-                v1.0.3
+                v1.0.4
               </span>
             </div>
           )}

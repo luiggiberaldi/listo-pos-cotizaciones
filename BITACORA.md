@@ -1,3 +1,29 @@
+# Versión 1.0.4 (Estable) — 2026-09-05
+
+**Certificación de Estabilidad**:
+- **Pruebas Unitarias**: 36/36 suites aprobadas, 319/319 tests en verde (100% de cobertura en proyecto principal) y 29/29 suites en staging (265/265 tests).
+- **Compilación de Producción**: `vite build` + Service Worker PWA completados sin errores en ambos entornos (código 0).
+- **Validación en Producción y Staging**: Smoke tests y flujo E2E determinístico 123/123 pasando; paridad 1:1 entre producción y staging.
+
+### Cambios Clave Incluidos en el Release 1.0.4:
+1. **Gestión Integral de Choferes por Logística (UI/UX & Backend)**:
+   - Permiso y capacidad completa para que el rol logística cree y edite fichas maestras de transportistas.
+   - Rediseño de `CambiarTransportistaModal` con máquina de sub-vistas (`selección`, `editar`, `nuevo`) y ancho dimensional estable.
+   - Guardado unificado en 1 solo clic: actualización en simultáneo de la ficha maestra y los datos del despacho entregado/activo.
+   - Normalización de etiquetas: badge neutro `General` para choferes no locales/foráneos y renombramiento de acción a "Editar Transportista".
+2. **Split de Sábados v3.1 (Designado del Día en Producción & Staging)**:
+   - Regla v3.1: TODAS las ventas de vendedores/supervisores elegibles del sábado splittean (1.5% dueño del cliente + 0.5% designado del día), incluidas las ventas a clientes propios; si el designado vende a su propio cliente cobra su 2% íntegro.
+   - Corrección de zona horaria `America/Caracas` para dow y fecha de designación (evita desfasajes UTC post 8:00 PM).
+   - Persistencia de configuración en backend filtrando columnas reales en `configuracion_negocio`.
+   - Release 07 SQL en producción, migraciones 265, 266 y 267 en staging, y `PanelDesignacion` jefe-only.
+3. **Modernización de Vista de Comisiones & Corrección de Batching**:
+   - `ComisionesView` modernizado: integración de `DateRangeSelector` con cortes semanales automáticos, `CustomSelect` con bordes redondeados y búsqueda.
+   - Eliminación del acordeón infinito reemplazándolo por el diálogo modular `ModalDetalleVendedor` (`max-w-6xl`) con desglose de productos y generación de PDF individual.
+   - Batching de 50 registros por petición en `api/handlers/comisiones.js` para eliminar el error `414 Request-URI Too Long` ("SIN CLIENTE" / `#---`).
+   - Sincronización completa entre proyecto principal y `construacero-staging`.
+
+---
+
 # Versión 1.0.3 (Estable) — 2026-09-05
 
 **Certificación de Estabilidad**:
