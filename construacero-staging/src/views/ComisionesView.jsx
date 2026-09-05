@@ -19,6 +19,7 @@ import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import { countUniqueDispatches } from '../utils/comisionUtils'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
 import CustomSelect from '../components/ui/CustomSelect'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import ModalDetalleVendedor, { prepararComisionParaPDF } from '../components/reportes/ModalDetalleVendedor'
 import supabase from '../services/supabase/client'
 
@@ -108,9 +109,34 @@ function PanelDesignacion({ perfil, vendedores }) {
     }
   }, [designado, fecha])
 
-  const quitar = useCallback(async (f) => {
+  const [modalQuitar, setModalQuitar] = useState({ isOpen: false, fecha: '', nombre: '' })
+
+  const fechaLegibleModal = useMemo(() => {
+    if (!modalQuitar.fecha) return ''
+    try {
+      const parts = modalQuitar.fecha.split('-').map(Number)
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0)
+        const str = d.toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+        return str.charAt(0).toUpperCase() + str.slice(1)
+      }
+    } catch {}
+    return modalQuitar.fecha
+  }, [modalQuitar.fecha])
+
+  const solicitarQuitar = useCallback((f, nombre) => {
     const fechaQuitar = f || fecha
-    if (!window.confirm(`¿Quitar la designación del ${fechaQuitar}?`)) return
+    const nombreDesignado = nombre || designaciones[fechaQuitar]?.designado?.nombre || nombreElegido || ''
+    setModalQuitar({
+      isOpen: true,
+      fecha: fechaQuitar,
+      nombre: nombreDesignado
+    })
+  }, [fecha, designaciones, nombreElegido])
+
+  const confirmarQuitar = useCallback(async () => {
+    const fechaQuitar = modalQuitar.fecha
+    if (!fechaQuitar) return
     try {
       setGuardando(true)
       const headers = await getAuthHeaders()
@@ -126,13 +152,15 @@ function PanelDesignacion({ perfil, vendedores }) {
         delete next[fechaQuitar]
         return next
       })
-      setMensaje({ tipo: 'ok', texto: `Designación de ${fechaQuitar} eliminada.` })
+      setMensaje({ tipo: 'ok', texto: `Designación de ${fechaQuitar} eliminada correctamente.` })
     } catch (e) {
       setMensaje({ tipo: 'error', texto: e.message || 'Error al quitar la designación' })
+      throw e
     } finally {
       setGuardando(false)
+      setModalQuitar({ isOpen: false, fecha: '', nombre: '' })
     }
-  }, [fecha])
+  }, [modalQuitar.fecha])
 
   if (!esJefe) return null
 
@@ -200,7 +228,7 @@ function PanelDesignacion({ perfil, vendedores }) {
         {designadoDelDia && (
           <button
             type="button"
-            onClick={() => quitar(fecha)}
+            onClick={() => solicitarQuitar(fecha, designadoDelDia.designado?.nombre || nombreElegido)}
             disabled={guardando}
             className="flex items-center gap-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-50 transition-all h-[38px]"
           >
@@ -228,7 +256,7 @@ function PanelDesignacion({ perfil, vendedores }) {
               {r.fecha.slice(5)} · {r.designado?.nombre || r.designado_id}
               <button
                 type="button"
-                onClick={() => quitar(r.fecha)}
+                onClick={() => solicitarQuitar(r.fecha, r.designado?.nombre)}
                 disabled={guardando}
                 className="hover:bg-emerald-200 rounded-full p-0.5 disabled:opacity-40"
                 title="Quitar designación"
@@ -243,6 +271,22 @@ function PanelDesignacion({ perfil, vendedores }) {
       {mensaje && (
         <p className={`text-xs font-bold ${mensaje.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>{mensaje.texto}</p>
       )}
+
+      <ConfirmModal
+        isOpen={modalQuitar.isOpen}
+        onClose={() => setModalQuitar({ isOpen: false, fecha: '', nombre: '' })}
+        onConfirm={confirmarQuitar}
+        title="¿Quitar designación de guardia?"
+        message={`¿Confirmas que deseas anular la designación para el ${fechaLegibleModal}?`}
+        details={
+          modalQuitar.nombre
+            ? `Asesor asignado: ${modalQuitar.nombre}. Los despachos de esta fecha no aplicarán el split del 0.5% y regresarán al esquema de comisiones habitual.`
+            : 'Los despachos registrados en esta fecha volverán al esquema habitual de comisiones sin split de guardia.'
+        }
+        confirmText="Quitar designación"
+        cancelText="Mantener designación"
+        variant="warning"
+      />
     </div>
   )
 }
