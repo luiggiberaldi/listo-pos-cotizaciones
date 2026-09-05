@@ -349,14 +349,20 @@ export function expandCommissionRows(rows, options = {}) {
       const allocation = allocations.get(product) || { itemCommission: 0, itemCabilla: 0 }
       const itemCommission = round2(allocation.itemCommission)
       const itemCabilla = round2(allocation.itemCabilla)
+      // % nominal almacenado en la fila (autoritativo: es el que aplicó la
+      // función de BD, incluido split 1.5%/0.5%), elegido por bucket del
+      // producto. Nunca el % derivado del prorrateo de centavos (0.48% etc.).
+      const esCabillaItem = isCabillaProduct(product, normalized.vendedor, options.config)
+      const pctNominal = (esCabillaItem ? normalized.pctcabilla : normalized.pctotros)
+        || (esCabillaItem ? normalized.pctotros : normalized.pctcabilla)
+        || getComisionPctForItem(product, options.config || {}, normalized.vendedor)
+        || 0
       expanded.push({
         ...normalized,
         codigo: product.codigo_snap || product.codigo || '',
         descripcion: productLabel(product).toUpperCase(),
         valor: value,
-        pct: itemCommission > 0 && value > 0
-          ? round2((itemCommission / value) * 100)
-          : normalized.pctotros || normalized.pctcabilla || 0,
+        pct: pctNominal,
         totalcomision: itemCommission,
         comisioncabilla: itemCabilla,
         comisionotros: round2(itemCommission - itemCabilla),

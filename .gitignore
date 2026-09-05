@@ -88,6 +88,7 @@ __tests__/
 !src/utils/__tests__/comisionUtils.test.js
 !src/utils/__tests__/comisionesGeneradasPDF.test.js
 !src/utils/__tests__/pdfSharedHeader.test.js
+!src/utils/__tests__/expandPctNominal.test.js
 !src/utils/__tests__/comisionesTasa.test.js
 
 # Revisión SQL 238b del proyecto principal
