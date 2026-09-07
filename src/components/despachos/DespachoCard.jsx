@@ -256,7 +256,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             const esExterno = it.origen === 'externo' || !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
             if (esExterno) return false
             const p = prods?.find(x => x.id === it.producto_id)
-            return it.cantidad > (p?.stock_actual || 0)
+            // v2 "advertir, no bloquear": disponible = físico − comprometido por
+            // despachos aprobados (regla 222) — misma matemática que la RPC.
+            const disponible = (Number(p?.stock_actual) || 0) - (Number(p?.stock_comprometido) || 0)
+            return it.cantidad > disponible
           })
           setItemsFaltantes(faltantes)
           

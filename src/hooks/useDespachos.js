@@ -271,7 +271,10 @@ export function useStockCheckDespachos(despachos = [], { enabled = true } = {}) 
         itemsPorDespacho[it.despacho_id].push(mapped)
       }
 
-      // 2. Stock actual de todos los productos referenciados
+      // 2. Stock actual + comprometido de todos los productos referenciados.
+      // Comprometido = items de despachos APROBADOS (estado 'despachada') según
+      // la regla 222 — mismo criterio que usa la RPC de aprobación v2, para que
+      // el aviso de la UI diga lo mismo que dirá la BD (disponible = físico − comprometido).
       const pids = [...new Set(items.map(it => it.producto_id).filter(Boolean))]
       const prodsMap = {}
       if (pids.length) {
@@ -283,6 +286,27 @@ export function useStockCheckDespachos(despachos = [], { enabled = true } = {}) 
         for (const r of pResults) {
           if (r.error) throw r.error
           for (const p of (r.data ?? [])) prodsMap[p.id] = p
+        }
+        // Comprometido por despacho aprobado, en lotes por producto
+        const cBatches = []
+        for (let i = 0; i < pids.length; i += 200) cBatches.push(pids.slice(i, i + 200))
+        const cResults = await Promise.all(cBatches.map(batch =>
+          supabase
+            .from('notas_despacho_items')
+            .select('producto_id, cantidad, notas_despacho!inner(estado)')
+            .in('producto_id', batch)
+            .eq('notas_despacho.estado', 'despachada')
+        ))
+        const comprometido = {}
+        for (const r of cResults) {
+          if (r.error) throw r.error
+          for (const row of (r.data ?? [])) {
+            comprometido[row.producto_id] = (comprometido[row.producto_id] || 0) + Number(row.cantidad || 0)
+          }
+        }
+        for (const pid of Object.keys(comprometido)) {
+          if (prodsMap[pid]) prodsMap[pid] = { ...prodsMap[pid], stock_comprometido: comprometido[pid] }
+          else prodsMap[pid] = { id: pid, stock_actual: 0, categoria: '', stock_comprometido: comprometido[pid] }
         }
       }
 

@@ -4,7 +4,7 @@ import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
 import useAuthStore from '../../store/useAuthStore'
-import { useEditarDespacho, useCambiarFechaEntregaDespacho } from '../../hooks/useDespachos'
+import { useEditarDespacho } from '../../hooks/useDespachos'
 import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoActions'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
@@ -20,7 +20,6 @@ import CambiarTransportistaModal from './CambiarTransportistaModal'
 import ConciliarCodModal from './ConciliarCodModal'
 import FacturaModal from './FacturaModal'
 import DevolucionParcialModal from './DevolucionParcialModal'
-import EditarFechaEntregaModal from './EditarFechaEntregaModal'
 import { showToast } from '../ui/Toast'
 import { MessageCircle } from 'lucide-react'
 import SeguimientoFijadoModal from '../ui/SeguimientoFijadoModal'
@@ -62,14 +61,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [showConciliarCod, setShowConciliarCod] = useState(false)
   const [showFacturaModal, setShowFacturaModal] = useState(false)
   const [showDevolucionParcial, setShowDevolucionParcial] = useState(false)
-  const [showEditarFechaEntrega, setShowEditarFechaEntrega] = useState(false)
   const [facturaActionType, setFacturaActionType] = useState('download')
   const esLogistica = perfil?.rol === 'logistica' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador'
   const puedeAjustarPorcentaje = ['administracion', 'logistica', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
   const editarDespacho = useEditarDespacho()
-  const cambiarFechaEntrega = useCambiarFechaEntregaDespacho()
   const [showNotaModal, setShowNotaModal] = useState(false)
   const [nuevaNota, setNuevaNota] = useState('')
 
@@ -259,7 +256,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             const esExterno = it.origen === 'externo' || !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
             if (esExterno) return false
             const p = prods?.find(x => x.id === it.producto_id)
-            return it.cantidad > (p?.stock_actual || 0)
+            // v2 "advertir, no bloquear": disponible = físico − comprometido por
+            // despachos aprobados (regla 222) — misma matemática que la RPC.
+            const disponible = (Number(p?.stock_actual) || 0) - (Number(p?.stock_comprometido) || 0)
+            return it.cantidad > disponible
           })
           setItemsFaltantes(faltantes)
           
@@ -329,7 +329,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canAnular = despacho.estado === 'pendiente' && (esDesarrollador || esAdministracion || esSupervisor || esVendedorPropio)
   const canDevolver = (despacho.estado === 'despachada' || despacho.estado === 'entregada') && ['logistica', 'jefe', 'desarrollador', 'administracion', 'supervisor'].includes(perfil?.rol)
   const canDevolucionParcial = despacho.estado === 'entregada' && ['administracion', 'logistica', 'desarrollador', 'jefe'].includes(perfil?.rol)
-  const canCambiarFechaEntrega = despacho.estado === 'entregada' && ['administracion', 'logistica', 'desarrollador', 'jefe'].includes(perfil?.rol)
   const canReciclar = ((esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar)
     || (['vendedor', 'vendedor_sin_comision'].includes(rol) && despacho.estado === 'anulada' && esVendedorPropio && onReciclar)
   const canDescuento = (esAdministracion || esDesarrollador || perfil?.rol === 'jefe') && ['pendiente', 'despachada'].includes(despacho.estado)
@@ -834,15 +833,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       })
     }
 
-    if (canCambiarFechaEntrega) {
-      actions.push({
-        label: 'Corregir fecha de entrega',
-        icon: Calendar,
-        onClick: () => setShowEditarFechaEntrega(true),
-        textColor: 'text-violet-600 font-medium'
-      })
-    }
-
     if (perfil?.rol === 'logistica' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe') {
       const tieneNota = !!despacho.notes?.trim() || !!despacho.notas?.trim()
       actions.push({
@@ -860,18 +850,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   }
 
   const moreActions = getMoreActions()
-  const bottomActions = moreActions.filter(act => 
-    act.label !== 'Reabrir despacho' && 
-    act.label !== 'No entregado' && 
-    act.label !== 'No entregado / Devolver' &&
-    act.label !== 'Cambiar Transportista' &&
-    act.label !== 'Editar Transportista' &&
-    act.label !== 'Agregar Transportista' &&
-    act.label !== 'Marcar COD como pagado' &&
-    act.label !== 'Devolución Parcial' &&
-    act.label !== 'Corregir fecha de entrega' &&
-    !act.label.includes('observación')
-  )
+  const bottomActions = moreActions.filter(act => {
+    const label = String(act.label || '').toLowerCase()
+    return !label.includes('reabrir') &&
+      !label.includes('devolver') &&
+      !label.includes('cambiar transportista') &&
+      !label.includes('editar transportista') &&
+      !label.includes('agregar transportista') &&
+      !label.includes('marcar cod como pagado') &&
+      !label.includes('devolución parcial') &&
+      !label.includes('observación')
+  })
 
   // Resolver config del confirm modal
   const confirmConfig = accionPendiente?.actionConfig || {}
@@ -987,8 +976,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       <div className="px-3 pt-2 pb-1.5 space-y-1">
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <Calendar size={11} />
-          {despacho.estado === 'entregada' && (despacho.entregada_en_ajustada || despacho.entregada_en)
-            ? <span className="text-teal-500 font-medium">{despacho.entregada_en_ajustada ? 'Entrega corregida' : 'Entregada'} {fmtFechaHora(despacho.entregada_en_ajustada || despacho.entregada_en)}</span>
+          {despacho.estado === 'entregada' && despacho.entregada_en
+            ? <span className="text-teal-500 font-medium">Entregada {fmtFechaHora(despacho.entregada_en)}</span>
             : despacho.estado === 'despachada' && despacho.despachada_en
               ? <span className="text-indigo-400 font-medium">Despachada {fmtFechaHora(despacho.despachada_en)}</span>
               : <span>{fmtFechaHora(despacho.creado_en)}</span>
@@ -1036,15 +1025,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             </div>
           ) : null
         )}
-        {isCtaPorCobrar && (
-          <div className="flex items-center gap-1.5 text-[11px] text-amber-600 font-medium mt-0.5">
-            <CreditCard size={11} className="shrink-0" />
+        {metodosPagoList.length > 0 && (
+          <div className="flex items-start gap-1.5 text-[11px] text-slate-600 font-medium mt-0.5">
+            <CreditCard size={11} className="shrink-0 mt-0.5 text-slate-400" />
             <span>
-              {isMixtoCxc 
-                ? `Mixto (${metodosPagoList.join(' + ')})` 
-                : 'Cta. por cobrar'
-              }
-              {textVencimiento ? ` - ${textVencimiento}` : ''}
+              <span className="text-slate-400">Pago: </span>
+              {metodosPagoList.join(' + ')}
+              {isCtaPorCobrar && textVencimiento ? ` - ${textVencimiento}` : ''}
             </span>
           </div>
         )}
@@ -1070,17 +1057,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                 <span className="text-xs font-semibold text-emerald-600">+{fmtUsd(fleteUsd)}</span>
               </div>
             )}
-            {Number(despacho.flete_neto_transportista_usd) > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
-                  Al chofer
-                  {despacho.flete_pagado && (
-                    <span className="px-1 py-0.5 rounded bg-green-100 text-green-700 text-[9px] font-bold uppercase">Pagado</span>
-                  )}
-                </span>
-                <span className="text-xs font-bold text-amber-600">{fmtUsd(Number(despacho.flete_neto_transportista_usd))}</span>
-              </div>
-            )}
             {corteUsd > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-slate-400">Corte</span>
@@ -1099,7 +1075,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                 className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 mt-0.5 cursor-pointer hover:text-indigo-600 hover:underline transition-all"
               >
                 <PackageCheck size={11} />
-                {despacho.items_count[0].count} {despacho.items_count[0].count === 1 ? 'Ítem' : 'Ítems'}
+                {Number(despacho.items_count[0].count) || 0} {Number(despacho.items_count[0].count) === 1 ? 'Ítem' : 'Ítems'}
               </button>
             )}
           </div>
@@ -1713,22 +1689,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         isOpen={showDevolucionParcial}
         onClose={() => setShowDevolucionParcial(false)}
         despacho={despacho}
-      />
-
-      <EditarFechaEntregaModal
-        key={`${despacho.id}:${showEditarFechaEntrega ? 'open' : 'closed'}:${despacho.entregada_en_ajustada || despacho.entregada_en || ''}`}
-        isOpen={showEditarFechaEntrega}
-        onClose={() => setShowEditarFechaEntrega(false)}
-        despacho={despacho}
-        isLoading={cambiarFechaEntrega.isPending}
-        onConfirm={async ({ nuevaFechaEntrega, motivo }) => {
-          try {
-            await cambiarFechaEntrega.mutateAsync({ despachoId: despacho.id, nuevaFechaEntrega, motivo })
-            setShowEditarFechaEntrega(false)
-          } catch {
-            // El hook ya muestra el error y conserva el modal abierto.
-          }
-        }}
       />
 
       {/* Modal para agregar/editar observación (Solo Logística) */}

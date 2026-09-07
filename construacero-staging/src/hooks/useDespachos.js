@@ -3,11 +3,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
-import { apiUrl } from '../services/apiBase'
+import { apiUrl, getAuthHeaders, chunkIds } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { authFetch } from '../services/authFetch'
 import { broadcastEntidad } from '../services/supabase/realtimeBus'
-import { notifyDespachoCreado, notifyDespachoEnRuta, notifyDespachoEntregado, notifyDespachoCancelado } from '../services/notificationService'
+import { notifyDespachoCreado, notifyStockBajo, notifyDespachoEnRuta, notifyDespachoEntregado, notifyDespachoCancelado } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
 
@@ -108,12 +108,12 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
         .from('notas_despacho')
         .select(`
           id, numero, cotizacion_id, estado, tiene_prestamos, tiene_devoluciones,
-          total_usd, flete_usd, corte_usd, descuento_total_usd, notas, forma_pago,
-          referencia_pago, forma_pago_cliente,
+          total_usd, flete_usd, corte_usd, descuento_total_usd,
           flete_neto_transportista_usd, flete_pct_aplicado, flete_pagado,
           flete_comisionable, flete_estado_destino_snapshot, flete_regla_aplicada,
-          direccion_envio_estado, direccion_envio_ciudad, direccion_envio_direccion,
-          creado_en, actualizado_en, despachada_en, entregada_en, entregada_en_ajustada, aprobado_por_nombre,
+          direccion_envio_estado, direccion_envio_ciudad, direccion_envio_direccion, notas, forma_pago,
+          referencia_pago, forma_pago_cliente,
+          creado_en, actualizado_en, despachada_en, entregada_en, aprobado_por_nombre,
           cliente_id, cliente_factura_id, vendedor_id, transportista_id,
           items_count:notas_despacho_items(count),
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, color_batea, vehiculo, placa_chuto, placa_batea, es_local),
@@ -124,7 +124,20 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
         .order(estado ? 'actualizado_en' : 'numero', { ascending: false })
 
       if (matchedIds !== null) {
-        query = query.in('id', matchedIds)
+        // Evitar URLs gigantes; para búsquedas con muchos resultados el filtro
+        // se divide en lotes y se resuelve antes de la consulta enriquecida.
+        const matchedChunks = chunkIds(matchedIds, 50)
+        if (matchedChunks.length === 0) return []
+        if (matchedChunks.length > 1) {
+          const results = await Promise.all(matchedChunks.map(chunk =>
+            supabase.from('notas_despacho').select('id').in('id', chunk)
+          ))
+          const ids = results.flatMap(r => r.error ? [] : (r.data || []).map(row => row.id))
+          if (ids.length === 0) return []
+          query = query.in('id', ids.slice(0, 200))
+        } else {
+          query = query.in('id', matchedChunks[0])
+        }
       }
 
       if (esHoy) {
@@ -161,7 +174,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
 
       const session = (await supabase.auth.getSession()).data.session
 
-      const VENDEDOR_COLS = 'id, nombre, color, telefono, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo'
+      const VENDEDOR_COLS = 'id, nombre, color, telefono, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo, codigo'
 
       // 1. Cargar clientes y vendedores de los despachos EN PARALELO
       //    (antes era en serie: 3 viajes → ahora 1 tanda + 1 condicional)
@@ -258,7 +271,10 @@ export function useStockCheckDespachos(despachos = [], { enabled = true } = {}) 
         itemsPorDespacho[it.despacho_id].push(mapped)
       }
 
-      // 2. Stock actual de todos los productos referenciados
+      // 2. Stock actual + comprometido de todos los productos referenciados.
+      // Comprometido = items de despachos APROBADOS (estado 'despachada') según
+      // la regla 222 — mismo criterio que usa la RPC de aprobación v2, para que
+      // el aviso de la UI diga lo mismo que dirá la BD (disponible = físico − comprometido).
       const pids = [...new Set(items.map(it => it.producto_id).filter(Boolean))]
       const prodsMap = {}
       if (pids.length) {
@@ -270,6 +286,27 @@ export function useStockCheckDespachos(despachos = [], { enabled = true } = {}) 
         for (const r of pResults) {
           if (r.error) throw r.error
           for (const p of (r.data ?? [])) prodsMap[p.id] = p
+        }
+        // Comprometido por despacho aprobado, en lotes por producto
+        const cBatches = []
+        for (let i = 0; i < pids.length; i += 200) cBatches.push(pids.slice(i, i + 200))
+        const cResults = await Promise.all(cBatches.map(batch =>
+          supabase
+            .from('notas_despacho_items')
+            .select('producto_id, cantidad, notas_despacho!inner(estado)')
+            .in('producto_id', batch)
+            .eq('notas_despacho.estado', 'despachada')
+        ))
+        const comprometido = {}
+        for (const r of cResults) {
+          if (r.error) throw r.error
+          for (const row of (r.data ?? [])) {
+            comprometido[row.producto_id] = (comprometido[row.producto_id] || 0) + Number(row.cantidad || 0)
+          }
+        }
+        for (const pid of Object.keys(comprometido)) {
+          if (prodsMap[pid]) prodsMap[pid] = { ...prodsMap[pid], stock_comprometido: comprometido[pid] }
+          else prodsMap[pid] = { id: pid, stock_actual: 0, categoria: '', stock_comprometido: comprometido[pid] }
         }
       }
 
@@ -354,9 +391,8 @@ export function useActualizarEstadoDespacho() {
   const usuarioNombre = perfil?.nombre ?? 'usuario'
 
   return useMutation({
-    mutationFn: async ({ despachoId, nuevoEstado, numeroCotizacion, clienteNombre, vendedorId = null, motivoDevolucion = null, motivoAnulacion = null, tasaBcv = null, idempotencyKey = null }) => {
-      const stableIdempotencyKey = idempotencyKey || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const body = { despachoId, nuevoEstado, idempotencyKey: stableIdempotencyKey }
+    mutationFn: async ({ despachoId, nuevoEstado, numeroCotizacion, clienteNombre, vendedorId = null, motivoDevolucion = null, motivoAnulacion = null, tasaBcv = null }) => {
+      const body = { despachoId, nuevoEstado }
       if (motivoDevolucion) body.motivo_devolucion = motivoDevolucion
       if (motivoAnulacion) body.motivo_anulacion = motivoAnulacion
       if (tasaBcv && Number(tasaBcv) > 0) body.tasaBcv = Number(tasaBcv)
@@ -393,7 +429,7 @@ export function useActualizarEstadoDespacho() {
       showToast(error.message || 'Error al cambiar estado del despacho', 'error')
     },
     onSuccess: ({ nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados, creditoAnuladoUsd }) => {
-      // Reversión consciente de devoluciones (migración 264): toast con el efecto exacto en CxC.
+      // Reversión consciente de devoluciones (release 06): toast con el efecto exacto en CxC.
       if (['pendiente', 'anulada'].includes(nuevoEstado) && (abonosDevolucionAnulados > 0 || (creditoAnuladoUsd ?? 0) > 0)) {
         const partes = []
         if (abonosDevolucionAnulados > 0) partes.push(`${abonosDevolucionAnulados} abono${abonosDevolucionAnulados !== 1 ? 's' : ''} de devolución anulado${abonosDevolucionAnulados !== 1 ? 's' : ''}`)
@@ -452,37 +488,6 @@ export function useActualizarEstadoDespacho() {
   })
 }
 
-// ─── Corregir fecha efectiva de entrega (operación atómica en Worker) ────────
-export function useCambiarFechaEntregaDespacho() {
-  const qc = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ despachoId, nuevaFechaEntrega, motivo }) => {
-      const idempotencyKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const res = await authFetch('/api/despachos/cambiar-fecha-entrega', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
-        body: JSON.stringify({ despachoId, nuevaFechaEntrega, motivo, idempotencyKey }),
-      })
-      const result = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(result.error || 'Error al corregir la fecha de entrega')
-      return result
-    },
-    onSuccess: () => {
-      showToast('Fecha efectiva de entrega corregida', 'success')
-      qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
-      qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
-      qc.invalidateQueries({ queryKey: ['reporte-ventas'], exact: false })
-      qc.invalidateQueries({ queryKey: ['reporte-liquidacion'], exact: false })
-      qc.invalidateQueries({ queryKey: ['dashboard_metrics'], exact: false })
-      broadcastEntidad(['despachos', 'comisiones', 'reportes'])
-    },
-    onError: (error) => {
-      showToast(error.message || 'Error al corregir la fecha de entrega', 'error')
-    },
-  })
-}
-
 // ─── Editar despacho pendiente (pago, transportista, notas) ─────────────────
 export function useEditarDespacho() {
   const qc = useQueryClient()
@@ -520,17 +525,21 @@ export function useEditarItemsDespacho() {
 
   return useMutation({
     mutationFn: async ({ despachoId, items, pagos }) => {
+      console.group('[DEEP_EDIT][NETWORK_TRACE]')
+      console.log('Request body at mutation boundary', { despachoId, itemCount: Array.isArray(items) ? items.length : null, items, pagos })
+      const body = JSON.stringify({ despachoId, items, pagos })
+      console.log('Serialized request body', JSON.parse(body))
       const res = await authFetch('/api/despachos/editar-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ despachoId, items, pagos }),
+        body,
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al editar ítems del despacho')
       return result
     },
     onSuccess: async () => {
-      showToast('Ítems del despacho actualizados con éxito', 'success')
+      showToast('Ítems del despacho actualizados con éxito', 'success', 5000)
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
       qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
@@ -579,7 +588,6 @@ export function useDevolucionParcialDespacho() {
       motivo,
       generarReemplazo,
       exchangeItems,
-      idempotencyKey = null,
       pagosDiferencia,
       destinoSaldo,
       pagosReembolso,
@@ -587,17 +595,15 @@ export function useDevolucionParcialDespacho() {
       reembolsoReferencia,
       reembolsoMonto
     }) => {
-      const stableIdempotencyKey = idempotencyKey || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
       const res = await authFetch('/api/despachos/devolucion-parcial', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': stableIdempotencyKey },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           despachoId,
           items,
           motivo,
           generarReemplazo,
           exchangeItems,
-          idempotencyKey: stableIdempotencyKey,
           pagosDiferencia: Array.isArray(pagosDiferencia) ? pagosDiferencia : [],
           destinoSaldo,
           pagosReembolso: Array.isArray(pagosReembolso) ? pagosReembolso : [],
