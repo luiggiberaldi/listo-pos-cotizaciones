@@ -21,7 +21,7 @@ import ConciliarCodModal from './ConciliarCodModal'
 import FacturaModal from './FacturaModal'
 import DevolucionParcialModal from './DevolucionParcialModal'
 import { showToast } from '../ui/Toast'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, StickyNote } from 'lucide-react'
 import SeguimientoFijadoModal from '../ui/SeguimientoFijadoModal'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { calcComisionEstimada } from '../../utils/comisionUtils'
@@ -869,6 +869,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   }
 
   const moreActions = getMoreActions()
+
+  // Chip de observación (fila 2): visible para todos; click = modal solo logística/jefe/dev
+  const notaObsTexto = (despacho.notas || despacho.notes || '').trim()
+  const tieneNotaObs = !!notaObsTexto
+  const notaObsPreview = notaObsTexto.length > 20 ? notaObsTexto.slice(0, 20).trimEnd() + '…' : notaObsTexto
+  const puedeEditarNota = perfil?.rol === 'logistica' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe'
   const bottomActions = moreActions.filter(act => {
     const label = String(act.label || '').toLowerCase()
     return !label.includes('reabrir') &&
@@ -972,6 +978,16 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {despacho.tiene_devoluciones && (
             <span className="inline-flex items-center gap-1 bg-amber-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Este despacho tiene devoluciones parciales registradas">
               Devolución
+            </span>
+          )}
+          {tieneNotaObs && (
+            <span
+              className={`inline-flex items-center gap-1 max-w-[150px] bg-yellow-100 text-yellow-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-yellow-300/70 shadow-sm uppercase tracking-wider leading-none ${puedeEditarNota ? 'cursor-pointer hover:bg-yellow-200' : 'select-none'}`}
+              title={notaObsTexto}
+              onClick={puedeEditarNota ? () => { setNuevaNota(despacho.notas || ''); setShowNotaModal(true) } : undefined}
+            >
+              <StickyNote size={10} className="shrink-0" />
+              <span className="truncate">{notaObsPreview}</span>
             </span>
           )}
         </div>
