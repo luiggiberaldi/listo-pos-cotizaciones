@@ -927,20 +927,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                 <Mail className="animate-envelope-vibrate" size={14} strokeWidth={2} />
               </button>
             )}
-            {isCodUnpaid && (
-              <span className="bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-rose-400/50 shadow-sm uppercase tracking-wider animate-pulse leading-none shrink-0 select-none">
-                COD
-              </span>
-            )}
-            {isCodPaid && !esContadoVenta && (
-              <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none">
-                COD ✓
-              </span>
-            )}
             {esCreditoVenta && (
               <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none"
                 title={tooltipPendiente || 'Venta a crédito'}>
-                CRÉDITO{pendientePagoUsd > 0 ? ` ${fmtMonto(pendientePagoUsd)}` : ''}
+                PENDIENTE{pendientePagoUsd > 0 ? ` ${fmtMonto(pendientePagoUsd)}` : ''}
               </span>
             )}
             {esContadoVenta && (
