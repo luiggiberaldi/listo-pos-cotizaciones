@@ -4,6 +4,16 @@ Este archivo sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 
 > Convención de este proyecto: el "release" de frontend se despliega en Vercel (auto-deploy desde `main`), el Worker en Cloudflare (GitHub Actions y/o manual) y la base de datos recibe releases SQL independientes (`supabase/release/`). Por eso cada versión agrupa los tres planos cuando aplican.
 
+## [Unreleased]
+
+### Added
+- **Tranca COD v4 (comisión solo cuando el COD está pagado, todo-o-nada)**: despacho con porción "Cobro a destino" (monto > 0) y `cobro_destino_pagado ≠ true` genera CERO comisión — tampoco la parte de adelanto en pagos mixtos. Al conciliar el COD, la comisión nace completa por el total (disparador en `editar-pago` cuando el flag pasa a pagado con despacho aprobado/entregado). Toggle por cuenta `comision_cod_solo_pagado` (default OFF; activado 13/13 en producción tras postflight). Staging: migración `270` + helper `comision_238b_cod_pendiente` (formatos legacy incluidos); principal: release `09` (rollback byte-idéntico al cuerpo previo). Arnés propio 30/30; split de sábados hereda la tranca (el designado se resuelve por fecha de creación en hora VE). Comisiones ya pagadas intocables (G3). Sin efecto retroactivo: 2 despachos COD previos con comisión ($270.88) quedan para revisión manual.
+- Control de stock al aprobar despachos, **modo solo advertencia (v2, nunca bloquea)**: RPC `aprobar_despacho_inventario_atomico` calcula disponible = físico − comprometido (por otros despachos aprobados, con locks FOR UPDATE) y fija el estado en la misma transacción, pero **no rechaza por faltante**: devuelve `faltantes` en la respuesta y la aprobación sigue su curso. Nuevo modo `p_solo_validar` (solo lectura: análisis sin tocar el despacho). Toggle `bloqueo_stock_aprobacion` por cuenta — en ON el faltante se registra en auditoría; en OFF silencioso. Venta Anticipada respetada; items externos/préstamos excluidos. Stock comprometido visible de nuevo en UI (`useStockComprometido` reactivado); cálculo de faltantes en UI alineado a disponible. Staging: migraciones `268` + `269`; principal: releases `08` + `08b` (cuerpos idénticos, verificados).
+
+### Validation
+- Arnés tranca COD 30/30 (T0–T10: retrocompatibilidad, todo-o-nada, conciliación, split sábado, G3, idempotencia); E2E staging 123/123; dry-run transaccional release 09 en staging; postflight 09: tranca viva, split intacto, helper 7/7, toggle 0/13→13/13, hash de entrega intacto (`ef0ef730`).
+- Arnés RPC v2 20/20 (T2/T3 ahora aprueban informando faltantes); suites 324/324 (principal) y 265/265 (staging); E2E staging 123/123; postflight 08b principal 100% verde; verificación read-only en producción sobre despacho real (#2317: 1 faltante detectado, despacho intacto).
+
 ## [1.0.4] - 2026-09-05
 
 ### Added

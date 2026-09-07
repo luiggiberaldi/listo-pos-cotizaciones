@@ -468,6 +468,19 @@ export async function handleCambiarFechaEntregaDespacho(request, env) {
   return json(payload, 200, request)
 }
 
+// G-COD v4: ¿el JSON de formas de pago tiene el COD marcado como pagado?
+// (flag cobro_destino_pagado en el elemento "Cobro a destino", monto > 0)
+function formaPagoTieneCodPagado(raw) {
+  if (!raw) return false
+  try {
+    const fps = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!Array.isArray(fps)) return false
+    return fps.some(f => f && f.metodo === 'Cobro a destino'
+      && Number(f.monto || 0) > 0
+      && f.cobro_destino_pagado === true)
+  } catch { return false }
+}
+
 export async function handleEditarPagoDespacho(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
@@ -674,6 +687,33 @@ export async function handleEditarPagoDespacho(request, env) {
         body: JSON.stringify({ p_despachoid: despachoId }),
       });
     }
+  }
+
+  // G-COD v4 (tranca comision_cod_solo_pagado): al conciliar el COD, el flag
+  // cobro_destino_pagado pasa a true y la comisión retenida debe nacer AHORA.
+  // El recálculo de arriba solo corre cuando la fila ya existe; con la tranca
+  // activa la fila nunca existió, así que aquí se llama al calculador directo
+  // (delegador en staging; idempotente: sin fila previa no duplica).
+  try {
+    const codPagadoAntes = formaPagoTieneCodPagado(despacho.forma_pago_cliente || despacho.forma_pago)
+    const fpAhora = formaPagoCliente !== undefined ? formaPagoCliente
+      : (formaPago !== undefined ? formaPago : (despacho.forma_pago_cliente || despacho.forma_pago))
+    const codPagadoAhora = formaPagoTieneCodPagado(fpAhora)
+    if (!codPagadoAntes && codPagadoAhora && ['despachada', 'entregada'].includes(despacho.estado)) {
+      const vendIdCod = await obtenerVendedorComisionId(despacho, h, env)
+      const vendRolResCod = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendIdCod}&select=rol,markup_pct`, { headers: h })
+      const [vendCod] = await vendRolResCod.json()
+      if (!['jefe', 'logistica', 'administracion', 'desarrollador'].includes(vendCod?.rol) && (vendCod?.rol !== 'vendedor_sin_comision' || parseFloat(vendCod?.markup_pct || 0) > 0)) {
+        const comResCod = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/calcularcomisiondespacho`, {
+          method: 'POST', headers: h,
+          body: JSON.stringify({ p_despachoid: despachoId }),
+        })
+        if (!comResCod.ok) console.error('[COMISION][COD-CONCILIADO] Error al calcular:', await comResCod.text())
+        else console.log('[COMISION][COD-CONCILIADO] Comisión creada al conciliar COD')
+      }
+    }
+  } catch (codErr) {
+    console.error('[COMISION][COD-CONCILIADO] Error:', codErr?.message)
   }
 
   // Auditoría
@@ -894,6 +934,43 @@ export async function handleActualizarEstadoDespacho(request, env) {
       && ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado);
     let entregaFinanzasAtomica = null;
     let reversaResultadoStaging = null;
+    let aprobacionAtomica = null;
+
+    // ── Advertencia de stock al aprobar (v2 "advertir, no bloquear") ──────
+    // RPC transaccional: valida disponible = físico − comprometido (por OTROS
+    // despachos aprobados) con FOR UPDATE de despacho+productos y fija el estado
+    // despachada en la MISMA transacción → sin condiciones de carrera.
+    // Toggle bloqueo_stock_aprobacion OFF → bloqueo_aplicado=false → ruta legacy.
+    // El descuento físico y el Kardex siguen ocurriendo SOLO al confirmar entrega;
+    // la validación de entrega se conserva como 2ª defensa.
+    if (desp.estado === 'pendiente' && nuevoEstado === 'despachada') {
+      const rpcResAprob = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/aprobar_despacho_inventario_atomico`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          p_despacho_id: despachoId,
+          p_usuario_id: operador.actor_id || operador.id,
+          p_usuario_nombre: operador.nombre,
+          p_usuario_color: operador.color || null,
+        }),
+      })
+      const rpcTextAprob = await rpcResAprob.text()
+      let resultAprob = null
+      try { resultAprob = rpcTextAprob ? JSON.parse(rpcTextAprob) : null } catch { resultAprob = null }
+      if (!rpcResAprob.ok) {
+        const msgAprob = resultAprob?.message || rpcTextAprob || `HTTP ${rpcResAprob.status}`
+        const msgStr = String(msgAprob)
+        if (msgStr.includes('PRODUCTO_NO_DISPONIBLE')) {
+          return jsonError(`Producto no disponible o inactivo: ${msgStr.split('PRODUCTO_NO_DISPONIBLE:')[1]?.trim() || msgStr}`, 400, request)
+        }
+        return jsonError(`No se pudo aprobar con verificación de inventario: ${msgAprob}`, 400, request)
+      }
+      if (!resultAprob?.ok) return jsonError('La RPC de bloqueo no confirmó la aprobación', 500, request)
+      if (resultAprob.bloqueo_aplicado === true) {
+        aprobacionAtomica = resultAprob
+      }
+      // bloqueo_aplicado === false → toggle OFF: continúa la ruta legacy intacta.
+    }
 
     if (esReversionEntregaAtomica) {
       const reversaAtomicaRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/revertir_entrega_finanzas_atomica_staging`, {
@@ -1253,7 +1330,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
     // La RPC de entrega/reversión ya actualiza el estado y el inventario de
     // forma atómica. En una reversión solo persistimos los metadatos restantes
     // (motivos, pagos COD y liquidación del transportista).
-    if (nuevoEstado !== 'entregada') {
+    if (nuevoEstado !== 'entregada' && !aprobacionAtomica) {
       const patchData = esReversionEntregaAtomica
         ? Object.fromEntries(Object.entries(updateData).filter(([key]) => !['estado', 'entregada_en'].includes(key)))
         : updateData;
@@ -1519,7 +1596,9 @@ export async function handleActualizarEstadoDespacho(request, env) {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
       categoria: 'COTIZACION', accion: 'ACTUALIZAR_DESPACHO',
       entidadTipo: 'nota_despacho', entidadId: despachoId,
-      meta: { estado_anterior: desp.estado, estado_nuevo: nuevoEstado, cotizacion_id: desp.cotizacion_id }, ip,
+      meta: { estado_anterior: desp.estado, estado_nuevo: nuevoEstado, cotizacion_id: desp.cotizacion_id, bloqueo_stock_aprobacion: aprobacionAtomica ? 'aplicado' : 'off',
+        ...(aprobacionAtomica?.faltantes?.length ? { stock_faltantes: aprobacionAtomica.faltantes } : {}),
+      }, ip,
     });
 
     return json({
@@ -1527,6 +1606,9 @@ export async function handleActualizarEstadoDespacho(request, env) {
       nuevoEstado,
       idempotencyKey,
       inventario_atomico: Boolean(entregaFinanzasAtomica || esReversionEntregaAtomica),
+      bloqueo_stock_aprobacion: aprobacionAtomica ? 'sql_atomic' : null,
+      bloqueo_productos: aprobacionAtomica?.productos ?? null,
+      stock_faltantes: aprobacionAtomica?.faltantes ?? null,
       finanzas_atomicas: Boolean(entregaFinanzasAtomica?.finanzas_atomicas || esReversionEntregaAtomica),
       frontera_financiera: entregaFinanzasAtomica ? 'sql_atomic' : null,
       // Migración 264: contadores para el toast/UX de reversión consciente de devoluciones.
