@@ -379,6 +379,37 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
   const choferY = PAGE_H - 25 - CHOFER_H - 6
   const sloganY = choferY + CHOFER_H + 6
 
+  // ── Observación (nota de entrega) — en el hueco entre tabla y chofer ──
+  // Anclada por DEBAJO justo encima de la caja del chofer: chofer, eslogan y
+  // encabezado conservan sus coordenadas exactas. Sin notas no dibuja nada.
+  const obsTxt = (despacho.notas || '').trim()
+  const obsLineH = 4.5
+  const obsLabelH = 5
+  const obsTopLimit = y + 2
+  const obsAvailH = choferY - 2 - obsLabelH - obsTopLimit
+  if (obsTxt && obsAvailH >= obsLineH) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    let obsLines = doc.splitTextToSize(obsTxt, CONTENT_W - 4)
+    const maxObsLines = Math.floor(obsAvailH / obsLineH)
+    if (obsLines.length > maxObsLines) {
+      obsLines = obsLines.slice(0, maxObsLines)
+      obsLines[maxObsLines - 1] = obsLines[maxObsLines - 1].slice(0, -3).trimEnd() + '…'
+    }
+    const obsBlockH = obsLabelH + obsLines.length * obsLineH
+    const obsStartY = choferY - 2 - obsBlockH
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+    doc.text('OBSERVACIÓN:', MARGIN, obsStartY + 3.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...C_DARK)
+    obsLines.forEach((lin, i) => {
+      doc.text(lin, MARGIN, obsStartY + obsLabelH + i * obsLineH)
+    })
+  }
+
   // ── Caja de datos del chofer ──
   doc.setFillColor(240, 240, 240)
   doc.rect(MARGIN, choferY, CONTENT_W, 6, 'F')
