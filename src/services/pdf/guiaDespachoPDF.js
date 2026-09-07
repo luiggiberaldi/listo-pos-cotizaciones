@@ -384,7 +384,7 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
   // encabezado conservan sus coordenadas exactas. Sin notas no dibuja nada.
   const obsTxt = (despacho.notas || '').trim()
   const obsLineH = 4.5
-  const obsLabelH = 5
+  const obsLabelH = 8
   const obsTopLimit = y + 2
   const obsAvailH = choferY - 2 - obsLabelH - obsTopLimit
   if (obsTxt && obsAvailH >= obsLineH) {
@@ -401,7 +401,7 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(100, 100, 100)
-    doc.text('OBSERVACIÓN:', MARGIN, obsStartY + 3.5)
+    doc.text('OBSERVACIÓN:', MARGIN, obsStartY + 3)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)
