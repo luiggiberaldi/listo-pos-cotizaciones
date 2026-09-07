@@ -69,12 +69,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const editarDespacho = useEditarDespacho()
   const [showNotaModal, setShowNotaModal] = useState(false)
   const [nuevaNota, setNuevaNota] = useState('')
+  const [nuevoTituloNota, setNuevoTituloNota] = useState('nota')
 
   async function handleGuardarNota() {
     try {
       await editarDespacho.mutateAsync({
         despachoId: despacho.id,
-        notas: nuevaNota || null
+        notas: nuevaNota || null,
+        notasTitulo: (nuevoTituloNota.trim() || null)
       })
       setShowNotaModal(false)
     } catch (err) {
@@ -86,7 +88,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     try {
       await editarDespacho.mutateAsync({
         despachoId: despacho.id,
-        notas: null
+        notas: null,
+        notasTitulo: null
       })
       setShowNotaModal(false)
     } catch (err) {
@@ -859,6 +862,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         icon: MessageCircle,
         onClick: () => {
           setNuevaNota(despacho.notas || '')
+          setNuevoTituloNota(despacho.notas_titulo || 'nota')
           setShowNotaModal(true)
         },
         textColor: 'text-slate-700'
@@ -984,7 +988,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <span
               className={`inline-flex items-center gap-1 max-w-[150px] bg-yellow-100 text-yellow-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-yellow-300/70 shadow-sm uppercase tracking-wider leading-none ${puedeEditarNota ? 'cursor-pointer hover:bg-yellow-200' : 'select-none'}`}
               title={notaObsTexto}
-              onClick={puedeEditarNota ? () => { setNuevaNota(despacho.notas || ''); setShowNotaModal(true) } : undefined}
+              onClick={puedeEditarNota ? () => { setNuevaNota(despacho.notas || ''); setNuevoTituloNota(despacho.notas_titulo || 'nota'); setShowNotaModal(true) } : undefined}
             >
               <StickyNote size={10} className="shrink-0" />
               <span className="truncate">{notaObsPreview}</span>
@@ -1746,6 +1750,20 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         className="sm:max-w-md"
       >
         <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Título (etiqueta en la guía):
+            </p>
+            <input
+              value={nuevoTituloNota}
+              onChange={e => setNuevoTituloNota(e.target.value)}
+              placeholder="nota"
+              maxLength={40}
+              disabled={editarDespacho.isPending}
+              className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+            />
+          </div>
+
           <div className="space-y-2">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Observación / Nota interna:

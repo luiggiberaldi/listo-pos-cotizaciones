@@ -111,7 +111,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
           total_usd, flete_usd, corte_usd, descuento_total_usd,
           flete_neto_transportista_usd, flete_pct_aplicado, flete_pagado,
           flete_comisionable, flete_estado_destino_snapshot, flete_regla_aplicada,
-          direccion_envio_estado, direccion_envio_ciudad, direccion_envio_direccion, notas, forma_pago,
+          direccion_envio_estado, direccion_envio_ciudad, direccion_envio_direccion, notas, notas_titulo, forma_pago,
           referencia_pago, forma_pago_cliente,
           creado_en, actualizado_en, despachada_en, entregada_en, aprobado_por_nombre,
           cliente_id, cliente_factura_id, vendedor_id, transportista_id,
@@ -493,11 +493,11 @@ export function useEditarDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado }) => {
+    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado }) => {
       const res = await authFetch('/api/despachos/editar-pago', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado }),
+        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al editar despacho')

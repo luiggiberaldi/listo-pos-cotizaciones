@@ -401,7 +401,7 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(100, 100, 100)
-    doc.text('OBSERVACIÓN:', MARGIN, obsStartY + 3)
+    doc.text(((despacho.notas_titulo || 'nota') + ':').toUpperCase(), MARGIN, obsStartY + 3)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.setTextColor(...C_DARK)

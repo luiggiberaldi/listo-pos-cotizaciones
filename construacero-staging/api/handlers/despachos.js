@@ -489,7 +489,7 @@ export async function handleEditarPagoDespacho(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado } = body;
+  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado } = body;
   if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
     return jsonError('transportistaId inválido', 400, request);
   }
@@ -567,7 +567,8 @@ export async function handleEditarPagoDespacho(request, env) {
       clienteId === undefined && 
       direccionEnvioDireccion === undefined && 
       direccionEnvioCiudad === undefined && 
-      direccionEnvioEstado === undefined;
+      direccionEnvioEstado === undefined &&
+      notasTitulo === undefined;
 
     // Logística/admin puede editar transportista, flete y destino en despachos ya entregados
     // pero NO puede tocar campos financieros (forma de pago, corte) ni cliente ni dirección física
@@ -578,7 +579,7 @@ export async function handleEditarPagoDespacho(request, env) {
       corteUsd === undefined &&
       clienteId === undefined &&
       direccionEnvioDireccion === undefined &&
-      (transportistaId !== undefined || fleteUsd !== undefined || notas !== undefined);
+      (transportistaId !== undefined || fleteUsd !== undefined || notas !== undefined || notasTitulo !== undefined);
 
     if (!editandoSoloNotas && !editandoTransportista) {
       return jsonError('No se pueden editar despachos en estado entregado', 400, request);
@@ -590,7 +591,7 @@ export async function handleEditarPagoDespacho(request, env) {
     if (tieneCamposFinancierosRestringidos) {
       return jsonError('No se pueden editar datos financieros en un despacho aprobado', 400, request);
     }
-    if (transportistaId === undefined && fleteUsd === undefined && notas === undefined) {
+    if (transportistaId === undefined && fleteUsd === undefined && notas === undefined && notasTitulo === undefined) {
       return jsonError('No hay campos editables para este estado', 400, request);
     }
   }
@@ -616,6 +617,7 @@ export async function handleEditarPagoDespacho(request, env) {
     campos.total_usd = Number(despacho.total_usd) - fleteAnterior - corteAnterior + nuevoFlete + nuevoCorte;
   }
   if (notas !== undefined) campos.notas = notas || null;
+  if (notasTitulo !== undefined) campos.notas_titulo = notasTitulo || null;
   if (clienteId !== undefined && isValidUuid(clienteId)) {
     campos.cliente_id = clienteId;
     campos.cliente_factura_id = clienteId;
