@@ -900,7 +900,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         {/* Fila 1: ID y Kebab */}
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <p className="font-black text-white font-mono leading-none drop-shadow text-sm sm:text-base">{numDisplay}</p>
+            <p className="font-black text-white font-mono leading-none drop-shadow text-sm sm:text-base whitespace-nowrap">{numDisplay}</p>
             {tieneSeguimientoActivo && (
               <button
                 type="button"
@@ -940,22 +940,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                 CONTADO ✓
               </span>
             )}
-            {tienePrestamos && (
-              totalFinal <= 0.015 ? (
-                <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Todos los materiales son de préstamo">
-                  <Handshake size={10} /> Préstamo
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 bg-teal-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-teal-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Contiene artículos vendidos y artículos prestados">
-                  <Handshake size={10} /> Mixto
-                </span>
-              )
-            )}
-            {despacho.tiene_devoluciones && (
-              <span className="inline-flex items-center gap-1 bg-amber-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Este despacho tiene devoluciones parciales registradas">
-                Devolución
-              </span>
-            )}
           </div>
           {/* Kebab ⋮ — acciones secundarias */}
           {(moreActions.length > 0 || canAnular) && (
@@ -971,9 +955,25 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           )}
         </div>
 
-        {/* Fila 2: EstadoBadge */}
-        <div className="relative z-10 flex items-center">
+        {/* Fila 2: EstadoBadge + badges contextuales (Devolución, Préstamo/Mixto) */}
+        <div className="relative z-10 flex items-center flex-wrap gap-1.5">
           <EstadoBadge estado={despacho.estado} rol={rol} />
+          {tienePrestamos && (
+            totalFinal <= 0.015 ? (
+              <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Todos los materiales son de préstamo">
+                <Handshake size={10} /> Préstamo
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 bg-teal-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-teal-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Contiene artículos vendidos y artículos prestados">
+                <Handshake size={10} /> Mixto
+              </span>
+            )
+          )}
+          {despacho.tiene_devoluciones && (
+            <span className="inline-flex items-center gap-1 bg-amber-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Este despacho tiene devoluciones parciales registradas">
+              Devolución
+            </span>
+          )}
         </div>
       </div>
 
