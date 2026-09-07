@@ -300,6 +300,25 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
     } catch { formasDisplay = [{ metodo: registro.forma_pago, monto: null }] }
   }
 
+  // Clasificación CONTADO / CRÉDITO: crédito si hay Cobro a destino impago o
+  // Cta. por cobrar con monto > 0 (coherente con la tranca COD de comisiones).
+  let pendientePagoUsd = 0
+  let esCreditoLegacy = false
+  if (!esCot) {
+    if (Array.isArray(formasDisplay)) {
+      for (const f of formasDisplay) {
+        const m = Number(f.monto)
+        if (!m || m <= 0) continue
+        if (f.metodo === 'Cobro a destino' && !f.cobro_destino_pagado) pendientePagoUsd += m
+        else if (f.metodo === 'Cta por cobrar') pendientePagoUsd += m
+      }
+    }
+    if (typeof registro.forma_pago === 'string' && /credito|cta por cobrar/i.test(registro.forma_pago)) esCreditoLegacy = true
+  }
+  const esCreditoVenta = pendientePagoUsd > 0 || esCreditoLegacy
+  const esContadoVenta = !esCreditoVenta && Array.isArray(formasDisplay) && formasDisplay.length > 0 && Number(registro.total_usd || 0) > 0.015
+  const fmtMontoChip = (n) => '$' + Math.round(n).toLocaleString('es-VE')
+
   const tieneChofer = !esCot && registro.transportista?.nombre
   const tienePago = !esCot && (formasDisplay.length > 0 || registro.referencia_pago)
 
@@ -341,6 +360,16 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           <div className="mx-5 mt-3 rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-2">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <CreditCard size={11} /> Pago
+              {esCreditoVenta && (
+                <span className="ml-auto bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shadow-sm">
+                  CRÉDITO{pendientePagoUsd > 0 ? ' ' + fmtMontoChip(pendientePagoUsd) : ''}
+                </span>
+              )}
+              {esContadoVenta && (
+                <span className="ml-auto bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shadow-sm">
+                  CONTADO ✓
+                </span>
+              )}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {formasDisplay.map((fp, i) => {

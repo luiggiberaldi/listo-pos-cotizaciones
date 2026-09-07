@@ -385,6 +385,10 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   let isCodUnpaid = false
   let isCodPaid = false
   let metodosPagoList = []
+  let pendientePagoUsd = 0
+  let esCreditoLegacy = false
+  let tooltipPendiente = ''
+  const fmtMonto = (n) => '$' + Math.round(n).toLocaleString('es-VE')
   try {
     const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : (despacho.forma_pago || [])
     if (Array.isArray(fp)) {
@@ -417,11 +421,23 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           isCodPaid = true
         }
       }
+      for (const f of fp) {
+        const m = Number(f.monto)
+        if (!m || m <= 0) continue
+        if (f.metodo === 'Cobro a destino' && !f.cobro_destino_pagado) {
+          pendientePagoUsd += m
+          tooltipPendiente = (tooltipPendiente ? tooltipPendiente + ' · ' : '') + `Cobro a destino ${fmtMonto(m)} pendiente`
+        } else if (f.metodo === 'Cta por cobrar') {
+          pendientePagoUsd += m
+          tooltipPendiente = (tooltipPendiente ? tooltipPendiente + ' · ' : '') + `Cta. por cobrar ${fmtMonto(m)}${f.diasVencimiento > 0 ? ` (vence en ${f.diasVencimiento}d)` : ''}`
+        }
+      }
     } else if (typeof despacho.forma_pago === 'string' && despacho.forma_pago) {
       metodosPagoList = [despacho.forma_pago === 'Cta por cobrar' ? 'Cta. por cobrar' : despacho.forma_pago]
       if (despacho.forma_pago === 'Cta por cobrar') {
         isCtaPorCobrar = true
       }
+      if (/credito|cta por cobrar/i.test(despacho.forma_pago)) esCreditoLegacy = true
     }
   } catch (e) {
     if (typeof despacho.forma_pago === 'string' && despacho.forma_pago) {
@@ -429,8 +445,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       if (despacho.forma_pago === 'Cta por cobrar') {
         isCtaPorCobrar = true
       }
+      if (/credito|cta por cobrar/i.test(despacho.forma_pago)) esCreditoLegacy = true
     }
   }
+  const esCreditoVenta = pendientePagoUsd > 0 || esCreditoLegacy
+  const esContadoVenta = !esCreditoVenta && metodosPagoList.length > 0 && Number(despacho.total_usd || 0) > 0.015
   // Helper: fetch notas_despacho_items con fallback offline
   async function fetchItemsDespacho() {
     const res = await supabase
@@ -907,6 +926,18 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             {isCodPaid && (
               <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none">
                 COD ✓
+              </span>
+            )}
+            {esCreditoVenta && (
+              <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none"
+                title={tooltipPendiente || 'Venta a crédito'}>
+                CRÉDITO{pendientePagoUsd > 0 ? ` ${fmtMonto(pendientePagoUsd)}` : ''}
+              </span>
+            )}
+            {esContadoVenta && (
+              <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none"
+                title="Pago cobrado en su totalidad">
+                CONTADO ✓
               </span>
             )}
             {tienePrestamos && (
