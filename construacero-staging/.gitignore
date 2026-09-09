@@ -87,6 +87,7 @@ scripts/*
 !scripts/monitor-kardex-staging.mjs
 !scripts/test-consumo-credito-staging.mjs
 !scripts/detect-double-credit-cxc-staging.mjs
+!scripts/test-saldo-favor-272.mjs
 
 # Keep the regression test that protects the nightly E2E guards.
 !api/lib/__tests__/
