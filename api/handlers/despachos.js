@@ -1774,7 +1774,7 @@ export async function handleEditarItemsDespacho(request, env) {
             }
 
             // Sincronizar Abono Saldo a Favor
-            const existingAbono = dbMovimientos.find(m => m.tipo === 'abono' && m.forma_pago_abono === 'Saldo a favor');
+            const existingAbono = dbMovimientos.find(m => m.tipo === 'consumo_credito' || (m.tipo === 'abono' && m.forma_pago_abono === 'Saldo a favor'));
             if (existingAbono) {
               if (!targetAbono) {
                 // Si ya no existe, eliminamos el abono
@@ -1797,21 +1797,21 @@ export async function handleEditarItemsDespacho(request, env) {
             } else if (targetAbono) {
               // Si no existía pero ahora sí, lo creamos
               const saldoRes = await fetch(
-                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
+                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente,saldo_a_favor`,
                 { headers }
               );
               const [clienteSaldo] = await saldoRes.json();
-              const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-              const nuevoSaldo = Math.max(0, saldoActual - targetAbono.monto);
+              const saldoFavorActual = Number(clienteSaldo?.saldo_a_favor || 0);
+              const nuevoSaldoFavor = Math.max(0, saldoFavorActual - targetAbono.monto);
 
               await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
                 method: 'POST', headers,
                 body: JSON.stringify({
                   cliente_id: clienteCxCId,
                   despacho_id: despachoId,
-                  tipo: 'abono',
+                  tipo: 'consumo_credito',
                   monto_usd: targetAbono.monto,
-                  saldo_usd: nuevoSaldo,
+                  saldo_usd: nuevoSaldoFavor,
                   forma_pago_abono: 'Saldo a favor',
                   referencia: `Despacho #${cot ? cot.numero : despachoId}`,
                   descripcion: `Pago con Saldo a Favor (${targetAbono.origen.toUpperCase()}) (Creado en edición profunda)`,

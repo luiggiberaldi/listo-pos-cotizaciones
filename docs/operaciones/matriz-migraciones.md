@@ -31,6 +31,7 @@
 ## Migraciones y releases financieros / de seguridad (los de mayor riesgo)
 
 | Archivo / Release | Área | Producción | Staging | Rollback | Validación | Notas |
+| `274_staging_entrega_consumo_tipo_correcto.sql` | Staging | 2026-09-10 | Tipo correcto del consumo de saldo a favor en las 2 RPCs de entrega (`consumo_credito`, no `abono`) + saldo_usd desde el bolsillo de favor; repara COD incobrable (caso #3072 del principal). Arnés 28/28; E2E 123/123; 13 filas históricas retipadas (0 inconsistentes). Rollback: `274_rollback.sql`. |
 |---|---|---:|---:|---:|---|---|
 | `238a_contract_neutral_review.sql` + rollback | Contratos RPC (neutro) | ✅ | ✅ | ✅ Incluido | Dry-run + apply documentados en bitácora 2026-08-23 | Base de la cadena 238 |
 | `238b_comisiones_guardrails_review.sql` (v4, 5 args) | Comisiones (cálculo) | ✅ (vía release 07) | ✅ (257→260→266→267) | ✅ | E2E staging 123/123 ×2 (2026-09-05); recálculo en vivo despacho #2958 | Firma `(uuid) → uuid`; el delegador legacy `calcularcomisiondespacho` lo creó 257 |
