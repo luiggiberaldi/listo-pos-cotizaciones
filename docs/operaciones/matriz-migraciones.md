@@ -31,6 +31,7 @@
 ## Migraciones y releases financieros / de seguridad (los de mayor riesgo)
 
 | Archivo / Release | Área | Producción | Staging | Rollback | Validación | Notas |
+| `13_entrega_consumo_tipo_review.sql` (principal) | Principal | 2026-09-10 | Espejo del parche 274: `confirmar_entrega_finanzas_idempotente` inserta `consumo_credito` (no `abono`) con saldo del bolsillo de favor. Dry-run en staging + LCS (del=2/ins=5) + postflight ✓ + smoke 8/8. Reparación #3072 (deuda $2 cobrable, favor $2) y replay global 0 divergentes. Rollback: `13_rollback_review.sql`. |
 | `274_staging_entrega_consumo_tipo_correcto.sql` | Staging | 2026-09-10 | Tipo correcto del consumo de saldo a favor en las 2 RPCs de entrega (`consumo_credito`, no `abono`) + saldo_usd desde el bolsillo de favor; repara COD incobrable (caso #3072 del principal). Arnés 28/28; E2E 123/123; 13 filas históricas retipadas (0 inconsistentes). Rollback: `274_rollback.sql`. |
 |---|---|---:|---:|---:|---|---|
 | `238a_contract_neutral_review.sql` + rollback | Contratos RPC (neutro) | ✅ | ✅ | ✅ Incluido | Dry-run + apply documentados en bitácora 2026-08-23 | Base de la cadena 238 |
