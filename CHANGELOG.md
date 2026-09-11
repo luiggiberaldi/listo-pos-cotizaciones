@@ -6,6 +6,14 @@ Este archivo sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 
 ## [Unreleased]
 
+### Fix — Conciliación COD sin abono (caso #2185)
+
+- **FIX-A (UI):** `ConciliarCodModal` consulta el saldo fresco del cliente al abrir; si el COD supera el saldo, muestra banner con el caso y ofrece "Marcar como pagado (ya recibido)" en vez de chocar en bucle contra el guardarrail 400 de `/api/cxc/abono`.
+- **FIX-B (Worker):** `editar-pago` acepta `codSinAbono` y audita la acción dedicada `COD_CONCILIADO_SIN_ABONO` (roles admin/jefe/desarrollador vía el flujo existente).
+- **FIX-C (datos):** reparación del despacho #2185 (Angel Pineda) con script con guardas: flag `cobro_destino_pagado=true` con la evidencia de los 3 pagos de agosto en `metodos_pagados`, sin escrituras en CxC, saldo del cliente intacto ($2,188.74).
+- **Arnés:** `construacero-staging/scripts/test-cod-sin-abono-staging.mjs` (12 asserts, fixtures aislados, limpieza final): guardarrail vivo, happy path con comisión G-COD v4, idempotencia y 404.
+
+
 ### Fixed
 
 - **Release 13 al principal — cierre del caso #3072 (COD incobrable por tipo incorrecto)**: espejo del parche 274 sobre el dump vivo (confirmar_entrega_finanzas_idempotente: tipo `consumo_credito` + saldo del bolsillo de favor; guard 273 intacto). Método: preflight vivo==dump → apply 201 → postflight byte-idéntico ✓ → reparación de datos con guarda RETURNING==1 (la fila `abono` con forma de pago 'Saldo a favor' de #3072 retipada a `consumo_credito`; columnas recalculadas: deuda $2 cobrable, favor $2) → smoke 8/8 (incluye replay global 0 divergentes en los 867 clientes) → deploy del Worker (edición profunda ya alineada a staging, versión `d3acc2ae`, ping 200). Rollback en `13_rollback_review.sql`. Ambos entornos quedan alineados: el consumo de saldo a favor siempre es `consumo_credito`.

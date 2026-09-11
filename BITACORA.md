@@ -160,6 +160,18 @@
 
 ---
 
+
+### 2026-09-11 — Fix conciliación COD sin abono (#2185 Angel Pineda) + arnés 12/12
+
+- **Diagnóstico:** el COD de #2185 ($3,135.96) se cobró en agosto con 3 abonos a nivel de cuenta (`despacho_id=NULL`); el flag `cobro_destino_pagado` nunca volteó y el modal ConciliarCodModal intentaba abonar de nuevo → guardarrail 400 en bucle (COD > saldo actual del cliente, que ya era deuda de #3064).
+- **FIX-A:** el modal ahora consulta el saldo fresco (`clientes.saldo_pendiente`) al abrir; si COD > saldo, banner + botón "Marcar como pagado (ya recibido)" que solo voltea el flag con `codSinAbono: true`.
+- **FIX-B:** worker `editar-pago` acepta `codSinAbono` y audita `COD_CONCILIADO_SIN_ABONO` con la evidencia en `meta`.
+- **FIX-C:** reparación de #2185 vía Postgres con 7 guardas + dry-run + backup byte-idéntico del JSON previo (`tmp/r13/repair-2185-previo.json`); CxC sin tocar; saldo del cliente verificado intacto ($2,188.74).
+- **Comisión:** la fila legacy de #2185 ($126.78, pre-tranca, creada 05-ago) se dejó intacta — el delegador vivo no la recalculó porque su política conserva la fila existente. Decisión: revisar en auditoría de comisiones legacy; no forma parte de este fix.
+- **Arnés:** `test-cod-sin-abono-staging.mjs` 12/12 en verde contra staging (guardarrail 400, happy path con comisión 2% por G-COD v4, idempotencia sin duplicar, 404 despacho inexistente). Limpieza de fixtures verificada sin residuos.
+- **Paridad:** modal byte-idéntico en ambos árboles (diff vacío); worker con los 3 hunks FIX-B presentes en ambos.
+- **Commits:** locales, sin push (regla de colaboración).
+
 ### 2026-09-11 — Regla de fechas en comisiones (tranca COD) + fix columna FECHA + regla de colaboración (no-push)
 
 - ✅ **Regla documentada — fechas de una comisión (tranca COD v4)**: con `comision_cod_solo_pagado=true` una comisión puede nacer días después de su despacho. **La fecha que define el corte semanal y la que se muestra en la tabla "Comisiones generadas" es la fecha del DESPACHO** (`despacho.creado_en`, política 182), nunca la de creación de la fila. Caso disparador: #3099 (despacho 10-sep 16:11 VE, comisión $34.56 creada 11-sep 14:23 al conciliar el COD) — pertenecía al corte 04→10/09 y la tabla lo pintaba "11-sept." Detalle normativo en `docs/decisiones/ADR-004-finanzas-devoluciones-y-reembolsos.md`.
