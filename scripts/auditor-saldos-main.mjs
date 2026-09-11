@@ -1,14 +1,23 @@
 import fs from 'node:fs'
 
-// ─── Auditor nocturno de saldos — PRINCIPAL (SOLO LECTURA) ───────────────────
-// Regla: el ledger (cuentas_por_cobrar) es la fuente de verdad. Las columnas
-// saldo_pendiente / saldo_a_favor de clientes deben coincidir con el replay
-// canónico del ledger (fórmula validada en release 12, incluye consumo_credito).
+// ─── Auditor nocturno — PRINCIPAL (SOLO LECTURA) ─────────────────────────────
+// SECCIÓN 1: saldos de clientes (replay del ledger vs columnas).
+// SECCIÓN 2: integridad del ledger de comisiones vs despachos entregados.
+//
+// Regla sección 1: el ledger (cuentas_por_cobrar) es la fuente de verdad. Las
+// columnas saldo_pendiente / saldo_a_favor de clientes deben coincidir con el
+// replay canónico del ledger (fórmula validada en release 12, incluye consumo_credito).
+//
+// Regla sección 2: la fila de comisiones tiene invariantes internas de dinero
+// (hard fail) y la cobertura de despachos entregados comisionables se vigila
+// como warning (reporta, no tumba el run — hay flujos históricos/manuales que
+// no generan fila y el historial no se repara masivamente).
 //
 // Guardarraíles:
 //  - SOLO SELECT: nunca UPDATE/INSERT/DELETE (riesgo cero para producción).
 //  - Guardia de proyecto: se niega a correr contra otro ref que no sea el principal.
-//  - Exit 1 si hay divergencias → GitHub envía correo + dispara el webhook de alerta.
+//  - Exit 1 si hay divergencias de saldo O invariantes de comisiones rotas →
+//    GitHub envía correo + dispara el webhook de alerta.
 //  - La reparación NO es automática: tras revisar el reporte se usa el script
 //    de reparación con guardas (mismo flujo deliberado del release 12).
 //
@@ -53,6 +62,59 @@ async function q(sql) {
   return JSON.parse(t)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECCIÓN 2: SQL de integridad de comisiones.
+//   C1–C5: invariantes de dinero dentro de la fila (hard fail).
+//   W1–W2: huecos de cobertura (warning, no tumban el run).
+// W1 usa el helper VIVO comision_238b_cod_pendiente (release 09) para no
+// duplicar la regla COD — paridad exacta con la RPC de comisiones. Ventana de
+// 30 días mantiene el reporte accionable; lo viejo es histórico.
+const VENTANA_DIAS = 30
+
+const SQL_COMISIONES = `
+-- C1: identidad básica total = cabilla + otros
+SELECT 'C1_identidad' AS check_id, COUNT(*)::int AS n,
+  COALESCE(jsonb_agg(jsonb_build_object('id', id, 'total', totalcomision, 'cab', comisioncabilla, 'otr', comisionotros) ORDER BY id), '[]'::jsonb) AS detalle
+FROM public.comisiones WHERE ROUND(comisioncabilla+comisionotros,2) <> ROUND(totalcomision,2)
+UNION ALL
+-- C2: liberación proporcional rota (lib+ret != total, incluye lib>total)
+SELECT 'C2_liberacion', COUNT(*)::int,
+  COALESCE(jsonb_agg(jsonb_build_object('id', id, 'total', totalcomision, 'lib', comision_liberada, 'ret', comision_retenida) ORDER BY id), '[]'::jsonb)
+FROM public.comisiones WHERE ROUND(comision_liberada+comision_retenida,2) <> ROUND(totalcomision,2)
+UNION ALL
+-- C3: duplicados (despacho, vendedor)
+SELECT 'C3_duplicados', COUNT(*)::int, '[]'::jsonb
+FROM (SELECT despachoid, vendedorid FROM public.comisiones GROUP BY 1,2 HAVING COUNT(*)>1) d
+UNION ALL
+-- C4: pagos imposibles (negativo o mayor al total)
+SELECT 'C4_pagos_imposibles', COUNT(*)::int,
+  COALESCE(jsonb_agg(jsonb_build_object('id', id, 'total', totalcomision, 'pagado', montopagado, 'estado', estado) ORDER BY id), '[]'::jsonb)
+FROM public.comisiones WHERE montopagado < 0 OR montopagado > totalcomision
+UNION ALL
+-- C5: huérfanas (despacho no existe)
+SELECT 'C5_huerfanas', COUNT(*)::int, '[]'::jsonb
+FROM public.comisiones c WHERE NOT EXISTS (SELECT 1 FROM public.notas_despacho d WHERE d.id = c.despachoid)
+UNION ALL
+-- W1: entregados comisionables sin fila (ventana 30d).
+--   Excluye: vendedor_sin_comision (regla 136) y COD pendiente (helper vivo).
+SELECT 'W1_huecos_entregados', COUNT(*)::int,
+  COALESCE(jsonb_agg(jsonb_build_object('numero', d.numero, 'fecha', d.creado_en::date, 'vendedor', u.nombre, 'total', d.total_usd) ORDER BY d.creado_en DESC), '[]'::jsonb)
+FROM public.notas_despacho d
+JOIN public.usuarios u ON u.id = d.vendedor_id
+WHERE d.estado = 'entregada'
+  AND d.entregada_en > now() - interval '${VENTANA_DIAS} days'
+  AND u.rol <> 'vendedor_sin_comision'
+  AND NOT EXISTS (SELECT 1 FROM public.comisiones c WHERE c.despachoid = d.id)
+  AND NOT public.comision_238b_cod_pendiente(d.forma_pago_cliente, d.forma_pago)
+UNION ALL
+-- W2: anuladas con comisión viva (pendiente/cta_cobrar)
+SELECT 'W2_anuladas_con_comision', COUNT(*)::int,
+  COALESCE(jsonb_agg(jsonb_build_object('id', c.id, 'numero', d.numero, 'estado', c.estado, 'total', c.totalcomision) ORDER BY d.numero), '[]'::jsonb)
+FROM public.comisiones c
+JOIN public.notas_despacho d ON d.id = c.despachoid
+WHERE d.estado = 'anulada' AND c.estado IN ('pendiente','cta_cobrar')
+`
+
 // Replay canónico (idéntico al validado en release 12) + deltas por cliente.
 // COUNT(*) OVER() trae el total real aunque LIMIT recorte la lista mostrada.
 const SQL = `
@@ -76,18 +138,21 @@ ORDER BY GREATEST(ABS(GREATEST(0, ROUND(cl.saldo_pendiente::numeric,4)) - COALES
                   ABS(GREATEST(0, ROUND(cl.saldo_a_favor::numeric,4)) - COALESCE(r.favor_ok,0))) DESC
 LIMIT 50`
 
+const fmt = (n) => Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// ─── Ejecución ───────────────────────────────────────────────────────────────
 const started = Date.now()
-const rows = await q(SQL)
-const total = rows.length > 0 ? Number(rows[0].total) : 0
+const [rows, comRows] = await Promise.all([q(SQL), q(SQL_COMISIONES)])
 const secs = ((Date.now() - started) / 1000).toFixed(1)
 
-console.log(`Auditor de saldos — principal (${ref})`)
-console.log(`Replay del ledger completado en ${secs}s`)
-console.log(total === 0
-  ? '✅ CONSISTENTE: 0 clientes divergentes — columnas == ledger en toda la base.'
-  : `❌ DIVERGENCIAS: ${total} cliente(s) con columnas != ledger.`)
+console.log(`Auditor de saldos y comisiones — principal (${ref})`)
+console.log(`Replay completado en ${secs}s (solo lectura)`)
 
-const fmt = (n) => Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// ─── Sección 1: saldos ───────────────────────────────────────────────────────
+const total = rows.length > 0 ? Number(rows[0].total) : 0
+console.log(total === 0
+  ? '✅ SALDOS: 0 clientes divergentes — columnas == ledger en toda la base.'
+  : `❌ SALDOS: ${total} cliente(s) con columnas != ledger.`)
 
 if (total > 0) {
   console.log('')
@@ -96,17 +161,54 @@ if (total > 0) {
     console.log(`  ${r.nombre}: ${fmt(r.deuda_col)}/${fmt(r.deuda_ok)} (Δ ${fmt(r.deuda_delta)}) · ${fmt(r.favor_col)}/${fmt(r.favor_ok)} (Δ ${fmt(r.favor_delta)})`)
   }
   if (total > rows.length) console.log(`  … y ${total - rows.length} más (mostrando top ${rows.length} por magnitud).`)
-  console.log('\nAcción deliberada: revisar el reporte y reparar con el script con guardas (NO auto-reparar).')
 }
 
-// Resumen en GitHub Actions (visible en la pestaña Summary del run)
+// ─── Sección 2: comisiones ───────────────────────────────────────────────────
+// Hard fails: C1–C5 (corrupción de dinero). Warnings: W1–W2 (cobertura).
+const HARD = new Set(['C1_identidad', 'C2_liberacion', 'C3_duplicados', 'C4_pagos_imposibles', 'C5_huerfanas'])
+const hardFails = comRows.filter(r => HARD.has(r.check_id) && Number(r.n) > 0)
+const warnings = comRows.filter(r => !HARD.has(r.check_id) && Number(r.n) > 0)
+
+console.log('')
+if (comRows.length === 0) {
+  console.log('⚠️ COMISIONES: sin resultados (¿existe la tabla?)')
+  hardFails.push({ check_id: 'sin_resultados', n: 1, detalle: [] })
+} else if (hardFails.length === 0 && warnings.length === 0) {
+  console.log(`✅ COMISIONES: invariantes íntegros y 0 huecos en entregados de los últimos ${VENTANA_DIAS} días.`)
+} else {
+  if (hardFails.length === 0) {
+    console.log(`✅ COMISIONES: invariantes íntegros (identidad, liberación, duplicados, pagos, huérfanas).`)
+  }
+  for (const r of hardFails) {
+    console.log(`❌ COMISIONES ${r.check_id}: ${r.n} fila(s) con invariantes de dinero rotas.`)
+    for (const d of (r.detalle || []).slice(0, 10)) console.log(`   ${JSON.stringify(d)}`)
+    if ((r.detalle || []).length > 10) console.log(`   … y ${r.detalle.length - 10} más.`)
+  }
+  for (const r of warnings) {
+    const etiqueta = r.check_id === 'W1_huecos_entregados'
+      ? `entregados comisionables SIN fila de comisión (últimos ${VENTANA_DIAS} días, excluye sin_comision y COD pendiente)`
+      : 'despachos ANULADOS con comisión viva (pendiente/cta_cobrar)'
+    console.log(`⚠️ COMISIONES ${r.check_id}: ${r.n} caso(s) — ${etiqueta}.`)
+    for (const d of (r.detalle || []).slice(0, 15)) console.log(`   ${JSON.stringify(d)}`)
+    if ((r.detalle || []).length > 15) console.log(`   … y ${r.detalle.length - 15} más.`)
+  }
+  console.log('\nAcción deliberada: revisar el reporte y reparar con script con guardas (NO auto-reparar).')
+}
+
+// ─── Resumen en GitHub Actions (pestaña Summary del run) ─────────────────────
 if (process.env.GITHUB_STEP_SUMMARY) {
-  const lines = ['## Auditor de saldos — principal', '',
+  const lines = ['## Auditor de saldos y comisiones — principal', '',
     `- Proyecto: \`${ref}\``,
     `- Replay: ${secs}s · Solo lectura`,
     total === 0
-      ? '- Resultado: ✅ **0 clientes divergentes**'
-      : `- Resultado: ❌ **${total} cliente(s) divergente(s)**`, '']
+      ? '- Saldos: ✅ **0 clientes divergentes**'
+      : `- Saldos: ❌ **${total} cliente(s) divergente(s)**`,
+    hardFails.length === 0
+      ? '- Comisiones (invariantes): ✅ íntegras'
+      : `- Comisiones (invariantes): ❌ ${hardFails.map(r => `${r.check_id}=${r.n}`).join(', ')}`,
+    warnings.length === 0
+      ? `- Comisiones (cobertura ${VENTANA_DIAS}d): ✅ sin huecos`
+      : `- Comisiones (cobertura ${VENTANA_DIAS}d): ⚠️ ${warnings.map(r => `${r.check_id}=${r.n}`).join(', ')}`, '']
   if (total > 0) {
     lines.push('| Cliente | Deuda col | Deuda ledger | Δ | Favor col | Favor ledger | Δ |',
       '|---|---|---|---|---|---|---|')
@@ -114,9 +216,26 @@ if (process.env.GITHUB_STEP_SUMMARY) {
       lines.push(`| ${r.nombre} | ${fmt(r.deuda_col)} | ${fmt(r.deuda_ok)} | ${fmt(r.deuda_delta)} | ${fmt(r.favor_col)} | ${fmt(r.favor_ok)} | ${fmt(r.favor_delta)} |`)
     }
     if (total > rows.length) lines.push('', `_… y ${total - rows.length} más (top ${rows.length} por magnitud)._`)
+  }
+  for (const r of [...hardFails, ...warnings]) {
+    lines.push('', `### ${r.check_id} (${r.n})`, '',
+      '| detalle |', '|---|')
+    for (const d of (r.detalle || []).slice(0, 20)) lines.push(`| \`${JSON.stringify(d)}\` |`)
+  }
+  if (hardFails.length > 0 || warnings.length > 0 || total > 0) {
     lines.push('', '**Acción:** reparación deliberada con script con guardas tras revisar el reporte.')
   }
   fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n')
 }
 
-process.exit(total > 0 ? 1 : 0)
+// Exit: hard fails de comisiones o divergencias de saldo tumban el run (correo +
+// webhook). Warnings solo se reportan.
+const exitCode = (total > 0 || hardFails.length > 0) ? 1 : 0
+if (exitCode === 1) {
+  console.log('\n❌ Resultado: FALLO (saldos divergentes o invariantes de comisiones rotos).')
+} else if (warnings.length > 0) {
+  console.log('\n⚠️ Resultado: OK con advertencias (revisar reporte).')
+} else {
+  console.log('\n✅ Resultado: todo consistente.')
+}
+process.exit(exitCode)
