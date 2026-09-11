@@ -96,16 +96,26 @@ SELECT 'C5_huerfanas', COUNT(*)::int, '[]'::jsonb
 FROM public.comisiones c WHERE NOT EXISTS (SELECT 1 FROM public.notas_despacho d WHERE d.id = c.despachoid)
 UNION ALL
 -- W1: entregados comisionables sin fila (ventana 30d).
---   Excluye: vendedor_sin_comision (regla 136) y COD pendiente (helper vivo).
+--   Espejo EXACTO de las exclusiones by-design verificadas por auditoría (2026-09-11):
+--   1) venta del card: rol <> vendedor_sin_comision (regla 136)
+--   2) dueño del cliente NO comisionable (regla RPC 238b): jefe/admin/logistica/
+--      administracion/desarrollador, o vendedor_sin_comision interno sin markup
+--   3) COD pendiente (helper vivo, release 09)
+--   4) donación en cualquier método (política del Worker: pagoEsDonacion)
 SELECT 'W1_huecos_entregados', COUNT(*)::int,
   COALESCE(jsonb_agg(jsonb_build_object('numero', d.numero, 'fecha', d.creado_en::date, 'vendedor', u.nombre, 'total', d.total_usd) ORDER BY d.creado_en DESC), '[]'::jsonb)
 FROM public.notas_despacho d
 JOIN public.usuarios u ON u.id = d.vendedor_id
+LEFT JOIN public.clientes cl ON cl.id = d.cliente_id
+LEFT JOIN public.usuarios du ON du.id = cl.vendedor_id
 WHERE d.estado = 'entregada'
   AND d.entregada_en > now() - interval '${VENTANA_DIAS} days'
   AND u.rol <> 'vendedor_sin_comision'
   AND NOT EXISTS (SELECT 1 FROM public.comisiones c WHERE c.despachoid = d.id)
   AND NOT public.comision_238b_cod_pendiente(d.forma_pago_cliente, d.forma_pago)
+  AND NOT COALESCE(du.rol, '') IN ('admin','jefe','logistica','administracion','desarrollador')
+  AND NOT (COALESCE(du.rol, '') = 'vendedor_sin_comision' AND NOT COALESCE(du.es_externo, FALSE) AND COALESCE(du.markup_pct, 0) <= 0)
+  AND NOT (d.forma_pago_cliente::text ILIKE '%donaci%' OR d.forma_pago::text ILIKE '%donaci%')
 UNION ALL
 -- W2: anuladas con comisión viva (pendiente/cta_cobrar)
 SELECT 'W2_anuladas_con_comision', COUNT(*)::int,
