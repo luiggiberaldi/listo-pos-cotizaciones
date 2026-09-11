@@ -321,7 +321,7 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
                         className="border-b border-slate-50 transition-colors duration-150 hover:bg-slate-50/50"
                       >
                         <td className="px-2 sm:px-4 py-2 sm:py-2.5">
-                          <span className="font-bold text-slate-700">{new Date(d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}</span>
+                          <span className="font-bold text-slate-700">{new Date(d.despacho?.creado_en || d.creadoen).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}</span>
                         </td>
                         <td className="px-2 sm:px-4 py-2 sm:py-2.5">
                           <div className="flex flex-col">
