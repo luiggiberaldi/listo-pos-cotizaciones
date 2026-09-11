@@ -69,10 +69,16 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
             .then(async clients => {
               const clientIds = clients.map(c => c.id).filter(Boolean)
               if (clientIds.length === 0) return []
-              const despRes = await supabase.from('notas_despacho')
-                .select('id')
-                .or(`cliente_id.in.(${clientIds.join(',')}),cliente_factura_id.in.(${clientIds.join(',')})`)
-              return despRes.data?.map(d => d.id) || []
+              // Troceado en lotes de 50 (mismo patrón que los despachos abajo):
+              // una URL con cientos de clientes x2 columnas muere con ERR_FAILED.
+              const cliChunks = chunkIds(clientIds, 50)
+              const cliDespRes = await Promise.all(cliChunks.map(chunk =>
+                supabase.from('notas_despacho')
+                  .select('id')
+                  .or(`cliente_id.in.(${chunk.join(',')}),cliente_factura_id.in.(${chunk.join(',')})`)
+              ))
+              const cliIds = cliDespRes.flatMap(r => r.error ? [] : (r.data || []).map(d => d.id))
+              return [...new Set(cliIds)]
             })
             .catch(err => {
               console.error('Error fetching clients in search:', err)
