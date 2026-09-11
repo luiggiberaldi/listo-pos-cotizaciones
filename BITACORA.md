@@ -10,6 +10,10 @@
 - 🔄 En progreso
 - 🗃️ Histórico/reemplazado (la decisión o el fix fue sustituido por otro posterior; ver enlace)
 
+## Reglas de colaboración (obligatorias)
+
+- **NO se hace `git push` sin que el propietario lo pida explícitamente.** Los commits locales se hacen cuando corresponde, pero el push a `main` (que dispara deploy automático a producción por Vercel y GitHub Actions) es una decisión del propietario. Aplica a agentes IA y humanos por igual. Establecido por el propietario el 2026-09-11.
+
 ## Estado vigente resumido
 
 - Release estable: **v1.0.4** (2026-09-05) — split de sábados v3.1, TZ Caracas, batching de comisiones. Certificados de release: `CHANGELOG.md`.
@@ -155,6 +159,16 @@
 - [2026-09-05 — Split de sábados v3 ("designado del día") portado y aplicado al PRINCIPAL (toggle OFF)](#2026-09-05--split-de-sábados-v3-designado-del-día-portado-y-aplicado-al-principal-toggle-off)
 
 ---
+
+### 2026-09-11 — Regla de fechas en comisiones (tranca COD) + fix columna FECHA + regla de colaboración (no-push)
+
+- ✅ **Regla documentada — fechas de una comisión (tranca COD v4)**: con `comision_cod_solo_pagado=true` una comisión puede nacer días después de su despacho. **La fecha que define el corte semanal y la que se muestra en la tabla "Comisiones generadas" es la fecha del DESPACHO** (`despacho.creado_en`, política 182), nunca la de creación de la fila. Caso disparador: #3099 (despacho 10-sep 16:11 VE, comisión $34.56 creada 11-sep 14:23 al conciliar el COD) — pertenecía al corte 04→10/09 y la tabla lo pintaba "11-sept." Detalle normativo en `docs/decisiones/ADR-004-finanzas-devoluciones-y-reembolsos.md`.
+- ✅ **Fix UI**: `ModalDetalleVendedor.jsx` (main + staging) — la columna FECHA usa `d.despacho?.creado_en || d.creadoen` (commit `845916c`).
+- ✅ **Auditoría #3098/#3099**: ambas correctas. #3098 sin comisión porque su COD de $278.80 está pendiente (tranca COD v4, todo-o-nada); nacerá al conciliar. #3099 con $34.56 = 2% exacto.
+- ✅ **Auditoría W1 del auditor nocturno**: los 24 "huecos" eran exclusiones legítimas (19 dueño del cliente EMPRESA `vendedor_sin_comision` sin markup — regla de la RPC 238b; 4 donación en el pago — política del Worker; 1 dueño jefe). W1 parcheado con el espejo de las reglas vivas: 24 → 0 falsos positivos (commit `aca122e`).
+- ⚠️ **Regla de colaboración establecida por el propietario**: NO hacer `git push` sin pedido explícito (ver "Reglas de colaboración" arriba). El push de `845916c` fue hecho sin pedido — no repetirlo.
+- Hallazgos reales del auditor aún abiertos: C2 despacho 2121 (`liberada $5.27 > total $4.33`) y W2 despacho 1898 (anulado con comisión viva $170.64) — pendientes de reparación deliberada con guardas.
+
 
 ## Versión 1.0.4 (Estable) — 2026-09-05
 
