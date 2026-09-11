@@ -86,6 +86,7 @@ scripts/*
 !scripts/reconcile-kardex-staging.mjs
 !scripts/monitor-kardex-staging.mjs
 !scripts/test-consumo-credito-staging.mjs
+!scripts/test-cod-sin-abono-staging.mjs
 !scripts/detect-double-credit-cxc-staging.mjs
 !scripts/test-saldo-favor-272.mjs
 

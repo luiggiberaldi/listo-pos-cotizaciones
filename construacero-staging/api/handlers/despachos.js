@@ -489,7 +489,7 @@ export async function handleEditarPagoDespacho(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado } = body;
+  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, codSinAbono } = body;
   if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
     return jsonError('transportistaId inválido', 400, request);
   }
@@ -725,11 +725,13 @@ export async function handleEditarPagoDespacho(request, env) {
       usuarioNombre: operador.nombre,
       usuarioRol: operador.rol,
       categoria: 'COTIZACION',
-      accion: 'EDITAR_PAGO_DESPACHO',
-      descripcion: `Despacho ${despachoId.slice(0,8)} editado (pago/transportista/notas)`,
+      accion: codSinAbono ? 'COD_CONCILIADO_SIN_ABONO' : 'EDITAR_PAGO_DESPACHO',
+      descripcion: codSinAbono
+        ? `Despacho ${despachoId.slice(0,8)}: COD marcado pagado sin abono (pago recibido fuera del sistema)`
+        : `Despacho ${despachoId.slice(0,8)} editado (pago/transportista/notas)`,
       entidadTipo: 'despacho',
       entidadId: despachoId,
-      meta: campos,
+      meta: codSinAbono ? { ...campos, codSinAbono: true } : campos,
       ip: request.headers.get('CF-Connecting-IP') || null,
     });
   } catch {

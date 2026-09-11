@@ -7,6 +7,7 @@ import { showToast } from '../ui/Toast'
 import { FORMAS_PAGO } from '../../constants/formasPago'
 import { authFetch } from '../../services/authFetch'
 import { useQueryClient } from '@tanstack/react-query'
+import supabase from '../../services/supabase/client'
 
 export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
   const qc = useQueryClient()
@@ -16,6 +17,8 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
   const [codMethod, setCodMethod] = useState(null)
   const [formasPagoOriginales, setFormasPagoOriginales] = useState([])
   const [hasPropuesto, setHasPropuesto] = useState(false)
+  const [saldoCliente, setSaldoCliente] = useState(null)
+  const [marcandoSinAbono, setMarcandoSinAbono] = useState(false)
 
   // Parse methods on load
   useEffect(() => {
@@ -50,6 +53,19 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
       setHasPropuesto(false)
       setPayments([])
     }
+
+    // Saldo fresco del cliente (nunca caché): base para detectar el caso
+    // "COD ya pagado fuera del sistema" sin chocar contra el guardarrail 400.
+    async function fetchSaldo() {
+      if (!despacho?.cliente_id) { setSaldoCliente(null); return }
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('saldo_pendiente')
+        .eq('id', despacho.cliente_id)
+        .single()
+      setSaldoCliente(error ? null : Number(data?.saldo_pendiente || 0))
+    }
+    fetchSaldo()
   }, [despacho, isOpen])
 
   if (!isOpen || !despacho || !codMethod) return null
@@ -62,6 +78,7 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
   const totalReconciled = payments.reduce((sum, p) => sum + (Number(p.monto) || 0), 0)
   const difference = totalReconciled - totalCod
   const isSquare = Math.abs(difference) < 0.02
+  const codExcedeSaldo = saldoCliente !== null && totalCod > saldoCliente + 0.02
 
   const allowedMethods = FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar' && m !== 'Donación')
 
@@ -82,6 +99,50 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
 
   function setReferenciaForma(metodo, referencia) {
     setPayments(prev => prev.map(p => p.metodo === metodo ? { ...p, referencia } : p))
+  }
+
+  // FIX-A: camino "el dinero ya fue recibido fuera del sistema" (caso #2185).
+  // Solo expone el flag; NO registra abonos (el guardarrail de /api/cxc/abono
+  // rechazaría cobrar dos veces lo ya cobrado). El worker voltea el flag,
+  // dispara la comisión vía G-COD v4 y audita COD_CONCILIADO_SIN_ABONO.
+  async function handleConfirmarSinAbono() {
+    setMarcandoSinAbono(true)
+    try {
+      const updatedFormasPago = formasPagoOriginales.map(f => {
+        if (f.metodo === 'Cobro a destino') {
+          return {
+            ...f,
+            cobro_destino_pagado: true,
+            metodos_pagados: payments,
+            conciliado_sin_abono: true
+          }
+        }
+        return f
+      })
+      const res = await authFetch('/api/despachos/editar-pago', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          despachoId: despacho.id,
+          formaPago: JSON.stringify(updatedFormasPago),
+          formaPagoCliente: JSON.stringify(updatedFormasPago),
+          codSinAbono: true
+        })
+      })
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Error al marcar el COD como pagado')
+      }
+      showToast('COD marcado como pagado (sin abono: pago ya recibido)', 'success')
+      qc.invalidateQueries({ queryKey: ['despachos'] })
+      qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
+      qc.invalidateQueries({ queryKey: ['clientes'] })
+      onClose()
+    } catch (err) {
+      showToast(err.message || 'Error al marcar el COD como pagado', 'error')
+    } finally {
+      setMarcandoSinAbono(false)
+    }
   }
 
   async function handleConfirm() {
@@ -163,6 +224,34 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
             </p>
           </div>
         </div>
+
+        {/* FIX-A: caso COD > saldo del cliente */}
+        {codExcedeSaldo && (
+          <div className="flex gap-2.5 items-start bg-amber-50/70 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40 text-amber-900 dark:text-amber-300 text-xs transition-all">
+            <span className="text-base leading-none mt-0.5">⚠️</span>
+            <div className="flex-1">
+              <p className="font-bold text-amber-950 dark:text-amber-200">
+                El COD (${totalCod.toFixed(2)}) supera el saldo del cliente (${(saldoCliente ?? 0).toFixed(2)})
+              </p>
+              <p className="mt-0.5 leading-relaxed">
+                Si el cliente ya pagó este COD por otra vía (efectivo, transferencia previa, etc.), márcalo como pagado sin registrar un abono nuevo.
+              </p>
+              <button
+                type="button"
+                onClick={handleConfirmarSinAbono}
+                disabled={marcandoSinAbono}
+                className="mt-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                {marcandoSinAbono ? 'Marcando…' : 'Marcar como pagado (ya recibido)'}
+              </button>
+            </div>
+          </div>
+        )}
+        {!codExcedeSaldo && saldoCliente !== null && (
+          <p className="text-[11px] text-slate-400 -mt-1">
+            Saldo del cliente: ${saldoCliente.toFixed(2)}
+          </p>
+        )}
 
         {/* Banner Intento Previo */}
         {hasPropuesto && (
