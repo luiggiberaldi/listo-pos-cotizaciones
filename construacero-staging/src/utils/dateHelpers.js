@@ -39,6 +39,20 @@ export function getWeekRange(offset = 0) {
 }
 
 /**
+ * Sábado en formato ISO local: hoy si es sábado, o el próximo (offset semanas).
+ * TZ-local seguro (no usa toISOString → no sufre el salto UTC de las noches VE).
+ * @param {number} offset 0 = sábado actual/próximo, 1 = el siguiente, etc.
+ */
+export function getSabadoActualOFuturo(offset = 0) {
+    const now = new Date();
+    const day = now.getDay(); // 0=dom ... 6=sab
+    const dias = day === 6 ? 0 : (6 - day + 7) % 7;
+    const d = new Date(now);
+    d.setDate(now.getDate() + dias + offset * 7);
+    return getLocalISODate(d);
+}
+
+/**
  * Rango de un solo día: el sábado más reciente (hoy si es sábado).
  * Alineado con la regla de comisión por cliente ajeno (aplica los sábados).
  * @param {number} offset 0 = último sábado, -1 = sábado anterior, etc.

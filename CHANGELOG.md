@@ -6,6 +6,13 @@ Este archivo sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 
 ## [Unreleased]
 
+### Fix — Split de comisiones de sábados (incidente 12-sep)
+
+- **Repair de datos (principal):** 3 filas de comisión del sábado 2026-09-12 (#3137, #3138, #3142) recalculadas bajo la regla v3.1: dueño al 1.5% ($0.21/$0.51/$0.25) + fila nueva del designado Edgar Ramírez al 0.5% ($0.07/$0.17/$0.08). Causa: designación guardada el 11-sep apuntó al 19-sep (bug UTC del default del panel). Auditoría `COMISION_SPLIT_REPAIR` + backup `tmp/r14/sabado-12sep-backup.json`.
+- **UI (ambos árboles):** `PanelDesignacion` usa nuevo helper `getSabadoActualOFuturo()` (TZ-local, sin salto `toISOString`) + confirmación previa al guardar con la fecha legible del sábado objetivo. Regresión cubierta por `sabadoHelper.test.js` (5 tests).
+- **Auditor:** nueva verificación nocturna W3 — sábado con ventas entregadas comisionables pero sin designación → alerta (warning-only).
+
+
 ### Fix — Conciliación COD sin abono (caso #2185)
 
 - **FIX-A (UI):** `ConciliarCodModal` consulta el saldo fresco del cliente al abrir; si el COD supera el saldo, muestra banner con el caso y ofrece "Marcar como pagado (ya recibido)" en vez de chocar en bucle contra el guardarrail 400 de `/api/cxc/abono`.

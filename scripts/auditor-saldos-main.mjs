@@ -65,7 +65,7 @@ async function q(sql) {
 // ─────────────────────────────────────────────────────────────────────────────
 // SECCIÓN 2: SQL de integridad de comisiones.
 //   C1–C5: invariantes de dinero dentro de la fila (hard fail).
-//   W1–W2: huecos de cobertura (warning, no tumban el run).
+//   W1–W3: huecos de cobertura (warning, no tumban el run).
 // W1 usa el helper VIVO comision_238b_cod_pendiente (release 09) para no
 // duplicar la regla COD — paridad exacta con la RPC de comisiones. Ventana de
 // 30 días mantiene el reporte accionable; lo viejo es histórico.
@@ -123,6 +123,31 @@ SELECT 'W2_anuladas_con_comision', COUNT(*)::int,
 FROM public.comisiones c
 JOIN public.notas_despacho d ON d.id = c.despachoid
 WHERE d.estado = 'anulada' AND c.estado IN ('pendiente','cta_cobrar')
+UNION ALL
+-- W3: sábado con ventas entregadas comisionables pero SIN designación (ventana 30d).
+--   Incidente 12-sep: designación guardada para el sábado equivocado → el split
+--   0.5%/1.5% nunca aplicó. Mismo criterio de elegibilidad que W1 (dueño
+--   comisionable, COD pagado, no donación); filtra dow=6 (sábado hora VE).
+SELECT 'W3_sabados_sin_designacion', COUNT(*)::int,
+  COALESCE(jsonb_agg(jsonb_build_object('fecha', f.fecha_ve, 'despachos', f.n) ORDER BY f.fecha_ve), '[]'::jsonb)
+FROM (
+  SELECT (d.creado_en AT TIME ZONE 'America/Caracas')::date AS fecha_ve, COUNT(*) AS n
+  FROM public.notas_despacho d
+  JOIN public.usuarios u ON u.id = d.vendedor_id
+  LEFT JOIN public.clientes cl ON cl.id = d.cliente_id
+  LEFT JOIN public.usuarios du ON du.id = cl.vendedor_id
+  WHERE d.estado = 'entregada'
+    AND d.creado_en > now() - interval '${VENTANA_DIAS} days'
+    AND EXTRACT(dow FROM d.creado_en AT TIME ZONE 'America/Caracas')::int = 6
+    AND u.rol <> 'vendedor_sin_comision'
+    AND NOT EXISTS (SELECT 1 FROM public.comisiones c WHERE c.despachoid = d.id)
+    AND NOT public.comision_238b_cod_pendiente(d.forma_pago_cliente, d.forma_pago)
+    AND NOT COALESCE(du.rol, '') IN ('admin','jefe','logistica','administracion','desarrollador')
+    AND NOT (COALESCE(du.rol, '') = 'vendedor_sin_comision' AND NOT COALESCE(du.es_externo, FALSE) AND COALESCE(du.markup_pct, 0) <= 0)
+    AND NOT (d.forma_pago_cliente::text ILIKE '%donaci%' OR d.forma_pago::text ILIKE '%donaci%')
+    AND NOT EXISTS (SELECT 1 FROM public.comision_designacion_diaria dd WHERE dd.fecha = (d.creado_en AT TIME ZONE 'America/Caracas')::date)
+  GROUP BY 1
+) f
 `
 
 // Replay canónico (idéntico al validado en release 12) + deltas por cliente.
@@ -174,7 +199,7 @@ if (total > 0) {
 }
 
 // ─── Sección 2: comisiones ───────────────────────────────────────────────────
-// Hard fails: C1–C5 (corrupción de dinero). Warnings: W1–W2 (cobertura).
+// Hard fails: C1–C5 (corrupción de dinero). Warnings: W1–W3 (cobertura).
 const HARD = new Set(['C1_identidad', 'C2_liberacion', 'C3_duplicados', 'C4_pagos_imposibles', 'C5_huerfanas'])
 const hardFails = comRows.filter(r => HARD.has(r.check_id) && Number(r.n) > 0)
 const warnings = comRows.filter(r => !HARD.has(r.check_id) && Number(r.n) > 0)

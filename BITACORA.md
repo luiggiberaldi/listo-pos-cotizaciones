@@ -10,6 +10,16 @@
 - 🔄 En progreso
 - 🗃️ Histórico/reemplazado (la decisión o el fix fue sustituido por otro posterior; ver enlace)
 
+
+## 2026-09-13 — Split de sábados — incidente 12-sep (plan 2026-09-13-plan-sabados-split-fix.md)
+
+- **Qué pasó:** el sábado 12-sep no tuvo designación (`comision_designacion_diaria` vacía ese día) → el split 0.5%/1.5% nunca aplicó. La designación se guardó el viernes 11-sep 16:40 VE pero apuntó al **19-sep**: el default del panel sumaba siempre hacia el próximo sábado y usaba `toISOString()` (salto UTC después de ~20:00 VE). El guardrail de la RPC v3.1 hizo lo correcto: sin designado válido → sin split.
+- **Evidencia:** caso control 5-sep (con designación) ejecutó el split perfecto; 12-sep sin designación → dueños al 2% completo. Despachos afectados: #3137/#3138 (Niki) y #3142 (Josué) — dueño ≠ Edgar. ~$0.32 mal asignados.
+- **Repair aplicado (principal):** dueños al 1.5% + filas nuevas de Edgar al 0.5%. Guardas: backup byte-idéntico, validación de forma SQL en staging (rollback), re-chequeo de estado/`actualizadoen` antes de escribir, invariantes `cab+otros=total` y `lib+ret=total` verificadas en 6 filas, auditoría `COMISION_SPLIT_REPAIR` con evidencia.
+- **Fix UI (ambos árboles):** helper `getSabadoActualOFuturo()` + confirmación al guardar. Tests 5/5. Paridad de árboles verificada.
+- **Auditor W3:** sábado con ventas comisionables sin designación → alerta nocturna (warning). Corrida local post-fix: W3 limpio (el repair dejó el 12-sep cubierto); persisten hallazgos previos C2 (despacho 2121, liberación $5.27 > total $4.33) y W2 (anulado 1898 con comisión viva $170.64) — fuera del alcance de este plan.
+- **Regla recordada:** sin `git push` sin pedido explícito del propietario.
+
 ## Reglas de colaboración (obligatorias)
 
 - **NO se hace `git push` sin que el propietario lo pida explícitamente.** Los commits locales se hacen cuando corresponde, pero el push a `main` (que dispara deploy automático a producción por Vercel y GitHub Actions) es una decisión del propietario. Aplica a agentes IA y humanos por igual. Establecido por el propietario el 2026-09-11.

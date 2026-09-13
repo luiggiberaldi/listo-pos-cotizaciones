@@ -90,12 +90,14 @@ __tests__/
 !docs/plans/2026-08-22-fix-e2e-comisiones-pago-legacy.md
 !docs/plans/2026-08-22-quitar-pago-comisiones.md
 !docs/plans/2026-08-29-plan-comision-split-sabados-v2.md
+!docs/plans/2026-09-13-plan-sabados-split-fix.md
 !src/utils/__tests__/
 !src/utils/__tests__/comisionUtils.test.js
 !src/utils/__tests__/comisionesGeneradasPDF.test.js
 !src/utils/__tests__/pdfSharedHeader.test.js
 !src/utils/__tests__/comisionesTasa.test.js
 !src/utils/__tests__/expandPctNominal.test.js
+!src/utils/__tests__/sabadoHelper.test.js
 
 # Revisión SQL 238b del proyecto principal
 !scripts/

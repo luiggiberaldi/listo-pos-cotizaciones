@@ -69,13 +69,16 @@ deploy_ahora.bat
 scratch*
 *.test.js
 *.test.jsx
-__tests__/
+# __tests__/ ignorado por patrón de archivo abajo (*.test.js cubre el contenido)
 *.md
 !README.md
 !ARQUITECTURA.md
 !ROADMAP.md
 !BITACORA.md
 !docs/plans/PLAN_SALIDA_PRODUCCION.md
+!src/utils/__tests__/
+!src/utils/__tests__/sabadoHelper.test.js
+!docs/plans/2026-09-13-plan-sabados-split-fix.md
 
 # Automatización E2E segura: estos dos scripts sí deben viajar con staging.
 !scripts/

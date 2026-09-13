@@ -10,7 +10,7 @@ import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import useAuthStore from '../store/useAuthStore'
 import { fmtUsd, fmtBs } from '../utils/format'
-import { getCorteSemanalRange } from '../utils/dateHelpers'
+import { getCorteSemanalRange, getSabadoActualOFuturo } from '../utils/dateHelpers'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
@@ -50,13 +50,10 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
 function PanelDesignacion({ perfil, vendedores }) {
   const esJefe = perfil?.rol === 'jefe'
   const hoy = new Date().toISOString().slice(0, 10)
-  const proximoSabado = (() => {
-    const d = new Date()
-    const dias = (6 - d.getDay() + 7) % 7
-    d.setDate(d.getDate() + dias)
-    return d.toISOString().slice(0, 10)
-  })()
-  const [fecha, setFecha] = useState(proximoSabado)
+  // Default: sábado actual (si hoy es sábado) o el próximo — TZ-local, sin salto UTC.
+  // (Fix 2026-09-13: el IIFE anterior con toISOString() registraba la designación
+  //  en el sábado equivocado — incidente 12-sep, plan 2026-09-13-plan-sabados-split-fix.md)
+  const [fecha, setFecha] = useState(() => getSabadoActualOFuturo())
   const [designado, setDesignado] = useState('')
   const [designaciones, setDesignaciones] = useState({})
   const [cargando, setCargando] = useState(false)
@@ -123,6 +120,14 @@ function PanelDesignacion({ perfil, vendedores }) {
       setMensaje({ tipo: 'error', texto: 'Selecciona el vendedor o supervisor designado.' })
       return
     }
+    // Guardarrail (incidente 12-sep): confirmar explícitamente el sábado objetivo.
+    const [y, m, d] = fecha.split('-').map(Number)
+    const fechaLegible = new Date(y, m - 1, d, 12, 0, 0).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    const esHoy = fecha === getSabadoActualOFuturo()
+        const ok = window.confirm('Designar a ' + nombreElegido + ' para el ' + fechaLegible + '?
+
+El split 0.5%/1.5% aplicará SOLO a los despachos creados ese día.')
+    if (!ok) return
     try {
       setGuardando(true)
       const headers = await getAuthHeaders()
