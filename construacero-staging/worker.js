@@ -21,7 +21,7 @@ import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/h
 import { handleMarcarComisionPagada, handleLiberarComisionCxc, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
 import { handleRegistrarAbono, handleRevertirAbono, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
-import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
+import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleCambiarFechaEntregaDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
@@ -363,6 +363,11 @@ export default {
     // ── API: aplicar movimiento de inventario (bypass RLS) ──────────────────
     if (url.pathname === '/api/inventario/movimiento' && request.method === 'POST') {
       return handleAplicarMovimientoLote(request, env);
+    }
+
+    // ── API: revertir movimiento de inventario (admin) ─────────────────────
+    if (url.pathname === '/api/inventario/movimiento/revertir' && request.method === 'POST') {
+      return handleRevertirMovimientoInventario(request, env);
     }
 
     // ── API: ingreso masivo por lote (bypass RLS) ───────────────────────────

@@ -45,10 +45,11 @@ function SummaryCard({ icon: Icon, label, value, color, suffix }) {
 }
 
 // ── Fila de Movimiento ──────────────────────────────────────────────────────
-function KardexRow({ m, idx, isExpanded, onToggle }) {
+function KardexRow({ m, idx, isExpanded, onToggle, puedeRevertir, yaRevertida, onRevertir, revirtiendo }) {
   const esIngreso = m.tipo === 'ingreso'
   const motivoCfg = MOTIVOS_TIPO[m.motivo_tipo] || MOTIVOS_TIPO.otro
   const motivoColors = getMotivoChipClasses(m.motivo_tipo)
+  const elegible = puedeRevertir && !m.origen_tipo && m.motivo_tipo !== 'venta'
   
   const textRef = useRef(null)
   const [isTruncated, setIsTruncated] = useState(false)
@@ -124,12 +125,28 @@ function KardexRow({ m, idx, isExpanded, onToggle }) {
           {Number(m.stock_nuevo).toLocaleString('es-VE')}
         </span>
 
-        {/* Categoría */}
-        <div className="hidden sm:flex justify-center min-w-0">
+        {/* Categoría + Revertir */}
+        <div className="hidden sm:flex justify-center items-center gap-1 min-w-0">
+          {yaRevertida && (
+            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 border border-slate-300 whitespace-nowrap" title="Este movimiento ya fue revertido">
+              <Undo2 size={9} /> Revertida
+            </span>
+          )}
           <span className={`inline-flex items-center gap-1 text-[9.5px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap overflow-hidden max-w-full ${motivoColors.bg} ${motivoColors.text} ${motivoColors.border}`}>
             <span className={`w-1 h-1 rounded-full shrink-0 ${motivoColors.dot}`} />
             <span className="truncate">{motivoCfg.label}</span>
           </span>
+          {elegible && !yaRevertida && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRevertir(m) }}
+              disabled={revirtiendo}
+              title="Revertir movimiento (aplica el inverso)"
+              className="shrink-0 p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+            >
+              <Undo2 size={12} />
+            </button>
+          )}
         </div>
 
         {/* Motivo */}
@@ -156,6 +173,29 @@ function KardexRow({ m, idx, isExpanded, onToggle }) {
 
 export default function KardexModal({ isOpen, onClose, producto }) {
   const [limite, setLimite] = useState(200)
+  const reversion = useRevertirMovimiento()
+  const { perfil } = useAuthStore()
+  const puedeRevertir = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const revertidosSet = useMemo(() => {
+    const ids = new Set()
+    for (const m of movimientos || []) {
+      if (m.origen_tipo === 'reversion_inventario' && m.origen_id) ids.add(m.origen_id)
+    }
+    return ids
+  }, [movimientos])
+
+  function handleRevertir(m) {
+    const accion = m.tipo === 'ingreso' ? 'devolver' : 'reingresar'
+    const detalle = (m.tipo === 'ingreso' ? 'Restará ' : 'Sumará ') + Number(m.cantidad).toLocaleString('es-VE') + ' al stock'
+    if (!window.confirm('Revertir MOV-' + m.numero + ' (' + (m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso') + ' de ' + Number(m.cantidad).toLocaleString('es-VE') + ')?\n\n' + detalle + '.\nMotivo original: "' + (m.motivo || '—') + '"\n\nSe registrará un movimiento inverso; el histórico no se borra.')) return
+    reversion.mutate(
+      { movimiento_id: m.id },
+      {
+        onSuccess: (r) => showToast('Reversión aplicada: MOV-' + r.numero + ' (' + accion + ' ' + Number(r.cantidad).toLocaleString('es-VE') + ')', 'success'),
+        onError: (e) => showToast(e.message || 'No se pudo revertir', 'error'),
+      }
+    )
+  }
   const { data: kardexData, isLoading } = useKardex(producto?.id, { limite })
   const movimientos = kardexData?.movimientos ?? []
   const hayMas = !!kardexData?.hayMas
@@ -301,6 +341,10 @@ export default function KardexModal({ isOpen, onClose, producto }) {
                   idx={idx}
                   isExpanded={expandedRows.has(m.id)}
                   onToggle={toggleRow}
+                  puedeRevertir={puedeRevertir}
+                  yaRevertida={revertidosSet.has(m.id)}
+                  onRevertir={handleRevertir}
+                  revirtiendo={reversion.isPending}
                 />
               ))}
               {hayMas && (

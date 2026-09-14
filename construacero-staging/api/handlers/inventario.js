@@ -212,6 +212,71 @@ export async function handleAplicarMovimientoLote(request, env) {
 }
 
 */
+// ── Revertir movimiento manual de inventario (admin) ─────────────────────────
+export async function handleRevertirMovimientoInventario(request, env) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+  const ROLES_REVERSION = ['administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_REVERSION.includes(operador.rol)) {
+    return jsonError('Solo administración, jefe o desarrollador pueden revertir movimientos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const { movimiento_id } = body;
+  if (!isValidUuid(movimiento_id)) return jsonError('movimiento_id inválido', 400, request);
+
+  const idempotencyKey = resolverIdempotencyKey(request, body);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
+
+  try {
+    const rpcRes = await fetch(env.SUPABASE_URL + '/rest/v1/rpc/revertir_movimiento_inventario_atomico', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        p_cuenta_id: operador.cuenta_id,
+        p_movimiento_id: movimiento_id,
+        p_usuario_id: user.operator_id,
+        p_usuario_nombre: operador.nombre,
+        p_usuario_color: operador.color || null,
+        p_idempotency_key: idempotencyKey,
+      }),
+    });
+    const text = await rpcRes.text();
+    let result = null;
+    try { result = text ? JSON.parse(text) : null; } catch {
+      // Best-effort parse: conservar la respuesta original.
+    }
+    if (!rpcRes.ok) {
+      const msg = result?.message || text || ('HTTP ' + rpcRes.status);
+      if (msg.includes('MOVIMIENTO_NO_ENCONTRADO_O_CUENTA_AJENA')) return jsonError('Movimiento no encontrado', 404, request);
+      if (msg.includes('ROL_NO_AUTORIZADO_PARA_REVERTIR')) return jsonError('Rol no autorizado para revertir', 403, request);
+      if (msg.includes('MOVIMIENTO_NO_REVERTIBLE')) return jsonError('Este movimiento pertenece a un flujo (venta/despacho) y no se puede revertir aquí', 400, request);
+      if (msg.includes('MOVIMIENTO_YA_REVERTIDO')) return jsonError('Este movimiento ya fue revertido', 409, request);
+      if (msg.includes('STOCK_NEGATIVO_NO_PERMITIDO')) return jsonError('La reversión dejaría el stock en negativo', 400, request);
+      if (msg.includes('OPERACION_IDEMPOTENTE_SIN_RESULTADO')) return jsonError('Reversión en proceso; reintenta en unos segundos', 409, request);
+      return jsonError('No se pudo revertir el movimiento: ' + msg, 400, request);
+    }
+    if (!result?.ok) return jsonError('La RPC no confirmó la reversión', 500, request);
+
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+        categoria: 'INVENTARIO', accion: 'REVERSION_INVENTARIO',
+        descripcion: 'Reversión de movimiento ' + (result.numero_origen ? 'MOV-' + result.numero_origen : movimiento_id) + ' → nuevo MOV-' + result.numero,
+        entidadTipo: 'inventario', entidadId: result.lote_id, meta: { movimiento_origen: movimiento_id, tipo_inverso: result.tipo_inverso, cantidad: result.cantidad, stock_nuevo: result.stock_nuevo, idempotency_key: idempotencyKey, idempotent: result.idempotent === true }, ip,
+      });
+    } catch {
+      // Best-effort operation; preserve the primary response.
+    }
+
+    return json(result, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al revertir movimiento', 500, request);
+  }
+}
+
 // ── Parsear texto WhatsApp → productos del inventario ────────────────────────
 export async function handleParseMaterialText(request, env) {
   if (!env.AI) return jsonError('Servicio AI no configurado', 503, request)

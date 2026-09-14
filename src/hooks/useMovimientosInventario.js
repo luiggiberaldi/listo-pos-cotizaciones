@@ -71,14 +71,18 @@ export function useKardex(productoId, { limite = 200 } = {}) {
 }
 
 // ─── Aplicar movimiento por lotes (via Worker API) ──────────────────────────
+// FIX idempotencia: se genera UNA clave por submit del usuario; authFetch
+// reutiliza la misma en su reintento de red, y la RPC deduplica por clave.
+// Antes la clave era randomUUID() por request en el Worker → dedup inerte.
 export function useAplicarMovimientoLote() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ tipo, motivo, motivo_tipo = 'otro', items }) => {
+      const idempotencyKey = crypto.randomUUID()
       const res = await authFetch('/api/inventario/movimiento', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo, motivo, motivo_tipo, items }),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ tipo, motivo, motivo_tipo, items, idempotencyKey }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al aplicar movimiento')
@@ -137,6 +141,35 @@ export function useAplicarMovimientoLote() {
     },
     onError: (error) => {
       showToast(error.message || 'Error al aplicar movimiento', 'error')
+    },
+  })
+}
+
+// ─── Revertir movimiento manual de inventario (Kardex) ──────────────────────
+export function useRevertirMovimiento() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ movimiento_id }) => {
+      const idempotencyKey = crypto.randomUUID()
+      const res = await authFetch('/api/inventario/movimiento/revertir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ movimiento_id, idempotencyKey }),
+        timeout: 30000,
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al revertir movimiento')
+      return result
+    },
+    onSuccess: () => {
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: KARDEX_KEY, exact: false })
+        qc.invalidateQueries({ queryKey: INVENTARIO_KEY, exact: false })
+        qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY, exact: false })
+      }, 1200)
+    },
+    onError: (error) => {
+      showToast(error.message || 'Error al revertir movimiento', 'error')
     },
   })
 }
