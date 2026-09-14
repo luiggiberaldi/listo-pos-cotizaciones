@@ -4261,3 +4261,21 @@ Producción completa con las 3 fases. Pendiente opcional: espejo 262 en staging 
 - Runbook de activación/rollback: `docs/runbooks/2026-09-05-runbook-split-sabados-principal.md`.
 
 **Estado:** instalado e inerte. Ningún cambio de comportamiento hasta que el jefe active el toggle en el piloto de sábado.
+
+---
+
+## SESIÓN 14/09/2026 — Release 15: Kardex Revert + idempotencia real + reparación FER0252002
+
+**Incidente (auditoría 14-sep):** compra NOTA 0062908 registrada DOS veces (lotes 6ee726cc/3ea09603) y la corrección "INGRESO PEDIDO DOS VECES" aplicada TRES veces (80a577dd/d1bb2b04/f69a37da) en FER0252002 → stock sistema 426 vs físico 530 (faltante fantasma 104 lt).
+
+**Causa raíz:** la cadena de idempotencia era decorativa — la UI nunca enviaba `Idempotency-Key` y el Worker generaba una UUID aleatoria por request, así que la dedup de la RPC jamás activaba. Los reintentos (timeout 15 s de authFetch vs respuestas lentas) multiplicaban escrituras.
+
+**Implementado (plan docs/plans/2026-09-14-plan-release15-kardex-revert.md):**
+- F1–F2: migración 275 en staging + arnés `test-revertir-movimiento-staging.mjs` **14/14 en verde** (reversión egreso/ingreso, idempotencia cacheada, doble reversión rechazada, venta rechazada, cuenta ajena rechazada, continuidad). Hallazgo clave: el trigger `enriquecer_proveniencia_kardex` rellena `origen_tipo` en TODO insert → el discriminador de manuales es `motivo_tipo`, no `origen_tipo`.
+- F3: endpoint Worker + botón Revertir (Undo2) en `KardexModal` + FIX-A idempotencia en `useAplicarMovimientoLote` + paridad byte a byte entre árboles (KardexModal idénticos; hook alineado en bloques release-15).
+- F4: RPC al principal (dry-run transaccional + apply + verificación de firma/definer).
+- F5: reparación con guardas — G0 (solo ventas post-incidente), G1 (sin re-revertir), G2 (motivo manual), G6 (stock final exacto). Revertidos MOV-5121/5122 → MOV-5137/5138 (+104). **Stock final 528.00 = físico 530 − 2 ventas legítimas (5125, 5130).** Continuidad 17/17 OK. Backup + auditoría.
+- F6: auditor W4 (reversiones sin auditoría, 7d) — detectó correctamente las 2 reversiones de la propia reparación como caso de prueba (su auditoría fue REPARACION_*, no REVERSION_*). Vitest 329/329. Bundle Worker OK.
+
+**Commits:** ver git log — sin push (regla).
+

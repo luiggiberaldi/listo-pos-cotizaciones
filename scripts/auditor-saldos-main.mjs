@@ -148,6 +148,22 @@ FROM (
     AND NOT EXISTS (SELECT 1 FROM public.comision_designacion_diaria dd WHERE dd.fecha = (d.creado_en AT TIME ZONE 'America/Caracas')::date)
   GROUP BY 1
 ) f
+UNION ALL
+-- W4: reversiones de kardex sin auditoría (ventana 7d).
+--   Release 15: cada reversión (origen_tipo='reversion_inventario') debe tener
+--   su fila REVERSION_INVENTARIO en auditoria (best-effort del Worker). Si
+--   falta, hay un cambio de stock sin rastro del actor.
+SELECT 'W4_reversiones_sin_auditoria', COUNT(*)::int,
+  COALESCE(jsonb_agg(jsonb_build_object('lote', m.lote_id, 'numero', m.numero, 'producto', m.producto_nombre) ORDER BY m.numero), '[]'::jsonb)
+FROM public.inventario_movimientos m
+WHERE m.origen_tipo = 'reversion_inventario'
+  AND m.creado_en > now() - interval '7 days'
+  AND NOT EXISTS (
+    SELECT 1 FROM public.auditoria a
+    WHERE a.categoria = 'INVENTARIO'
+      AND a.accion = 'REVERSION_INVENTARIO'
+      AND a.entidad_id = m.lote_id
+  )
 `
 
 // Replay canónico (idéntico al validado en release 12) + deltas por cliente.
@@ -220,9 +236,13 @@ if (comRows.length === 0) {
     if ((r.detalle || []).length > 10) console.log(`   … y ${r.detalle.length - 10} más.`)
   }
   for (const r of warnings) {
-    const etiqueta = r.check_id === 'W1_huecos_entregados'
-      ? `entregados comisionables SIN fila de comisión (últimos ${VENTANA_DIAS} días, excluye sin_comision y COD pendiente)`
-      : 'despachos ANULADOS con comisión viva (pendiente/cta_cobrar)'
+    const etiquetas = {
+      W1_huecos_entregados: `entregados comisionables SIN fila de comisión (últimos ${VENTANA_DIAS} días, excluye sin_comision y COD pendiente)`,
+      W2_anuladas_con_comision: 'despachos ANULADOS con comisión viva (pendiente/cta_cobrar)',
+      W3_sabados_sin_designacion: 'sábados con ventas entregadas comisionables pero SIN designación (split no aplicó)',
+      W4_reversiones_sin_auditoria: 'reversiones de kardex sin fila REVERSION_INVENTARIO en auditoría (últimos 7d)',
+    }
+    const etiqueta = etiquetas[r.check_id] || r.check_id
     console.log(`⚠️ COMISIONES ${r.check_id}: ${r.n} caso(s) — ${etiqueta}.`)
     for (const d of (r.detalle || []).slice(0, 15)) console.log(`   ${JSON.stringify(d)}`)
     if ((r.detalle || []).length > 15) console.log(`   … y ${r.detalle.length - 15} más.`)

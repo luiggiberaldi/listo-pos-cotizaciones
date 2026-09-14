@@ -75,6 +75,7 @@
 | `233_unificar_rpc_productos.sql` | Productos (RPC 16 args) | ✅ | ✅ | Firma nueva verificada en auditoría de cadenas |
 | `236_configuracion_global_choferes_20.sql` + `237` | Configuración | ✅ | ✅ | Paquete correctivo con preflight readonly |
 | `240_fix_reporte_ventas_corte_y_cuenta.sql` | Reportes | ✅ | ✅ (259 espejo) | Espejo aplicado en staging |
+| `275_revertir_movimiento_inventario.sql` | Inventario/Kardex | ✅ | ✅ (275 staging) | ✅ | RPC reversión movimientos manuales (arnés 14/14) | Motivo manual + idempotencia cacheada |
 
 > La tabla anterior es una muestra de alto riesgo/impacto, no un índice exhaustivo de las 224+251 migraciones. Para el resto aplica ❓ hasta verificar con la base correspondiente.
 

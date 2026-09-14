@@ -6,6 +6,17 @@ Este archivo sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 
 ## [Unreleased]
 
+### Release 15 — Kardex: reversión segura de movimientos + idempotencia real (2026-09-14)
+
+- **Botón Revertir en el Kardex** (solo administración/jefe/desarrollador): aplica el movimiento inverso como fila nueva (nunca borra el histórico), con confirmación, chip "Revertida" y bloqueo de doble reversión. Solo movimientos manuales (compra/ajuste/merma/devolución/transferencia/otro); la venta pertenece al flujo del despacho.
+- **RPC `revertir_movimiento_inventario_atomico`** (migración 275, staging y principal): idempotencia vía `inventario_operaciones` con resultado cacheado, lock de producto, respeto a `permitir_stock_negativo`, actor validado por rol. Rollback: `275_rollback.sql`.
+- **Endpoint Worker `POST /api/inventario/movimiento/revertir`** con auditoría `REVERSION_INVENTARIO` y mapeo de errores a 403/404/409.
+- **FIX idempotencia real (causa raíz del incidente FER0252002):** la UI ahora envía `Idempotency-Key` por submit; antes el Worker generaba una UUID aleatoria por request y la dedup de la RPC quedaba inerte (doble compra NOTA 0062908 + corrección aplicada 3 veces → faltante fantasma 104 lt).
+- **Reparación FER0252002:** revertidos MOV-5121 y MOV-5122 (+104 lt neto) vía la RPC nueva; stock 424 → 528 (físico 530 − 2 ventas legítimas). Continuidad del kardex verificada (17 movimientos). Auditoría `REPARACION_KARDEX_FER0252002` + backup `tmp/r15/fer0252002-pre-repair.json`.
+- **Auditor W4:** alerta nocturna de reversiones sin auditoría (ventana 7d).
+
+
+
 ### Fix — Split de comisiones de sábados (incidente 12-sep)
 
 - **Repair de datos (principal):** 3 filas de comisión del sábado 2026-09-12 (#3137, #3138, #3142) recalculadas bajo la regla v3.1: dueño al 1.5% ($0.21/$0.51/$0.25) + fila nueva del designado Edgar Ramírez al 0.5% ($0.07/$0.17/$0.08). Causa: designación guardada el 11-sep apuntó al 19-sep (bug UTC del default del panel). Auditoría `COMISION_SPLIT_REPAIR` + backup `tmp/r14/sabado-12sep-backup.json`.
