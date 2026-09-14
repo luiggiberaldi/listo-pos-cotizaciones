@@ -6,8 +6,9 @@ import {
   ArrowDownToLine, ArrowUpFromLine, Clock, Package, Hash,
   TrendingUp, TrendingDown, BarChart3, Layers, ChevronDown, ChevronUp, User,
 } from 'lucide-react'
-import { useKardex } from '../../hooks/useMovimientosInventario'
+import { useKardex, useRevertirMovimiento } from '../../hooks/useMovimientosInventario'
 import { MOTIVOS_TIPO, formatCorrelativo, getMotivoChipClasses } from '../../utils/motivosTipo'
+import { useAuthStore } from '../../store/useAuthStore'
 
 function formatFecha(ts) {
   return new Date(ts).toLocaleString('es-VE', {
