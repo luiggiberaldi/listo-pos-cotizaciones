@@ -124,9 +124,7 @@ function PanelDesignacion({ perfil, vendedores }) {
     const [y, m, d] = fecha.split('-').map(Number)
     const fechaLegible = new Date(y, m - 1, d, 12, 0, 0).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     const esHoy = fecha === getSabadoActualOFuturo()
-        const ok = window.confirm('Designar a ' + nombreElegido + ' para el ' + fechaLegible + '?
-
-El split 0.5%/1.5% aplicará SOLO a los despachos creados ese día.')
+        const ok = window.confirm('Designar a ' + nombreElegido + ' para el ' + fechaLegible + '?\n\nEl split 0.5%/1.5% aplicará SOLO a los despachos creados ese día.')
     if (!ok) return
     try {
       setGuardando(true)
