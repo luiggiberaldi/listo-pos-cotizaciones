@@ -40,14 +40,17 @@ jobs:
           test -n "$SUPABASE_SERVICE_KEY" || { echo "Falta SUPABASE_SERVICE_KEY para operaciones administrativas del Worker"; exit 1; }
           test -n "$DEV_SUPER_CODE" || { echo "Falta DEV_SUPER_CODE para el acceso de desarrollador"; exit 1; }
 
-          printf '%s' "$SUPABASE_SERVICE_KEY" | npx wrangler secret put SUPABASE_SERVICE_KEY
-          printf '%s' "$DEV_SUPER_CODE" | npx wrangler secret put DEV_SUPER_CODE
-          # SUPABASE_ANON_KEY puede existir ya como var plana en el dashboard
-          # (era de deploy.sh). Error 10053 = binding ocupado: se tolera porque
-          # el valor vigente funciona (ver INC-003). Los otros 2 son estrictos.
-          if printf '%s' "$SUPABASE_ANON_KEY" | npx wrangler secret put SUPABASE_ANON_KEY 2>&1 | tee /tmp/anon_put.log | grep -q '10053'; then
-            echo "::warning::SUPABASE_ANON_KEY ya existe como binding no-secreto en el dashboard; se conserva el valor vigente (ver INC-003)"
-          fi
+          # Los 3 bindings existen ya como vars planas en el dashboard (era
+          # deploy.sh). Error 10053 = binding ocupado: se tolera porque el
+          # runtime funciona con los valores vigentes (ver INC-003). Si algun
+          # dia se rotan, borrarlos primero en el dashboard.
+          for pair in "SUPABASE_ANON_KEY:SUPABASE_ANON_KEY" "SUPABASE_SERVICE_KEY:SUPABASE_SERVICE_KEY" "DEV_SUPER_CODE:DEV_SUPER_CODE"; do
+            name="${pair%%:*}"; val="${pair#*:}"
+            if ! printf '%s' "${!val}" | npx wrangler secret put "$name" 2>&1 | tee /tmp/put.log | grep -q '10053'; then
+              continue
+            fi
+            echo "::warning::${name} ya existe como binding no-secreto en el dashboard; se conserva el valor vigente (ver INC-003)"
+          done
 
       - name: Deploy a Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
