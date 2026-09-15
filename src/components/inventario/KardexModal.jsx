@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useKardex, useRevertirMovimiento } from '../../hooks/useMovimientosInventario'
 import { MOTIVOS_TIPO, formatCorrelativo, getMotivoChipClasses } from '../../utils/motivosTipo'
-import { useAuthStore } from '../../store/useAuthStore'
+import useAuthStore from '../../store/useAuthStore'
 import { showToast } from '../ui/Toast'
 
 function formatFecha(ts) {
