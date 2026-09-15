@@ -4,11 +4,12 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { Modal } from '../ui/Modal'
 import {
   ArrowDownToLine, ArrowUpFromLine, Clock, Package, Hash,
-  TrendingUp, TrendingDown, BarChart3, Layers, ChevronDown, ChevronUp, User,
+  TrendingUp, TrendingDown, BarChart3, Layers, ChevronDown, ChevronUp, User, Undo2,
 } from 'lucide-react'
 import { useKardex, useRevertirMovimiento } from '../../hooks/useMovimientosInventario'
 import { MOTIVOS_TIPO, formatCorrelativo, getMotivoChipClasses } from '../../utils/motivosTipo'
 import { useAuthStore } from '../../store/useAuthStore'
+import { showToast } from '../ui/Toast'
 
 function formatFecha(ts) {
   return new Date(ts).toLocaleString('es-VE', {
@@ -177,13 +178,6 @@ export default function KardexModal({ isOpen, onClose, producto }) {
   const reversion = useRevertirMovimiento()
   const { perfil } = useAuthStore()
   const puedeRevertir = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
-  const revertidosSet = useMemo(() => {
-    const ids = new Set()
-    for (const m of movimientos || []) {
-      if (m.origen_tipo === 'reversion_inventario' && m.origen_id) ids.add(m.origen_id)
-    }
-    return ids
-  }, [movimientos])
 
   function handleRevertir(m) {
     const accion = m.tipo === 'ingreso' ? 'devolver' : 'reingresar'
@@ -199,6 +193,13 @@ export default function KardexModal({ isOpen, onClose, producto }) {
   }
   const { data: kardexData, isLoading } = useKardex(producto?.id, { limite })
   const movimientos = kardexData?.movimientos ?? []
+  const revertidosSet = useMemo(() => {
+    const ids = new Set()
+    for (const m of movimientos || []) {
+      if (m.origen_tipo === 'reversion_inventario' && m.origen_id) ids.add(m.origen_id)
+    }
+    return ids
+  }, [movimientos])
   const hayMas = !!kardexData?.hayMas
   const totalMovimientos = kardexData?.total ?? 0
   const [fechaDesde, setFechaDesde] = useState('')
