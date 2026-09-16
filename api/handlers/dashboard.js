@@ -1,7 +1,7 @@
 // Inicio: el servidor decide el alcance y devuelve únicamente el DTO permitido.
 import { validateOperator } from '../lib/auth.js'
 import { json, jsonError } from '../lib/utils.js'
-import { readAllRows, splitIds, getDashboardPeriod, addPeriod, money, estimateGrossProfit } from '../lib/dashboardData.js'
+import { readAllRows, splitIds, getDashboardPeriod, addPeriod, money } from '../lib/dashboardData.js'
 import { getDashboardAccess, SELLER_ROLES } from '../../src/utils/dashboardAccess.js'
 import { isDonationPayment, isLoanPayment } from '../../src/utils/comisionUtils.js'
 import { enrichCommissions } from './comisiones.js'
@@ -22,6 +22,7 @@ async function readFinancialData(env, headers, user, operador, access, period, s
   if (access.team) {
     const params = paramsFor('usuarios', user.id, 'id,nombre,color,rol,activo,es_externo')
     params.set('rol', `in.(${SELLER_ROLES.join(',')})`)
+    params.set('activo', 'eq.true')
     sellers = await readAllRows(env, headers, 'usuarios', params, { signal })
   }
   const sellerIds = new Set(sellers.map(seller => seller.id))
@@ -33,14 +34,32 @@ async function readFinancialData(env, headers, user, operador, access, period, s
   salesParams.set('estado', 'in.(despachada,entregada)')
   addPeriod(salesParams, period)
 
-  let sales = []
+  // Se preservan comisiones históricas y la excepción existente de vendedor externo.
+  // 'Sin comisión' describe la configuración actual, no borra ganancias anteriores.
+  const commissionParams = paramsFor('comisiones', user.id,
+    'id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en,estado,cuenta_id)')
+  commissionParams.set('despacho.cuenta_id', `eq.${user.id}`)
+  commissionParams.set('despacho.estado', 'in.(despachada,entregada)')
+  addPeriod(commissionParams, period, 'despacho.creado_en')
+
   // Un supervisor solo consulta vendedores, no las operaciones del jefe/administración.
   const chunks = selected ? splitIds(selected) : [null]
-  for (const ids of chunks) {
-    const params = new URLSearchParams(salesParams)
-    if (ids) params.set('vendedor_id', `in.(${ids.join(',')})`)
-    sales.push(...await readAllRows(env, headers, 'notas_despacho', params, { signal }))
-  }
+  // Los bloques de ventas y comisiones son lecturas independientes: se piden en paralelo
+  // (el resto de la función solo depende de estas filas, no entre sí).
+  let sales = []
+  let commissions = []
+  await Promise.all([
+    Promise.all(chunks.map(ids => {
+      const params = new URLSearchParams(salesParams)
+      if (ids) params.set('vendedor_id', `in.(${ids.join(',')})`)
+      return readAllRows(env, headers, 'notas_despacho', params, { signal })
+    })).then(results => { sales = results.flat() }),
+    Promise.all(chunks.map(ids => {
+      const params = new URLSearchParams(commissionParams)
+      if (ids) params.set('vendedorid', `in.(${ids.join(',')})`)
+      return readAllRows(env, headers, 'comisiones', params, { signal })
+    })).then(results => { commissions = results.flat() }),
+  ])
   sales = sales.filter(sale => {
     if (sale.cuenta_id !== user.id) throw new Error('Respuesta fuera de la cuenta autorizada')
     if (own && sale.vendedor_id !== operador.id) throw new Error('Respuesta fuera del alcance del operador')
@@ -54,31 +73,20 @@ async function readFinancialData(env, headers, user, operador, access, period, s
       .map(sale => ({ id: sale.id, numero: sale.numero, fecha: sale.creado_en, totalUsd: money(sale.total_usd), estado: sale.estado })),
   }
 
-  let commissions = []
-  // Se preservan comisiones históricas y la excepción existente de vendedor externo.
-  // 'Sin comisión' describe la configuración actual, no borra ganancias anteriores.
-  const commissionParams = paramsFor('comisiones', user.id,
-    'id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en,estado,cuenta_id)')
-  commissionParams.set('despacho.cuenta_id', `eq.${user.id}`)
-  commissionParams.set('despacho.estado', 'in.(despachada,entregada)')
-  addPeriod(commissionParams, period, 'despacho.creado_en')
-  for (const ids of chunks) {
-    const params = new URLSearchParams(commissionParams)
-    if (ids) params.set('vendedorid', `in.(${ids.join(',')})`)
-    const rows = await readAllRows(env, headers, 'comisiones', params, { signal })
-    for (const row of rows) {
-      if (row.cuentaid !== user.id || (own && row.vendedorid !== operador.id) || (team && !sellerIds.has(row.vendedorid))) {
-        throw new Error('Comisiones fuera del alcance del operador')
-      }
+  for (const row of commissions) {
+    if (row.cuentaid !== user.id || (own && row.vendedorid !== operador.id) || (team && !sellerIds.has(row.vendedorid))) {
+      throw new Error('Comisiones fuera del alcance del operador')
     }
-    // Misma política de CxC, donaciones, préstamos y productos que el módulo Comisiones.
-    // Los registros modernos ya vienen netos; solo los legacy necesitan enriquecimiento.
-    const current = rows.filter(row => row.estado === 'generada').map(row => ({
-      vendedorid: row.vendedorid, despachoid: row.despachoid, totalcomision: Number(row.totalcomision || 0),
-    }))
-    const legacy = rows.filter(row => row.estado !== 'generada')
-    commissions.push(...current, ...(legacy.length ? await enrichCommissions(env, headers, legacy, user.id, { strict: true }) : []))
   }
+  // Misma política de CxC, donaciones, préstamos y productos que el módulo Comisiones.
+  // Los registros modernos ya vienen netos; solo los legacy necesitan enriquecimiento.
+  const legacy = commissions.filter(row => row.estado !== 'generada')
+  commissions = [
+    ...commissions.filter(row => row.estado === 'generada').map(row => ({
+      vendedorid: row.vendedorid, despachoid: row.despachoid, totalcomision: Number(row.totalcomision || 0),
+    })),
+    ...(legacy.length ? await enrichCommissions(env, headers, legacy, user.id, { strict: true }) : []),
+  ]
   commissions = commissions.filter(row => Number(row.totalcomision) > 0)
   result.comisiones = {
     totalUsd: money(commissions.reduce((sum, row) => sum + Number(row.totalcomision), 0)),
@@ -103,27 +111,19 @@ async function readFinancialData(env, headers, user, operador, access, period, s
     result.equipo = [...rows.values()].map(row => ({ ...row, ventasUsd: money(row.ventasUsd), comisionesUsd: money(row.comisionesUsd) }))
       .sort((a, b) => b.ventasUsd - a.ventasUsd || a.nombre.localeCompare(b.nombre, 'es'))
   }
-  if (access.profit) {
-    const items = []
-    for (const ids of splitIds(sales.map(sale => sale.id))) {
-      const params = paramsFor('notas_despacho_items', user.id, 'id,despacho_id,producto_id,cantidad,es_prestamo')
-      params.set('despacho_id', `in.(${ids.join(',')})`)
-      items.push(...await readAllRows(env, headers, 'notas_despacho_items', params, { signal }))
-    }
-    const products = []
-    for (const ids of splitIds(items.map(item => item.producto_id))) {
-      const params = paramsFor('productos', user.id, 'id,costo_usd')
-      params.set('id', `in.(${ids.join(',')})`)
-      products.push(...await readAllRows(env, headers, 'productos', params, { signal }))
-    }
-    result.gananciasEmpresa = estimateGrossProfit(sales, items, products)
-  }
   return result
 }
 
 async function readOperations(env, headers, user, access, signal, now) {
+  const isAdministration = access.scope === 'administracion'
+  const isLogistics = access.scope === 'logistica'
+  const today = getDashboardPeriod('hoy', now)
   const params = paramsFor('notas_despacho', user.id, 'id,numero,estado,creado_en,entregada_en,cliente_id')
   params.set('estado', access.deliveries ? 'in.(despachada,entregada)' : 'eq.pendiente')
+  if (isAdministration || isLogistics) {
+    params.set('creado_en', `gte.${today.desde}`)
+    params.append('creado_en', `lt.${today.hasta}`)
+  }
   const dispatches = await readAllRows(env, headers, 'notas_despacho', params, { signal })
   const pending = dispatches.filter(row => row.estado === (access.deliveries ? 'despachada' : 'pendiente'))
   const result = { operaciones: { pendientes: pending.length } }
@@ -144,7 +144,32 @@ async function readOperations(env, headers, user, access, signal, now) {
     cliente: names.get(row.cliente_id)?.nombre ?? 'Cliente no disponible',
     ubicacion: access.deliveries ? [names.get(row.cliente_id)?.ciudad, names.get(row.cliente_id)?.estado].filter(Boolean).join(', ') : undefined,
   }))
-  if (access.receivables) {
+  if (isAdministration) {
+    const codQuery = paramsFor('cuentas_por_cobrar', user.id, 'id,cliente_id,despacho_id,monto_usd,saldo_usd')
+    codQuery.set('tipo', 'eq.cargo')
+    codQuery.set('metodo_pago', 'eq.cod')
+    codQuery.set('saldo_usd', 'gt.0')
+    const dueQuery = paramsFor('cuentas_por_cobrar', user.id, 'id,cliente_id,despacho_id,monto_usd,saldo_usd,fecha_vencimiento')
+    dueQuery.set('tipo', 'eq.cargo')
+    dueQuery.set('metodo_pago', 'eq.cxc')
+    dueQuery.set('saldo_usd', 'gt.0')
+    dueQuery.set('fecha_vencimiento', `gte.${today.desde.slice(0, 10)}`)
+    const dueUntil = new Date(today.hasta)
+    dueUntil.setUTCDate(dueUntil.getUTCDate() + 6)
+    dueQuery.append('fecha_vencimiento', `lt.${dueUntil.toISOString().slice(0, 10)}`)
+    const [codRows, dueRows] = await Promise.all([
+      readAllRows(env, headers, 'cuentas_por_cobrar', codQuery, { signal }),
+      readAllRows(env, headers, 'cuentas_por_cobrar', dueQuery, { signal }),
+    ])
+    result.operaciones.codPendientes = {
+      cantidad: codRows.length,
+      totalUsd: money(codRows.reduce((sum, row) => sum + Number(row.saldo_usd || 0), 0)),
+    }
+    result.operaciones.deudasPorVencer = {
+      cantidad: dueRows.length,
+      totalUsd: money(dueRows.reduce((sum, row) => sum + Number(row.saldo_usd || 0), 0)),
+    }
+  } else if (access.receivables) {
     const query = paramsFor('clientes', user.id, 'id,saldo_pendiente')
     query.set('activo', 'eq.true')
     query.set('saldo_pendiente', 'gt.0')

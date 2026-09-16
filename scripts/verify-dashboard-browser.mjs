@@ -32,10 +32,11 @@ const iso = now.toISOString()
 const rolePin = rol => rol.startsWith('vendedor') ? '1234' : '123456'
 const roleNames = { jefe: 'Jefe QA', supervisor: 'Supervisor QA', vendedor: 'Vendedor Alfa QA', vendedor_sin_comision: 'Vendedor Beta QA', administracion: 'Administración QA', logistica: 'Logística QA', desarrollador: 'Soporte QA' }
 const operators = await Promise.all(Object.entries(roleNames).map(async ([rol, nombre], i) => ({ id: uuid(100 + i), cuenta_id: account, nombre, rol, activo: true, color: '#1B365D', codigo: `QA-${i}`, pin_hash: await hashPinPBKDF2(rolePin(rol), 'qa-only-salt'), pin_salt: 'qa-only-salt', es_externo: false })))
+const inactiveSeller = { id: uuid(199), cuenta_id: account, nombre: 'Vendedor Inactivo QA', rol: 'vendedor', activo: false, color: '#888888', codigo: 'QA-INACTIVO', es_externo: false }
 const actor = Object.fromEntries(operators.map(row => [row.rol, row]))
 const sale = (id, seller, total, estado = 'entregada') => ({ id: uuid(id), numero: id, cuenta_id: account, vendedor_id: seller.id, total_usd: total, creado_en: iso, entregada_en: iso, estado, flete_usd: 10, corte_usd: 5, forma_pago: 'Efectivo', cliente_id: uuid(501) })
 const data = {
-  usuarios: operators,
+  usuarios: [...operators, inactiveSeller],
   notas_despacho: [sale(201, actor.vendedor, 115), sale(202, actor.vendedor_sin_comision, 215), sale(203, actor.jefe, 1015), sale(204, actor.vendedor, 99, 'pendiente'), sale(205, actor.vendedor_sin_comision, 75, 'despachada')],
   comisiones: [
     { id: uuid(301), cuentaid: account, vendedorid: actor.vendedor.id, despachoid: uuid(201), totalcomision: 5, estado: 'generada' },
@@ -44,6 +45,7 @@ const data = {
   notas_despacho_items: [201, 202, 203, 205].map((n, i) => ({ id: uuid(400 + i), despacho_id: uuid(n), cuenta_id: account, producto_id: uuid(601), cantidad: 1, es_prestamo: false })),
   productos: [{ id: uuid(601), cuenta_id: account, costo_usd: 30, stock_actual: 1, stock_minimo: 3, activo: true }],
   clientes: [{ id: uuid(501), cuenta_id: account, nombre: 'Cliente QA', ciudad: 'Valencia', estado: 'Carabobo', activo: true, saldo_pendiente: 150 }],
+  cuentas_por_cobrar: [{ id: uuid(701), cuenta_id: account, cliente_id: uuid(501), despacho_id: uuid(204), tipo: 'cargo', metodo_pago: 'cod', monto_usd: 40, saldo_usd: 40 }, { id: uuid(702), cuenta_id: account, cliente_id: uuid(501), despacho_id: uuid(201), tipo: 'cargo', metodo_pago: 'cxc', monto_usd: 90, saldo_usd: 90, fecha_vencimiento: '2099-01-01' }],
 }
 const sessions = new Map()
 const serverCalls = []
@@ -181,10 +183,12 @@ try {
     await login(page, rol)
     const main = page.getByRole('main', { name: 'Inicio por rol' })
     const text = await main.innerText()
-    if (rol === 'jefe') { assert.match(text, /Ganancia bruta estimada/); assert.match(text, /Resultados por vendedor/) }
-    if (rol === 'supervisor') { assert.match(text, /Resultados por vendedor/); assert.match(text, /Vendedor Alfa QA/); assert.match(text, /Vendedor Beta QA/); assert.doesNotMatch(text, /Ganancia bruta estimada|Ventas de la empresa|Cuentas por cobrar/) }
+    if (rol === 'jefe') { assert.doesNotMatch(text, /Ganancia bruta estimada/); assert.match(text, /Resultados por vendedor/); assert.match(text, /Vendedor Alfa QA/); assert.match(text, /Supervisor QA/); assert.doesNotMatch(text, /Vendedor Beta QA|Inactivo/) }
+    if (rol === 'supervisor') { assert.match(text, /Resultados por vendedor/); assert.match(text, /Vendedor Alfa QA/); assert.match(text, /Supervisor QA/); assert.doesNotMatch(text, /Vendedor Beta QA|Ganancia bruta estimada|Ventas de la empresa|Cuentas por cobrar/) }
     if (rol.startsWith('vendedor')) { assert.match(text, /Mis ventas/); assert.match(text, /Mis comisiones generadas/); assert.doesNotMatch(text, /Resultados por vendedor|Ganancia bruta|Clientes con deuda|Cuentas por cobrar/); assert.doesNotMatch(text, new RegExp(rol === 'vendedor' ? roleNames.vendedor_sin_comision : roleNames.vendedor)) }
-    if (['administracion', 'logistica'].includes(rol)) assert.doesNotMatch(text, /Resultados por vendedor|Ganancia bruta|Mis comisiones/)
+    if (rol === 'administracion') { assert.match(text, /Despachos por aprobar hoy/); assert.match(text, /COD pendientes/); assert.match(text, /Deudas por vencer/); assert.doesNotMatch(text, /Cuentas por cobrar/); assert.doesNotMatch(text, /Prioridad a los pendientes más antiguos/) }
+    if (rol === 'logistica') assert.doesNotMatch(text, /Resultados por vendedor|Ganancia bruta|Mis comisiones|COD pendientes|Deudas por vencer/)
+    assert.doesNotMatch(text, /Datos de entregas|Datos administrativos|Toda la empresa|Solo vendedores del equipo/)
     check(`Desktop role isolation: ${rol}`)
     await screenshot(page, `${rol}-desktop.png`)
     await page.setViewportSize({ width: 390, height: 844 })
@@ -199,12 +203,23 @@ try {
       await page.setViewportSize({ width: 1440, height: 1000 })
       const requested = []
       page.on('request', req => { if (req.url().includes('/api/dashboard/')) requested.push(req.url()) })
-      await page.getByLabel('Período del resumen').selectOption('anterior')
-      await page.waitForResponse(response => response.url().includes('periodo=anterior'))
+      // El trigger del CustomSelect queda dentro de un <label>Período…, así que su
+      // nombre accesible es el del label; las opciones viven en un portal al body.
+      await page.getByRole('button', { name: 'Período', exact: true }).click()
+      const previousResponse = page.waitForResponse(response => response.url().includes('periodo=anterior'))
+      await page.getByRole('button', { name: 'Mes anterior' }).click()
+      await previousResponse
       await page.getByText('No hay ventas en este período.', { exact: true }).waitFor()
       check('Previous month selector changes scoped data')
-      await page.getByLabel('Período del resumen').selectOption('mes')
+      await page.getByRole('button', { name: 'Período', exact: true }).click()
+      await page.getByRole('button', { name: 'Este mes' }).click()
       await page.getByText('DES-00201', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Período', exact: true }).click()
+      const todayResponse = page.waitForResponse(response => response.url().includes('periodo=hoy'))
+      await page.getByRole('button', { name: 'Hoy', exact: true }).click()
+      await todayResponse
+      await page.getByText('DES-00201', { exact: true }).waitFor()
+      check('Today selector uses the current Caracas day')
       forceDashboardFailure = true
       await main.getByRole('button', { name: 'Actualizar', exact: true }).click()
       await page.getByRole('alert').filter({ hasText: 'Fallo de prueba' }).waitFor()
@@ -234,7 +249,7 @@ try {
   const a = await context(), b = await context()
   const pa = await a.newPage(), pb = await b.newPage()
   await login(pa, 'jefe'); await login(pb, 'vendedor')
-  assert.match(await pa.getByRole('main', { name: 'Inicio por rol' }).innerText(), /Ganancia bruta/)
+  assert.doesNotMatch(await pa.getByRole('main', { name: 'Inicio por rol' }).innerText(), /Ganancia bruta/)
   assert.doesNotMatch(await pb.getByRole('main', { name: 'Inicio por rol' }).innerText(), /Ganancia bruta/)
   check('Concurrent boss and seller browsers retain separate identity')
   await a.close(); await b.close()

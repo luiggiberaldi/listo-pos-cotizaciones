@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { addPeriod, estimateGrossProfit, getDashboardPeriod, readAllRows } from '../dashboardData.js'
+import { addPeriod, getDashboardPeriod, readAllRows } from '../dashboardData.js'
 
 const env = { SUPABASE_URL: 'https://dashboard.test.invalid' }
 afterEach(() => vi.unstubAllGlobals())
@@ -48,6 +48,10 @@ describe('Caracas periods and metric definitions', () => {
   it('crosses the year for previous month', () => {
     expect(getDashboardPeriod('anterior', new Date('2026-01-15T12:00:00Z')).desde).toBe('2025-12-01T00:00:00-04:00')
   })
+  it('supports the current Caracas day with an exclusive next-day bound', () => {
+    const period = getDashboardPeriod('hoy', new Date('2026-09-15T12:00:00Z'))
+    expect(period).toMatchObject({ id: 'hoy', label: 'Hoy', desde: '2026-09-15T00:00:00-04:00', hasta: '2026-09-16T00:00:00-04:00' })
+  })
   it('preserves both lower and exclusive upper bound for the same field', () => {
     const period = getDashboardPeriod('mes', new Date('2026-09-15T12:00:00Z'))
     const params = addPeriod(new URLSearchParams(), period)
@@ -55,20 +59,5 @@ describe('Caracas periods and metric definitions', () => {
   })
   it('requires an explicit supported period', () => {
     expect(() => getDashboardPeriod('rol=jefe')).toThrow()
-  })
-  it('never calls revenue minus commissions company profit', () => {
-    const result = estimateGrossProfit([{ id: 'd', total_usd: 115, flete_usd: 10, corte_usd: 5, descuento_total_usd: 20 }], [{ despacho_id: 'd', producto_id: 'p', cantidad: 2 }], [{ id: 'p', costo_usd: 30 }])
-    expect(result.brutaEstimadaUsd).toBe(40)
-    expect(result.base).toBe('costos_actuales')
-    expect(result.descripcion).toContain('No es utilidad neta')
-  })
-  it.each([null, undefined, '', -1, 'unknown'])('does not substitute missing/invalid cost %s with zero', cost => {
-    const result = estimateGrossProfit([{ id: 'd', total_usd: 100 }], [{ despacho_id: 'd', producto_id: 'p', cantidad: 1 }], [{ id: 'p', costo_usd: cost }])
-    expect(result.brutaEstimadaUsd).toBeNull()
-    expect(result.despachosSinCosto).toBe(1)
-  })
-  it('preserves valid zero cost and losses', () => {
-    expect(estimateGrossProfit([{ id: 'd', total_usd: 25 }], [{ despacho_id: 'd', producto_id: 'p', cantidad: 1 }], [{ id: 'p', costo_usd: 0 }]).brutaEstimadaUsd).toBe(25)
-    expect(estimateGrossProfit([{ id: 'd', total_usd: 25 }], [{ despacho_id: 'd', producto_id: 'p', cantidad: 1 }], [{ id: 'p', costo_usd: 40 }]).brutaEstimadaUsd).toBe(-15)
   })
 })

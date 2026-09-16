@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { canOpenDashboard, dashboardIdentityMatches, getDashboardAccess, mayPersistQuery } from '../dashboardAccess.js'
+import { canOpenDashboard, dashboardIdentityMatches, getDashboardAccess, mayPersistQuery, SELLER_ROLES } from '../dashboardAccess.js'
 
 describe('explicit home permission matrix', () => {
-  it('allows company profit only for jefe', () => {
-    expect(getDashboardAccess('jefe').profit).toBe(true)
-    for (const role of ['supervisor', 'vendedor', 'vendedor_sin_comision', 'administracion', 'logistica', 'desarrollador', 'admin', '__proto__', null]) {
+  it('no longer exposes a company profit flag for any role', () => {
+    for (const role of ['jefe', 'supervisor', 'vendedor', 'vendedor_sin_comision', 'administracion', 'logistica', 'desarrollador', 'admin', '__proto__', null]) {
       expect(getDashboardAccess(role).profit).not.toBe(true)
     }
   })
@@ -16,6 +15,10 @@ describe('explicit home permission matrix', () => {
   })
   it('grants supervisor seller breakdown, not company profit', () => {
     expect(getDashboardAccess('supervisor')).toMatchObject({ scope: 'equipo', team: true })
+  })
+  it('team table lists vendedor and supervisor only; company seller is a total-only alias', () => {
+    expect(SELLER_ROLES).toEqual(['vendedor', 'supervisor'])
+    expect(SELLER_ROLES).not.toContain('vendedor_sin_comision')
   })
   it('denies missing, unknown and inactive profiles', () => {
     expect(canOpenDashboard(null)).toBe(false)

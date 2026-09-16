@@ -5,7 +5,7 @@ vi.mock('../../lib/auth.js', () => ({ validateOperator: vi.fn() }))
 
 const account = '10000000-0000-4000-8000-000000000001'
 const other = '10000000-0000-4000-8000-000000000002'
-const ids = { vendedor: '20000000-0000-4000-8000-000000000001', vendedor_sin_comision: '20000000-0000-4000-8000-000000000002', jefe: '20000000-0000-4000-8000-000000000003', supervisor: '20000000-0000-4000-8000-000000000004' }
+const ids = { vendedor: '20000000-0000-4000-8000-000000000001', vendedor_sin_comision: '20000000-0000-4000-8000-000000000002', jefe: '20000000-0000-4000-8000-000000000003', supervisor: '20000000-0000-4000-8000-000000000004', inactivo: '20000000-0000-4000-8000-000000000005' }
 const env = { SUPABASE_URL: 'https://dashboard.test.invalid' }
 let fixtures, calls
 function auth(rol, overrides = {}) {
@@ -21,7 +21,7 @@ function installTransport({ failTable, injectSale } = {}) {
     expect(url.origin).toBe(env.SUPABASE_URL)
     const table = url.pathname.split('/').at(-1)
     const params = url.searchParams
-    calls.push({ table, params: Object.fromEntries(params), method: init.method || 'GET' })
+    calls.push({ table, params: Object.fromEntries(params), query: params.toString(), method: init.method || 'GET' })
     expect(init.method || 'GET').toBe('GET')
     expect(params.get(table === 'comisiones' ? 'cuentaid' : 'cuenta_id')).toBe(`eq.${account}`)
     if (failTable === table) return new Response('{}', { status: 503 })
@@ -53,12 +53,13 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-09-15T14:00:00Z'))
   const sale = (id, seller, amount, tenant = account) => ({ id, numero: Number(id.replace(/\D/g, '')) || 1, vendedor_id: seller, cuenta_id: tenant, total_usd: amount, creado_en: '2026-09-10T15:00:00Z', estado: 'entregada', flete_usd: 10, corte_usd: 5, forma_pago: 'Efectivo', cliente_id: 'client1' })
   fixtures = {
-    usuarios: [{ id: ids.vendedor, cuenta_id: account, rol: 'vendedor', nombre: 'Seller A', activo: true }, { id: ids.vendedor_sin_comision, cuenta_id: account, rol: 'vendedor_sin_comision', nombre: 'Seller B', activo: true }, { id: ids.jefe, cuenta_id: account, rol: 'jefe', nombre: 'Boss private', activo: true }],
-    notas_despacho: [sale('sale1', ids.vendedor, 115), sale('sale2', ids.vendedor_sin_comision, 215), sale('sale3', ids.jefe, 1015), sale('sale4', ids.vendedor, 99999, other)],
+    usuarios: [{ id: ids.vendedor, cuenta_id: account, rol: 'vendedor', nombre: 'Seller A', activo: true }, { id: ids.vendedor_sin_comision, cuenta_id: account, rol: 'vendedor_sin_comision', nombre: 'Seller B', activo: true }, { id: ids.jefe, cuenta_id: account, rol: 'jefe', nombre: 'Boss private', activo: true }, { id: ids.supervisor, cuenta_id: account, rol: 'supervisor', nombre: 'Supervisor private', activo: true }],
+    notas_despacho: [sale('sale1', ids.vendedor, 115), sale('sale2', ids.vendedor_sin_comision, 215), sale('sale3', ids.jefe, 1015), sale('sale4', ids.vendedor, 99999, other), { ...sale('sale5', ids.vendedor, 320), id: 'sale5', numero: 5, creado_en: '2026-09-15T13:00:00Z', estado: 'pendiente' }],
     comisiones: [commission('commission1', ids.vendedor, 'sale1', 4), commission('commission2', ids.vendedor_sin_comision, 'sale2', 8), commission('commission3', ids.vendedor, 'sale2', 1)],
     notas_despacho_items: [1, 2, 3].map(i => ({ id: `item${i}`, cuenta_id: account, despacho_id: `sale${i}`, producto_id: 'product1', cantidad: i })),
     productos: [{ id: 'product1', cuenta_id: account, costo_usd: 30, activo: true, stock_actual: 2, stock_minimo: 5 }],
     clientes: [{ id: 'client1', cuenta_id: account, nombre: 'Private client', activo: true, saldo_pendiente: 100, ciudad: 'Valencia' }],
+    cuentas_por_cobrar: [{ id: 'cod1', cuenta_id: account, cliente_id: 'client1', despacho_id: 'sale5', tipo: 'cargo', metodo_pago: 'cod', monto_usd: 40, saldo_usd: 40 }, { id: 'due1', cuenta_id: account, cliente_id: 'client1', despacho_id: 'sale1', tipo: 'cargo', metodo_pago: 'cxc', monto_usd: 90, saldo_usd: 90, fecha_vencimiento: '2026-09-20' }],
   }
   auth('vendedor')
   installTransport()
@@ -77,7 +78,7 @@ describe('server-selected home data', () => {
     expect(body.ultimasVentas.map(row => row.id)).toEqual(['sale1'])
     expect(body.equipo).toBeUndefined()
     expect(body.gananciasEmpresa).toBeUndefined()
-    expect(calls.map(call => call.table)).toEqual(['notas_despacho', 'comisiones'])
+    expect(new Set(calls.map(call => call.table))).toEqual(new Set(['notas_despacho', 'comisiones']))
     expect(response.headers.get('cache-control')).toContain('no-store')
   })
   it('preserves own historic commission for seller_sin_comision without widening scope', async () => {
@@ -88,24 +89,59 @@ describe('server-selected home data', () => {
     expect(body.comisiones.sinComisionConfigurada).toBe(true)
     expect(body.equipo).toBeUndefined()
   })
-  it('supervisor sees sellers and their earnings, never boss operations or company profit', async () => {
+  it('supervisor sees active sellers/supervisors and their earnings, never boss operations or company profit', async () => {
     auth('supervisor')
     const body = await (await handleDashboard(request(), env)).json()
     expect(body.scope).toBe('equipo')
-    expect(body.ventas.totalUsd).toBe(330)
+    // Seller A (115). Las ventas de EMPRESA (vendedor_sin_comision) quedan fuera del alcance del supervisor.
+    expect(body.ventas.totalUsd).toBe(115)
     expect(body.equipo).toHaveLength(2)
     expect(body.equipo.map(row => row.nombre)).not.toContain('Boss private')
-    expect(body.comisiones.totalUsd).toBe(13)
+    expect(body.equipo.map(row => row.nombre)).not.toContain('Seller B')
+    expect(body.comisiones.totalUsd).toBe(5)
     expect(body.gananciasEmpresa).toBeUndefined()
     expect(calls.every(call => !['clientes', 'productos', 'cuentas_por_cobrar'].includes(call.table))).toBe(true)
   })
-  it('boss sees company totals and explicitly estimated gross profit', async () => {
+  it('boss sees company totals without estimated profit data', async () => {
     auth('jefe')
     const body = await (await handleDashboard(request('periodo=historico'), env)).json()
     expect(body.ventas).toEqual({ totalUsd: 1345, despachos: 3 })
-    expect(body.gananciasEmpresa.brutaEstimadaUsd).toBe(1120)
-    expect(body.gananciasEmpresa.base).toBe('costos_actuales')
+    expect(body.gananciasEmpresa).toBeUndefined()
+    expect(calls.every(call => !['notas_despacho_items', 'productos'].includes(call.table))).toBe(true)
     expect(body.equipo).toHaveLength(2)
+  })
+  it('boss totals include company sales; team table lists only active sellers and supervisors', async () => {
+    auth('jefe')
+    fixtures.usuarios.push({ id: ids.inactivo, cuenta_id: account, rol: 'vendedor', nombre: 'Gone Seller', activo: false })
+    const body = await (await handleDashboard(request('periodo=historico'), env)).json()
+    expect(body.ventas.totalUsd).toBe(1345)
+    const names = body.equipo.map(row => row.nombre)
+    expect(names).toContain('Seller A')
+    expect(names).toContain('Supervisor private')
+    expect(names).not.toContain('Seller B')
+    expect(names).not.toContain('Gone Seller')
+    expect(names).not.toContain('Boss private')
+  })
+  it('administration shows only today pending dispatches plus open COD and near-term debts', async () => {
+    auth('administracion')
+    const body = await (await handleDashboard(request(), env)).json()
+    expect(body.operaciones.pendientes).toBe(1)
+    expect(body.operaciones.despachos.map(row => row.id)).toEqual(['sale5'])
+    expect(body.operaciones.codPendientes).toEqual({ cantidad: 1, totalUsd: 40 })
+    expect(body.operaciones.deudasPorVencer).toEqual({ cantidad: 1, totalUsd: 90 })
+    const pendingCall = calls.find(call => call.table === 'notas_despacho')
+    expect(pendingCall.query).toContain('creado_en=gte.2026-09-15T00%3A00%3A00-04%3A00')
+    expect(pendingCall.query).toContain('creado_en=lt.2026-09-16T00%3A00%3A00-04%3A00')
+  })
+  it('logistics shows only today pending deliveries, never historical ones', async () => {
+    auth('logistica')
+    fixtures.notas_despacho.push({ ...fixtures.notas_despacho[0], id: 'sale6', numero: 6, creado_en: '2026-09-15T12:00:00Z', estado: 'despachada' })
+    const body = await (await handleDashboard(request(), env)).json()
+    expect(body.operaciones.pendientes).toBe(1)
+    expect(body.operaciones.despachos.map(row => row.id)).toEqual(['sale6'])
+    const deliveryCall = calls.find(call => call.table === 'notas_despacho')
+    expect(deliveryCall.query).toContain('creado_en=gte.2026-09-15T00%3A00%3A00-04%3A00')
+    expect(deliveryCall.query).toContain('creado_en=lt.2026-09-16T00%3A00%3A00-04%3A00')
   })
   it.each(['administracion', 'logistica', 'desarrollador'])('%s does not receive financial or team fields', async role => {
     auth(role)
@@ -143,12 +179,11 @@ describe('server-selected home data', () => {
     expect(body.ventas).toBeUndefined()
     expect(body.comisiones).toBeUndefined()
   })
-  it('does not report an invented company profit when cost records are missing', async () => {
+  it('does not compute company profit anymore, even with missing cost records', async () => {
     auth('jefe')
     fixtures.productos = []
     const body = await (await handleDashboard(request(), env)).json()
-    expect(body.gananciasEmpresa.brutaEstimadaUsd).toBeNull()
-    expect(body.gananciasEmpresa.despachosSinCosto).toBe(3)
+    expect(body.gananciasEmpresa).toBeUndefined()
   })
   it('uses unique sales, not commission row count, and fully paginates over 1,000 records', async () => {
     fixtures.notas_despacho = Array.from({ length: 1103 }, (_, i) => ({ ...fixtures.notas_despacho[0], id: `sale-${String(i).padStart(5, '0')}`, total_usd: 1 }))

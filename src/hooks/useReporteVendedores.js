@@ -5,6 +5,7 @@ import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
 import { getComisionPctForItem, getNonCxcFraction, isDonationPayment, isLoanPayment } from '../utils/comisionUtils'
+import { shouldIncludeReporteVendedor } from '../utils/reporteVendedoresAccess'
 
 export const REPORTE_VENDEDORES_KEY = ['reporte-vendedores']
 
@@ -23,7 +24,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
     perfil?.rol === 'desarrollador'
 
   return useQuery({
-    queryKey: [...REPORTE_VENDEDORES_KEY, from, to, prevFrom, prevTo, perfil?.id],
+    queryKey: [...REPORTE_VENDEDORES_KEY, from, to, prevFrom, prevTo, perfil?.id, perfil?.rol],
     queryFn: async () => {
       // ── Timezone local para filtros correctos ────────────────────────────
       const rawOffset = new Date().getTimezoneOffset()
@@ -538,13 +539,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         .filter(v => {
           // El desarrollador nunca debe aparecer en ningún reporte
           if (v.rol === 'desarrollador') return false
-          // Administración y logística tampoco aparecen en el desglose de vendedores
-          if (v.rol === 'administracion' || v.rol === 'logistica') return false
-          // Jefes y supervisores tampoco aparecen en este reporte
-          if (v.rol === 'jefe' || v.rol === 'supervisor') return false
-          
-          // Incluir vendedores sin comisión (como "EMPRESA" para ventas y préstamos)
-          return true
+          return shouldIncludeReporteVendedor(perfil?.rol, v)
         })
         .map(v => {
           const enviadas = v.cotizaciones.enviada + v.cotizaciones.aceptada + v.cotizaciones.rechazada
@@ -565,7 +560,12 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       // ── 7. KPIs globales del período ──────────────────────────────────────
       const totalVentasGlobal = porVendedor.reduce((s, v) => s + v.totalUsd, 0)
       const totalDespachosGlobal = porVendedor.reduce((s, v) => s + v.numDespachos, 0)
-      const totalComisionGlobal = comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
+      // Para supervisor, el KPI respeta exactamente las filas visibles y excluye
+      // cualquier comisión histórica asociada a EMPRESA. Jefe conserva el total
+      // histórico general, incluida esa comisión si existe.
+      const totalComisionGlobal = perfil?.rol === 'supervisor'
+        ? porVendedor.reduce((s, v) => s + Number(v.comisionTotal || 0), 0)
+        : comisiones.reduce((s, c) => s + Number(c.totalcomision || 0), 0)
       const totalComisionCabilla2Global = porVendedor.reduce((s, v) => s + (v.comisionCabilla2 || 0), 0)
       const totalComisionCabilla3Global = porVendedor.reduce((s, v) => s + (v.comisionCabilla3 || 0), 0)
       const totalComisionOtrosGlobal = porVendedor.reduce((s, v) => s + (v.comisionOtros || 0), 0)

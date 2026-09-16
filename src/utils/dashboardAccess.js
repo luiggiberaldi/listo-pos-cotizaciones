@@ -1,6 +1,6 @@
 // Una matriz explícita compartida por la vista y el servidor. Sin herencia implícita.
 const policies = {
-  jefe: { scope: 'empresa', sales: true, profit: true, commissions: true, team: true, quote: true },
+  jefe: { scope: 'empresa', sales: true, commissions: true, team: true, quote: true },
   supervisor: { scope: 'equipo', sales: true, commissions: true, team: true, quote: true },
   vendedor: { scope: 'propio', sales: true, commissions: true, quote: true },
   vendedor_sin_comision: { scope: 'propio', sales: true, noCommission: true, quote: true },
@@ -13,7 +13,10 @@ const denied = Object.freeze({ scope: 'denegado' })
 for (const policy of Object.values(policies)) Object.freeze(policy)
 Object.freeze(policies)
 
-export const SELLER_ROLES = Object.freeze(['vendedor', 'vendedor_sin_comision'])
+// Roles que se listan en "Resultados por vendedor" y definen el alcance "equipo".
+// Los inactivos se excluyen siempre (filtro activo en el servidor); vendedor_sin_comision
+// (ventas de EMPRESA) suma en los totales pero no se lista en la tabla.
+export const SELLER_ROLES = Object.freeze(['vendedor', 'supervisor'])
 
 export function getDashboardAccess(rol) {
   return Object.hasOwn(policies, rol) ? policies[rol] : denied

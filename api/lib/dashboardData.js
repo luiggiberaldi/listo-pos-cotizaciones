@@ -41,7 +41,7 @@ export function splitIds(ids, size = 50) {
 }
 
 export function getDashboardPeriod(id = 'mes', now = new Date()) {
-  if (!['mes', 'anterior', 'historico'].includes(id)) throw new Error('Período inválido')
+  if (!['hoy', 'mes', 'anterior', 'historico'].includes(id)) throw new Error('Período inválido')
   const date = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit',
   }).formatToParts(now)
@@ -52,6 +52,12 @@ export function getDashboardPeriod(id = 'mes', now = new Date()) {
   const next = month === 12 ? start(year + 1, 1) : start(year, month + 1)
   const previous = month === 1 ? start(year - 1, 12) : start(year, month - 1)
   const base = { id, timeZone: 'America/Caracas' }
+  const today = `${year}-${String(month).padStart(2, '0')}-${String(Number(parts.day)).padStart(2, '0')}`
+  const todayStart = `${today}T00:00:00-04:00`
+  const tomorrowDate = new Date(`${today}T12:00:00-04:00`)
+  tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1)
+  const tomorrow = tomorrowDate.toISOString().slice(0, 10)
+  if (id === 'hoy') return { ...base, label: 'Hoy', desde: todayStart, hasta: `${tomorrow}T00:00:00-04:00` }
   if (id === 'historico') return { ...base, label: 'Todo el historial', desde: null, hasta: now.toISOString() }
   if (id === 'anterior') return { ...base, label: 'Mes anterior', desde: previous, hasta: start(year, month) }
   return { ...base, label: 'Este mes', desde: start(year, month), hasta: next }
@@ -65,48 +71,4 @@ export function addPeriod(params, period, field = 'creado_en') {
 
 export function money(value) {
   return Math.round((Number(value) || 0) * 100) / 100
-}
-
-// No se inventan costos históricos ni se confunde facturación con beneficio.
-export function estimateGrossProfit(sales, items, products) {
-  const byDispatch = new Map()
-  for (const item of items) {
-    if (!byDispatch.has(item.despacho_id)) byDispatch.set(item.despacho_id, [])
-    byDispatch.get(item.despacho_id).push(item)
-  }
-  const costs = new Map(products.map(product => [product.id, product.costo_usd]))
-  let eligibleSales = 0
-  let totalCost = 0
-  let missingDispatches = 0
-  for (const sale of sales) {
-    const lines = byDispatch.get(sale.id) ?? []
-    let complete = lines.length > 0
-    let cost = 0
-    for (const line of lines) {
-      const value = costs.get(line.producto_id)
-      const quantity = Number(line.cantidad)
-      if (line.es_prestamo || value == null || value === '' || !Number.isFinite(Number(value))
-        || Number(value) < 0 || !Number.isFinite(quantity) || quantity < 0) {
-        complete = false
-      } else {
-        cost += Number(value) * quantity
-      }
-    }
-    if (!complete) {
-      missingDispatches++
-      continue
-    }
-    // total_usd ya incluye el descuento aplicado: NO restarlo dos veces.
-    eligibleSales += Math.max(0, Number(sale.total_usd || 0) - Number(sale.flete_usd || 0) - Number(sale.corte_usd || 0))
-    totalCost += cost
-  }
-  return {
-    brutaEstimadaUsd: missingDispatches ? null : money(eligibleSales - totalCost),
-    ventasConCostoUsd: money(eligibleSales),
-    costoProductosUsd: money(totalCost),
-    despachosSinCosto: missingDispatches,
-    despachosConCosto: sales.length - missingDispatches,
-    base: 'costos_actuales',
-    descripcion: 'Ventas sin flete ni corte menos costos actuales de productos. No es utilidad neta ni costo histórico; no descuenta comisiones, gastos ni impuestos.',
-  }
 }

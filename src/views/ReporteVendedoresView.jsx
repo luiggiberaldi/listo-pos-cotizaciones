@@ -7,6 +7,7 @@ import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 import { fmtUsdSimple as fmtUsd, fmtFecha } from '../utils/format'
+import { shouldIncludeReporteVendedor } from '../utils/reporteVendedoresAccess'
 
 // ─── Helpers de rango ─────────────────────────────────────────────────────────
 function getRango(tipo) {
@@ -327,8 +328,15 @@ export default function ReporteVendedoresView() {
     if (!data?.porVendedor || data.porVendedor.length === 0) {
       return { internos: [], externos: [], subInternos: {}, subExternos: {}, totalGlobal: {}, hasData: false }
     }
-    const max = data.porVendedor[0]?.totalUsd ?? 1
-    const mapped = data.porVendedor.map(v => ({ ...v, _maxVenta: max }))
+    // Defensa de UI: el supervisor nunca debe ver EMPRESA ni ningún
+    // vendedor con rol vendedor_sin_comision, incluso si llega una respuesta
+    // cacheada o un backend antiguo.
+    const visibles = data.porVendedor.filter(v => shouldIncludeReporteVendedor(perfil?.rol, v))
+    if (visibles.length === 0) {
+      return { internos: [], externos: [], subInternos: {}, subExternos: {}, totalGlobal: {}, hasData: false }
+    }
+    const max = visibles[0]?.totalUsd ?? 1
+    const mapped = visibles.map(v => ({ ...v, _maxVenta: max }))
 
     const intList = mapped.filter(v => !(v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0)))
     const extList = mapped.filter(v => !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0))
@@ -341,7 +349,7 @@ export default function ReporteVendedoresView() {
       totalGlobal: calcSubtotales(mapped),
       hasData: true
     }
-  }, [data])
+  }, [data, perfil?.rol])
 
   const handleToggle = useCallback((id) => {
     setExpandedId(prev => prev === id ? null : id)
