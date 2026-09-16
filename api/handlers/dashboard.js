@@ -145,10 +145,6 @@ async function readOperations(env, headers, user, access, signal, now) {
     ubicacion: access.deliveries ? [names.get(row.cliente_id)?.ciudad, names.get(row.cliente_id)?.estado].filter(Boolean).join(', ') : undefined,
   }))
   if (isAdministration) {
-    const codQuery = paramsFor('cuentas_por_cobrar', user.id, 'id,cliente_id,despacho_id,monto_usd,saldo_usd')
-    codQuery.set('tipo', 'eq.cargo')
-    codQuery.set('metodo_pago', 'eq.cod')
-    codQuery.set('saldo_usd', 'gt.0')
     const dueQuery = paramsFor('cuentas_por_cobrar', user.id, 'id,cliente_id,despacho_id,monto_usd,saldo_usd,fecha_vencimiento')
     dueQuery.set('tipo', 'eq.cargo')
     dueQuery.set('metodo_pago', 'eq.cxc')
@@ -157,14 +153,7 @@ async function readOperations(env, headers, user, access, signal, now) {
     const dueUntil = new Date(today.hasta)
     dueUntil.setUTCDate(dueUntil.getUTCDate() + 6)
     dueQuery.append('fecha_vencimiento', `lt.${dueUntil.toISOString().slice(0, 10)}`)
-    const [codRows, dueRows] = await Promise.all([
-      readAllRows(env, headers, 'cuentas_por_cobrar', codQuery, { signal }),
-      readAllRows(env, headers, 'cuentas_por_cobrar', dueQuery, { signal }),
-    ])
-    result.operaciones.codPendientes = {
-      cantidad: codRows.length,
-      totalUsd: money(codRows.reduce((sum, row) => sum + Number(row.saldo_usd || 0), 0)),
-    }
+    const dueRows = await readAllRows(env, headers, 'cuentas_por_cobrar', dueQuery, { signal })
     result.operaciones.deudasPorVencer = {
       cantidad: dueRows.length,
       totalUsd: money(dueRows.reduce((sum, row) => sum + Number(row.saldo_usd || 0), 0)),

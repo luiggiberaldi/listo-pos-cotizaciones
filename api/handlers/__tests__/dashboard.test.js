@@ -127,7 +127,7 @@ describe('server-selected home data', () => {
     const body = await (await handleDashboard(request(), env)).json()
     expect(body.operaciones.pendientes).toBe(1)
     expect(body.operaciones.despachos.map(row => row.id)).toEqual(['sale5'])
-    expect(body.operaciones.codPendientes).toEqual({ cantidad: 1, totalUsd: 40 })
+    expect(body.operaciones.codPendientes).toBeUndefined()
     expect(body.operaciones.deudasPorVencer).toEqual({ cantidad: 1, totalUsd: 90 })
     const pendingCall = calls.find(call => call.table === 'notas_despacho')
     expect(pendingCall.query).toContain('creado_en=gte.2026-09-15T00%3A00%3A00-04%3A00')

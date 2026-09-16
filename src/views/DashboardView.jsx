@@ -137,7 +137,7 @@ export default function DashboardView() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard color="gold" icon={Truck} label={administration ? 'Despachos por aprobar hoy' : access.deliveries ? 'Entregas pendientes' : 'Despachos por aprobar'} value={data.operaciones.pendientes} sub={administration ? 'Creados hoy · requieren aprobación' : 'Pendientes actuales de tu área'} />
                 {access.deliveries && <MetricCard color="emerald" icon={ClipboardList} label="Entregadas hoy" value={data.operaciones.entregadasHoy} sub="Día local de Venezuela" />}
-                {administration && <MetricCard color="blue" icon={AlertCircle} label="COD pendientes" value={fmtUsd(data.operaciones.codPendientes.totalUsd)} sub={`${data.operaciones.codPendientes.cantidad} cobros a destino abiertos`} />}
+
                 {administration && <MetricCard color="gold" icon={AlertCircle} label="Deudas por vencer" value={fmtUsd(data.operaciones.deudasPorVencer.totalUsd)} sub={`${data.operaciones.deudasPorVencer.cantidad} cuentas · próximos 7 días`} />}
                 {!administration && access.receivables && <MetricCard color="blue" icon={AlertCircle} label="Cuentas por cobrar" value={fmtUsd(data.operaciones.cuentasPorCobrar.totalUsd)} sub={`${data.operaciones.cuentasPorCobrar.clientes} clientes con saldo pendiente`} />}
                 {access.inventory && <MetricCard color="gold" icon={Package} label="Inventario bajo stock" value={data.operaciones.stockBajo} sub="Productos activos que requieren reposición" />}

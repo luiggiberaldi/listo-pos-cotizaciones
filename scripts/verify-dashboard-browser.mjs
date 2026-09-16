@@ -186,7 +186,7 @@ try {
     if (rol === 'jefe') { assert.doesNotMatch(text, /Ganancia bruta estimada/); assert.match(text, /Resultados por vendedor/); assert.match(text, /Vendedor Alfa QA/); assert.match(text, /Supervisor QA/); assert.doesNotMatch(text, /Vendedor Beta QA|Inactivo/) }
     if (rol === 'supervisor') { assert.match(text, /Resultados por vendedor/); assert.match(text, /Vendedor Alfa QA/); assert.match(text, /Supervisor QA/); assert.doesNotMatch(text, /Vendedor Beta QA|Ganancia bruta estimada|Ventas de la empresa|Cuentas por cobrar/) }
     if (rol.startsWith('vendedor')) { assert.match(text, /Mis ventas/); assert.match(text, /Mis comisiones generadas/); assert.doesNotMatch(text, /Resultados por vendedor|Ganancia bruta|Clientes con deuda|Cuentas por cobrar/); assert.doesNotMatch(text, new RegExp(rol === 'vendedor' ? roleNames.vendedor_sin_comision : roleNames.vendedor)) }
-    if (rol === 'administracion') { assert.match(text, /Despachos por aprobar hoy/); assert.match(text, /COD pendientes/); assert.match(text, /Deudas por vencer/); assert.doesNotMatch(text, /Cuentas por cobrar/); assert.doesNotMatch(text, /Prioridad a los pendientes más antiguos/) }
+    if (rol === 'administracion') { assert.match(text, /Despachos por aprobar hoy/); assert.doesNotMatch(text, /COD pendientes/); assert.match(text, /Deudas por vencer/); assert.doesNotMatch(text, /Cuentas por cobrar/); assert.doesNotMatch(text, /Prioridad a los pendientes más antiguos/) }
     if (rol === 'logistica') assert.doesNotMatch(text, /Resultados por vendedor|Ganancia bruta|Mis comisiones|COD pendientes|Deudas por vencer/)
     assert.doesNotMatch(text, /Datos de entregas|Datos administrativos|Toda la empresa|Solo vendedores del equipo/)
     check(`Desktop role isolation: ${rol}`)
