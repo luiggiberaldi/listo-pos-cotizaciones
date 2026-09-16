@@ -4,8 +4,9 @@
 // Realtime broadcast via Supabase para entrega cross-device
 
 import supabase from './supabase/client'
+import { getOperatorSession } from './operatorSession'
 
-const NOTIF_KEY_BASE = 'construacero_notifications_v2'
+const NOTIF_KEY_BASE = 'construacero_notifications_v3'
 const MAX_NOTIFS = 100
 
 // ─── Sonido de notificación (dual: normal + urgente) ─────────────────────────
@@ -43,11 +44,16 @@ function playNotifSound(type) {
 
 // ─── userId global para la sesión ─────────────────────────────────────────────
 let _currentUserId = null
-export function setNotificationUserId(userId) { _currentUserId = userId }
+let _currentRole = null
+export function setNotificationUserId(userId) {
+  _currentUserId = userId
+  window.dispatchEvent(new CustomEvent('construacero-notification-read'))
+}
 
 function getKey() {
-  if (!_currentUserId) return null
-  return `${NOTIF_KEY_BASE}_${_currentUserId}`
+  const session = getOperatorSession()
+  if (!_currentUserId || session?.operatorId !== _currentUserId) return null
+  return `${NOTIF_KEY_BASE}_${session.accountId}_${session.id}_${_currentUserId}`
 }
 
 export const NOTIF_TYPES = {
@@ -173,6 +179,8 @@ export function createNotification(type, title, body, meta = null, currentRole =
 // Crea la notificación localmente (localStorage + evento + sonido)
 // Aplica deduplicación inteligente: REPLACE para STATE, debounce para EVENT
 function _insertLocalNotification(type, title, body, meta) {
+  if (!getKey()) return null
+  if (['vendedor', 'vendedor_sin_comision'].includes(_currentRole) && meta?.vendedorId !== _currentUserId) return null
   let notifs = readNotifs()
 
   if (STATE_TYPES.has(type)) {
@@ -212,13 +220,14 @@ function _insertLocalNotification(type, title, body, meta) {
 // ─── Supabase Realtime broadcast ──────────────────────────────────────────────
 let _realtimeChannel = null
 
-function _broadcastNotification({ type, title, body, meta, targetRole }) {
+function _broadcastNotification() {
   try {
     if (!_realtimeChannel || _realtimeChannel.state !== 'joined') return // no hay canal activo o no está unido, se pierde (push lo cubre)
     _realtimeChannel.send({
       type: 'broadcast',
       event: 'new_notification',
-      payload: { type, title, body, meta, targetRole, ts: Date.now() },
+      // El canal broadcast es compartido: nunca publicar nombres, importes o IDs de documentos.
+      payload: { type: 'refresh_authorized_data', cuentaId: getOperatorSession()?.accountId, ts: Date.now() },
     })
   } catch { /* silencioso */ }
 }
@@ -229,24 +238,15 @@ function _broadcastNotification({ type, title, body, meta, targetRole }) {
  */
 export function startRealtimeNotifications(currentRole) {
   stopRealtimeNotifications()
-
+  _currentRole = currentRole
+  const session = getOperatorSession()
+  if (!session) return
   _realtimeChannel = supabase
-    .channel('notificaciones')
+    .channel(`notificaciones-${session.accountId}`)
     .on('broadcast', { event: 'new_notification' }, ({ payload }) => {
-      if (!payload) return
-      // targetRole puede contener múltiples roles separados por comas
-      if (payload.targetRole) {
-        const roles = payload.targetRole.split(',')
-        if (!roles.includes(currentRole)) return
-      }
-
-      // Ignorar si el broadcast fue originado por mí mismo
-      if (payload.meta && payload.meta.creadorId && payload.meta.creadorId === _currentUserId) return
-
-      // Si el rol es 'vendedor' y la notif tiene vendedorId, solo mostrarla al dueño del despacho
-      if (currentRole === 'vendedor' && payload.meta?.vendedorId && payload.meta.vendedorId !== _currentUserId) return
-
-      _insertLocalNotification(payload.type, payload.title, payload.body, payload.meta)
+      // Solo invalidación: los detalles se consultan por el canal autorizado, no por broadcast público.
+      if (payload?.type !== 'refresh_authorized_data' || payload.cuentaId !== getOperatorSession()?.accountId) return
+      window.dispatchEvent(new CustomEvent('construacero-refresh-authorized'))
     })
     .subscribe()
 }

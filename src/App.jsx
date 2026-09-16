@@ -12,6 +12,7 @@ import {
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import queryClient from './lib/queryClient'
 import { indexedDbPersister, CACHE_BUSTER } from './lib/queryPersister'
+import { mayPersistQuery } from './utils/dashboardAccess'
 import OfflineBanner from './components/ui/OfflineBanner'
 import useAuthStore from './store/useAuthStore'
 import { ToastProvider } from './components/ui/Toast'
@@ -368,7 +369,7 @@ export default function App() {
           maxAge: 1000 * 60 * 60 * 24,            // 24h — coincide con gcTime
           buster: CACHE_BUSTER,                   // git hash → invalida en cada deploy
           dehydrateOptions: {
-            shouldDehydrateQuery: (q) => q.state.status === 'success',
+            shouldDehydrateQuery: mayPersistQuery,
           },
         }}>
         <BrowserRouter unstable_useTransitions={false}>

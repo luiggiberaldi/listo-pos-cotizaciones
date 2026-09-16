@@ -12,6 +12,7 @@ import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import { getAction, PRIMARY_ACTION_COLORS } from '../../utils/cotizacionActions'
 import { apiUrl } from '../../services/apiBase'
+import { getOperatorSessionHeaders } from '../../services/operatorSession'
 import DetalleModal from '../ui/DetalleModal'
 import { showToast } from '../ui/Toast'
 
@@ -25,7 +26,7 @@ async function fetchClienteViaAPI(clienteId) {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.access_token}`,
-        'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+        ...getOperatorSessionHeaders(),
       },
       body: JSON.stringify({ ids: [clienteId] }),
     })

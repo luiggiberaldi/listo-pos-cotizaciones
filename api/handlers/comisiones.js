@@ -77,7 +77,7 @@ function baseCommissionQuery(env) {
   return `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en),split:calculo_evidencia->>split_cliente_ajeno,designado_ev:calculo_evidencia->>split_designado_id&order=creadoen.desc`
 }
 
-async function fetchByIds(env, headers, table, ids, select) {
+async function fetchByIds(env, headers, table, ids, select, { strict = false, cuentaId } = {}) {
   const uniqueIds = [...new Set(ids.filter(Boolean))]
   if (!uniqueIds.length) return {}
 
@@ -89,10 +89,19 @@ async function fetchByIds(env, headers, table, ids, select) {
 
   const results = await Promise.all(
     chunks.map(async chunk => {
-      const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?id=in.(${chunk.join(',')})&select=${select}`, { headers })
-      if (!response.ok) return []
-      const rows = await response.json().catch(() => [])
-      return Array.isArray(rows) ? rows : []
+      const query = new URLSearchParams({ id: `in.(${chunk.join(',')})`, select })
+      if (cuentaId) query.set('cuenta_id', `eq.${cuentaId}`)
+      const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?${query}`, { headers })
+      if (!response.ok) {
+        if (strict) throw new Error(`No se pudo verificar ${table} de las comisiones`)
+        return []
+      }
+      const rows = await response.json()
+      if (!Array.isArray(rows) || (strict && rows.length !== chunk.length)) {
+        if (strict) throw new Error(`Datos incompletos de ${table} en las comisiones`)
+        return []
+      }
+      return rows
     })
   )
 
@@ -100,21 +109,25 @@ async function fetchByIds(env, headers, table, ids, select) {
   return Object.fromEntries(allRows.map(row => [row.id, row]))
 }
 
-async function fetchCommissionConfig(env, headers, cuentaId) {
+async function fetchCommissionConfig(env, headers, cuentaId, strict = false) {
   if (!cuentaId) return {}
   const response = await fetch(`${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${cuentaId}&select=*&limit=1`, { headers })
-  if (!response.ok) return {}
+  if (!response.ok) {
+    if (strict) throw new Error('No se pudo verificar la política de comisiones')
+    return {}
+  }
   const rows = await response.json()
   return rows[0] || {}
 }
 
-async function enrichCommissions(env, headers, rows, cuentaId) {
+export async function enrichCommissions(env, headers, rows, cuentaId, { strict = false } = {}) {
   const despachos = await fetchByIds(
     env,
     headers,
     'notas_despacho',
     rows.map(row => row.despachoid),
     'id,numero,total_usd,creado_en,tasa_snapshot,forma_pago,forma_pago_cliente,cliente_id,cliente:clientes!notas_despacho_cliente_id_fkey(id,nombre,tipo_cliente),productos:notas_despacho_items(nombre_snap,codigo_snap,cantidad,precio_unit_usd,descuento_pct,total_linea_usd,origen,es_prestamo,producto_id,producto:productos(categoria))',
+    { strict, cuentaId },
   )
   const cotizaciones = await fetchByIds(
     env,
@@ -122,6 +135,7 @@ async function enrichCommissions(env, headers, rows, cuentaId) {
     'cotizaciones',
     rows.map(row => row.cotizacionid),
     'id,numero,tasa_bcv_snapshot,cliente_id,cliente:clientes(id,nombre)',
+    { strict, cuentaId },
   )
   const vendedores = await fetchByIds(
     env,
@@ -129,8 +143,9 @@ async function enrichCommissions(env, headers, rows, cuentaId) {
     'usuarios',
     rows.map(row => row.vendedorid),
     'id,nombre,color,markup_pct,rol,es_externo,codigo',
+    { strict, cuentaId },
   )
-  const config = await fetchCommissionConfig(env, headers, cuentaId)
+  const config = await fetchCommissionConfig(env, headers, cuentaId, strict)
 
   // v3: designaciones del día — mapa fecha → designado_id para derivar el tipo de fila
   const fechasDespachos = [...new Set(rows

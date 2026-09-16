@@ -5,7 +5,7 @@
 // En otros hosts, VITE_WORKER_ORIGIN permite apuntar manualmente.
 
 import supabase from './supabase/client'
-import useAuthStore from '../store/useAuthStore'
+import { requireOperatorSession, assertOperatorSession } from './operatorSession'
 
 const WORKER_ORIGIN = import.meta.env.PROD ? '' : (import.meta.env.VITE_WORKER_ORIGIN || '')
 
@@ -22,11 +22,15 @@ export function apiUrl(path) {
  */
 export async function fetchConTimeout(url, options = {}, timeoutMs = 15000) {
   const controller = new AbortController()
+  const upstreamSignal = options.signal === undefined && url instanceof Request ? url.signal : options.signal
+  const onAbort = () => controller.abort(upstreamSignal.reason)
+  if (upstreamSignal?.aborted) onAbort()
+  else upstreamSignal?.addEventListener('abort', onAbort, { once: true })
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     return await fetch(url, { ...options, signal: controller.signal })
   } catch (err) {
-    if (err?.name === 'AbortError') {
+    if (err?.name === 'AbortError' && !upstreamSignal?.aborted) {
       const e = new Error('timeout_red')
       e.name = 'TimeoutError'
       throw e
@@ -34,40 +38,32 @@ export async function fetchConTimeout(url, options = {}, timeoutMs = 15000) {
     throw err
   } finally {
     clearTimeout(timer)
+    // The caller signal must also be able to cancel a body read after headers.
   }
 }
 
-/** Returns auth headers including X-Operator-Id to avoid JWT refresh delay issues */
+/** Capture operator identity before waiting for business authentication. */
 export async function getAuthHeaders(extra = {}) {
-  let token = null
+  const operatorSession = requireOperatorSession()
+  let timer
+  let sessionRes
   try {
-    const sessionRes = await Promise.race([
+    sessionRes = await Promise.race([
       supabase.auth.getSession(),
-      new Promise(r => setTimeout(() => r({ data: { session: null } }), 1500))
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('No autenticado')), 1500) }),
     ])
-    token = sessionRes?.data?.session?.access_token
-  } catch { /* fallback */ }
-
-  if (!token) {
-    try {
-      const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
-      if (storageKey) {
-        const raw = localStorage.getItem(storageKey)
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          token = parsed?.access_token || parsed?.currentSession?.access_token || parsed?.session?.access_token
-        }
-      }
-    } catch { /* fallback */ }
+  } finally {
+    clearTimeout(timer)
   }
-
-  const perfil = useAuthStore.getState().perfil
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(perfil?.id ? { 'X-Operator-Id': perfil.id } : {}),
-    ...extra,
-  }
+  assertOperatorSession(operatorSession)
+  const session = sessionRes?.data?.session
+  if (!session?.access_token || session.user?.id !== operatorSession.accountId) throw new Error('No autenticado')
+  const headers = new Headers(extra)
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  headers.set('Authorization', `Bearer ${session.access_token}`)
+  headers.set('X-Operator-Id', operatorSession.operatorId)
+  headers.set('X-Operator-Session', operatorSession.token)
+  return Object.fromEntries(headers)
 }
 
 /** Divide identificadores para evitar URLs .in() excesivamente grandes. */

@@ -109,3 +109,19 @@ scripts/*
 !docs/plans/2026-08-24-staging-238b-contract-test.md
 !docs/plans/2026-08-23-validacion-migracion-238.md
 !docs/plans/2026-08-28-runbook-promocion-04-consumo-credito.md
+
+# Regresiones de acceso al inicio: exclusivamente datos sintéticos
+!api/lib/__tests__/
+!api/lib/__tests__/authVirtualOperator.test.js
+!api/lib/__tests__/operatorSessions.test.js
+!api/lib/__tests__/dashboardData.test.js
+!api/handlers/__tests__/
+!api/handlers/__tests__/dashboard.test.js
+!src/utils/__tests__/dashboardAccess.test.js
+!src/utils/__tests__/operatorSession.test.js
+!src/utils/__tests__/operatorSessionIntegration.test.js
+!src/utils/__tests__/rpcProductContract.test.js
+!scripts/verify-dashboard-rls.mjs
+!scripts/verify-dashboard-browser.mjs
+!scripts/verify-dashboard-build.mjs
+outputs/

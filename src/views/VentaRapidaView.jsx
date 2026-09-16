@@ -28,6 +28,7 @@ import { fetchDespachoConsolidado } from '../services/despachoItemsService'
 import { ESTADOS, getCiudades } from '../data/venezuelaGeo'
 import { MapPin, Building } from 'lucide-react'
 import { apiUrl } from '../services/apiBase'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 import { round2, mulR } from '../utils/dinero'
 import { calcTotales } from '../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
@@ -109,7 +110,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session?.access_token}`,
-          'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+          ...getOperatorSessionHeaders(),
         },
         body: JSON.stringify({ ids: [data.clienteId].filter(Boolean) }),
       }).then(r => r.ok ? r.json() : []),

@@ -3,7 +3,8 @@
 // Reglas:
 // 1. Solo ingresos líquidos reales en total_ingresos_usd (efectivo, zelle, usdt, pago móvil, transf, punto).
 // 2. Créditos otorgados (CxC y COD) y fletes foráneos se reportan de forma informativa pero NO entran a total_ingresos_usd.
-import { json, jsonError } from '../lib/utils.js'
+import { json, jsonError, isValidUuid } from '../lib/utils.js'
+import { readAllRows } from '../lib/dashboardData.js'
 
 function round2(num) {
   return Math.round((Number(num) || 0) * 100) / 100
@@ -25,7 +26,11 @@ export async function handleCierreDiarioSync(request, env) {
   // 1. Verificación de seguridad por token compartido
   const authHeader = request.headers.get('Authorization') || ''
   const syncHeader = request.headers.get('x-sync-secret') || ''
-  const expectedSecret = env.FINANZAS_SYNC_SECRET || env.SYNC_SECRET_KEY || 'construacero-sync-secret-2026'
+  const expectedSecret = env.FINANZAS_SYNC_SECRET || env.SYNC_SECRET_KEY
+  const accountId = env.FINANZAS_SYNC_ACCOUNT_ID
+  if (!expectedSecret || !isValidUuid(accountId)) {
+    return jsonError('Integración financiera no configurada', 503, request)
+  }
 
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : syncHeader.trim()
   if (!token || token !== expectedSecret) {
@@ -40,50 +45,20 @@ export async function handleCierreDiarioSync(request, env) {
   }
 
   try {
-    // 2. Consulta de despachos entregados del día vía RPC
-    let despachosRaw = []
-    try {
-      const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/obtener_reporte_ventas_operaciones`, {
-        method: 'POST',
-        headers: serviceHeaders(env),
-        body: JSON.stringify({
-          p_fecha_inicio: fecha,
-          p_fecha_fin: fecha,
-          p_vendedor_id: null,
-        }),
-      })
-      if (rpcRes.ok) {
-        const parsed = await rpcRes.json().catch(() => [])
-        despachosRaw = Array.isArray(parsed) ? parsed : []
-      }
-    } catch (errRpc) {
-      console.error('Error consultando RPC despachos:', errRpc)
-    }
+    // 2. La integración también se acota explícitamente a una sola cuenta.
+    const salesQuery = new URLSearchParams({
+      select: 'id,flete_usd,tasa_snapshot,forma_pago,forma_pago_cliente',
+      cuenta_id: `eq.${accountId}`, estado: 'in.(despachada,entregada)',
+    })
+    salesQuery.append('creado_en', `gte.${fecha}T00:00:00-04:00`)
+    salesQuery.append('creado_en', `lte.${fecha}T23:59:59.999-04:00`)
+    const despachosRaw = (await readAllRows(env, serviceHeaders(env), 'notas_despacho', salesQuery))
+      .map(row => ({ ...row, tasa: row.tasa_snapshot, forma_pago: row.forma_pago_cliente || row.forma_pago }))
 
-    // 3. Consulta de abonos y devoluciones en Cuentas por Cobrar
-    let cxcList = []
-    try {
-      const cxcRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?creado_en=gte.${fecha}T00:00:00&creado_en=lte.${fecha}T23:59:59.999&select=id,tipo,monto_usd,forma_pago_abono,referencia`,
-        { headers: serviceHeaders(env) }
-      )
-      if (cxcRes.ok) {
-        const parsed = await cxcRes.json().catch(() => [])
-        cxcList = Array.isArray(parsed) ? parsed : []
-      } else {
-        // Fallback a created_at
-        const cxcResFallback = await fetch(
-          `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?created_at=gte.${fecha}T00:00:00&created_at=lte.${fecha}T23:59:59.999&select=id,tipo,monto_usd,forma_pago_abono,referencia`,
-          { headers: serviceHeaders(env) }
-        )
-        if (cxcResFallback.ok) {
-          const parsed = await cxcResFallback.json().catch(() => [])
-          cxcList = Array.isArray(parsed) ? parsed : []
-        }
-      }
-    } catch (errCxc) {
-      console.error('Error consultando CxC:', errCxc)
-    }
+    const cxcQuery = new URLSearchParams({ select: 'id,tipo,monto_usd,forma_pago_abono,referencia', cuenta_id: `eq.${accountId}` })
+    cxcQuery.append('creado_en', `gte.${fecha}T00:00:00-04:00`)
+    cxcQuery.append('creado_en', `lte.${fecha}T23:59:59.999-04:00`)
+    const cxcList = await readAllRows(env, serviceHeaders(env), 'cuentas_por_cobrar', cxcQuery)
 
     // 4. Procesar formas de pago de ventas de contado líquidas (sin créditos y sin fletes)
     const desglose = {

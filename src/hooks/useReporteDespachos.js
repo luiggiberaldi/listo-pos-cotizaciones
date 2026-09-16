@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 import useAuthStore from '../store/useAuthStore'
 
 export const REPORTE_DESPACHOS_KEY = ['reporte-despachos']
@@ -50,7 +51,7 @@ export function useReporteDespachos({ from, to }) {
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${session?.access_token}`,
-              'X-Operator-Id': perfil?.id || '',
+              ...getOperatorSessionHeaders(),
             },
             body: JSON.stringify({ ids: clienteIds }),
           })

@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 import useAuthStore from '../store/useAuthStore'
 import { DESPACHOS_KEY } from './useDespachos'
 import { INVENTARIO_KEY } from './useInventario'
@@ -81,7 +82,7 @@ export function useVentaRapida() {
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${session?.access_token}`,
-              'X-Operator-Id': perfil?.id || '',
+              ...getOperatorSessionHeaders(),
             },
             body: JSON.stringify({ ids: [clienteId] }),
           })

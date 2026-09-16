@@ -263,8 +263,9 @@ export async function handleBackup(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const isSupervisor = await verifySupervisor(user.operator_id, env);
-  if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403, request);
+  if (!user.operator_session_id || !['jefe', 'desarrollador'].includes(user.operator_rol)) {
+    return jsonError('Acceso denegado: el respaldo empresarial requiere un jefe', 403, request);
+  }
 
   const h = {
     apikey: env.SUPABASE_SERVICE_KEY,
@@ -319,7 +320,7 @@ export async function handleBackup(request, env) {
       cotizacion_items,
       notas_despacho,
       transportistas,
-      usuarios,
+      usuarios: usuarios.map(({ pin_hash: _hash, pin_salt: _salt, ...safe }) => safe),
       configuracion_negocio,
       auditoria,
     },

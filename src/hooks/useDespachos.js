@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders, chunkIds } from '../services/apiBase'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 import useAuthStore from '../store/useAuthStore'
 import { authFetch } from '../services/authFetch'
 import { broadcastEntidad } from '../services/supabase/realtimeBus'
@@ -60,9 +61,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session.access_token}`,
-                // Respaldo del operador: si el JWT aún no trae app_metadata.operator_id
-                // (refresh pendiente), el Worker respondería 400 y esta rama moriría en [].
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               }
             })
             .then(r => r.ok ? r.json() : [])
@@ -193,7 +192,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: clienteIds }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])

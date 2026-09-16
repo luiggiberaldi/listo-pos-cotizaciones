@@ -40,6 +40,7 @@ import {
   handleActualizarTransaccionCxP
 } from './api/handlers/proveedores.js'
 import { handleCierreDiarioSync } from './api/handlers/finanzas-sync.js'
+import { handleDashboard } from './api/handlers/dashboard.js'
 
 export default {
   async fetch(request, env) {
@@ -73,6 +74,10 @@ export default {
           ...corsHeaders(request),
         },
       });
+    }
+
+    if (url.pathname === '/api/dashboard/inicio') {
+      return handleDashboard(request, env)
     }
 
     // ── API: sincronización de ventas con Nómina y Finanzas ─────────────

@@ -11,4 +11,4 @@ export const indexedDbPersister = {
 }
 
 // Build hash — invalidates persisted cache on each deploy
-export const CACHE_BUSTER = __APP_VERSION__
+export const CACHE_BUSTER = `${__APP_VERSION__}-operator-sessions-v1`

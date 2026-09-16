@@ -31,14 +31,15 @@ const CONFIG_KEY       = ['config_negocio']
 const USUARIOS_KEY     = ['usuarios']
 
 // Mapa entidad (broadcast) → query keys a invalidar de inmediato
+const DASHBOARD_KEY = ['dashboard_metrics']
 const ENTIDAD_KEYS = {
-  inventario:  [INVENTARIO_KEY],
-  despachos:   [DESPACHOS_KEY, INVENTARIO_KEY], // un despacho mueve stock
-  cotizaciones:[COTIZACIONES_KEY],
-  clientes:    [CLIENTES_KEY],
-  comisiones:  [COMISIONES_KEY],
+  inventario:  [INVENTARIO_KEY, DASHBOARD_KEY],
+  despachos:   [DESPACHOS_KEY, INVENTARIO_KEY, DASHBOARD_KEY],
+  cotizaciones:[COTIZACIONES_KEY, DASHBOARD_KEY],
+  clientes:    [CLIENTES_KEY, DASHBOARD_KEY],
+  comisiones:  [COMISIONES_KEY, DASHBOARD_KEY],
   config:      [CONFIG_KEY],
-  cuentas:     [['cuentas-cobrar']],
+  cuentas:     [['cuentas-cobrar'], DASHBOARD_KEY],
 }
 
 const TABLAS_LAZY = [
@@ -149,6 +150,8 @@ export function useRealtimeSync() {
 
     createDbChannel()
     createBusChannel()
+    const refreshAuthorized = () => qc.invalidateQueries({ queryKey: DASHBOARD_KEY, refetchType: 'active' })
+    window.addEventListener('construacero-refresh-authorized', refreshAuthorized)
 
     // Refetch al volver de fondo (cubre caso de móvil en background)
     // Solo si estuvo >3 min oculta — el canal realtime ya cubre ausencias cortas,
@@ -179,6 +182,7 @@ export function useRealtimeSync() {
         busCh.current = null
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('construacero-refresh-authorized', refreshAuthorized)
     }
   }, [cuentaId, perfilId, qc])
 }

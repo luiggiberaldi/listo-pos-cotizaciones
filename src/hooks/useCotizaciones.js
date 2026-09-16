@@ -5,6 +5,7 @@ import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 import { calcTotales } from '../utils/calcTotales'
 import { round2 } from '../utils/dinero'
 import {
@@ -74,7 +75,7 @@ export function useCotizaciones({ estado = '', clienteId = '', veTodos = false }
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: clienteIds }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])
@@ -184,7 +185,7 @@ export function useBuscarCotizaciones(busqueda, { enabled = true } = {}) {
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: clienteIds }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])
@@ -250,7 +251,7 @@ export function useCotizacion(id) {
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: [cot.cliente_id] }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])
@@ -454,7 +455,7 @@ export function useEnviarCotizacion() {
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${session2?.access_token}`,
-              'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+              ...getOperatorSessionHeaders(),
             },
             body: JSON.stringify({ ids: [cot.cliente_id] }),
           })

@@ -70,7 +70,10 @@ describe('contrato RPC de productos y Tester', () => {
     const auth = readProjectFile('api/lib/auth.js')
     const tester = readProjectFile('src/views/TesterFlowView.jsx')
 
-    expect(auth).toContain('cuenta_id: user.id')
+    const sessions = readProjectFile('api/lib/operatorSession.js')
+    expect(auth).toContain('operador.cuenta_id !== user.id')
+    expect(sessions).toContain('cuenta_id: accountId')
+    expect(sessions).toContain('virtualDeveloper: true')
     expect(tester).toContain('const transportistaId = null')
     expect(tester).toContain('el caso local se crea en el paso 35')
   })

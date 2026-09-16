@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
-import useAuthStore from '../store/useAuthStore'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 
 export function useScanMaterialList() {
   const [loading, setLoading] = useState(false)
@@ -12,7 +12,6 @@ export function useScanMaterialList() {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
     if (!token) throw new Error('No hay sesión activa')
-    const perfil = useAuthStore.getState().perfil
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
     const res = await fetch(url, {
@@ -20,7 +19,7 @@ export function useScanMaterialList() {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-        ...(perfil?.id ? { 'X-Operator-Id': perfil.id } : {}),
+        ...getOperatorSessionHeaders(),
       },
       body: JSON.stringify(body),
       signal: controller.signal,

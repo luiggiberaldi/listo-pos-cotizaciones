@@ -1,228 +1,156 @@
 // api/lib/auth.js
 import { jsonError, isValidUuid } from './utils.js'
+import { resolveOperatorSession, SUPER_ADMIN_UUID } from './operatorSession.js'
 
-// UUID especial para Super Admin virtual (easter egg del logo)
-export const SUPER_ADMIN_UUID = '00000000-0000-0000-0000-000000000000'
+export { SUPER_ADMIN_UUID }
 
-// ─── Caché en memoria del isolate para verificación de auth ────────────────────
-// Cada petición API pagaba 2-3 round-trips a Supabase solo para validar el token
-// y el operador. Con TTL corto (60s) las ráfagas de peticiones reutilizan la
-// verificación. El isolate de Cloudflare se recicla solo, así que el caché es
-// naturalmente efímero. Límite de entradas para acotar memoria.
-const AUTH_CACHE_TTL_MS = 60_000;
-const AUTH_CACHE_MAX = 500;
-const _userCache = new Map();     // token → { user (raw), exp }
-const _operatorCache = new Map(); // operatorId → { operador, exp }
+const AUTH_CACHE_TTL_MS = 60_000
+const AUTH_CACHE_MAX = 500
+const userCache = new Map()
 
-function cacheGet(map, key) {
-  const hit = map.get(key);
-  if (!hit) return null;
-  if (Date.now() > hit.exp) { map.delete(key); return null; }
-  return hit.value;
-}
+// Kept for existing callers; operator permissions are never cached.
+export function invalidateOperatorCache() {}
 
-function cacheSet(map, key, value) {
-  if (map.size >= AUTH_CACHE_MAX) {
-    // Evicción simple: borrar la entrada más antigua (primera insertada)
-    const first = map.keys().next().value;
-    if (first !== undefined) map.delete(first);
-  }
-  map.set(key, { value, exp: Date.now() + AUTH_CACHE_TTL_MS });
-}
-
-// Invalidar caché de un operador (llamar tras cambios de rol/activo/PIN)
-export function invalidateOperatorCache(operatorId) {
-  if (operatorId) _operatorCache.delete(operatorId);
-}
-
-// Obtiene headers Supabase con service key
 export function supaServiceHeaders(env) {
   return {
     apikey: env.SUPABASE_SERVICE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     'Content-Type': 'application/json',
     Prefer: 'return=representation',
-  };
+  }
 }
 
-function decodeJwtPayload(token) {
+// Read expiry only after the auth server has verified the complete token.
+function verifiedTokenExpiry(token) {
   try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const base64Url = parts[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
-    const binary = atob(padded);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const text = new TextDecoder().decode(bytes);
-    return JSON.parse(text);
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const { exp } = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, '=')))
+    return typeof exp === 'number' && Number.isFinite(exp) ? exp * 1000 : null
   } catch {
-    return null;
+    return null
   }
 }
 
-// Verifica el JWT del usuario autenticado contra Supabase
-// Extrae operator_id/operator_rol de app_metadata si están presentes
 export async function verifyAuth(request, env) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7);
-
-  // Verificar el token: caché 60s por token para evitar el round-trip repetido
-  let rawUser = cacheGet(_userCache, token);
+  const authHeader = request.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) return null
+  const token = authHeader.slice(7)
+  if (!token) return null
+  const cacheKey = `${env.SUPABASE_URL}\n${token}`
+  const cached = userCache.get(cacheKey)
+  let rawUser = cached?.expiresAt > Date.now() ? cached.user : null
   if (!rawUser) {
-    const payload = decodeJwtPayload(token);
-    // Si el payload es un JWT emitido por Supabase con sub
-    if (payload?.sub) {
-      rawUser = {
-        id: payload.sub,
-        email: payload.email,
-        app_metadata: payload.app_metadata || {},
-        user_metadata: payload.user_metadata || {},
-        role: payload.role || 'authenticated',
-      };
-      cacheSet(_userCache, token, rawUser);
-    } else {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 2000)
-      try {
-        const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            apikey: env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_KEY,
-          },
-          signal: controller.signal,
-        });
-        if (!res.ok) return null;
-        rawUser = await res.json();
-        cacheSet(_userCache, token, rawUser);
-      } catch {
-        return null;
-      } finally {
-        clearTimeout(timeout)
+    userCache.delete(cacheKey)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5000)
+    try {
+      const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_KEY,
+        },
+        signal: controller.signal,
+      })
+      if (!response.ok) return null
+      rawUser = await response.json()
+      if (!isValidUuid(rawUser?.id)) return null
+      const expiry = verifiedTokenExpiry(token)
+      if (expiry !== null && expiry <= Date.now()) return null
+      // Unknown-expiry tokens remain uncached rather than extending their lifetime.
+      if (expiry !== null) {
+        if (userCache.size >= AUTH_CACHE_MAX) userCache.delete(userCache.keys().next().value)
+        userCache.set(cacheKey, {
+          user: rawUser,
+          expiresAt: Math.min(Date.now() + AUTH_CACHE_TTL_MS, expiry),
+        })
       }
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
     }
   }
 
-  // Clonar antes de mutar — el objeto cacheado se comparte entre peticiones
-  const user = { ...rawUser };
-  // Attach operator context from app_metadata (set by switch-operator)
-  user.operator_id = user.app_metadata?.operator_id || null;
-  user.operator_rol = user.app_metadata?.operator_rol || null;
-  user.operator_nombre = user.app_metadata?.operator_nombre || null;
-  user.operator_es_externo = user.app_metadata?.operator_es_externo || null;
-
-  // Allow frontend to override operator_id via header (handles JWT refresh delay)
-  const headerOpId = request.headers.get('X-Operator-Id');
-  if (headerOpId && isValidUuid(headerOpId) && headerOpId !== user.operator_id) {
-    // Verify the operator exists and is active before trusting the header
-    const checkRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${headerOpId}&activo=eq.true&cuenta_id=eq.${user.id}&select=id,nombre,rol,es_externo`,
-      { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } }
-    );
-    if (checkRes.ok) {
-      const [op] = await checkRes.json();
-      if (op) {
-        user.operator_id = op.id;
-        user.operator_rol = op.rol;
-        user.operator_nombre = op.nombre;
-        user.operator_es_externo = op.es_externo;
-      }
-    }
+  // Shared account metadata is deliberately not an operator authority.
+  const user = {
+    ...rawUser,
+    operator_id: null,
+    operator_rol: null,
+    operator_nombre: null,
+    operator_es_externo: null,
+    operator_session_id: null,
+    operator_session_expires_at: null,
+    operator_virtual_developer: false,
+    operador: null,
   }
+  const tokenHeader = request.headers.get('X-Operator-Session')
+  const operatorHeader = request.headers.get('X-Operator-Id')
+  if (!tokenHeader) return operatorHeader ? null : user
 
-  return user;
-}
-
-// Obtiene el rol del operador (supervisor | vendedor | administracion | desarrollador | null)
-export async function getOperatorRole(operatorId, env) {
-  if (!operatorId) return null;
-  if (operatorId === SUPER_ADMIN_UUID) return 'desarrollador';
-  // Reusar la fila cacheada por validateOperator si existe
-  const cached = cacheGet(_operatorCache, operatorId);
-  if (cached) return cached.rol ?? null;
-  const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operatorId}&activo=eq.true&select=rol`,
-    {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      },
-    }
-  );
-  if (!res.ok) return null;
-  const rows = await res.json();
-  return rows.length === 1 ? rows[0].rol : null;
-}
-
-// Verifica que el operador sea supervisor consultando la tabla usuarios
-export async function verifySupervisor(operatorId, env) {
-  const rol = await getOperatorRole(operatorId, env);
-  return rol === 'supervisor' || rol === 'jefe' || rol === 'administracion' || rol === 'desarrollador';
-}
-
-// Verifica supervisor O administracion O jefe (para endpoints compartidos como reportes)
-export async function verifyPrivileged(operatorId, env) {
-  const rol = await getOperatorRole(operatorId, env);
-  return rol === 'supervisor' || rol === 'jefe' || rol === 'administracion' || rol === 'desarrollador';
-}
-
-// Valida auth + operator_id, devuelve { user, operador, ip } o Response de error
-// HELPERS para endpoints migrados de RPC
-export async function validateOperator(request, env, { requireSupervisor = false } = {}) {
-  const user = await verifyAuth(request, env);
-  if (!user?.id) return { error: jsonError('No autenticado', 401, request) };
-  if (!user.operator_id) return { error: jsonError('No hay operador seleccionado', 400, request) };
-
-  const ip = request.headers.get('CF-Connecting-IP') || null;
-
-  // Desarrollador virtual — no existe en tabla usuarios
-  if (user.operator_id === SUPER_ADMIN_UUID) {
-    // El operador virtual debe conservar la cuenta autenticada para que las
-    // operaciones multi-tenant del desarrollador no queden sin contexto.
-    const operador = {
-      id: SUPER_ADMIN_UUID,
-      nombre: 'Desarrollador',
-      rol: 'desarrollador',
-      color: '#8b5cf6',
-      cuenta_id: user.id,
-      markup_pct: null,
-      es_externo: false,
-    };
-    return { user, operador, headers: supaServiceHeaders(env), ip };
-  }
-
-  const h = supaServiceHeaders(env);
-  const ROLES_PRIVILEGIADOS = ['supervisor', 'jefe', 'logistica', 'administracion', 'desarrollador'];
   try {
-    // Caché 60s por operador — evita re-consultar usuarios en cada petición.
-    // El filtro de rol se aplica en código para poder compartir la entrada
-    // cacheada entre endpoints con y sin requireSupervisor.
-    let operador = cacheGet(_operatorCache, user.operator_id);
-    if (!operador) {
-      const res = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${user.operator_id}&activo=eq.true&select=id,nombre,rol,color,cuenta_id,markup_pct,es_externo`,
-        { headers: h }
-      );
-      if (!res.ok) {
-        const errText = await res.text();
-        return { error: jsonError(`Error de conexion con Supabase (HTTP ${res.status}): ${errText}`, res.status || 500, request) };
-      }
-      const rows = await res.json();
-      operador = rows[0] ?? null;
-      if (operador) cacheSet(_operatorCache, user.operator_id, operador);
-    }
+    const session = await resolveOperatorSession(env, tokenHeader, user.id)
+    if (!session || (operatorHeader && operatorHeader !== session.operator.id)) return null
+    user.operator_id = session.operator.id
+    user.operator_rol = session.operator.rol
+    user.operator_nombre = session.operator.nombre
+    user.operator_es_externo = session.operator.es_externo
+    user.operator_session_id = session.id
+    user.operator_session_expires_at = session.expiresAt
+    user.operator_virtual_developer = session.virtualDeveloper
+    user.operador = session.operator
+    return user
+  } catch {
+    return null
+  }
+}
 
-    if (!operador) {
-      return { error: jsonError('Operador no encontrado o inactivo', 403, request) };
-    }
-    if (requireSupervisor && !ROLES_PRIVILEGIADOS.includes(operador.rol)) {
-      return { error: jsonError('Solo supervisores, logistica o administracion pueden realizar esta acción', 403, request) };
-    }
+// Legacy role helpers accept IDs only from a successfully verified session context.
+// An optional account ID lets newer callers repeat the tenant constraint explicitly.
+export async function getOperatorRole(operatorId, env, accountId = null) {
+  if (!isValidUuid(operatorId)) return null
+  if (operatorId === SUPER_ADMIN_UUID) return 'desarrollador'
+  if (accountId !== null && !isValidUuid(accountId)) return null
+  const tenantFilter = accountId ? `&cuenta_id=eq.${accountId}` : ''
+  try {
+    const response = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${operatorId}&activo=eq.true${tenantFilter}&select=rol`,
+      { headers: supaServiceHeaders(env) },
+    )
+    if (!response.ok) return null
+    const rows = await response.json()
+    return Array.isArray(rows) && rows.length === 1 ? rows[0].rol ?? null : null
+  } catch {
+    return null
+  }
+}
 
-    return { user, operador, headers: h, ip };
-  } catch (err) {
-    return { error: jsonError(`Error critico al validar operador: ${err.message}`, 500, request) };
+export async function verifySupervisor(operatorId, env, accountId = null) {
+  const role = await getOperatorRole(operatorId, env, accountId)
+  return ['supervisor', 'jefe', 'administracion', 'desarrollador'].includes(role)
+}
+
+export async function verifyPrivileged(operatorId, env, accountId = null) {
+  return verifySupervisor(operatorId, env, accountId)
+}
+
+export async function validateOperator(request, env, { requireSupervisor = false } = {}) {
+  const user = await verifyAuth(request, env)
+  if (!user?.id) return { error: jsonError('No autenticado', 401, request) }
+  if (!user.operator_session_id || !user.operador) {
+    return { error: jsonError('No hay una sesión de operador activa', 403, request) }
+  }
+  const operador = user.operador
+  if (operador.cuenta_id !== user.id ||
+      (operador.id === SUPER_ADMIN_UUID && !user.operator_virtual_developer)) {
+    return { error: jsonError('Operador no autorizado', 403, request) }
+  }
+  if (requireSupervisor && !['supervisor', 'jefe', 'logistica', 'administracion', 'desarrollador'].includes(operador.rol)) {
+    return { error: jsonError('Solo supervisores, logistica o administracion pueden realizar esta acción', 403, request) }
+  }
+  return {
+    user,
+    operador,
+    headers: supaServiceHeaders(env),
+    ip: request.headers.get('CF-Connecting-IP') || null,
   }
 }

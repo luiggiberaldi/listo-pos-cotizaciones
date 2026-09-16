@@ -8,6 +8,7 @@ import {
 import _PageHeader from '../components/ui/PageHeader'
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 import useAuthStore from '../store/useAuthStore'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -18,13 +19,12 @@ async function apiCall(path, method = 'GET', body = null) {
   const session = (await supabase.auth.getSession()).data.session
   if (!session?.access_token) throw new Error('No autenticado')
   const idempotencyKey = body?.idempotencyKey
-  const operatorId = useAuthStore.getState().perfil?.id
   const opts = {
     method,
     headers: {
       Authorization: `Bearer ${session.access_token}`,
       'Content-Type': 'application/json',
-      ...(operatorId ? { 'X-Operator-Id': operatorId } : {}),
+      ...getOperatorSessionHeaders(),
       ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     },
   }

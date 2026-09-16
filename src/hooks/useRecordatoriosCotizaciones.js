@@ -9,6 +9,7 @@
 
 import { useEffect, useRef } from 'react'
 import supabase from '../services/supabase/client'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 import useAuthStore from '../store/useAuthStore'
 import {
   notifyCotizacionSinRespuesta,
@@ -100,7 +101,7 @@ export function useRecordatoriosCotizaciones() {
                   headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${session.access_token}`,
-                    'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+                    ...getOperatorSessionHeaders(),
                   },
                   body: JSON.stringify({ ids: clienteIds }),
                 })
