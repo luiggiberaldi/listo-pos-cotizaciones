@@ -606,7 +606,7 @@ export default function ComisionesView() {
           <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">
             Rango de Período
           </label>
-          <DateRangeSelector value={rango} onChange={setRango} />
+          <DateRangeSelector value={rango} onChange={setRango} ocultarPresets={perfil?.rol === 'administracion' ? ['thisMonth', 'lastMonth'] : undefined} />
         </div>
 
         {/* Fila Inferior: Vendedor con CustomSelect, Switch Formato, Tasas y Exportación */}

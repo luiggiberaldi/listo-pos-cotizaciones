@@ -595,6 +595,8 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
 
 // ─── Tab Ventas ───────────────────────────────────────────────────────────────
 function TabVentas({ configNeg }) {
+  const { perfil } = useAuthStore()
+  const esAdministracion = perfil?.rol === 'administracion'
   const [rango, setRango] = useState(() => {
     const actual = getDayRange(0)
     const anterior = getDayRange(-1)
@@ -692,7 +694,7 @@ function TabVentas({ configNeg }) {
                 {rangoLabel}
               </span>
             </div>
-            <DateRangeSelector value={rango} onChange={setRango} />
+            <DateRangeSelector value={rango} onChange={setRango} ocultarPresets={esAdministracion ? ['thisMonth', 'lastMonth'] : undefined} />
           </div>
           
           <div className="flex justify-end items-center gap-3 border-t border-slate-50 pt-4 relative">

@@ -1,5 +1,5 @@
 // src/components/reportes/DateRangeSelector.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Calendar } from 'lucide-react'
 import { getDayRange, getWeekRange, getUltimoSabadoRange, getCorteSemanalRange, getMonthRange, getLocalISODate } from '../../utils/dateHelpers'
 
@@ -17,10 +17,11 @@ function mismoRango(a, b) {
   return a?.from === b?.from && a?.to === b?.to
 }
 
-export default function DateRangeSelector({ value, onChange }) {
+export default function DateRangeSelector({ value, onChange, ocultarPresets }) {
   const [showCustom, setShowCustom] = useState(false)
+  const presetsVisibles = useMemo(() => PRESETS.filter(p => !ocultarPresets?.includes(p.id)), [ocultarPresets])
   const [activePresetId, setActivePresetId] = useState(() => {
-    return PRESETS.find(p => mismoRango(value, p.getRango()))?.id || ''
+    return presetsVisibles.find(p => mismoRango(value, p.getRango()))?.id || ''
   })
 
   // Estado local para los campos del rango personalizado
@@ -29,16 +30,16 @@ export default function DateRangeSelector({ value, onChange }) {
 
   // Sincronizar el preset activo si el valor cambia externamente
   useEffect(() => {
-    const currentPreset = PRESETS.find(p => p.id === activePresetId)
+    const currentPreset = presetsVisibles.find(p => p.id === activePresetId)
     if (currentPreset && mismoRango(value, currentPreset.getRango())) {
       return
     }
-    const matching = PRESETS.find(p => mismoRango(value, p.getRango()))
+    const matching = presetsVisibles.find(p => mismoRango(value, p.getRango()))
     setActivePresetId(matching ? matching.id : '')
     if (!matching) {
       setShowCustom(true)
     }
-  }, [value, activePresetId])
+  }, [value, activePresetId, presetsVisibles])
 
   // Sincronizar inputs locales si el rango cambia externamente
   useEffect(() => {
@@ -94,7 +95,7 @@ export default function DateRangeSelector({ value, onChange }) {
     <div className="space-y-2">
       <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide pb-0.5">
         <Calendar size={12} className="text-slate-400 shrink-0 sm:w-3.5 sm:h-3.5" />
-        {PRESETS.map(p => (
+        {presetsVisibles.map(p => (
           <button key={p.id}
             onClick={() => selectPreset(p)}
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
