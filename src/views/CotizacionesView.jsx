@@ -113,7 +113,7 @@ function SkeletonCotizaciones() {
 }
 
 // ─── Modal de resumen para despachar ────────────────────────────────────────
-import { FORMAS_PAGO } from '../constants/formasPago'
+import { FORMAS_PAGO, getSalePaymentMethods } from '../constants/formasPago'
 
 
 function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 }) {
@@ -621,7 +621,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                     </button>
                   )}
 
-                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
+                  {getSalePaymentMethods()
                     .filter(m => m !== 'Saldo a Favor')
                     .filter(m => !pagosInmediatos.some(f => f.metodo === m))
                     .map(m => (

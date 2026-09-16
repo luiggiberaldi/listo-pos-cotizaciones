@@ -8,7 +8,7 @@ import { useEditarItemsDespacho } from '../../hooks/useDespachos'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useSaldoFavorOrigen } from '../../hooks/useCuentasCobrar'
-import { FORMAS_PAGO } from '../../constants/formasPago'
+import { FORMAS_PAGO, getSalePaymentMethods } from '../../constants/formasPago'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { round4, round2 } from '../../utils/dinero'
@@ -1092,7 +1092,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
                               </button>
                             )}
 
-                            {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
+                            {getSalePaymentMethods()
                               .filter(m => m !== 'Saldo a Favor')
                               .filter(m => !pagosInmediatos.some(f => f.metodo === m))
                               .map(metodo => (

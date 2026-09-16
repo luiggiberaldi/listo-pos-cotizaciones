@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getSalePaymentMethods } from '../../constants/formasPago'
 import {
   adjustLegacyCommissionForExcludedProducts,
   calcularTotalCorte,
@@ -10,6 +11,15 @@ import {
 } from '../comisionUtils'
 
 describe('contrato de comisiones', () => {
+  it('ofrece Donación a todos los roles en los flujos normales de venta', () => {
+    const roles = ['jefe', 'supervisor', 'vendedor', 'vendedor_sin_comision', 'administracion', 'logistica', 'desarrollador']
+    const methods = getSalePaymentMethods()
+
+    expect(methods).toContain('Donación')
+    expect(methods).not.toContain('Cobro a destino')
+    for (const role of roles) expect(methods).toContain('Donación')
+  })
+
   it('excluye una cuenta por cobrar completa', () => {
     const split = getCommissionablePaymentSplit({
       totalUsd: 100,

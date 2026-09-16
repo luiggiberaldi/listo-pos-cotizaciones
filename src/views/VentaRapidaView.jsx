@@ -40,7 +40,7 @@ import ProductCard from '../components/shared/ProductCard'
 import CategoryPills from '../components/shared/CategoryPills'
 import { usePrecioVendedor } from '../hooks/usePrecioVendedor'
 
-import { FORMAS_PAGO } from '../constants/formasPago'
+import { FORMAS_PAGO, getSalePaymentMethods } from '../constants/formasPago'
 import { PREFIJOS_RIF, parsearRif as parsearRifVR, formatearRif as formatearRifVR } from '../utils/rif'
 
 
@@ -2389,7 +2389,7 @@ function Step2Pago({
                     </button>
                   )}
 
-                  {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
+                  {getSalePaymentMethods()
                     .filter(m => m !== 'Saldo a Favor')
                     .filter(m => !pagosInmediatos.some(f => f.metodo === m))
                     .map(m => (

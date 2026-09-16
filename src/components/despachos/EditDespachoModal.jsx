@@ -20,7 +20,7 @@ import useAuthStore from '../../store/useAuthStore'
 import { ESTADOS, getCiudades } from '../../data/venezuelaGeo'
 import { MapPin, Building } from 'lucide-react'
 
-import { FORMAS_PAGO } from '../../constants/formasPago'
+import { FORMAS_PAGO, getSalePaymentMethods } from '../../constants/formasPago'
 
 
 export default function EditDespachoModal({ isOpen, onClose, despacho }) {
@@ -552,7 +552,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                   </button>
                 )}
 
-                {FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && (m !== 'Donación' || perfil?.rol !== 'vendedor'))
+                {getSalePaymentMethods()
                   .filter(m => m !== 'Saldo a Favor')
                   .filter(m => !pagosInmediatos.some(f => f.metodo === m))
                   .map(m => (
