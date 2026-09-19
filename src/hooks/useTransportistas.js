@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
-import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { authFetch } from '../services/authFetch'
 import { showToast } from '../components/ui/Toast'
 import { rankEntities } from '../utils/entitySearch'
 import {
@@ -113,12 +113,9 @@ export function useCrearTransportista() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (campos) => {
-      const headers = await getAuthHeaders()
-      if (!headers.Authorization?.includes('Bearer ')) throw new Error('No autenticado')
-
-      const res = await fetch(apiUrl('/api/transportistas/crear'), {
+      const res = await authFetch('/api/transportistas/crear', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(campos),
       })
       if (!res.ok) {
@@ -154,12 +151,9 @@ export function useActualizarTransportista() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, campos }) => {
-      const headers = await getAuthHeaders()
-      if (!headers.Authorization?.includes('Bearer ')) throw new Error('No autenticado')
-
-      const res = await fetch(apiUrl('/api/transportistas/actualizar'), {
+      const res = await authFetch('/api/transportistas/actualizar', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...campos }),
       })
       if (!res.ok) {
@@ -197,12 +191,11 @@ export function useReporteTransportistas({ desde = null, hasta = null } = {}) {
     // Incluir fechas en queryKey para invalidar correctamente al cambiar el rango
     queryKey: [...REPORTE_TRANSP_KEY, desde, hasta],
     queryFn: async () => {
-      const headers = await getAuthHeaders()
       const params = new URLSearchParams()
       if (desde) params.set('desde', desde)
       if (hasta) params.set('hasta', hasta)
       const qs = params.toString() ? `?${params}` : ''
-      const res = await fetch(apiUrl(`/api/transportistas/reporte${qs}`), { headers })
+      const res = await authFetch(`/api/transportistas/reporte${qs}`)
       if (!res.ok) {
         const e = await res.json().catch(() => ({}))
         throw new Error(e.error || `Error ${res.status}`)
@@ -221,8 +214,7 @@ export function useDetalleTransportista(transportistaId) {
   return useQuery({
     queryKey: [...REPORTE_TRANSP_KEY, 'detalle', transportistaId],
     queryFn: async () => {
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl(`/api/transportistas/detalle?id=${transportistaId}`), { headers })
+      const res = await authFetch(`/api/transportistas/detalle?id=${transportistaId}`)
       if (!res.ok) throw new Error(`Error ${res.status}`)
       return res.json()
     },
@@ -235,9 +227,9 @@ export function usePagarTransportista() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ transportistaId, monto, referencia, nota, despachoIds, idempotencyKey }) => {
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl('/api/transportistas/pagar'), {
-        method: 'POST', headers,
+      const res = await authFetch('/api/transportistas/pagar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transportistaId, monto, referencia, nota, despachoIds, idempotencyKey: idempotencyKey || crypto.randomUUID() }),
       })
       if (!res.ok) {
@@ -258,9 +250,9 @@ export function useRevertirPagoTransportista() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (pagoId) => {
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl('/api/transportistas/revertir-pago'), {
-        method: 'POST', headers,
+      const res = await authFetch('/api/transportistas/revertir-pago', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pagoId }),
       })
       if (!res.ok) {
@@ -284,9 +276,9 @@ export function useDesactivarTransportista() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id) => {
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl('/api/transportistas/desactivar'), {
-        method: 'POST', headers,
+      const res = await authFetch('/api/transportistas/desactivar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       })
       if (!res.ok) {
