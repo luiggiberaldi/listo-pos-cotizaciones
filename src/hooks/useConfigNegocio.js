@@ -12,7 +12,7 @@
 // useRealtimeSync sobre configuracion_negocio.
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
-import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { authFetch } from '../services/authFetch'
 import { broadcastEntidad } from '../services/supabase/realtimeBus'
 
 const KEY = ['config_negocio']
@@ -21,8 +21,7 @@ export function useConfigNegocio() {
   return useQuery({
     queryKey: KEY,
     queryFn: async () => {
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl('/api/config'), { headers })
+      const res = await authFetch('/api/config')
       if (!res.ok) {
         throw new Error('Error al obtener la configuración')
       }
@@ -40,16 +39,14 @@ export function useActualizarConfig() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (campos) => {
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl('/api/admin/config'), {
+      const res = await authFetch('/api/admin/config', {
         method: 'PUT',
-        headers,
         body: JSON.stringify(campos),
       })
       if (!res.ok) {
         const text = await res.text()
         let data = {}
-        try { data = JSON.parse(text) } catch {}
+        try { data = JSON.parse(text) } catch { /* respuesta no JSON */ }
         throw new Error(data.error || text || `Error ${res.status}`)
       }
     },

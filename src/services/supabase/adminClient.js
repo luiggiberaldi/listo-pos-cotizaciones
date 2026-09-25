@@ -1,25 +1,29 @@
 // src/services/supabase/adminClient.js
 // Cliente para operaciones admin — llama al Worker backend en /api/admin/
 // El service_role key NUNCA se expone al frontend.
-import { apiUrl, getAuthHeaders } from '../apiBase'
+//
+// Todas las llamadas usan authFetch (estándar del sistema): refresca el JWT
+// single-flight y reintenta ante 401, con timeout de 15s. El canal antiguo
+// (helper con carrera de 1.5s sin refresh) producía el falso "No autenticado"
+// cuando getSession() tardaba más de 1.5s con el token vencido — misma causa
+// raíz que el fix de transportistas (commit 02a08f4).
+import { apiUrl } from '../apiBase'
+import { authFetch } from '../authFetch'
 
-async function adminFetch(path, method = 'POST', body = null) {
-  const headers = await getAuthHeaders()
-  if (!headers.Authorization || headers.Authorization === 'Bearer undefined') throw new Error('No autenticado')
-
-  const res = await fetch(apiUrl(`/api/admin/${path}`), {
-    method,
-    headers,
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  })
-
+async function readError(res) {
   const text = await res.text()
   let data = {}
   try { data = text ? JSON.parse(text) : {} } catch { /* respuesta no JSON */ }
-  if (!res.ok) {
-    throw new Error(data.error || `Error ${res.status}`)
-  }
-  return data
+  return new Error(data.error || `Error ${res.status}`)
+}
+
+async function adminFetch(path, method = 'POST', body = null) {
+  const res = await authFetch(`/api/admin/${path}`, {
+    method,
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  })
+  if (!res.ok) throw await readError(res)
+  return res.json().catch(() => ({}))
 }
 
 export const adminAPI = {
@@ -28,16 +32,9 @@ export const adminAPI = {
   deleteUser: (id) => adminFetch(`users/${id}`, 'DELETE'),
 
   async downloadBackup() {
-    const headers = await getAuthHeaders()
+    const res = await authFetch('/api/admin/backup')
 
-    const res = await fetch(apiUrl('/api/admin/backup'), { headers })
-
-    if (!res.ok) {
-      const text = await res.text()
-      let data = {}
-      try { data = JSON.parse(text) } catch { /* noop */ }
-      throw new Error(data.error || `Error ${res.status}`)
-    }
+    if (!res.ok) throw await readError(res)
 
     const blob = await res.blob()
     const disposition = res.headers.get('Content-Disposition') || ''
@@ -67,20 +64,17 @@ export const adminAPI = {
   },
 
   async restoreBackup(file) {
-    const headers = await getAuthHeaders()
-
     const text = await file.text()
     let backup
     try { backup = JSON.parse(text) } catch { throw new Error('El archivo no es un JSON válido') }
 
-    const res = await fetch(apiUrl('/api/admin/restore'), {
+    const res = await authFetch('/api/admin/restore', {
       method: 'POST',
-      headers,
       body: JSON.stringify(backup),
     })
 
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
+    if (!res.ok) throw await readError(res)
+    const data = await res.json().catch(() => ({}))
     return data.resumen
   },
 
@@ -100,16 +94,9 @@ export const adminAPI = {
   getLogStats: () => adminFetch('logs/stats', 'GET'),
 
   async downloadLogs() {
-    const headers = await getAuthHeaders()
+    const res = await authFetch('/api/admin/logs/download')
 
-    const res = await fetch(apiUrl('/api/admin/logs/download'), { headers })
-
-    if (!res.ok) {
-      const text = await res.text()
-      let data = {}
-      try { data = JSON.parse(text) } catch {}
-      throw new Error(data.error || `Error ${res.status}`)
-    }
+    if (!res.ok) throw await readError(res)
 
     const blob = await res.blob()
     const disposition = res.headers.get('Content-Disposition') || ''
@@ -150,14 +137,9 @@ export const adminAPI = {
 
 // ── Dev Tools API (solo desarrollador) ──────────────────────────────────
 async function devFetch(path, method = 'GET') {
-  const headers = await getAuthHeaders()
-  const res = await fetch(apiUrl(`/api/dev/${path}`), {
-    method,
-    headers,
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
-  return data
+  const res = await authFetch(`/api/dev/${path}`, { method })
+  if (!res.ok) throw await readError(res)
+  return res.json().catch(() => ({}))
 }
 
 export const devAPI = {
