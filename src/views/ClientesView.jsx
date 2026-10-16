@@ -170,8 +170,8 @@ export default function ClientesView() {
     const list = clientes.filter(c => {
       // Excluir personal de la lista general de clientes
       if (c.tipo_cliente === 'personal') return false
-      // Supervisor/dev con toggle en "Mis datos": solo ver propios
-      if (mostrarToggle && !verTodos && c.vendedor_id !== perfil?.id) return false
+      // Supervisor/dev con toggle en "Mis datos": solo ver propios (a menos que haya una búsqueda activa)
+      if (mostrarToggle && !verTodos && !busqueda.trim() && c.vendedor_id !== perfil?.id) return false
       if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
       if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
       if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0)) return false

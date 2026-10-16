@@ -99,7 +99,7 @@ function guardarOperadoresCache(operators, userId) {
 async function fetchAndCacheOperators(token, userId) {
   try {
     const endpoints = import.meta.env.DEV
-      ? ['http://localhost:8787/api/auth/operators', apiUrl('/api/auth/operators')]
+      ? [apiUrl('/api/auth/operators')]
       : [apiUrl('/api/auth/operators'), 'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/operators']
     for (const url of endpoints) {
       try {
@@ -500,7 +500,7 @@ const useAuthStore = create((set, get) => ({
     // Helper para hacer la llamada al worker con multi-endpoint y timeout resiliente
     const callWorker = async (token) => {
       const endpoints = import.meta.env.DEV
-        ? ['http://localhost:8787/api/auth/switch-operator', 'http://127.0.0.1:8787/api/auth/switch-operator', apiUrl('/api/auth/switch-operator')]
+        ? [apiUrl('/api/auth/switch-operator')]
         : [
             apiUrl('/api/auth/switch-operator'),
             'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/switch-operator',
@@ -686,7 +686,7 @@ const useAuthStore = create((set, get) => ({
         const token = await getAccessToken()
         if (token) {
           const endpoints = import.meta.env.DEV
-            ? ['http://localhost:8787/api/auth/clear-operator', 'http://127.0.0.1:8787/api/auth/clear-operator', apiUrl('/api/auth/clear-operator')]
+            ? [apiUrl('/api/auth/clear-operator')]
             : [apiUrl('/api/auth/clear-operator'), 'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/clear-operator']
           for (const url of endpoints) {
             try {

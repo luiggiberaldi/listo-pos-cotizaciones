@@ -19,6 +19,16 @@ export function getAllowedOrigin(request) {
   return ALLOWED_ORIGINS.has(origin) ? origin : null
 }
 
+// Rechaza peticiones de navegador cross-site en mutaciones. Sin cabecera Origin
+// (clientes no-navegador) se permite; con Origin debe coincidir con el origen
+// de la propia petición o estar en ALLOWED_ORIGINS.
+export function isSameOriginRequest(request) {
+  const origin = request.headers.get('Origin')
+  if (!origin) return true
+  if (ALLOWED_ORIGINS.has(origin)) return true
+  try { return origin === new URL(request.url).origin } catch { return false }
+}
+
 export function corsHeaders(request) {
   const origin = getAllowedOrigin(request)
   if (!origin) return {}

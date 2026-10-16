@@ -481,6 +481,61 @@ function formaPagoTieneCodPagado(raw) {
   } catch { return false }
 }
 
+export async function handleRegularizarCodEfectivo(request, env) {
+  const v = await validateOperator(request, env)
+  if (v.error) return v.error
+  const { operador, headers, ip } = v
+
+  if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
+    return jsonError('Solo administración, jefe o desarrollador pueden regularizar un COD.', 403, request)
+  }
+  if (!isValidUuid(operador.cuenta_id)) {
+    return jsonError('Cuenta del operador no disponible.', 403, request)
+  }
+
+  let body
+  try { body = await request.json() } catch { return jsonError('Body inválido', 400, request) }
+  const despachoId = body?.despachoId
+  const montoEfectivo = Number(body?.montoEfectivo)
+  const idempotencyKey = body?.idempotencyKey || request.headers.get('Idempotency-Key') || crypto.randomUUID()
+
+  if (!isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request)
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request)
+  if (!Number.isFinite(montoEfectivo) || montoEfectivo <= 0 || Math.round(montoEfectivo * 100) !== montoEfectivo * 100) {
+    return jsonError('montoEfectivo inválido; debe ser positivo y tener máximo dos decimales.', 400, request)
+  }
+
+  const rpc = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/regularizar_cod_efectivo_atomico_staging`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      p_cuenta_id: operador.cuenta_id,
+      p_despacho_id: despachoId,
+      p_idempotency_key: idempotencyKey,
+      p_usuario_id: operador.actor_id || operador.id,
+      p_usuario_nombre: operador.nombre,
+      p_monto_efectivo: montoEfectivo,
+      p_ip_origen: ip || request.headers.get('CF-Connecting-IP') || null,
+    }),
+  })
+  const text = await rpc.text().catch(() => '')
+  if (!rpc.ok) {
+    if (text.includes('COD_REGULARIZACION_DESPACHO_NO_ENCONTRADO')) return jsonError('Despacho no encontrado en esta cuenta.', 404, request)
+    if (text.includes('COD_REGULARIZACION_ACTOR_INVALIDO')) return jsonError('El operador no cumple las guardas para esta operación.', 403, request)
+    if (text.includes('MONTO_NO_COINCIDE') || text.includes('SALDO_CLIENTE_INSUFICIENTE')) return jsonError('El efectivo indicado no coincide con el saldo vigente del despacho/cliente; no se registró ningún cambio.', 409, request)
+    if (text.includes('IDEMPOTENCIA_REUTILIZADA')) return jsonError('La clave de idempotencia ya fue usada con otros datos.', 400, request)
+    if (text.includes('YA_TIENE_PAGO_REAL')) return jsonError('El despacho ya tiene un abono real; no se duplicó el cobro.', 409, request)
+    if (text.includes('NO_ES_CASO_SIN_ABONO') || text.includes('CARGO_NO_COINCIDE') || text.includes('COD_AMBIGUO') || text.includes('ESTADO_INVALIDO')) return jsonError('El despacho no cumple las condiciones para esta regularización segura.', 409, request)
+    return jsonError(`No se pudo regularizar el COD: ${text.slice(0, 240)}`, 400, request)
+  }
+
+  let result
+  try { result = text ? JSON.parse(text) : null } catch { result = null }
+  if (!result?.ok) return jsonError('La regularización no devolvió confirmación.', 500, request)
+
+  return json({ ...result, idempotencyKey }, 200, request)
+}
+
 export async function handleEditarPagoDespacho(request, env) {
   const v = await validateOperator(request, env);
   if (v.error) return v.error;

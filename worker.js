@@ -5,7 +5,7 @@
 
 import { 
   json, jsonError, sanitizeSearch, isValidEmail, isValidUuid, 
-  corsHeaders, getAllowedOrigin, isRateLimited,
+  corsHeaders, getAllowedOrigin, isRateLimited, isSameOriginRequest,
   ALLOWED_ORIGINS, rateLimitMap, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX, EMAIL_RE, UUID_RE 
 } from './api/lib/utils.js'
 
@@ -24,6 +24,8 @@ import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSu
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp, handleActualizarProductoMetadatos, handleCrearProductoConKardex, handleActualizarProductoConKardex, handleBorrarProductoConKardex } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
+import { handleResumenFinancieroDespacho, handleConciliarPagoCod } from './api/handlers/cod.js'
+
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleGetRates } from './api/handlers/rates.js'
 import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleDesignacion, handleResetOperacional, handleTesterClearAll, handleTesterCleanupFixtures, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
@@ -53,6 +55,11 @@ export default {
 
     // ── API routes (wrapped in error logging) ────
     if (url.pathname.startsWith('/api/')) {
+      // Guard every API write at the router boundary, including mutation handlers
+      // that do not use validateOperator or are mounted through special routes.
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !isSameOriginRequest(request)) {
+        return jsonError('Origen de la petición no permitido', 403, request)
+      }
       try {
 
     // ── API: recibir log del frontend ─────────────────────────────────────
@@ -231,6 +238,13 @@ export default {
     }
 
     // ── API: editar forma de pago del despacho ──────────────────────────
+    if (url.pathname === '/api/despachos/resumen-financiero' && request.method === 'POST') {
+      return handleResumenFinancieroDespacho(request, env);
+    }
+    if (url.pathname === '/api/despachos/conciliar-cod' && request.method === 'POST') {
+      return handleConciliarPagoCod(request, env);
+    }
+
     if (url.pathname === '/api/despachos/editar-pago' && request.method === 'POST') {
       return handleEditarPagoDespacho(request, env);
     }

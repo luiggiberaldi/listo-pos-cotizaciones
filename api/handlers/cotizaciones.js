@@ -1,4 +1,4 @@
-import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, corsHeaders, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { verifyAuth, validateOperator, verifySupervisor, SUPER_ADMIN_UUID } from '../lib/auth.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 
@@ -388,6 +388,7 @@ export async function handleReabrirCotizacion(request, env) {
 
 // ── Crear versión de cotización enviada/rechazada (bypass RLS) ──────────────
 export async function handleCrearVersion(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env)
   if (v.error) return v.error
   const { user, operador, headers: supaHeaders } = v
@@ -518,6 +519,7 @@ export async function handleCrearVersion(request, env) {
 
 // ── Enviar cotización ──
 export async function handleEnviarCotizacion(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -579,6 +581,7 @@ export async function handleEnviarCotizacion(request, env) {
 
 // ── Venta Rápida: crea cotización aceptada + despacho en un solo paso ───────
 export async function handleVentaRapida(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;

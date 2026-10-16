@@ -1,0 +1,16 @@
+# Normalización de finales de línea: el repositorio es canónicamente LF.
+# Fundamento: rpcProductContract.test.js busca patrones multilínea con \n literal y
+# falla en clones frescos de Windows cuando core.autocrlf=true reintroduce CRLF
+# (falla latente documentada en el handoff del candidato 2026-10-06).
+# `-text` en binarios: sin conversión nunca (defensivo; git ya los detecta).
+* text=auto eol=lf
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.ico -text
+*.wav -text
+*.mp3 -text
+*.woff -text
+*.woff2 -text
+*.ttf -text

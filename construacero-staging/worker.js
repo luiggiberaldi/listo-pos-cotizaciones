@@ -23,7 +23,7 @@ import { handleRegistrarAbono, handleRevertirAbono, handleRegistrarSaldoFavor, h
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
-import { handleCrearDespacho, handleCambiarFechaEntregaDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
+import { handleCrearDespacho, handleCambiarFechaEntregaDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho, handleRegularizarCodEfectivo } from './api/handlers/despachos.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleGetRates } from './api/handlers/rates.js'
 import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleDesignacion, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
@@ -208,6 +208,11 @@ export default {
     // ── API: editar forma de pago del despacho ──────────────────────────
     if (url.pathname === '/api/despachos/editar-pago' && request.method === 'POST') {
       return handleEditarPagoDespacho(request, env);
+    }
+
+    // ── API staging: regularización atómica de COD en efectivo ──────────
+    if (url.pathname === '/api/despachos/regularizar-cod-efectivo' && request.method === 'POST') {
+      return handleRegularizarCodEfectivo(request, env);
     }
 
     // ── API: devolución parcial de despacho (administracion/logistica) ────

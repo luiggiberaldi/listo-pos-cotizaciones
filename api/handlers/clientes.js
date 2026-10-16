@@ -1,5 +1,5 @@
 // api/handlers/clientes.js
-import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, corsHeaders, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { rankSearch } from '../lib/entitySearch.js'
 import { verifyAuth, validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
@@ -52,10 +52,10 @@ export async function handleListarClientes(request, env) {
 
   const esExterno = !!operador.es_externo;
 
-  // Fetch ALL active clients — filtrado en el Worker (in-memory, rápido)
-  // limit=10000 evita el tope de 1000 filas de PostgREST
-  // Fetch ALL clients (incluyendo inactivos) — filtrado en el Worker
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&limit=10000&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,saldo_a_favor,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol,codigo)`;
+  // PostgREST tiene un límite duro de 1000 filas (max-rows).
+  // Se pagina en bloques de 1000 para cargar todos los clientes (actualmente >1000),
+  // evitando que clientes al final del alfabeto (como los que empiezan por Y o Z) queden truncados.
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,saldo_a_favor,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol,codigo)`;
 
   if (esExterno) {
     baseUrl += `&vendedor_id=eq.${operador.id}`;
@@ -64,17 +64,33 @@ export async function handleListarClientes(request, env) {
   // Fetch active loans in parallel to detect which clients have pending/partial loans
   const prestamosUrl = `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?estado=in.("pendiente","devuelto_parcial")&select=cliente_id`;
 
-  const [clientesRes, prestamosRes] = await Promise.all([
-    fetch(baseUrl, { headers: supaHeaders }),
+  const rawClientes = [];
+  let offset = 0;
+  const BATCH_SIZE = 1000;
+
+  const [primeraPaginaRes, prestamosRes] = await Promise.all([
+    fetch(`${baseUrl}&limit=${BATCH_SIZE}&offset=${offset}`, { headers: supaHeaders }),
     fetch(prestamosUrl, { headers: supaHeaders })
   ]);
 
-  if (!clientesRes.ok) {
-    const errText = await clientesRes.text();
-    return jsonError(`Error al cargar clientes: ${errText}`, clientesRes.status, request);
+  if (!primeraPaginaRes.ok) {
+    const errText = await primeraPaginaRes.text();
+    return jsonError(`Error al cargar clientes: ${errText}`, primeraPaginaRes.status, request);
   }
 
-  const rawClientes = await clientesRes.json();
+  const primeraPagina = await primeraPaginaRes.json();
+  if (Array.isArray(primeraPagina)) rawClientes.push(...primeraPagina);
+
+  // Si la primera página vino llena (1000 filas), traer las páginas restantes
+  let ultimosResultados = primeraPagina;
+  while (Array.isArray(ultimosResultados) && ultimosResultados.length === BATCH_SIZE) {
+    offset += BATCH_SIZE;
+    const sigRes = await fetch(`${baseUrl}&limit=${BATCH_SIZE}&offset=${offset}`, { headers: supaHeaders });
+    if (!sigRes.ok) break;
+    ultimosResultados = await sigRes.json();
+    if (!Array.isArray(ultimosResultados) || ultimosResultados.length === 0) break;
+    rawClientes.push(...ultimosResultados);
+  }
   const clientesConPrestamosActivos = new Set();
 
   if (prestamosRes.ok) {
@@ -141,14 +157,15 @@ export async function handleClientesLookup(request, env) {
 }
 
 export async function handleReasignarCliente(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
 
-  // ── Solo supervisores y administración pueden reasignar clientes ────────────
-  const rolesPermitidos = ['supervisor', 'administracion', 'jefe', 'desarrollador'];
+  // ── Solo administración, jefe y desarrollador pueden reasignar clientes ─────
+  const rolesPermitidos = ['administracion', 'jefe', 'desarrollador'];
   if (!rolesPermitidos.includes(operador.rol)) {
-    return jsonError('Solo supervisores y administración pueden reasignar clientes', 403, request);
+    return jsonError('Solo administración, jefe o desarrollador pueden reasignar clientes', 403, request);
   }
 
   let body;
@@ -231,7 +248,7 @@ export async function handleReasignarCliente(request, env) {
 
     // 5. Auditoría
     await registrarAuditoria(env, headers, {
-      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
       categoria: 'REASIGNACION', accion: 'REASIGNAR_CLIENTE',
       descripcion: `Cliente "${cliente.nombre}" reasignado${motivoFinal ? `. Motivo: ${motivoFinal}` : ''}`,
       entidadTipo: 'cliente', entidadId: clienteId,
@@ -245,6 +262,7 @@ export async function handleReasignarCliente(request, env) {
 }
 
 export async function handleBorrarCliente(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers } = v;
@@ -383,6 +401,7 @@ export async function handleCrearCliente(request, env) {
 }
 
 export async function handleActualizarCliente(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers } = v;
@@ -424,6 +443,11 @@ export async function handleActualizarCliente(request, env) {
   };
 
   if (tipo_cliente === 'personal') {
+    // Mover un cliente a Personal lo reasigna a la cuenta EMPRESA: aplica la
+    // misma restricción que reasignar (solo administración/jefe/desarrollador).
+    if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
+      return jsonError('Solo administración, jefe o desarrollador pueden mover un cliente a Personal', 403, request);
+    }
     const empRes = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?nombre=ilike.EMPRESA&activo=eq.true&select=id`, { headers });
     if (empRes.ok) {
       const empUsers = await empRes.json();
@@ -457,6 +481,7 @@ export async function handleActualizarCliente(request, env) {
 }
 
 export async function handleActivarCliente(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers } = v;
@@ -494,14 +519,15 @@ export async function handleActivarCliente(request, env) {
 
 
 export async function handleReasignarClientesBulk(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
 
-  // ── Solo supervisores y administración pueden reasignar masivamente ─────────
-  const rolesPermitidos = ['supervisor', 'administracion', 'jefe', 'desarrollador'];
+  // ── Solo administración, jefe y desarrollador pueden reasignar masivamente ──
+  const rolesPermitidos = ['administracion', 'jefe', 'desarrollador'];
   if (!rolesPermitidos.includes(operador.rol)) {
-    return jsonError('Solo supervisores y administración pueden reasignar clientes', 403, request);
+    return jsonError('Solo administración, jefe o desarrollador pueden reasignar clientes', 403, request);
   }
 
   let body;
@@ -640,6 +666,7 @@ export async function handleGetPrestamosCliente(request, env) {
 
 // Endpoint para devolver préstamo físico
 export async function handleDevolverPrestamo(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -757,6 +784,7 @@ export async function handleDevolverPrestamo(request, env) {
 
 // Endpoint para facturar préstamo (convertir a venta con saldo en cuentas por cobrar)
 export async function handleFacturarPrestamo(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { operador, headers, ip } = v;

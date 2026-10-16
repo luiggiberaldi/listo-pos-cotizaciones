@@ -1,5 +1,5 @@
 // api/handlers/proveedores.js
-import { json, jsonError, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { rankSearch } from '../lib/entitySearch.js'
 import { verifyAuth, validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
@@ -114,6 +114,7 @@ export async function handleCheckRifProveedor(request, env) {
 
 // 3. Crear Proveedor
 export async function handleCrearProveedor(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -183,6 +184,7 @@ export async function handleCrearProveedor(request, env) {
 
 // 4. Actualizar Proveedor
 export async function handleActualizarProveedor(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -255,6 +257,7 @@ export async function handleActualizarProveedor(request, env) {
 
 // 5. Borrar / Desactivar Proveedor
 export async function handleBorrarProveedor(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -361,6 +364,7 @@ export async function handleGetCuentasPorPagar(request, env) {
 
 // 7. Registrar transacción en CxP (Cargo o Abono)
 export async function handleRegistrarTransaccionCxP(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -466,6 +470,7 @@ export async function handleRegistrarTransaccionCxP(request, env) {
 
 // 8. Actualizar transacción en CxP
 export async function handleActualizarTransaccionCxP(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;

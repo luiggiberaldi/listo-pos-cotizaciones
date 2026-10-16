@@ -2,7 +2,7 @@
 // Reporte de choferes locales + liquidación de comisiones de fletes fuera de Carabobo.
 // Adicionalmente, el reporte y detalle son de solo lectura para admin/dev/logística.
 // El pago (FIFO) requiere admin/dev (igual que cxc/abono).
-import { json, jsonError, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 
@@ -263,6 +263,7 @@ export async function handleDetalleTransportista(request, env) {
 // Marca FIFO solo sobre comisiones de fletes fuera de Carabobo. La nómina local no se registra aquí.
 // Se ejecuta con service_role para bypassar trigger de defensa en profundidad.
 export async function handlePagarTransportista(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env)
   if (v.error) return v.error
   const { operador, ip } = v
@@ -466,6 +467,7 @@ export async function handlePagarTransportista(request, env) {
 // Revierte un pago: marca pago.revertido=true y resetea flete_pagado en los despachos vinculados.
 // Solo admin/desarrollador.
 export async function handleRevertirPagoTransportista(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env)
   if (v.error) return v.error
   const { operador, ip } = v

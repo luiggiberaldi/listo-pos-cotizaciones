@@ -1,9 +1,10 @@
-import { json, jsonError, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 
 export async function handleRegistrarAbono(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -147,6 +148,7 @@ export async function handleRegistrarAbono(request, env) {
 }
 
 export async function handleRevertirAbono(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -239,6 +241,7 @@ export async function handleRevertirAbono(request, env) {
 }
 
 export async function handleRegistrarSaldoFavor(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -304,6 +307,7 @@ export async function handleRegistrarSaldoFavor(request, env) {
 }
 
 export async function handleCruzarSaldoFavor(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -406,6 +410,7 @@ export async function handleCruzarSaldoFavor(request, env) {
 }
 
 export async function handleRegistrarDevolucionCredito(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;

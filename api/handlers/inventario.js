@@ -1,5 +1,5 @@
 // api/handlers/inventario.js
-import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, corsHeaders, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 
@@ -101,6 +101,7 @@ export async function handleClearInventory(request, env) {
 
 // ── Aplicar movimiento de inventario por lotes (admin) ────────────────────────
 export async function handleAplicarMovimientoLote(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -175,6 +176,7 @@ export async function handleAplicarMovimientoLote(request, env) {
 
 // ── Revertir movimiento manual de inventario (admin) ─────────────────────────
 export async function handleRevertirMovimientoInventario(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -644,6 +646,7 @@ export async function handleSyncEmbeddings(request, env) {
 
 // ── Actualización Masiva de Precios (Admin) ──────────────────────────────────
 export async function handleBatchPriceUpdate(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -827,6 +830,7 @@ async function callProductKardexRpc(request, env, rpcName, payload, context) {
 
 // ── Crear producto con Kardex (Worker/service_role) ─────────────────────────
 export async function handleCrearProductoConKardex(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env)
   if (v.error) return v.error
   const { user, operador, headers, ip } = v
@@ -882,6 +886,7 @@ export async function handleCrearProductoConKardex(request, env) {
 
 // ── Actualizar producto con Kardex (Worker/service_role) ────────────────────
 export async function handleActualizarProductoConKardex(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env)
   if (v.error) return v.error
   const { user, operador, headers, ip } = v
@@ -934,6 +939,7 @@ export async function handleActualizarProductoConKardex(request, env) {
 
 // ── Borrar producto con Kardex (Worker/service_role) ────────────────────────
 export async function handleBorrarProductoConKardex(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env)
   if (v.error) return v.error
   const { user, operador, headers, ip } = v
@@ -970,6 +976,7 @@ export async function handleBorrarProductoConKardex(request, env) {
 // para que 06 pueda revocar UPDATE de productos a authenticated. Este handler
 // escribe por service_role (headers de validateOperator) y valida tenant.
 export async function handleActualizarProductoMetadatos(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -1034,6 +1041,7 @@ export async function handleActualizarProductoMetadatos(request, env) {
 
 // ── Transformación de Inventario (Procesamiento de un producto en otro) ──────
 export async function handleTransformacionInventario(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -1111,6 +1119,7 @@ export async function handleTransformacionInventario(request, env) {
 
 // ── Ingreso masivo por lote (admin / supervisor) ─────────────────────────────
 export async function handleBatchIngest(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
