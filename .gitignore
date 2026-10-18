@@ -81,6 +81,7 @@ __tests__/
 !ROADMAP.md
 !BITACORA.md
 !CHANGELOG.md
+!PLAN_SOLUCION_DEFINITIVA_COD.md
 !docs/runbooks/*.md
 !docs/decisiones/*.md
 !docs/incidentes/*.md
@@ -161,3 +162,16 @@ outputs/
 !src/test-fixtures/cod-modal/*.html
 !src/test-fixtures/cod-modal/vite.config.js
 !scripts/test-cod-modal-browser.mjs
+
+# Verificación unificada del release COD (runbook)
+!scripts/verify-cod-release.mjs
+
+# Runner de test:cod con validacion de manifest
+!scripts/test-cod.mjs
+
+# Ensayo de rollback del release 14 COD
+!scripts/test-cod-rollback-local.mjs
+# Plan corregido del release 14 COD (fuente de verdad del cierre)
+!docs/plans/2026-10-18-solucion-definitiva-conciliacion-cod-corregido.md
+# Smoke end-to-end del release 14 COD en produccion (Tarea 5)
+!scripts/smoke-cod-prod-14.mjs

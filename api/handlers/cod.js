@@ -10,7 +10,7 @@ const METODOS_SIN_REFERENCIA = new Set(['Efectivo $', 'Efectivo Bs'])
 
 function idempotencyKey(request, body) {
   const raw = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : ''
-  return raw || (request.headers.get('Idempotency-Key') || '').trim() || crypto.randomUUID()
+  return raw || (request.headers.get('Idempotency-Key') || '').trim()
 }
 
 export async function handleResumenFinancieroDespacho(request, env) {
@@ -87,6 +87,10 @@ export async function handleConciliarPagoCod(request, env) {
   if (pagosInvalidos) return jsonError('Método, monto, tasa o referencia de pago inválidos', 400, request)
 
   const key = idempotencyKey(request, body)
+  // La clave la genera el cliente (una por conciliación) y la REUTILIZA en reintentos:
+  // inventar una clave aleatoria por petición anularía el replay-safe de la RPC
+  // (cada reintento parecería una conciliación nueva y duplicaría abonos).
+  if (!key) return jsonError('Idempotency-Key requerida: genere una clave única por conciliación y reutilícela en los reintentos', 400, request)
   if (!isValidUuid(key)) return jsonError('Idempotency-Key inválida', 400, request)
 
   const response = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_pago_externo_cobro_idempotente`, {

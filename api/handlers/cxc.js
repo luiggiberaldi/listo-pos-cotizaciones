@@ -17,11 +17,41 @@ export async function handleRegistrarAbono(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { clienteId, monto, formaPago, referencia, descripcion, despachoId } = body;
+  const { clienteId, monto, formaPago, referencia, descripcion, despachoId, idempotencyKey } = body;
   if (!clienteId || !isValidUuid(clienteId)) return jsonError('clienteId inválido', 400, request);
   if (!monto || monto <= 0) return jsonError('Monto inválido', 400, request);
 
   try {
+    // 0. Anti-replay (solo si el cliente envió Idempotency-Key): un reintento del mismo
+    //    cobro devuelve el abono ya registrado en lugar de duplicarlo. Se detecta por
+    //    coincidencia exacta de la clave natural del abono (cliente + despacho + monto +
+    //    forma + referencia + descripción) en las últimas 24h. Sin clave, comportamiento
+    //    histórico intacto (llamadas sin idempotencia, p.ej. abonos manuales de FichaCliente).
+    const idemKey = typeof idempotencyKey === 'string' ? idempotencyKey.trim() : '';
+    if (idemKey) {
+      const descripcionFinal = descripcion || 'Abono recibido';
+      const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const params = new URLSearchParams({
+        select: 'id,saldo_usd',
+        tipo: 'eq.abono',
+        monto_usd: `eq.${monto}`,
+        descripcion: `eq.${descripcionFinal}`,
+        creado_en: `gt.${desde}`,
+        limit: '1',
+      });
+      params.set('cliente_id', `eq.${clienteId}`);
+      params.set('despacho_id', despachoId ? `eq.${despachoId}` : 'is.null');
+      params.set('forma_pago_abono', formaPago ? `eq.${formaPago}` : 'is.null');
+      params.set('referencia', referencia ? `eq.${referencia}` : 'is.null');
+      const replayRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?${params.toString().replace(/\+/g, '%20')}`, { headers });
+      if (replayRes.ok) {
+        const previos = await replayRes.json();
+        if (Array.isArray(previos) && previos.length > 0) {
+          return json({ id: previos[0].id, nuevoSaldo: Number(previos[0].saldo_usd), idempotent: true }, 200, request);
+        }
+      }
+    }
+
     // 1. Obtener cliente y su saldo actual
     const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}&select=saldo_pendiente`, { headers });
     const [cliente] = await cRes.json();
@@ -137,7 +167,7 @@ export async function handleRegistrarAbono(request, env) {
       await registrarAuditoria(env, headers, {
         usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
         categoria: 'FINANZAS', accion: 'REGISTRAR_ABONO', descripcion: `Abono de $${montoAbonar} registrado para cliente ${clienteId}`,
-        entidadTipo: 'cliente', entidadId: clienteId, meta: { monto: montoAbonar, forma_pago: formaPago, saldo_anterior: saldoActual, saldo_nuevo: nuevoSaldo }, ip,
+        entidadTipo: 'cliente', entidadId: clienteId,        meta: { monto: montoAbonar, forma_pago: formaPago, saldo_anterior: saldoActual, saldo_nuevo: nuevoSaldo, ...(idemKey ? { idempotency_key: idemKey } : {}) }, ip,
       });
     } catch {}
 

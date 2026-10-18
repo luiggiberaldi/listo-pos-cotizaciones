@@ -126,6 +126,19 @@ La primera entrega ya tiene preparado el contrato `confirmar_entrega_finanzas_id
 
 Quedan como gates antes de ejecutar o desplegar: (1) validar las firmas/columnas del snapshot disposable, (2) ejecutar tests mutables únicamente en esa base aislada, (3) revisar la semántica financiera de la primera entrega con datos representativos y (4) aprobar el retiro de `REVIEW_ONLY` y los grants. Todavía no se debe ejecutar SQL mutable ni desplegar.
 
+## Propuesta de release 14 — RPC financieras COD (REVIEW ONLY)
+
+Artefactos preparados, **no aplicados**. Paquete de revisión independiente, decisiones pendientes y formato de aprobación: [cod-release-14-review-packet.md](../../docs/runbooks/cod-release-14-review-packet.md).
+
+Comandos locales disponibles (no conectan a Supabase): `npm run test:cod`, `npm run test:cod:browser` y `npm run verify:cod:release-local`.
+
+- `14_cod_preflight_readonly.sql` valida de forma read-only las dependencias COD, el historial remoto y la presencia de RPCs.
+- `14_cod_financial_rpcs_review.sql` propone las RPC `resumen_financiero_despacho` y `registrar_pago_externo_cobro_idempotente` consumidas por `api/handlers/cod.js`.
+- `14_cod_postflight_readonly.sql` comprueba contratos, grants mínimos y la actualización independiente de `forma_pago` / `forma_pago_cliente`.
+- `14_cod_rollback_review.sql` elimina únicamente las RPC de release 14 si pertenecen a este paquete; conserva la tabla de idempotencia y no borra asientos ni auditoría.
+
+La conciliación construye cada JSON de pago a partir de su propia fuente, exige un único COD y monto nominal coincidente en las dos, y falla cerrado si las fuentes no son coherentes. Para cada abono `Efectivo Bs` acepta monto Bs + tasa seleccionada al confirmar, valida/congela el equivalente USD y retiene monto Bs, tasa, fuente y fecha en el snapshot del pago; cada parcial mantiene su conversión fija. La reparación manual `regularizar_cod_efectivo_atomico_staging` y su endpoint no se promueven: son staging-only y necesitan contrato, autorización y release aparte. El gate `REVIEW_ONLY` permanece deliberadamente activo. Dada la deriva conocida del historial de migraciones, **no usar `supabase db push/reset/migration repair`** para aplicar este paquete. Antes de quitar el gate: cotejar el contrato con un preflight principal fresco, verificar backup/restauración, resolver el método manual de aplicación, ejecutar los casos positivos/negativos y reintentos en BD desechable y completar revisión contable/seguridad. No se verificó esquema vivo ni SHA desplegado al preparar estos artefactos.
+
 ## Release 2026-08-28 — Cobro de la diferencia en devolución parcial (Opción A)
 
 Paquete aditivo publicado en `supabase/release/principal/02_devolucion_cobro_diferencia.sql` (con rollback en `02_devolucion_cobro_diferencia_rollback.sql`) y espejo para staging en `construacero-staging/supabase/migrations/252_staging_devolucion_cobro_diferencia.sql`.

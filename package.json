@@ -14,9 +14,13 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:staging:contracts": "vitest run --config vitest.staging.config.js",
-    "test:cod": "vitest run api/handlers/__tests__/cod.test.js src/components/despachos/__tests__/ConciliarCodModal.test.js src/utils/__tests__/codCurrency.test.js scripts/lib/__tests__/codMainRelease.test.js",
+    "test:cod": "node scripts/test-cod.mjs",
     "test:cod:browser": "node scripts/test-cod-modal-browser.mjs",
     "verify:cod:release-local": "node scripts/test-cod-main-release-local.mjs --verify-local",
+
+    "verify:cod:rollback-local": "node scripts/test-cod-rollback-local.mjs",
+
+    "verify:cod:release": "node scripts/verify-cod-release.mjs",
     "test:watch": "vitest",
     "verify:promotion:kardex": "node scripts/verify-kardex-promotion-package.mjs",
     "prepare:kardex:isolated": "node scripts/prepare-kardex-isolated-run.mjs",

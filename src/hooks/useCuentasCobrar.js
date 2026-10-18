@@ -436,17 +436,23 @@ export function useRegistrarAbono() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion, despachoId }) => {
+    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion, despachoId, idempotencyKey }) => {
       const res = await authFetch('/api/cxc/abono', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // Clave estable por operación (no por petición): un reintento reutiliza la
+          // misma clave y el servidor devuelve el abono ya registrado en vez de duplicarlo.
+          ...(idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey) } : {})
+        },
         body: JSON.stringify({
           clienteId,
           monto,
           formaPago: formaPago || null,
           referencia: referencia || null,
           descripcion: descripcion || 'Abono recibido',
-          despachoId: despachoId || null
+          despachoId: despachoId || null,
+          ...(idempotencyKey ? { idempotencyKey } : {})
         }),
       })
       const result = await res.json()
