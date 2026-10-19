@@ -1,7 +1,7 @@
 // src/views/ClientesView.jsx
 // Vista principal del módulo de Clientes
 // — Vendedor: ve y gestiona sus propios clientes
-// — Supervisor: ve todos los clientes + puede reasignar
+// — Supervisor: ve todos los clientes · Reasignar: solo administración/jefe/desarrollador
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
@@ -646,7 +646,7 @@ export default function ClientesView() {
         />
       </Modal>
 
-      {/* ── Modal: Reasignar (solo supervisor) ─────────────────────────────── */}
+      {/* ── Modal: Reasignar (solo administración/jefe/desarrollador) ─────── */}
       <ReasignacionModal
         cliente={clienteReasig}
         isOpen={modalReasigOpen}

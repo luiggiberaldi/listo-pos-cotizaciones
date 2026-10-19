@@ -39,6 +39,8 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
+  // Reasignar/transferir cliente: solo administración, jefe y desarrollador (misma lista que el API)
+  const puedeReasignar = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const esPropio = cliente.vendedor_id === perfil?.id
   const color = cliente.vendedor?.color || null
   const mostrarComoAdmin = esAdministracion && !esPersonalSection
@@ -162,7 +164,7 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
                 Ver cuenta
               </button>
             )}
-            {onReasignar && (
+            {onReasignar && puedeReasignar && (
               <button onClick={() => onReasignar(cliente)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors" title="Reasignar cliente">
                 <ArrowRightLeft size={15} />
@@ -197,7 +199,7 @@ export default function ClienteRow({ cliente, onEditar, onReasignar, onCotizar, 
                 <Pencil size={15} />
               </button>
             )}
-            {onReasignar && (esSupervisor || esAdministracion) && (
+            {onReasignar && puedeReasignar && (
               <button onClick={() => onReasignar(cliente)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors" title="Reasignar cliente">
                 <ArrowRightLeft size={15} />

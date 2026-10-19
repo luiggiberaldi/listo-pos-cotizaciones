@@ -663,8 +663,8 @@ function UsuarioCard({ usuario, propio, onEditar, onCambiarActivo, onEliminar, c
             {usuario.activo ? <UserX size={13} /> : <UserCheck size={13} />}
             {usuario.activo ? 'Desact.' : 'Activar'}
           </button>
-          {/* Reasignar clientes — solo para vendedores */}
-          {(usuario.rol === 'vendedor' || usuario.rol === 'vendedor_sin_comision') && (
+          {/* Reasignar clientes de un vendedor (objetivo) — acción visible solo para administración/jefe/desarrollador */}
+          {(usuario.rol === 'vendedor' || usuario.rol === 'vendedor_sin_comision') && onReasignarClientes && (
             <button onClick={() => onReasignarClientes(usuario)} title="Reasignar todos sus clientes"
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-600 hover:bg-amber-50 transition-colors whitespace-nowrap">
               <ArrowLeftRight size={13} />Reasignar
@@ -801,6 +801,8 @@ function ModalReasignarBulk({ vendedorOrigen, vendedores, onClose, onDone }) {
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function UsuariosView() {
   const { perfil } = useAuthStore()
+  // Transferir/reasignar clientes (masivo): solo administración, jefe y desarrollador (misma lista que el API)
+  const puedeReasignarClientes = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const [modalAbierto,     setModalAbierto]     = useState(false)
   const [editando,         setEditando]         = useState(null)
   const [confirmCambio,    setConfirmCambio]    = useState(null)
@@ -915,7 +917,7 @@ export default function UsuariosView() {
                     onEliminar={setConfirmBorrar}
                     coloresUsados={coloresUsados}
                     onCambiarColor={cambiarColor}
-                    onReasignarClientes={setReasignando}
+                    onReasignarClientes={puedeReasignarClientes ? setReasignando : undefined}
                   />
                 ))}
               </div>
@@ -934,7 +936,7 @@ export default function UsuariosView() {
                     onEliminar={setConfirmBorrar}
                     coloresUsados={coloresUsados}
                     onCambiarColor={cambiarColor}
-                    onReasignarClientes={setReasignando}
+                    onReasignarClientes={puedeReasignarClientes ? setReasignando : undefined}
                   />
                 ))}
               </div>

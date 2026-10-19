@@ -51,6 +51,8 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
   const { perfil } = useAuthStore()
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
+  // Reasignar/transferir cliente: solo administración, jefe y desarrollador (misma lista que el API)
+  const puedeReasignar = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const esPropio     = cliente.vendedor_id === perfil?.id
   const color        = cliente.vendedor?.color || '#64748b'
 
@@ -239,7 +241,7 @@ export default function ClienteCard({ cliente, onEditar, onReasignar, onCotizar,
             Editar
           </button>
         )}
-        {onReasignar && (esSupervisor || esAdministracion) && (
+        {onReasignar && puedeReasignar && (
           <button onClick={() => onReasignar(cliente)} title="Reasignar cliente"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
             <ArrowRightLeft size={14} />
