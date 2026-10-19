@@ -66,6 +66,35 @@ describe('contrato RPC de productos y Tester', () => {
     expect(handler).toContain('borrar_producto_con_kardex_tenant_safe')
   })
 
+  it('los flags de precio 2/3 inhabilitados viajan por metadatos y la migración 276', () => {
+    const handler = readProjectFile('api/handlers/inventario.js')
+    expect(handler).toContain('precio2_habilitado')
+    expect(handler).toContain('precio3_habilitado')
+    expect(handler).toContain('precio2_habilitado debe ser booleano')
+    expect(handler).toContain('precio3_habilitado debe ser booleano')
+
+    const migration = readProjectFile('supabase/migrations/276_precio_2_3_habilitado.sql')
+    expect(migration).toContain('precio2_habilitado BOOLEAN NOT NULL DEFAULT TRUE')
+    expect(migration).toContain('precio3_habilitado BOOLEAN NOT NULL DEFAULT TRUE')
+    expect(migration).toContain('CASE WHEN p.precio2_habilitado THEN p.precio_2 END')
+    expect(migration).toContain('CASE WHEN p.precio3_habilitado THEN p.precio_3 END')
+
+    const helper = readProjectFile('src/utils/preciosHabilitados.js')
+    expect(helper).toContain('precio2Visible')
+    expect(helper).toContain('precio3Visible')
+  })
+
+  it('las RPCs de productos quedan con tenant obligatorio y grants mínimos (277)', () => {
+    const migration = readProjectFile('supabase/migrations/277_tenant_obligatorio_rpcs_productos.sql')
+    expect(migration).toContain("RAISE EXCEPTION 'CUENTA_REQUERIDA'")
+    expect(migration).toContain("RAISE EXCEPTION 'CUENTA_NO_AUTORIZADA'")
+    expect(migration).toContain('p.cuenta_id = auth.uid()')
+    expect(migration).toContain('REVOKE ALL ON FUNCTION public.buscar_productos_hibrido')
+    expect(migration).toContain('FROM PUBLIC, anon, authenticated')
+    expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.buscar_productos_hibrido')
+    expect(migration).toContain('REVOKE ALL ON FUNCTION public.obtener_productos_vendedor')
+  })
+
   it('mantiene el aislamiento de cuenta del desarrollador virtual y del Tester', () => {
     const auth = readProjectFile('api/lib/auth.js')
     const tester = readProjectFile('src/views/TesterFlowView.jsx')

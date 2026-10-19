@@ -4279,3 +4279,27 @@ Producción completa con las 3 fases. Pendiente opcional: espejo 262 en staging 
 
 **Commits:** ver git log — sin push (regla).
 
+---
+
+## SESIÓN 18/10/2026 — Precios 2/3 inhabilitables por producto (276) + endurecimiento de tenant en RPCs de productos (277)
+
+**Pedido:** inhabilitar Precio 2 (Mayor) y/o Precio 3 (Especial) desde la edición de artículos (para los roles con esa función); un precio inhabilitado no debe aparecer en cotizaciones, venta rápida ni inventario; los valores guardados se conservan.
+
+**Implementado (plan `docs/plans/2026-10-18-plan-inhabilitar-precio-2-3.md`):**
+- Migración 276: columnas `precio2_habilitado`/`precio3_habilitado` (DEFAULT TRUE), `obtener_productos_vendedor` oculta valores inhabilitados, `buscar_productos_hibrido` expone los flags.
+- Escritura de flags vía `/api/productos/metadatos` (mismo canal que `activo`/`imagen_url`): las firmas de las RPCs crear/actualizar producto NO cambiaron → seguro ante deploys desfasados.
+- Frontend: toggles en `ProductoForm`, helper `preciosHabilitados.js`, gating en 9 superficies de venta/cotización/inventario.
+- Compatibilidad de rollout: select degradado ante BD sin migrar (corrigió el 400 reportado en pruebas en vivo).
+
+**Auditoría → endurecimiento (migración 277):** `buscar_productos_hibrido` tenía EXECUTE a PUBLIC/anon/authenticated y aceptaba `p_cuenta_id NULL` = todos los tenants (exponía `costo_usd`); `obtener_productos_vendedor` no filtraba tenant (saltaba RLS). 277: tenant obligatorio (`CUENTA_REQUERIDA`), rechazo de cuentas ajenas con JWT (`CUENTA_NO_AUTORIZADA`), EXECUTE solo `service_role` en buscar, y `p.cuenta_id = auth.uid()` en obtener (mismo modelo de tenant que la RLS de productos, migraciones 104/132).
+
+### Apply al principal (2026-10-19 00:40, vía Management API `database/query` — mismo canal que `backup-supabase-logical.mjs`)
+- Preflight: columnas inexistentes (0 filas), grants expuestos confirmados (PUBLIC, anon, authenticated en ambas RPCs), 466 productos.
+- Apply 276 → OK; apply 277 → OK (orden obligatorio).
+- Postflight: columnas `boolean NOT NULL DEFAULT true` (2/2), cuerpos con enforcement (`CUENTA_REQUERIDA`, `auth.uid()`, flags) ✓, grants mínimos verificados (buscar: solo `service_role`; obtener: `authenticated`+`service_role`), 466 productos sin cambios.
+- Comportamiento: `buscar_productos_hibrido(..., NULL, ...)` → 400 `CUENTA_REQUERIDA` ✓; `obtener_productos_vendedor` sin JWT → 0 filas ✓.
+- Evidencia: `docs/operaciones/apply-276-277-2026-10-19-00-40-27.md`. Rollbacks: `supabase/migrations/276_..._rollback.sql` y `277_..._rollback.sql`.
+- Verificación de código: Vitest 521/521 + `vite build` OK.
+
+**Estado:** aplicado y verificado en producción. Los toggles de Precio 2/3 quedan activos para los roles con edición de artículos, y la exposición entre tenants de las RPCs de productos quedó cerrada.
+

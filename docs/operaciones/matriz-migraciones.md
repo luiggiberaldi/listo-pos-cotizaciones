@@ -76,6 +76,8 @@
 | `236_configuracion_global_choferes_20.sql` + `237` | Configuración | ✅ | ✅ | Paquete correctivo con preflight readonly |
 | `240_fix_reporte_ventas_corte_y_cuenta.sql` | Reportes | ✅ | ✅ (259 espejo) | Espejo aplicado en staging |
 | `275_revertir_movimiento_inventario.sql` | Inventario/Kardex | ✅ | ✅ (275 staging) | ✅ | RPC reversión movimientos manuales (arnés 14/14) | Motivo manual + idempotencia cacheada |
+| `276_precio_2_3_habilitado.sql` | Productos (precios) | ✅ Confirmado aplicado (postflight 2026-10-19, bitácora 18/10) | — | ✅ `276_..._rollback.sql` | Postflight columnas 2/2 + comportamiento + Vitest 521/521 + `vite build`; evidencia `apply-276-277-2026-10-19-00-40-27.md` | Toggles por producto para inhabilitar Precio 2/3; valores se conservan; escritura vía `/api/productos/metadatos` (firmas de RPCs de producto sin cambios) |
+| `277_tenant_obligatorio_rpcs_productos.sql` | Seguridad (tenant RPCs productos) | ✅ Confirmado aplicado (postflight 2026-10-19, bitácora 18/10) | — | ✅ `277_..._rollback.sql` | Postflight grants mínimos + `CUENTA_REQUERIDA` 400 + sin-JWT 0 filas; evidencia `apply-276-277-2026-10-19-00-40-27.md` | Cierra fuga entre tenants: `buscar_productos_hibrido` con `p_cuenta_id` obligatorio + EXECUTE solo `service_role`; `obtener_productos_vendedor` filtrada por `auth.uid()`; aplica DESPUÉS de 276 |
 
 > La tabla anterior es una muestra de alto riesgo/impacto, no un índice exhaustivo de las 224+251 migraciones. Para el resto aplica ❓ hasta verificar con la base correspondiente.
 
