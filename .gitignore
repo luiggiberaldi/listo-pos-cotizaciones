@@ -179,3 +179,7 @@ outputs/
 !docs/plans/2026-10-18-solucion-definitiva-conciliacion-cod-corregido.md
 # Smoke end-to-end del release 14 COD en produccion (Tarea 5)
 !scripts/smoke-cod-prod-14.mjs
+
+# Guardarrail del doble clic en Guardar cambios (flags de precios 2/3)
+!src/components/inventario/__tests__/
+!src/components/inventario/__tests__/ProductoFormMetadatos.test.js

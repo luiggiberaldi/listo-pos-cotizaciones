@@ -1,8 +1,9 @@
 // src/components/inventario/ProductoForm.jsx
 // Formulario para crear/editar productos — solo supervisor
 import { useState, useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X, Clipboard } from 'lucide-react'
-import { useCrearProducto, useActualizarProducto, useCategorias } from '../../hooks/useInventario'
+import { useCrearProducto, useActualizarProducto, useCategorias, refrescarCacheTrasMetadatos } from '../../hooks/useInventario'
 import { comprimirImagen, subirImagenProducto } from '../../utils/imageCompress'
 import supabase from '../../services/supabase/client'
 import { authFetch } from '../../services/authFetch'
@@ -153,6 +154,7 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
   const [imagenEliminada, setImagenEliminada] = useState(false)
   const [comprimiendo, setComprimiendo] = useState(false)
 
+  const qc = useQueryClient()
   const crear     = useCrearProducto()
   const actualizar = useActualizarProducto()
   const { data: categoriasExistentes = [] } = useCategorias()
@@ -530,7 +532,10 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
         const metadatos = {}
         if (campos.precio2_habilitado !== (producto.precio2_habilitado !== false)) metadatos.precio2_habilitado = campos.precio2_habilitado
         if (campos.precio3_habilitado !== (producto.precio3_habilitado !== false)) metadatos.precio3_habilitado = campos.precio3_habilitado
-        if (Object.keys(metadatos).length) await guardarMetadatos(producto.id, metadatos)
+        if (Object.keys(metadatos).length) {
+          await guardarMetadatos(producto.id, metadatos)
+          await refrescarCacheTrasMetadatos(qc, producto.id, metadatos)
+        }
       } else {
         // Para nuevos productos: primero creamos para obtener el ID
         productoResult = await crear.mutateAsync(campos)
@@ -541,7 +546,10 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
           if (imagenBlob) metadatos.imagen_url = await subirImagenProducto(supabase, productoResult.id, imagenBlob)
           if (!campos.precio2_habilitado) metadatos.precio2_habilitado = false
           if (!campos.precio3_habilitado) metadatos.precio3_habilitado = false
-          if (Object.keys(metadatos).length) await guardarMetadatos(productoResult.id, metadatos)
+          if (Object.keys(metadatos).length) {
+            await guardarMetadatos(productoResult.id, metadatos)
+            await refrescarCacheTrasMetadatos(qc, productoResult.id, metadatos)
+          }
         }
       }
 
