@@ -21,6 +21,7 @@ import useAuthStore            from '../../store/useAuthStore'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { round2, mulR } from '../../utils/dinero'
 import { calcTotales } from '../../utils/calcTotales'
+import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs, fmtTelefono } from '../../utils/format'
 import { showToast } from '../ui/Toast'
 import { calcComisionEstimada } from '../../utils/comisionUtils'
@@ -703,11 +704,11 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     const prods = inventarioParaPrecios?.productos ?? inventarioParaPrecios ?? []
     const m = {}
     for (const p of prods) {
-      if (p.precio_2 != null || p.precio_3 != null) {
+      if (precio2Visible(p) || precio3Visible(p)) {
         m[p.id] = {
           p1: aplicarMarkup(Number(p.precio_usd) || 0),
-          p2: p.precio_2 != null ? aplicarMarkup(Number(p.precio_2)) : null,
-          p3: p.precio_3 != null ? aplicarMarkup(Number(p.precio_3)) : null
+          p2: precio2Visible(p) ? aplicarMarkup(Number(p.precio_2)) : null,
+          p3: precio3Visible(p) ? aplicarMarkup(Number(p.precio_3)) : null
         }
       }
     }

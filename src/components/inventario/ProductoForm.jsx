@@ -35,12 +35,28 @@ const VACIO = {
   codigo: '', nombre: '', descripcion: '', categoria: '',
   unidad: 'und', precio_usd: '', precio_2: '', precio_3: '', costo_usd: '',
   stock_actual: '0', stock_minimo: '0',
-  precio1_porcentaje: '', precio2_porcentaje: '', precio3_porcentaje: ''
+  precio1_porcentaje: '', precio2_porcentaje: '', precio3_porcentaje: '',
+  precio2_habilitado: true, precio3_habilitado: true
 }
 
-function PrecioBlock({ label, precioName, pctName, campos, cambiar, esAdmin, errores, cargando }) {
+// Los flags de precio 2/3 viven en metadatos (mismo canal que activo/imagen_url).
+async function guardarMetadatos(id, metadatos) {
+  // Migrado a Worker/service_role: 06 revoca UPDATE de productos a authenticated.
+  const res = await authFetch('/api/productos/metadatos', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, ...metadatos }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `Error ${res.status}`)
+  }
+}
+
+function PrecioBlock({ label, precioName, pctName, campos, cambiar, esAdmin, errores, cargando, habilitable = false, habilitado = true, onToggleHabilitado }) {
   const precio = Number(campos[precioName]) || 0;
   const costo = Number(campos.costo_usd) || 0;
+  const bloqueado = habilitable && !habilitado;
   
   const ganancia = precio - costo;
   const margenReal = precio > 0 ? (ganancia / precio) * 100 : 0;
@@ -70,21 +86,40 @@ function PrecioBlock({ label, precioName, pctName, campos, cambiar, esAdmin, err
   const baseInputClass = "w-full px-3 py-2.5 rounded-xl border text-sm text-slate-800 focus:outline-none focus:ring-2 placeholder:text-slate-400 transition-colors bg-slate-50";
 
   return (
-    <div className="space-y-2 border border-slate-200 rounded-xl p-3 bg-white">
-      <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1">
-        <DollarSign size={14} className="text-slate-400" />
-        {label}
-      </label>
+    <div className={`space-y-2 border rounded-xl p-3 ${bloqueado ? 'border-dashed border-slate-300 bg-slate-50/60' : 'border-slate-200 bg-white'}`}>
+      <div className="flex items-center justify-between gap-1.5 mb-1">
+        <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+          <DollarSign size={14} className="text-slate-400" />
+          {label}
+        </label>
+        {habilitable && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={habilitado}
+            onClick={onToggleHabilitado}
+            disabled={cargando}
+            title={habilitado ? 'Inhabilitar este precio (el valor se conserva)' : 'Habilitar este precio'}
+            className={`shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border transition-colors ${
+              habilitado
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-slate-200 text-slate-500 border-slate-300'
+            }`}
+          >
+            {habilitado ? 'Activo' : 'Inhabilitado'}
+          </button>
+        )}
+      </div>
       <div className="flex gap-2">
         <div className="flex-1">
           <input type="text" inputMode="decimal" name={precioName} value={campos[precioName]}
-            onChange={cambiar} placeholder="0.00" disabled={cargando}
+            onChange={cambiar} placeholder="0.00" disabled={cargando || bloqueado}
             className={`${baseInputClass} ${errores[precioName] ? 'border-red-500 ring-red-200 bg-red-50' : inputBorder}`} />
         </div>
         {esAdmin && (
           <div className="w-24 relative shrink-0">
             <input type="text" inputMode="decimal" name={pctName} value={campos[pctName]}
-              onChange={cambiar} placeholder="0" disabled={cargando}
+              onChange={cambiar} placeholder="0" disabled={cargando || bloqueado}
               className={`${baseInputClass} ${inputBorder} pr-6`} />
             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">%</span>
           </div>
@@ -165,6 +200,8 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
         precio1_porcentaje: producto.precio1_porcentaje != null ? String(producto.precio1_porcentaje) : '',
         precio2_porcentaje: producto.precio2_porcentaje != null ? String(producto.precio2_porcentaje) : '',
         precio3_porcentaje: producto.precio3_porcentaje != null ? String(producto.precio3_porcentaje) : '',
+        precio2_habilitado: producto.precio2_habilitado !== false,
+        precio3_habilitado: producto.precio3_habilitado !== false,
         costo_usd:    producto.costo_usd  != null ? String(producto.costo_usd)  : '',
         stock_actual: isClone ? '0' : (producto.stock_actual != null ? String(producto.stock_actual) : '0'),
         stock_minimo: isClone ? '0' : (producto.stock_minimo != null ? String(producto.stock_minimo) : '0'),
@@ -488,23 +525,23 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
           campos,
           imagen_url: finalImageUrl
         })
+
+        // 3. Estado de precios 2/3 (metadatos): solo si cambiaron
+        const metadatos = {}
+        if (campos.precio2_habilitado !== (producto.precio2_habilitado !== false)) metadatos.precio2_habilitado = campos.precio2_habilitado
+        if (campos.precio3_habilitado !== (producto.precio3_habilitado !== false)) metadatos.precio3_habilitado = campos.precio3_habilitado
+        if (Object.keys(metadatos).length) await guardarMetadatos(producto.id, metadatos)
       } else {
         // Para nuevos productos: primero creamos para obtener el ID
         productoResult = await crear.mutateAsync(campos)
         
-        // Luego subimos la imagen si hay una
-        if (imagenBlob && productoResult?.id) {
-          const url = await subirImagenProducto(supabase, productoResult.id, imagenBlob)
-          // Migrado a Worker/service_role: 06 revoca UPDATE de productos a authenticated.
-          const res = await authFetch('/api/productos/metadatos', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: productoResult.id, imagen_url: url }),
-          })
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}))
-            throw new Error(err.error || `Error ${res.status}`)
-          }
+        // Metadatos: imagen (si hay) y precios 2/3 inhabilitados en la creación
+        if (productoResult?.id) {
+          const metadatos = {}
+          if (imagenBlob) metadatos.imagen_url = await subirImagenProducto(supabase, productoResult.id, imagenBlob)
+          if (!campos.precio2_habilitado) metadatos.precio2_habilitado = false
+          if (!campos.precio3_habilitado) metadatos.precio3_habilitado = false
+          if (Object.keys(metadatos).length) await guardarMetadatos(productoResult.id, metadatos)
         }
       }
 
@@ -751,8 +788,12 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
       {/* Precios (bloques de precios con márgenes) */}
       <div className={`grid grid-cols-1 ${esAdmin ? 'md:grid-cols-3' : 'grid-cols-3'} gap-3 bg-slate-50/50 p-3 rounded-2xl border border-slate-100`}>
         <PrecioBlock label="Precio 1 (USD)" precioName="precio_usd" pctName="precio1_porcentaje" campos={campos} cambiar={cambiar} esAdmin={esAdmin} errores={errores} cargando={cargando} />
-        <PrecioBlock label="Precio 2 (USD)" precioName="precio_2" pctName="precio2_porcentaje" campos={campos} cambiar={cambiar} esAdmin={esAdmin} errores={errores} cargando={cargando} />
-        <PrecioBlock label="Precio 3 (USD)" precioName="precio_3" pctName="precio3_porcentaje" campos={campos} cambiar={cambiar} esAdmin={esAdmin} errores={errores} cargando={cargando} />
+        <PrecioBlock label="Precio 2 (USD)" precioName="precio_2" pctName="precio2_porcentaje" campos={campos} cambiar={cambiar} esAdmin={esAdmin} errores={errores} cargando={cargando}
+          habilitable habilitado={campos.precio2_habilitado}
+          onToggleHabilitado={() => setCampos(p => ({ ...p, precio2_habilitado: !p.precio2_habilitado }))} />
+        <PrecioBlock label="Precio 3 (USD)" precioName="precio_3" pctName="precio3_porcentaje" campos={campos} cambiar={cambiar} esAdmin={esAdmin} errores={errores} cargando={cargando}
+          habilitable habilitado={campos.precio3_habilitado}
+          onToggleHabilitado={() => setCampos(p => ({ ...p, precio3_habilitado: !p.precio3_habilitado }))} />
       </div>
 
       {/* Costo */}

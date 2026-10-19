@@ -5,6 +5,7 @@ import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { fmtBs, usdToBs } from '../../utils/format'
+import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
 import StockComprometidoDetalle from './StockComprometidoDetalle'
 
 function fmtUsd(n) {
@@ -94,8 +95,8 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
   // Markup para vendedor externo (solo presentación, no modifica BD)
   const { aplicarMarkup, esExterno, markupPct } = usePrecioVendedor()
   const precioDisplay  = esExterno ? aplicarMarkup(producto.precio_usd) : Number(producto.precio_usd)
-  const precio2Display = producto.precio_2 != null ? (esExterno ? aplicarMarkup(producto.precio_2) : Number(producto.precio_2)) : null
-  const precio3Display = producto.precio_3 != null ? (esExterno ? aplicarMarkup(producto.precio_3) : Number(producto.precio_3)) : null
+  const precio2Display = precio2Visible(producto) ? (esExterno ? aplicarMarkup(producto.precio_2) : Number(producto.precio_2)) : null
+  const precio3Display = precio3Visible(producto) ? (esExterno ? aplicarMarkup(producto.precio_3) : Number(producto.precio_3)) : null
 
   const stockActual = Number(producto.stock_actual) || 0
   const stockMinimo = Number(producto.stock_minimo) || 0
@@ -203,7 +204,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
 
             {/* P1 — precio principal */}
             <div className="flex items-baseline gap-1.5">
-              {(producto.precio_2 != null || producto.precio_3 != null) && (
+              {(precio2Visible(producto) || precio3Visible(producto)) && (
                 <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Detal</span>
               )}
               <p className="font-black text-slate-800 text-base sm:text-lg leading-none">{fmtUsd(precioDisplay)}</p>
@@ -248,7 +249,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
             })()}
 
             {/* P2 / P3 — precios secundarios */}
-            {(producto.precio_2 != null || producto.precio_3 != null) && (
+            {(precio2Visible(producto) || precio3Visible(producto)) && (
               <div className="flex flex-wrap gap-1 mt-2 pt-1.5 border-t border-slate-200">
                 {precio2Display != null && (
                   <div className="flex flex-col bg-white border border-slate-200 rounded-lg px-2 py-1 min-w-0">

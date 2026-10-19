@@ -4,6 +4,7 @@ import { X, Share2, Package, Loader2, Zap, Building2, DollarSign } from 'lucide-
 import { useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import { fmtBs, usdToBs } from '../../utils/format'
+import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 
@@ -28,8 +29,8 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
   if (!isOpen || !producto) return null
 
   const precioUsdDisplay = producto.precio_usd != null ? aplicarMarkup(producto.precio_usd) : null
-  const precio2Display   = producto.precio_2   != null ? aplicarMarkup(producto.precio_2)   : null
-  const precio3Display   = producto.precio_3   != null ? aplicarMarkup(producto.precio_3)   : null
+  const precio2Display   = precio2Visible(producto) ? aplicarMarkup(producto.precio_2)   : null
+  const precio3Display   = precio3Visible(producto) ? aplicarMarkup(producto.precio_3)   : null
 
   const stockActual = Number(producto.stock_actual) || 0
   const stockNegativo = stockActual < 0

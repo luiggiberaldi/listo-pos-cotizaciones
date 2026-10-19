@@ -261,10 +261,17 @@ export async function handleParseMaterialText(request, env) {
   }
 
   // 1. Obtener catálogo de productos del tenant (nombre, codigo)
-  const prodRes = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
+  let prodRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,precio2_habilitado,precio3_habilitado,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
     { headers: h }
   )
+  if (prodRes.status === 400) {
+    // Migración 276 pendiente: la BD aún no tiene las columnas de habilitación.
+    prodRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
+      { headers: h }
+    )
+  }
   if (!prodRes.ok) return jsonError('Error obteniendo productos', 500, request)
   const productos = await prodRes.json()
 
@@ -347,8 +354,9 @@ RESPOnde ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
         nombre: p.nombre,
         unidad: p.unidad,
         precio_usd: Number(p.precio_usd),
-        precio_2: p.precio_2 ? Number(p.precio_2) : null,
-        precio_3: p.precio_3 ? Number(p.precio_3) : null,
+        // Precio inhabilitado → se oculta en selectores de venta/cotización.
+        precio_2: p.precio_2 && p.precio2_habilitado !== false ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 && p.precio3_habilitado !== false ? Number(p.precio_3) : null,
         stock_actual: Number(p.stock_actual),
         stock_minimo: Number(p.stock_minimo),
         imagen_url: p.imagen_url,
@@ -406,10 +414,17 @@ export async function handleScanMaterialList(request, env) {
     'Content-Type': 'application/json',
   }
 
-  const prodRes = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
+  let prodRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,precio2_habilitado,precio3_habilitado,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
     { headers: h }
   )
+  if (prodRes.status === 400) {
+    // Migración 276 pendiente: la BD aún no tiene las columnas de habilitación.
+    prodRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,codigo,unidad,precio_usd,precio_2,precio_3,stock_actual,stock_minimo,imagen_url&order=nombre.asc`,
+      { headers: h }
+    )
+  }
   if (!prodRes.ok) return jsonError('Error obteniendo productos', 500, request)
   const productos = await prodRes.json()
 
@@ -490,8 +505,9 @@ RESPOnde ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
         nombre: p.nombre,
         unidad: p.unidad,
         precio_usd: Number(p.precio_usd),
-        precio_2: p.precio_2 ? Number(p.precio_2) : null,
-        precio_3: p.precio_3 ? Number(p.precio_3) : null,
+        // Precio inhabilitado → se oculta en selectores de venta/cotización.
+        precio_2: p.precio_2 && p.precio2_habilitado !== false ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 && p.precio3_habilitado !== false ? Number(p.precio_3) : null,
         stock_actual: Number(p.stock_actual),
         stock_minimo: Number(p.stock_minimo),
         imagen_url: p.imagen_url,
@@ -594,7 +610,14 @@ export async function handleBuscarProductosHibrido(request, env) {
   const productos = await res.json()
   const totalCount = productos.length > 0 ? Number(productos[0].total_count) : 0
   const productosLimpio = productos.map(({ total_count: _total_count, vector_distance: _vector_distance, costo_usd, ...rest }) => {
-    return isSup ? { ...rest, costo_usd } : rest
+    if (!isSup) {
+      // Precios 2/3 inhabilitados por producto: ocultos para roles no
+      // privilegiados, igual que costo_usd. El valor se conserva en la BD.
+      if (rest.precio2_habilitado === false) rest.precio_2 = null
+      if (rest.precio3_habilitado === false) rest.precio_3 = null
+      return rest
+    }
+    return { ...rest, costo_usd }
   })
   
   return json({ productos: productosLimpio, totalCount }, 200, request)
@@ -993,8 +1016,14 @@ export async function handleActualizarProductoMetadatos(request, env) {
 
   const hasImagen = Object.prototype.hasOwnProperty.call(body, 'imagen_url');
   const hasActivo = Object.prototype.hasOwnProperty.call(body, 'activo');
-  if (!hasImagen && !hasActivo) return jsonError('Sin campos a actualizar (imagen_url o activo)', 400, request);
+  const hasPrecio2Habilitado = Object.prototype.hasOwnProperty.call(body, 'precio2_habilitado');
+  const hasPrecio3Habilitado = Object.prototype.hasOwnProperty.call(body, 'precio3_habilitado');
+  if (!hasImagen && !hasActivo && !hasPrecio2Habilitado && !hasPrecio3Habilitado) {
+    return jsonError('Sin campos a actualizar (imagen_url, activo, precio2_habilitado o precio3_habilitado)', 400, request);
+  }
   if (hasActivo && typeof body.activo !== 'boolean') return jsonError('activo debe ser booleano', 400, request);
+  if (hasPrecio2Habilitado && typeof body.precio2_habilitado !== 'boolean') return jsonError('precio2_habilitado debe ser booleano', 400, request);
+  if (hasPrecio3Habilitado && typeof body.precio3_habilitado !== 'boolean') return jsonError('precio3_habilitado debe ser booleano', 400, request);
 
   // Tenant-safety: el producto debe pertenecer a la cuenta del operador.
   const cuentaId = operador.cuenta_id;
@@ -1010,6 +1039,8 @@ export async function handleActualizarProductoMetadatos(request, env) {
   const patch = { actualizado_en: new Date().toISOString() };
   if (hasImagen) patch.imagen_url = body.imagen_url; // puede ser null (quitar imagen)
   if (hasActivo) patch.activo = body.activo;
+  if (hasPrecio2Habilitado) patch.precio2_habilitado = body.precio2_habilitado;
+  if (hasPrecio3Habilitado) patch.precio3_habilitado = body.precio3_habilitado;
 
   const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${idQ}&cuenta_id=eq.${cuentaQ}`, {
     method: 'PATCH',
@@ -1018,6 +1049,9 @@ export async function handleActualizarProductoMetadatos(request, env) {
   });
   if (!upRes.ok) {
     const errText = await upRes.text().catch(() => '');
+    if (errText.includes('precio2_habilitado') || errText.includes('precio3_habilitado')) {
+      return jsonError('La migración 276 (habilitación de precios) aún no está aplicada en la base de datos', 503, request);
+    }
     return jsonError(`Error actualizando producto: ${errText}`, 500, request);
   }
   const updated = await upRes.json();
@@ -1027,9 +1061,14 @@ export async function handleActualizarProductoMetadatos(request, env) {
     await registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
       categoria: 'INVENTARIO', accion: 'ACTUALIZAR_PRODUCTO_METADATOS',
-      descripcion: 'Actualización de metadatos del producto (imagen_url/activo)',
+      descripcion: 'Actualización de metadatos del producto (imagen_url/activo/precios habilitados)',
       entidadTipo: 'productos', entidadId: id,
-      meta: { imagen_url: hasImagen ? body.imagen_url : undefined, activo: hasActivo ? body.activo : undefined },
+      meta: {
+        imagen_url: hasImagen ? body.imagen_url : undefined,
+        activo: hasActivo ? body.activo : undefined,
+        precio2_habilitado: hasPrecio2Habilitado ? body.precio2_habilitado : undefined,
+        precio3_habilitado: hasPrecio3Habilitado ? body.precio3_habilitado : undefined,
+      },
       ip,
     });
   } catch {

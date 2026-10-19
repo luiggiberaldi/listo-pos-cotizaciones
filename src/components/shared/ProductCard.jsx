@@ -3,6 +3,7 @@
 import { Plus, Minus, Trash2 } from 'lucide-react'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
+import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
 
 /**
  * @param {object} props
@@ -34,7 +35,7 @@ export default function ProductCard({
   const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
   const bloqueado = sinPrecio
   const disponibleReal = stock - comprometido
-  const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
+  const tieneMultiprecios = precio2Visible(p) || precio3Visible(p)
 
   return (
     <div
@@ -75,7 +76,7 @@ export default function ProductCard({
       </p>
       {tieneMultiprecios && (
         <p className="text-[8px] font-bold text-primary/60">
-          {[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios
+          {[precio2Visible(p) && 'P2', precio3Visible(p) && 'P3'].filter(Boolean).length + 1} precios
         </p>
       )}
       {tasa > 0 && (

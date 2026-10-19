@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Search, Plus, Package, X } from 'lucide-react'
 import { smartSearchProductos } from '../../utils/smartSearch'
+import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
 
 export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgregados = new Set(), placeholder = 'Búsqueda rápida por nombre o código...', stockComprometido = {} }) {
   const [texto, setTexto] = useState('')
@@ -92,8 +93,8 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-black text-slate-800">${Number(p.precio_usd || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  {(p.precio_2 != null || p.precio_3 != null) && (
-                    <p className="text-[9px] font-bold text-primary/60">{[p.precio_2 != null && 'P2', p.precio_3 != null && 'P3'].filter(Boolean).length + 1} precios</p>
+                  {(precio2Visible(p) || precio3Visible(p)) && (
+                    <p className="text-[9px] font-bold text-primary/60">{[precio2Visible(p) && 'P2', precio3Visible(p) && 'P3'].filter(Boolean).length + 1} precios</p>
                   )}
                 </div>
                 {!bloqueado && !yaAgregado && (

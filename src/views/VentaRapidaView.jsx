@@ -12,6 +12,7 @@ import { compartirPorWhatsApp, generarMensaje } from '../utils/whatsapp'
 import { useClientes } from '../hooks/useClientes'
 import ClienteForm from '../components/clientes/ClienteForm'
 import { useInventario, useCategorias } from '../hooks/useInventario'
+import { precio2Visible, precio3Visible } from '../utils/preciosHabilitados'
 import { useProductSearch } from '../hooks/useProductSearch'
 import { useLineItems } from '../hooks/useLineItems'
 import { useVentaRapida } from '../hooks/useVentaRapida'
@@ -479,8 +480,8 @@ export default function VentaRapidaView() {
         if (!prod) return it
         const precioBaseReal = Number(prod.precio_usd) || 0
         const precioBase = aplicarMarkup(precioBaseReal)
-        const precio2    = prod.precio_2 != null ? aplicarMarkup(Number(prod.precio_2)) : null
-        const precio3    = prod.precio_3 != null ? aplicarMarkup(Number(prod.precio_3)) : null
+        const precio2    = precio2Visible(prod) ? aplicarMarkup(Number(prod.precio_2)) : null
+        const precio3    = precio3Visible(prod) ? aplicarMarkup(Number(prod.precio_3)) : null
         // Solo actualizamos si el precio actual coincide con algún nivel de precio del catálogo
         // (el usuario puede haber puesto un precio personalizado que NO tocamos)
         const esPrecioNivel =
@@ -716,8 +717,8 @@ export default function VentaRapidaView() {
   const preciosMap = useMemo(() => {
     const m = {}
     for (const p of productos) {
-      if (p.precio_2 != null || p.precio_3 != null) {
-        m[p.id] = { p1: Number(p.precio_usd) || 0, p2: p.precio_2 != null ? Number(p.precio_2) : null, p3: p.precio_3 != null ? Number(p.precio_3) : null }
+      if (precio2Visible(p) || precio3Visible(p)) {
+        m[p.id] = { p1: Number(p.precio_usd) || 0, p2: precio2Visible(p) ? Number(p.precio_2) : null, p3: precio3Visible(p) ? Number(p.precio_3) : null }
       }
     }
     return m

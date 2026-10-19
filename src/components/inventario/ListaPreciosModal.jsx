@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { FileText, Loader2, DollarSign, Check, X, PackageCheck } from 'lucide-react'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
+import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
 
 export default function ListaPreciosModal({
   isOpen,
@@ -55,8 +56,8 @@ export default function ListaPreciosModal({
       const pAj = Number(ajustePorcentaje) || 0
       const productosFinales = productosFiltrados.map(p => {
         const baseP1 = p.precio_usd != null ? (Number(p.precio_usd) * (1 + (pAj / 100))) : p.precio_usd
-        const baseP2 = p.precio_2 != null ? (Number(p.precio_2) * (1 + (pAj / 100))) : p.precio_2
-        const baseP3 = p.precio_3 != null ? (Number(p.precio_3) * (1 + (pAj / 100))) : p.precio_3
+        const baseP2 = precio2Visible(p) ? (Number(p.precio_2) * (1 + (pAj / 100))) : null
+        const baseP3 = precio3Visible(p) ? (Number(p.precio_3) * (1 + (pAj / 100))) : null
         return {
           ...p,
           precio_usd: baseP1 != null ? aplicarMarkup(baseP1) : baseP1,
@@ -79,7 +80,7 @@ export default function ListaPreciosModal({
     }
   }
 
-  const tieneP2 = productos.some(p => p.precio_2 != null)
+  const tieneP2 = productos.some(p => precio2Visible(p))
 
   const MONEDAS = [
     { value: '$', label: 'USDT ($)', icon: '$' },

@@ -13,6 +13,14 @@ import { authFetch } from '../services/authFetch'
 
 export const INVENTARIO_KEY = ['inventario']
 
+// Select de productos para roles privilegiados. La variante COMPAT existe para
+// BD a las que aún no se aplicó la migración 276 (columnas de habilitación de
+// precios): PostgREST responde 400 por columnas inexistentes y sin esta
+// degradación se cae todo el inventario. Los flags ausentes se tratan como
+// "habilitado" (comportamiento histórico) hasta aplicar la migración.
+const SELECT_PRODUCTOS = 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, precio1_porcentaje, precio2_porcentaje, precio3_porcentaje, precio2_habilitado, precio3_habilitado, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en'
+const SELECT_PRODUCTOS_COMPAT = 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, precio1_porcentaje, precio2_porcentaje, precio3_porcentaje, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en'
+
 function nuevaIdempotencyKey() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
   throw new Error('El navegador no soporta claves de idempotencia')
@@ -116,10 +124,11 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
 
       if (esPrivilegiado) {
         // Supervisor: tabla directa (con costo_usd)
+        let columnas = SELECT_PRODUCTOS
         const buildQuery = (desde, hasta) => {
           let query = supabase
             .from('productos')
-            .select('id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, precio1_porcentaje, precio2_porcentaje, precio3_porcentaje, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en', { count: 'exact' })
+            .select(columnas, { count: 'exact' })
 
           if (!mostrarInactivos) {
             query = query.eq('activo', true)
@@ -142,7 +151,14 @@ export function useInventario({ busqueda = '', categoria = '', page = 0, pageSiz
           return query.order('nombre', { ascending: true }).range(desde, hasta)
         }
 
-        const { data, error, count } = await buildQuery(page * pageSize, (page + 1) * pageSize - 1)
+        let primera = await buildQuery(page * pageSize, (page + 1) * pageSize - 1)
+        if (primera.error && columnas === SELECT_PRODUCTOS) {
+          // Migración 276 pendiente: reintentar con el select compatible.
+          console.warn('[inventario] precio2_habilitado/precio3_habilitado no disponibles en la BD (migración 276 pendiente); usando select compatible.')
+          columnas = SELECT_PRODUCTOS_COMPAT
+          primera = await buildQuery(page * pageSize, (page + 1) * pageSize - 1)
+        }
+        const { data, error, count } = primera
         if (error) throw error
         let productos = data ?? []
         let totalCount = count ?? productos.length
