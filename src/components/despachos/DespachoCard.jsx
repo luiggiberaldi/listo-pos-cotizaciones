@@ -907,8 +907,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           }} />
         
         {/* Fila 1: ID y Kebab */}
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="relative z-10 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <p className="font-black text-white font-mono leading-none drop-shadow text-sm sm:text-base whitespace-nowrap">{numDisplay}</p>
             {tieneSeguimientoActivo && (
               <button
@@ -927,18 +927,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                 <Mail className="animate-envelope-vibrate" size={14} strokeWidth={2} />
               </button>
             )}
-            {esCreditoVenta && (
-              <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none"
-                title={tooltipPendiente || 'Venta a crédito'}>
-                PENDIENTE{pendientePagoUsd > 0 ? ` ${fmtMonto(pendientePagoUsd)}` : ''}
-              </span>
-            )}
-            {esContadoVenta && (
-              <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none"
-                title="Pago cobrado en su totalidad">
-                CONTADO ✓
-              </span>
-            )}
           </div>
           {/* Kebab ⋮ — acciones secundarias */}
           {(moreActions.length > 0 || canAnular) && (
@@ -946,7 +934,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               ref={adminBtnRef}
               type="button"
               onClick={(e) => { e.stopPropagation(); setShowAdminMenu(v => !v) }}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-800 shadow-md border border-white/20 transition-all active:scale-95 hover:shadow-lg shrink-0"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-800 shadow-md border border-white/20 transition-all active:scale-95 hover:shadow-lg shrink-0 ml-auto"
               title="Más opciones"
             >
               <MoreVertical size={18} className="drop-shadow-sm font-bold" />
@@ -954,9 +942,21 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           )}
         </div>
 
-        {/* Fila 2: EstadoBadge + badges contextuales (Devolución, Préstamo/Mixto) */}
-        <div className="relative z-10 flex items-center flex-wrap gap-1.5">
+        {/* Fila 2: EstadoBadge + badges de pago (Contado/Pendiente) + badges contextuales (Devolución, Préstamo/Mixto) */}
+        <div className="relative z-10 flex items-center flex-wrap gap-1.5 pt-0.5">
           <EstadoBadge estado={despacho.estado} rol={rol} />
+          {esCreditoVenta && (
+            <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none"
+              title={tooltipPendiente || 'Venta a crédito'}>
+              PENDIENTE{pendientePagoUsd > 0 ? ` ${fmtMonto(pendientePagoUsd)}` : ''}
+            </span>
+          )}
+          {esContadoVenta && (
+            <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none"
+              title="Pago cobrado en su totalidad">
+              CONTADO ✓
+            </span>
+          )}
           {tienePrestamos && (
             totalFinal <= 0.015 ? (
               <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none" title="Todos los materiales son de préstamo">
