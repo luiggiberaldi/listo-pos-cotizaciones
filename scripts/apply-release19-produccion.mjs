@@ -182,12 +182,15 @@ const functions = [
 ]
 let preimgCount = 0
 for (const f of functions) {
+  // Búsqueda por to_regprocedure (misma técnica que el preflight): evita que el
+  // paso de pre-imágenes falle en builds de Postgres que devuelven los argumentos
+  // de identidad con nombres de parámetros (p. ej. "p_cuenta_id uuid, ...").
   const res = await q(`SELECT pg_get_functiondef(p.oid) AS def
-FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public' AND p.proname = ${sqlLiteral(f.name)}
-  AND pg_get_function_identity_arguments(p.oid) = ${sqlLiteral(f.args)}`)
+FROM pg_proc p
+WHERE p.oid = to_regprocedure(${sqlLiteral(`public.${f.name}(${f.args.replace(/ /g, '')})`)})`)
   const def = res.rows?.[0]?.def
   if (!def) { console.log(`INFO  ${f.name} no está viva aún (se instalará en esta ventana)`); continue }
+  // Nota: si la firma exacta no existe, el preflight previo ya habría abortado.
   const file = path.join(PREIMG_DIR, f.file)
   fs.writeFileSync(file, def + '\n')
   preimgCount++

@@ -4303,3 +4303,21 @@ Producción completa con las 3 fases. Pendiente opcional: espejo 262 en staging 
 
 **Estado:** aplicado y verificado en producción. Los toggles de Precio 2/3 quedan activos para los roles con edición de artículos, y la exposición entre tenants de las RPCs de productos quedó cerrada.
 
+## SESIÓN 21/10/2026 — Release 19 en producción: cobro COD en pedidos de pago mixto + ajuste de contrato (nota opcional)
+
+**Pedido:** ejecutar el release 19 de COD en producción en una ventana tranquila. Ajuste de contrato incluido: el campo de pago pasa a "Nota (opcional)" y la referencia de medios no efectivo exige mínimo 4 caracteres.
+
+**Implementado:**
+- Release 19 (`supabase/release/main/19_cod_mixto_apply.sql`): `resumen_financiero_despacho` con pago mixto (parte COD cobrable + parte a crédito en CxC), motivos de revisión explícitos (`atribucion_ambigua`, `flag_sin_respaldo`) y aviso de desborde sin marca; `registrar_pago_externo_cobro_idempotente` con atribución explícita, hasta un centavo de exceso permitido y liquidación solo con deuda COD en cero.
+- Ajuste de contrato (21-oct): "Evidencia" → **Nota (opcional)** (vacía = `nota: (sin nota)`, máx. 500 caracteres) y **referencia mínima 4 caracteres** en medios no efectivo, coherente en las tres capas (formularios, Worker y SQL).
+
+### Apply al principal (2026-10-21 10:22 UTC, vía Management API `database/query`, instalador `scripts/apply-release19-produccion.mjs`)
+- Ventana tranquila verificada antes de mutar: 0 cobros COD en curso (último: 2026-10-20 14:13 UTC) y 0 consultas COD activas.
+- Huellas SHA-256 6/6 OK, dry-run local verde y destino guardado (`oyfyuszgjwcepjpngclv`).
+- Preflight: contrato release 14 exacto (COMMENTS incluidos) → APPLY 19 → postflight **11/11** → smoke read-only sobre despachos reales #4118 y #4108 (resumen financiero responde sin errores, estado `pendiente` correcto).
+- Evidencia: `docs/operaciones/release19-produccion-cutover-2026-10-21-10-22-15.md` + `tmp/release19-produccion-evidence-2026-10-21-10-22-15.json`.
+- **Incidencia menor documentada:** el paso de pre-imágenes no capturó los cuerpos previos (este Postgres devuelve los argumentos de identidad con nombres de parámetros y la comparación del instalador no coincidía). Sin impacto en la instalación ni en el plan B: `19_cod_rollback_review.sql` conserva los cuerpos release 14 byte-idénticos. Instalador corregido (búsqueda por `to_regprocedure`, verificada en vivo) y capturadas post-imágenes del estado release 19 en `supabase/release/main/19_backup_cuerpos/*.post19.live.sql` con SHA-256.
+- Verificación de código tras la corrección: pruebas COD 47/47 (modal + handlers + release).
+
+**Estado:** release 19 aplicado y verificado en producción. Pendientes manuales: prueba visual rápida en la app (2 min, recomendada) y despliegue del frontend/Worker por su canal habitual (el contrato nuevo ya está vivo en la base de datos).
+

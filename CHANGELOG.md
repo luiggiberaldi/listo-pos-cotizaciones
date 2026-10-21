@@ -6,6 +6,12 @@ Este archivo sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 
 ## [Unreleased]
 
+### Release 19 — COD en pedidos de pago mixto + nota opcional (2026-10-21)
+
+- **Cobro COD en pedidos de pago mixto (BD):** `resumen_financiero_despacho` separa la parte COD cobrable de la parte a crédito en CxC, con motivos de revisión explícitos (`atribucion_ambigua`, `flag_sin_respaldo`) y aviso de `desborde_sin_marca_usd`. `registrar_pago_externo_cobro_idempotente` registra el cobro en una sola operación atómica e idempotente, con atribución explícita, hasta un centavo de exceso permitido y liquidación solo con deuda COD en cero.
+- **Ajuste de contrato (21-oct):** el campo "Evidencia del pago" pasa a **Nota (opcional)** (vacía → `nota: (sin nota)`; máx. 500 caracteres) y la referencia de medios no efectivo exige **mínimo 4 caracteres** — coherente en formulario (`ConciliarCodModal`), Worker y SQL.
+- **Aplicado a producción el 2026-10-21** en ventana tranquila (preflight release 14 exacto → apply → postflight 11/11 → smoke read-only en despachos #4118/#4108). Evidencia: `docs/operaciones/release19-produccion-cutover-2026-10-21-10-22-15.md`. Rollback: `19_cod_rollback_review.sql` (cuerpos release 14 byte-idénticos).
+
 ### Release 15 — Kardex: reversión segura de movimientos + idempotencia real (2026-09-14)
 
 - **Botón Revertir en el Kardex** (solo administración/jefe/desarrollador): aplica el movimiento inverso como fila nueva (nunca borra el histórico), con confirmación, chip "Revertida" y bloqueo de doble reversión. Solo movimientos manuales (compra/ajuste/merma/devolución/transferencia/otro); la venta pertenece al flujo del despacho.

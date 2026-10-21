@@ -1,6 +1,6 @@
 # Plan de subida a producción — Release 19 (cobro COD en pedidos de pago mixto)
 
-**Preparado:** 20 de octubre de 2026 · **Ajustado:** 21 de octubre de 2026 · **Estado:** ✅ listo para ejecutar, esperando ventana
+**Preparado:** 20 de octubre de 2026 · **Ajustado:** 21 de octubre de 2026 · **Estado:** ✅ ejecutado el 21 de octubre de 2026 ([evidencia del cutover](release19-produccion-cutover-2026-10-21-10-22-15.md))
 **Plan de pruebas:** [release19-cod-staging-20261020.md](release19-cod-staging-20261020.md)
 
 ---
@@ -89,8 +89,12 @@ restaura **exactamente** las funciones anteriores (las mismas que hoy tiene prod
 Los cobros registrados mientras tanto **no se borran** (son historia contable válida) y el
 sistema vuelve a comportarse como hoy.
 
-Además, el paso 2 dejó **respaldo físico** de las funciones actuales en
-`supabase/release/main/19_backup_cuerpos/` con su huella digital — doble seguro.
+Además, el instalador dejó **respaldo físico** de los cuerpos instalados (release 19) en
+`supabase/release/main/19_backup_cuerpos/*.post19.live.sql` con su huella digital.
+**Nota honesta de la ejecución del 21-oct:** el paso de pre-imágenes no capturó los cuerpos
+previos (bug de comparación de firmas en el instalador, ya corregido); los cuerpos release 14
+los conserva intactos el propio `19_cod_rollback_review.sql`, que es el artefacto que usa el
+plan B, así que la reversión sigue plenamente disponible.
 
 Tiempo estimado de vuelta atrás: ~2 minutos.
 
