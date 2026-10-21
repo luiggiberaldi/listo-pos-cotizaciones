@@ -6,7 +6,6 @@ import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { fmtBs, usdToBs } from '../../utils/format'
 import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
-import StockComprometidoDetalle from './StockComprometidoDetalle'
 
 function fmtUsd(n) {
   if (n == null) return '—'
@@ -25,12 +24,10 @@ function colorCategoria(str = '') {
   return { fg, bg }
 }
 
-function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
+function StockBadge({ actual, minimo }) {
   const negativo = actual < 0
   const agotado = actual === 0
   const bajo = !agotado && !negativo && minimo > 0 && actual <= minimo
-  const disponible = actual - comprometido
-  const sobrecomprometido = comprometido > 0 && disponible < 0
 
   if (negativo) return (
     <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100 border border-red-300 px-2.5 py-1 rounded-lg">
@@ -45,33 +42,21 @@ function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
     </span>
   )
 
-  const cls = sobrecomprometido
-    ? 'text-red-700 bg-red-100 border-red-300'
-    : bajo
-      ? 'text-amber-700 bg-amber-100 border-amber-300'
-      : 'text-emerald-700 bg-emerald-100 border-emerald-300'
+  const cls = bajo
+    ? 'text-amber-700 bg-amber-100 border-amber-300'
+    : 'text-emerald-700 bg-emerald-100 border-emerald-300'
 
   return (
     <div className="text-right space-y-0.5">
       <span className={`inline-flex items-center gap-1 text-xs font-bold border px-2.5 py-1 rounded-lg ${cls}`}>
-        {(sobrecomprometido || bajo) && <AlertTriangle size={10} />}
+        {bajo && <AlertTriangle size={10} />}
         {Number(actual).toLocaleString('es-VE')}
       </span>
-      {comprometido > 0 && (
-        <div>
-          <StockComprometidoDetalle productoId={productoId} comprometido={comprometido} />
-          {sobrecomprometido && (
-            <div className="text-[10px] text-red-600 font-semibold mt-0.5">
-              Disponible: {Number(disponible).toLocaleString('es-VE')}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
 
-export default function ProductoCard({ producto, onEditar, onClonar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0, index }) {
+export default function ProductoCard({ producto, onEditar, onClonar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, index }) {
   const { perfil } = useAuthStore()
   const [copiado, setCopiado] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -290,7 +275,6 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
             <StockBadge
               actual={producto.stock_actual}
               minimo={producto.stock_minimo}
-              comprometido={comprometido}
               productoId={producto.id}
             />
           </div>

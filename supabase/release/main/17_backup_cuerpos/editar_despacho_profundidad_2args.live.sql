@@ -1,0 +1,87 @@
+CREATE OR REPLACE FUNCTION public.editar_despacho_profundidad(p_despacho_id uuid, p_nuevos_items jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_usuario_id     UUID := auth.uid();
+  v_usuario_nombre TEXT;
+  v_usuario_rol    TEXT;
+  v_despacho       RECORD;
+  v_item_json      RECORD;
+  v_total_items    NUMERIC(12,4) := 0;
+BEGIN
+  -- 1. Validar permisos: solo administraciÃ³n o jefes
+  SELECT nombre, rol INTO v_usuario_nombre, v_usuario_rol
+  FROM public.usuarios WHERE id = v_usuario_id AND activo = true;
+
+  IF v_usuario_rol NOT IN ('administracion', 'jefe', 'desarrollador') THEN
+    RAISE EXCEPTION 'ACCESO_DENEGADO: Solo administraciÃ³n puede editar despachos a profundidad';
+  END IF;
+
+  -- 2. Bloquear despacho y productos
+  SELECT * INTO v_despacho FROM public.notas_despacho WHERE id = p_despacho_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DESPACHO_NO_ENCONTRADO'; END IF;
+  
+  IF v_despacho.estado IN ('entregada', 'anulada') THEN
+    RAISE EXCEPTION 'ESTADO_INVALIDO: No se puede editar un despacho %', v_despacho.estado;
+  END IF;
+
+  -- 3. PASO CRÃTICO: Devolver stock actual al inventario temporalmente
+  UPDATE public.productos p
+  SET stock_actual = p.stock_actual + di.cantidad
+  FROM public.notas_despacho_items di
+  WHERE p.id = di.producto_id AND di.despacho_id = p_despacho_id;
+
+  -- 4. Limpiar Ã­tems viejos
+  DELETE FROM public.notas_despacho_items WHERE despacho_id = p_despacho_id;
+
+  -- 5. Insertar nuevos Ã­tems y volver a descontar stock
+  FOR v_item_json IN SELECT * FROM jsonb_to_recordset(p_nuevos_items) AS x(
+    producto_id UUID, codigo_snap TEXT, nombre_snap TEXT, unidad_snap TEXT,
+    cantidad NUMERIC, precio_unit_usd NUMERIC, descuento_pct NUMERIC, orden INTEGER
+  ) LOOP
+    
+    -- Validar stock disponible
+    IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = v_item_json.producto_id AND stock_actual >= v_item_json.cantidad) THEN
+      RAISE EXCEPTION 'STOCK_INSUFICIENTE: El producto "%" no tiene stock suficiente', v_item_json.nombre_snap;
+    END IF;
+
+    -- Descontar nuevo stock
+    UPDATE public.productos SET stock_actual = stock_actual - v_item_json.cantidad WHERE id = v_item_json.producto_id;
+
+    -- Insertar Ã­tem
+    INSERT INTO public.notas_despacho_items (
+      despacho_id, producto_id, codigo_snap, nombre_snap, unidad_snap,
+      cantidad_original, precio_original,
+      cantidad, precio_unit_usd, descuento_pct, total_linea_usd, orden
+    ) VALUES (
+      p_despacho_id, v_item_json.producto_id, v_item_json.codigo_snap, v_item_json.nombre_snap, v_item_json.unidad_snap,
+      v_item_json.cantidad, v_item_json.precio_unit_usd, -- Usamos los nuevos como originales ya que es una ediciÃ³n profunda
+      v_item_json.cantidad, v_item_json.precio_unit_usd, v_item_json.descuento_pct,
+      (v_item_json.cantidad * v_item_json.precio_unit_usd * (1 - COALESCE(v_item_json.descuento_pct,0)/100)),
+      v_item_json.orden
+    );
+
+    v_total_items := v_total_items + (v_item_json.cantidad * v_item_json.precio_unit_usd * (1 - COALESCE(v_item_json.descuento_pct,0)/100));
+  END LOOP;
+
+  -- 6. Actualizar total de la cabecera (Items + Flete + Corte)
+  UPDATE public.notas_despacho 
+  SET total_usd = v_total_items + COALESCE(flete_usd, 0) + COALESCE(corte_usd, 0)
+  WHERE id = p_despacho_id;
+
+  -- 7. AuditorÃ­a
+  PERFORM public.registrar_auditoria(
+    p_usuario_id := v_usuario_id, p_usuario_nombre := v_usuario_nombre, p_usuario_rol := v_usuario_rol,
+    p_categoria := 'COTIZACION', p_accion := 'EDITAR_DESPACHO_PROFUNDIDAD',
+    p_entidad_tipo := 'nota_despacho', p_entidad_id := p_despacho_id,
+    p_meta := jsonb_build_object(
+      'total_anterior', v_despacho.total_usd, 
+      'total_nuevo', (v_total_items + COALESCE(v_despacho.flete_usd, 0) + COALESCE(v_despacho.corte_usd, 0))
+    )
+  );
+
+END;
+$function$

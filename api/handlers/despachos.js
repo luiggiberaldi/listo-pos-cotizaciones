@@ -670,7 +670,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
 
     // 2. Validar transición
     const valid = (desp.estado === 'pendiente' && ['despachada', 'entregada', 'anulada'].includes(nuevoEstado))
-      || (desp.estado === 'despachada' && ['entregada', 'pendiente'].includes(nuevoEstado))
+      || (desp.estado === 'despachada' && ['entregada', 'pendiente', 'anulada'].includes(nuevoEstado))
       || (desp.estado === 'entregada' && ['pendiente', 'despachada'].includes(nuevoEstado))
       || (desp.estado === nuevoEstado && ['pendiente', 'despachada', 'entregada', 'anulada'].includes(nuevoEstado));
     if (!valid) {
@@ -919,15 +919,12 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // ── Advertencia de stock al aprobar (plan 2026-09-06, v2 "advertir, no bloquear") ──
-    // RPC transaccional: analiza disponible = físico − comprometido (por OTROS
-    // despachos aprobados) con FOR UPDATE de despacho+productos y fija el estado
-    // despachada en la MISMA transacción → sin condiciones de carrera.
-    // v2 (269): el stock insuficiente NO rechaza — viene como resultAprob.faltantes
-    // y se registra en auditoría; la aprobación siempre prosigue.
-    // Toggle bloqueo_stock_aprobacion OFF → bloqueo_aplicado=false → ruta legacy.
-    // El descuento físico y el Kardex siguen ocurriendo SOLO al confirmar entrega
-    // (223/04 sin cambios); la validación de entrega se conserva como 2ª defensa.
+    // ── Egreso de inventario al aprobar (release 17) ─────────────────────────
+    // RPC transaccional v3: −stock + kardex 'egreso' y estado 'despachada' en la
+    // MISMA transacción (FOR UPDATE de despacho+productos), sin condiciones de
+    // carrera. El stock insuficiente NUNCA rechaza: viaja como alertas_stock
+    // (nivel 'BAJO'/'NEGATIVO') y se registra en auditoría; la aprobación
+    // siempre prosigue. La entrega ya no descuenta inventario.
     const aprobacionCandidate = desp.estado === 'pendiente' && nuevoEstado === 'despachada'
     if (aprobacionCandidate) {
       const rpcResAprob = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/aprobar_despacho_inventario_atomico`, {
@@ -951,208 +948,47 @@ export async function handleActualizarEstadoDespacho(request, env) {
         }
         return jsonError(`No se pudo aprobar con verificación de inventario: ${msgAprob}`, 400, request)
       }
-      if (!resultAprob?.ok) return jsonError('La RPC de bloqueo no confirmó la aprobación', 500, request)
-      if (resultAprob.bloqueo_aplicado === true) {
-        aprobacionAtomica = resultAprob
-      }
-      // bloqueo_aplicado === false → toggle OFF: continúa la ruta legacy intacta.
+      if (!resultAprob?.ok) return jsonError('La RPC de inventario no confirmó la aprobación', 500, request)
+      // Release 17: la v3 SIEMPRE egresa y fija el estado en la misma transacción.
+      aprobacionAtomica = resultAprob
     }
 
-    // Solo restaurar stock si ya había sido entregada (stock ya descontado) y se anula o revierte
-    if (!reversaAtomica && desp.estado === 'entregada' && ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado)) {
-      // 1. Obtener ítems originales
-      const ciRes = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&producto_id=not.is.null&origen=eq.inventario&select=producto_id,cantidad,nombre_snap`,
-        { headers }
-      );
-      const itemsOrig = (await ciRes.json()) || [];
-
-      // 2. Si tiene devoluciones, consultar devoluciones e intercambios
-      let mapDevoluciones = {};
-      let mapIntercambios = {};
-      if (desp.tiene_devoluciones) {
-        const [devRes, intRes] = await Promise.all([
-          fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=eq.${despachoId}&select=producto_id,cantidad_devuelta`, { headers }),
-          fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devolucion_intercambios?despacho_id=eq.${despachoId}&select=producto_id,cantidad,nombre_snap`, { headers })
-        ]);
-        if (devRes.ok) {
-          const devList = await devRes.json();
-          (devList || []).forEach(d => {
-            if (d.producto_id) {
-              mapDevoluciones[d.producto_id] = (mapDevoluciones[d.producto_id] || 0) + Number(d.cantidad_devuelta || 0);
-            }
-          });
+    // ── Reingreso al devolver a pendiente o anular desde 'despachada' (release 17) ──
+    // +stock + kardex 'ingreso' y cambio de estado en la MISMA transacción SQL.
+    // entregada→despachada no reingresa: el egreso ocurrió al aprobar.
+    // (Las ramas legacy de restauración de stock y de descuento al entregar se
+    // retiraron en el release 17: la RPC es la única autoridad de inventario.)
+    let reingresoDespachoAtomica = null
+    const reingresoCandidate = desp.estado === 'despachada' && ['pendiente', 'anulada'].includes(nuevoEstado)
+    if (reingresoCandidate) {
+      const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/revertir_despacho_inventario_atomica`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          p_despacho_id: despachoId,
+          p_nuevo_estado: nuevoEstado,
+          p_usuario_id: user.operator_id,
+          p_usuario_nombre: operador.nombre,
+          p_usuario_color: operador.color || null,
+        }),
+      })
+      const rpcText = await rpcRes.text()
+      let result = null
+      try { result = rpcText ? JSON.parse(rpcText) : null } catch { result = null }
+      if (!rpcRes.ok) {
+        const msgFalta = String(result?.message || rpcText || `HTTP ${rpcRes.status}`)
+        // Compatibilidad de rollout (RELEASE17-FALLBACK): si la base aún no tiene
+        // el release 17, tampoco egresó inventario al aprobar (el descuento ocurre
+        // al entregar), así que NO hay nada que reingresar. Se continúa por la
+        // ruta desplegada hoy: estado + marcas COD + CxC + comisiones.
+        const faltaRelease17 = msgFalta.includes('Could not find the function') || msgFalta.includes('PGRST202')
+        if (!faltaRelease17) {
+          return jsonError(`No se pudo revertir el despacho con reingreso atómico: ${msgFalta}`, 400, request)
         }
-        if (intRes.ok) {
-          const intList = await intRes.json();
-          (intList || []).forEach(i => {
-            if (i.producto_id) {
-              mapIntercambios[i.producto_id] = {
-                cantidad: (mapIntercambios[i.producto_id]?.cantidad || 0) + Number(i.cantidad || 0),
-                nombre: i.nombre_snap
-              };
-            }
-          });
-        }
-      }
-
-      // 3. Consolidar mapa de productos y calcular cantidad neta a restaurar
-      const prodsToRestore = {}; // { prodId: { cant: number, nombre: string } }
-      itemsOrig.forEach(it => {
-        const devueltosPrevio = mapDevoluciones[it.producto_id] || 0;
-        const cantNetaOriginal = Number(it.cantidad || 0) - devueltosPrevio;
-        prodsToRestore[it.producto_id] = {
-          cant: cantNetaOriginal,
-          nombre: it.nombre_snap
-        };
-      });
-
-      // Sumar ítems de intercambio (que fueron egresados y deben devolverse a stock)
-      Object.keys(mapIntercambios).forEach(pId => {
-        const intObj = mapIntercambios[pId];
-        if (prodsToRestore[pId]) {
-          prodsToRestore[pId].cant += intObj.cantidad;
-        } else {
-          prodsToRestore[pId] = {
-            cant: intObj.cantidad,
-            nombre: intObj.nombre
-          };
-        }
-      });
-
-      const loteId = crypto.randomUUID();
-      const movimientos = [];
-
-      for (const pId of Object.keys(prodsToRestore)) {
-        const itemInfo = prodsToRestore[pId];
-        if (itemInfo.cant <= 0) continue;
-
-        const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${pId}&select=stock_actual,nombre`, { headers });
-        const [prod] = await pRes.json();
-        if (prod) {
-          const stockAnterior = Number(prod.stock_actual);
-          const nuevoStock = stockAnterior + itemInfo.cant;
-          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${pId}`, {
-            method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-            body: JSON.stringify({ stock_actual: nuevoStock }),
-          });
-          movimientos.push({
-            lote_id: loteId,
-            tipo: 'ingreso',
-            motivo: nuevoEstado === 'anulada'
-              ? `Anulación de despacho #${desp.numero} (Ajuste neto inventario)`
-              : `Reversión de despacho #${desp.numero} a ${nuevoEstado === 'pendiente' ? 'pendiente' : 'aprobado'}`,
-            motivo_tipo: 'venta',
-            producto_id: pId,
-            producto_nombre: itemInfo.nombre || prod.nombre,
-            cantidad: itemInfo.cant,
-            stock_anterior: stockAnterior,
-            stock_nuevo: nuevoStock,
-            usuario_id: user.operator_id,
-            usuario_nombre: operador.nombre,
-            usuario_color: operador.color || null,
-          });
-        }
-      }
-
-      if (movimientos.length > 0) {
-        const revKardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
-          method: 'POST', headers,
-          body: JSON.stringify(movimientos),
-        });
-        if (!revKardexRes.ok) {
-          console.error('[REVERSAR] Fallo al registrar Kardex:', await revKardexRes.text());
-        }
-      }
-    }
-
-    // 3b. Al confirmar entrega: descontar stock + registrar kardex.
-    // P0-B lo delega al wrapper neutral; esta rama queda solo como referencia
-    // para transiciones no portadas y no debe ejecutarse cuando hubo RPC.
-    if (!entregaAtomica && nuevoEstado === 'entregada') {
-      const ciResEnt = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&producto_id=not.is.null&origen=eq.inventario&select=producto_id,cantidad,nombre_snap`,
-        { headers }
-      );
-      const itemsEnt = await ciResEnt.json();
-
-      if (itemsEnt.length > 0) {
-        // Consultar si la cuenta permite stock negativo (Venta Anticipada)
-        let permitirNegativo = false;
-        try {
-          const cuentaId = operador?.cuenta_id || user?.id || desp?.cuenta_id;
-          const configUrl = cuentaId
-            ? `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${cuentaId}&select=*&limit=1`
-            : `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?select=*&limit=1`;
-          const cfgRes = await fetch(configUrl, { headers });
-          if (cfgRes.ok) {
-            const [cfgData] = await cfgRes.json();
-            permitirNegativo = cfgData?.permitir_stock_negativo === true ||
-              (Array.isArray(cfgData?._comision_extras) && cfgData._comision_extras.some(x => x && typeof x === 'object' && x.__meta_venta_anticipada === true));
-          }
-        } catch (e) {
-          console.warn('[VENTA ANTICIPADA] Error leyendo config permitir_stock_negativo:', e);
-        }
-
-        const prodIdsEnt = itemsEnt.map(i => i.producto_id);
-        const prodResEnt = await fetch(
-          `${env.SUPABASE_URL}/rest/v1/productos?id=in.(${prodIdsEnt.join(',')})&activo=eq.true&select=id,stock_actual,stock_minimo,nombre,unidad`,
-          { headers }
-        );
-        const productosEnt = await prodResEnt.json();
-        const stockMapEnt = Object.fromEntries(productosEnt.map(p => [p.id, p]));
-
-        // Verificar existencia de productos y stock suficiente (salvo Venta Anticipada)
-        for (const item of itemsEnt) {
-          const prod = stockMapEnt[item.producto_id];
-          if (!prod) return jsonError(`Producto "${item.nombre_snap}" no encontrado o inactivo`, 400, request);
-          const stockAnterior = Number(prod.stock_actual);
-          const cantReq = Number(item.cantidad);
-          if (stockAnterior < cantReq && !permitirNegativo) {
-            return jsonError(`Stock insuficiente para "${prod.nombre}": disponible ${stockAnterior}, requerido ${cantReq}`, 400, request);
-          }
-        }
-
-        // Descontar stock y registrar kardex
-        const loteIdEnt = crypto.randomUUID();
-        const movimientosEnt = [];
-        for (const item of itemsEnt) {
-          const prod = stockMapEnt[item.producto_id];
-          const stockAnterior = Number(prod.stock_actual);
-          const nuevoStock = stockAnterior - Number(item.cantidad);
-          await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${item.producto_id}`, {
-            method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
-            body: JSON.stringify({ stock_actual: nuevoStock }),
-          });
-
-          const esVentaAnticipada = nuevoStock < 0;
-          movimientosEnt.push({
-            lote_id: loteIdEnt,
-            tipo: 'egreso',
-            motivo: esVentaAnticipada
-              ? `Entrega confirmada [VENTA ANTICIPADA] — Despacho #${desp.numero}`
-              : `Entrega confirmada — Despacho #${desp.numero}`,
-            motivo_tipo: 'venta',
-            producto_id: item.producto_id,
-            producto_nombre: item.nombre_snap || prod.nombre,
-            cantidad: Number(item.cantidad),
-            stock_anterior: stockAnterior,
-            stock_nuevo: nuevoStock,
-            usuario_id: user.operator_id,
-            usuario_nombre: operador.nombre,
-            usuario_color: operador.color || null,
-          });
-        }
-        if (movimientosEnt.length > 0) {
-          const kardexRes = await fetch(`${env.SUPABASE_URL}/rest/v1/inventario_movimientos`, {
-            method: 'POST', headers,
-            body: JSON.stringify(movimientosEnt),
-          });
-          if (!kardexRes.ok) {
-            const kardexErr = await kardexRes.text();
-            return jsonError(`Error al registrar kardex de entrega: ${kardexErr}`, 500, request);
-          }
-        }
+        console.warn(`[RELEASE17-FALLBACK] revertir_despacho_inventario_atomica ausente (rollout pendiente); se omite el reingreso de inventario del despacho ${despachoId} — comportamiento idéntico a la versión desplegada.`)
+      } else if (!result?.ok) {
+        return jsonError('La RPC no confirmó el reingreso atómico', 500, request)
+      } else {
+        reingresoDespachoAtomica = result
       }
     }
 
@@ -1492,8 +1328,8 @@ export async function handleActualizarEstadoDespacho(request, env) {
       entidadTipo: 'nota_despacho', entidadId: despachoId,
       meta: {
         estado_anterior: desp.estado, estado_nuevo: nuevoEstado, cotizacion_id: desp.cotizacion_id,
-        bloqueo_stock_aprobacion: aprobacionAtomica ? 'aplicado' : 'off',
-        ...(aprobacionAtomica?.faltantes?.length ? { stock_faltantes: aprobacionAtomica.faltantes } : {}),
+        egreso_inventario: aprobacionAtomica ? 'sql_atomic' : null,
+        ...(aprobacionAtomica?.alertas_stock?.length ? { stock_alertas: aprobacionAtomica.alertas_stock } : {}),
       }, ip,
     });
 
@@ -1501,10 +1337,13 @@ export async function handleActualizarEstadoDespacho(request, env) {
       ok: true,
       nuevoEstado,
       idempotency_key: idempotencyKey,
-      inventario_atomico: Boolean(entregaAtomica || reversaAtomica),
-      bloqueo_stock_aprobacion: aprobacionAtomica ? 'sql_atomic' : null,
-      bloqueo_productos: aprobacionAtomica?.productos ?? null,
-      stock_faltantes: aprobacionAtomica?.faltantes ?? null,
+      inventario_atomico: Boolean(entregaAtomica || reversaAtomica || reingresoDespachoAtomica),
+      aprobacion_atomica: Boolean(aprobacionAtomica),
+      stock_analisis: aprobacionAtomica?.productos ?? null,
+      alertas_stock: aprobacionAtomica?.alertas_stock ?? null,
+      alerta_stock: aprobacionAtomica?.alerta_stock ?? null,
+      reingreso_inventario: Boolean(reingresoDespachoAtomica),
+      reingreso_movimientos: reingresoDespachoAtomica?.movimientos ?? null,
       finanzas_atomicas: Boolean(entregaAtomica?.finanzas_atomicas || reversaAtomica),
       frontera_financiera: entregaAtomica ? 'sql_atomic' : null,
       // Release 06: contadores para el toast/UX de reversión consciente de devoluciones.
@@ -1649,8 +1488,8 @@ export async function handleEditarItemsDespacho(request, env) {
     if (!despachoRes.ok) return jsonError('Error al verificar despacho', 500, request)
     const [despachoActual] = await despachoRes.json()
     if (!despachoActual) return jsonError('Despacho no encontrado', 404, request)
-    if (despachoActual.estado !== 'pendiente') {
-      return jsonError('La edición profunda solo está permitida para despachos pendientes', 400, request)
+    if (!['pendiente', 'despachada'].includes(despachoActual.estado)) {
+      return jsonError('La edición profunda solo está permitida para despachos pendientes o aprobados', 400, request)
     }
 
     const comisionAntes = await obtenerComisionExistente(despachoId, headers, env)
@@ -1723,8 +1562,9 @@ export async function handleEditarItemsDespacho(request, env) {
     console.log('[DEEP_EDIT][WORKER_AFTER_RPC]', { despachoId, status: res.status, sentItemCount: items.length })
 
     // ── 2b. Sincronizar Cuentas por Cobrar ────────────────────────────────────
-    // La edición profunda solo llega aquí para despachos pendientes. Esta rama
-    // conserva la compatibilidad de pagos, pero no habilita edición post-aprobación.
+    // Release 17: la edición profunda admite 'pendiente' (sin efecto en stock) y
+    // 'despachada' (el RPC aplica el ± delta de inventario). Esta rama
+    // resincroniza CxC si la edición ocurre con el despacho ya aprobado.
     try {
       const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=estado,cliente_id,cliente_factura_id,cotizacion_id,total_usd,forma_pago,forma_pago_cliente`, { headers });
       const despList = await dRes.json();

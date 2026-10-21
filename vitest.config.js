@@ -14,6 +14,7 @@ export default {
       'scripts/lib/__tests__/invariantes.test.js',
       'src/components/despachos/__tests__/ConciliarCodModal.test.js',
       'src/components/inventario/__tests__/ProductoFormMetadatos.test.js',
+      'src/utils/__tests__/egresoInventarioContract.test.js',
     ],
     exclude: [
       '**/node_modules/**',

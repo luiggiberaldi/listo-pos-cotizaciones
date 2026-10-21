@@ -186,6 +186,7 @@ outputs/
 
 # Contrato release 17 — egreso de inventario al aprobar
 !src/utils/__tests__/egresoInventarioContract.test.js
+!api/handlers/__tests__/despachosReversionRelease17.test.js
 
 # Release 19 COD mixto — contrato nota opcional / referencia mínima 4
 !supabase/release/main/19_cod_mixto_SHA256SUMS.txt

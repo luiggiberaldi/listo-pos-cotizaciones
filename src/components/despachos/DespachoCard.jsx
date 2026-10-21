@@ -259,9 +259,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             const esExterno = it.origen === 'externo' || !it.producto_id || String(it.producto_id).startsWith('manual-') || String(it.codigo_snap).startsWith('EXT')
             if (esExterno) return false
             const p = prods?.find(x => x.id === it.producto_id)
-            // v2 "advertir, no bloquear": disponible = físico − comprometido por
-            // despachos aprobados (regla 222) — misma matemática que la RPC.
-            const disponible = (Number(p?.stock_actual) || 0) - (Number(p?.stock_comprometido) || 0)
+            // Release 17: el stock comprometido ya no existe — el egreso ocurre
+            // al aprobar, así que el stock físico ES el disponible real.
+            const disponible = Number(p?.stock_actual) || 0
             return it.cantidad > disponible
           })
           setItemsFaltantes(faltantes)
@@ -1140,6 +1140,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         </div>
       </div>
 
+      {/* Badge release 17: este despacho salió con stock bajo/negativo al aprobar */}
+      {despacho.alerta_stock && ['despachada', 'entregada'].includes(despacho.estado) && (
+        <div className="mx-3 mb-2 p-2 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-600 animate-in slide-in-from-top-2 duration-300">
+          <AlertTriangle size={16} className="shrink-0" />
+          <span className="text-[10px] font-black uppercase leading-tight">Salió con stock bajo o negativo{despacho.alerta_stock_items?.length ? ` en ${despacho.alerta_stock_items.length} ítem(s)` : ''}</span>
+        </div>
+      )}
+
       {/* Banner Advertencia Stock (Admin) */}
       {hayFaltaStock && ['pendiente', 'despachada'].includes(despacho.estado) && esPrivilegiado && (
         <div className="mx-3 mb-2 p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-700 animate-in slide-in-from-top-2 duration-300">
@@ -1647,14 +1655,21 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             {hayFaltaStock && accionPendiente?.estado === 'despachada' && (
               <div className="w-full p-2.5 bg-red-50 border border-red-200 rounded-xl text-red-600 font-bold text-xs flex items-center gap-2 mt-1">
                 <AlertTriangle size={14} className="shrink-0" />
-                <span className="text-left">Hay productos sin stock suficiente. ¿Aprobar de todas formas?</span>
+                <span className="text-left">Hay productos con stock bajo o insuficiente. Se descontará el inventario al aprobar y puede quedar en negativo. ¿Aprobar de todas formas?</span>
+              </div>
+            )}
+
+            {accionPendiente?.estado === 'entregada' && (hayFaltaStock || despacho.alerta_stock) && (
+              <div className="w-full p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 font-bold text-xs flex items-center gap-2 mt-1">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span className="text-left">Este despacho {despacho.alerta_stock ? 'salió' : 'sale'} con stock bajo o negativo. El inventario ya fue descontado al aprobar. ¿Confirmar la entrega?</span>
               </div>
             )}
           </div>
         }
         details={confirmConfig.confirmDetails || ''}
         confirmText={confirmConfig.confirmText || 'Confirmar'}
-        variant={hayFaltaStock && accionPendiente?.estado === 'despachada' ? 'warning' : (confirmConfig.variant || 'default')}
+        variant={(hayFaltaStock || despacho.alerta_stock) && ['despachada', 'entregada'].includes(accionPendiente?.estado) ? 'warning' : (confirmConfig.variant || 'default')}
       />
 
       {/* Modal especial para Devolver o Anular desde "despachada" */}

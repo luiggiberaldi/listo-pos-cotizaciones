@@ -11,7 +11,6 @@ import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
  * @param {boolean} props.agregado - Si ya está en la cesta
  * @param {number|null} props.cantidad - Cantidad en cesta (si agregado)
  * @param {number} props.tasa - Tasa BCV
- * @param {number} props.comprometido - Stock comprometido
  * @param {function} props.onAgregar - Callback al hacer click (producto no agregado)
  * @param {function} props.onMas - Callback para incrementar cantidad
  * @param {function} props.onMenos - Callback para decrementar cantidad (o eliminar si qty=1)
@@ -22,7 +21,6 @@ export default function ProductCard({
   agregado,
   cantidad,
   tasa = 0,
-  comprometido = 0,
   onAgregar,
   onMas,
   onMenos,
@@ -34,7 +32,6 @@ export default function ProductCard({
   const sinStock = stock <= 0
   const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
   const bloqueado = sinPrecio
-  const disponibleReal = stock - comprometido
   const tieneMultiprecios = precio2Visible(p) || precio3Visible(p)
 
   return (
@@ -44,9 +41,11 @@ export default function ProductCard({
           ? 'opacity-40 cursor-not-allowed border-slate-100'
           : agregado
             ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
-            : disponibleReal <= 0 && comprometido > 0
-              ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100/80'
-              : 'border-slate-200 hover:border-primary/50'
+            : sinStock
+              ? 'border-red-300 bg-red-50/30 shadow-sm shadow-red-100/80'
+              : stock <= (p.stock_minimo || 5)
+                ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100/80'
+                : 'border-slate-200 hover:border-primary/50'
       }`}
       onClick={() => !agregado && !bloqueado && onAgregar?.(p)}
     >
@@ -87,12 +86,18 @@ export default function ProductCard({
       <p className={`text-[8px] font-medium mt-0.5 ${
         sinPrecio ? 'text-orange-500' :
         sinStock ? 'text-red-500' :
-        disponibleReal <= 0 && comprometido > 0 ? 'text-amber-600' :
         stock <= (p.stock_minimo || 5) ? 'text-amber-500' : 'text-emerald-500'
       }`}>
-        {sinPrecio ? 'Sin precio' : sinStock ? 'Agotado' : comprometido > 0 ? `${stock} (${comprometido} comp.)` : `${stock} disp.`}
+        {sinPrecio ? 'Sin precio' : sinStock ? 'Agotado' : stock <= (p.stock_minimo || 5) ? `Stock bajo: ${stock}` : `${stock} disp.`}
       </p>
 
+      {/* Alerta release 17: la cantidad en cesta puede exceder el stock (nunca se bloquea) */}
+      {agregado && cantidad != null && stock > 0 && cantidad > stock && (
+        <p className="text-[8px] font-bold text-red-600 mt-0.5">⚠ excede el stock ({stock} disp.)</p>
+      )}
+      {agregado && cantidad != null && stock <= 0 && (
+        <p className="text-[8px] font-bold text-red-600 mt-0.5">⚠ sin stock físico</p>
+      )}
       {/* Stepper inline */}
       {agregado && cantidad != null && (
         <div className="flex items-center gap-0.5 mt-1" onClick={e => e.stopPropagation()}>

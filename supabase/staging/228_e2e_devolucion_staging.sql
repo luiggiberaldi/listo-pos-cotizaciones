@@ -32,9 +32,9 @@ DECLARE
   v_despacho_carabobo UUID := gen_random_uuid();
   v_item UUID := gen_random_uuid();
   v_delivery JSONB;
+  v_aprobacion JSONB;
   v_partial JSONB;
   v_estado TEXT;
-  v_comprometido NUMERIC;
   v_stock NUMERIC;
   v_total NUMERIC;
   v_cxc_credito NUMERIC;
@@ -232,7 +232,7 @@ BEGIN
     v_cliente,
     v_operador,
     v_transportista,
-    'despachada',
+    'pendiente',
     120,
     100,
     v_transportista_neto,
@@ -382,14 +382,19 @@ BEGIN
     0
   );
 
-  -- 1) Aprobación: el despacho despachado compromete 2 unidades y no toca
-  -- stock físico ni Kardex.
-  SELECT COALESCE(SUM(cantidad), 0)
-  INTO v_comprometido
-  FROM public.obtener_stock_comprometido_detalle(v_producto);
+  -- 1) Aprobación (release 17): la aprobación egresa 2 unidades y crea el
+  -- movimiento de kardex. El stock comprometido ya no existe.
+  SELECT public.aprobar_despacho_inventario_atomico(
+    v_despacho,
+    v_operador,
+    'STAGING E2E Operator',
+    NULL,
+    FALSE
+  ) INTO v_aprobacion;
 
-  IF v_comprometido <> 2 THEN
-    RAISE EXCEPTION 'FALLO compromiso antes de entrega: esperado 2, obtenido %', v_comprometido;
+  SELECT estado INTO v_estado FROM public.notas_despacho WHERE id = v_despacho;
+  IF v_estado <> 'despachada' THEN
+    RAISE EXCEPTION 'FALLO estado después de aprobar: %', v_estado;
   END IF;
 
   SELECT stock_actual
@@ -397,8 +402,8 @@ BEGIN
   FROM public.productos
   WHERE id = v_producto;
 
-  IF v_stock <> 10 THEN
-    RAISE EXCEPTION 'FALLO stock en aprobación: esperado 10, obtenido %', v_stock;
+  IF v_stock <> 8 THEN
+    RAISE EXCEPTION 'FALLO stock en aprobación: esperado 8, obtenido %', v_stock;
   END IF;
 
   SELECT COUNT(*)
@@ -407,11 +412,11 @@ BEGIN
   WHERE producto_id IN (v_producto, v_producto_intercambio)
     AND cuenta_id = v_cuenta;
 
-  IF v_kardex_count <> 0 THEN
-    RAISE EXCEPTION 'FALLO Kardex en aprobación: se encontraron % movimientos', v_kardex_count;
+  IF v_kardex_count <> 1 THEN
+    RAISE EXCEPTION 'FALLO Kardex en aprobación: se esperaba 1 movimiento, se encontraron %', v_kardex_count;
   END IF;
 
-  -- 2) Entrega: descuenta físicamente 2 unidades y crea un único movimiento.
+  -- 2) Entrega (release 17): NO toca inventario — el egreso ocurrió al aprobar.
   SELECT public.confirmar_entrega_inventario_atomica(
     v_despacho,
     v_operador,
@@ -439,12 +444,6 @@ BEGIN
     RAISE EXCEPTION 'FALLO Kardex de entrega: esperado 1 movimiento, obtenido %', v_kardex_count;
   END IF;
 
-  SELECT COALESCE(SUM(cantidad), 0)
-  INTO v_comprometido
-  FROM public.obtener_stock_comprometido_detalle(v_producto);
-  IF v_comprometido <> 0 THEN
-    RAISE EXCEPTION 'FALLO compromiso después de entrega: esperado 0, obtenido %', v_comprometido;
-  END IF;
 
   -- 3) Devolución parcial con intercambio de menor valor:
   --    devuelve 1 unidad de A ($10), entrega 1 unidad de B ($5),

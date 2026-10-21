@@ -276,45 +276,22 @@ export function useStockCheckDespachos(despachos = [], { enabled = true } = {}) 
         itemsPorDespacho[it.despacho_id].push(mapped)
       }
 
-      // 2. Stock actual + comprometido de todos los productos referenciados.
-      // Comprometido = items de despachos APROBADOS (estado 'despachada') según
-      // la regla 222 — mismo criterio que usa la RPC de aprobación v2, para que
-      // el aviso de la UI diga lo mismo que dirá la BD (disponible = físico − comprometido).
+      // 2. Stock físico de todos los productos referenciados (release 17: ya no
+      // existe stock comprometido — el egreso ocurre al aprobar, así que el
+      // stock_actual ES el stock real que valida el aviso de la UI.
       const pids = [...new Set(items.map(it => it.producto_id).filter(Boolean))]
       const prodsMap = {}
       if (pids.length) {
         const pBatches = []
         for (let i = 0; i < pids.length; i += 200) pBatches.push(pids.slice(i, i + 200))
         const pResults = await Promise.all(pBatches.map(batch =>
-          supabase.from('productos').select('id, stock_actual, categoria').in('id', batch)
+          supabase.from('productos').select('id, stock_actual, stock_minimo, categoria').in('id', batch)
         ))
         for (const r of pResults) {
           if (r.error) throw r.error
           for (const p of (r.data ?? [])) prodsMap[p.id] = p
         }
-        // Comprometido por despacho aprobado, en lotes por producto
-        const cBatches = []
-        for (let i = 0; i < pids.length; i += 200) cBatches.push(pids.slice(i, i + 200))
-        const cResults = await Promise.all(cBatches.map(batch =>
-          supabase
-            .from('notas_despacho_items')
-            .select('producto_id, cantidad, notas_despacho!inner(estado)')
-            .in('producto_id', batch)
-            .eq('notas_despacho.estado', 'despachada')
-        ))
-        const comprometido = {}
-        for (const r of cResults) {
-          if (r.error) throw r.error
-          for (const row of (r.data ?? [])) {
-            comprometido[row.producto_id] = (comprometido[row.producto_id] || 0) + Number(row.cantidad || 0)
-          }
-        }
-        for (const pid of Object.keys(comprometido)) {
-          if (prodsMap[pid]) prodsMap[pid] = { ...prodsMap[pid], stock_comprometido: comprometido[pid] }
-          else prodsMap[pid] = { id: pid, stock_actual: 0, categoria: '', stock_comprometido: comprometido[pid] }
-        }
       }
-
       return { itemsPorDespacho, prodsMap }
     },
     enabled: enabled && ids.length > 0,
@@ -370,7 +347,6 @@ export function useCrearDespacho() {
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
       qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
-      qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
       broadcastEntidad(['despachos', 'inventario', 'comisiones', 'cotizaciones', 'cuentas'])
       showToast('Nota de despacho creada', 'success')
@@ -482,7 +458,6 @@ export function useActualizarEstadoDespacho() {
         qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
         qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
         qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
-        qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
         qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
         qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
         qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
@@ -511,7 +486,6 @@ export function useEditarDespacho() {
     onSuccess: async () => {
       showToast('Despacho actualizado', 'success')
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
-      qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
@@ -547,7 +521,6 @@ export function useEditarItemsDespacho() {
       showToast('Ítems del despacho actualizados con éxito', 'success', 5000)
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
-      qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
