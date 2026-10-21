@@ -1,0 +1,11 @@
+# Huellas SHA-256 de los artefactos del release 19 (COD mixto) — paquete de producción.
+# Regeneradas el 2026-10-21 tras el ajuste de contrato del 19 (nota opcional,
+# referencia mínima de 4 caracteres): el apply cambió y se re-aplicó en staging.
+# Verificar con:  sha256sum -c supabase/release/main/19_cod_mixto_SHA256SUMS.txt
+# Si una huella cambia, el paquete ya NO es el probado: repetir pruebas antes de subir.
+4e4a2e09083b67ab30ad6b609028ccdaf000ab906125a52f083f483d700b760e *supabase/release/main/14_cod_financial_rpcs_apply.sql
+f4a3d8c0d933d1d1de44e1fd0a840db4fc996801b6f83dd71523e7fd0e3ba7cf *supabase/release/main/19_cod_mixto_apply.sql
+8aa60fd346e8e49ee09856931bc684a8a232efc01786120dcedaf01e358c14e4 *supabase/release/main/19_cod_preflight_readonly.sql
+bd930b988fbc0792431f879c0efd62a3cb393a32adc346fab75b1fd597e250aa *supabase/release/main/19_cod_postflight_readonly.sql
+f957f56c1db0922a2c51964a8751591cd79be93ea4bd357820647da3732ca9f3 *supabase/release/main/19_cod_rollback_review.sql
+9a7997a4f7665fefacbf2dbad8a5c25c7694884f2d611848a31df482549415b8 *supabase/release/main/14_cod_preflight_readonly.sql

@@ -115,6 +115,56 @@ export function estadoCodDerivado({
 }
 
 /**
+ * Estado del COD DERIVADO del ledger bajo el contrato v2 (release 18): pago
+ * mixto (parte a crédito + parte COD) con atribución determinista.
+ *   · abonos marcados metodo_pago='cod' -> porción COD
+ *   · abonos comunes -> porción CxC primero; solo el desborde pasa al COD
+ *   · con cargo_cxc = 0 el desborde es todo (fórmula IDÉNTICA al contrato v14)
+ * Devuelve { estado, revisar, motivo, deudaCod, deudaCxc, desborde }.
+ * Espejo puro de resumen_financiero_despacho v2 (19_cod_mixto_review.sql);
+ * la semántica la fija scripts/test-cod-mixto-release-local.mjs contra SQL real.
+ */
+export function estadoCodDerivadoV2({
+  codPresente = true,
+  montoNominal = 0,
+  cargoCod = 0,
+  cargoCxc = 0,
+  abonoMarcadoDinero = 0,
+  abonoMarcadoComp = 0,
+  abonoComunDinero = 0,
+  abonoComunComp = 0,
+  flagPagado = false,
+  conciliadoSinAbono = false,
+} = {}) {
+  const cc = round2(Math.abs(Number(cargoCod) || 0))
+  const cxc = round2(Math.abs(Number(cargoCxc) || 0))
+  const mixed = cxc > TOLERANCIA_USD
+  const spillDinero = Math.max(0, round2(Number(abonoComunDinero) - cxc))
+  const spillComp = Math.max(0, round2(Number(abonoComunComp) - Math.max(0, round2(cxc - Number(abonoComunDinero)))))
+  const desborde = round2(spillDinero + spillComp)
+  const pagadoDinero = round2(Number(abonoMarcadoDinero) + spillDinero)
+  const pagadoComp = round2(Number(abonoMarcadoComp) + spillComp)
+  const deudaCod = Math.max(0, round2(cc - pagadoDinero - pagadoComp))
+  const abonoCxc = round2(Math.max(0, round2(Number(abonoComunDinero) + Number(abonoComunComp) - desborde)))
+  const deudaCxc = Math.max(0, round2(cxc - abonoCxc))
+  const base = { deudaCod, deudaCxc, desborde }
+  if (!codPresente || Number(montoNominal) <= 0) return { estado: 'sin_cargo', revisar: false, motivo: null, ...base }
+  if (cc <= 0) return { estado: 'manual_review', revisar: true, motivo: 'cod_sin_cargo', ...base }
+  if (Math.abs(cc - Number(montoNominal)) > TOLERANCIA_USD) {
+    return { estado: 'manual_review', revisar: true, motivo: 'cargo_no_coincide', ...base }
+  }
+  if (deudaCod > 0) {
+    if (mixed && desborde > TOLERANCIA_USD) return { estado: 'manual_review', revisar: true, motivo: 'atribucion_ambigua', ...base }
+    if (conciliadoSinAbono || flagPagado) return { estado: 'manual_review', revisar: true, motivo: 'flag_sin_respaldo', ...base }
+    if (pagadoDinero > TOLERANCIA_USD) return { estado: 'parcial', revisar: false, motivo: null, ...base }
+    return { estado: 'pendiente', revisar: false, motivo: null, ...base }
+  }
+  if (pagadoDinero > TOLERANCIA_USD) return { estado: 'cobrado', revisar: false, motivo: null, ...base }
+  if (pagadoComp > TOLERANCIA_USD) return { estado: 'compensado', revisar: false, motivo: null, ...base }
+  return { estado: 'manual_review', revisar: true, motivo: 'sin_movimientos', ...base }
+}
+
+/**
  * Clasificación de un ítem al bucket de comisión (misma semántica que el motor SQL
  * y que comision_238b_item_breakdown): cabilla | otros | externo | excluido.
  */

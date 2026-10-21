@@ -183,3 +183,13 @@ outputs/
 # Guardarrail del doble clic en Guardar cambios (flags de precios 2/3)
 !src/components/inventario/__tests__/
 !src/components/inventario/__tests__/ProductoFormMetadatos.test.js
+
+# Contrato release 17 — egreso de inventario al aprobar
+!src/utils/__tests__/egresoInventarioContract.test.js
+
+# Release 19 COD mixto — contrato nota opcional / referencia mínima 4
+!supabase/release/main/19_cod_mixto_SHA256SUMS.txt
+!scripts/apply-release19-produccion.mjs
+!scripts/test-cod-mixto-release-local.mjs
+!scripts/test-cod-idempotencia-release-local.mjs
+!docs/plans/2026-10-20-plan-cod-pagos-multiples-e2e.md

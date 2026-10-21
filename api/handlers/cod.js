@@ -62,14 +62,15 @@ export async function handleConciliarPagoCod(request, env) {
   if (!Array.isArray(pagos) || pagos.length < 1 || pagos.length > 6) {
     return jsonError('Agregue entre 1 y 6 métodos de pago', 400, request)
   }
-  if (typeof evidencia !== 'string' || evidencia.trim().length < 4 || evidencia.trim().length > 500) {
-    return jsonError('La evidencia del pago es obligatoria (mínimo 4 caracteres)', 400, request)
+  // La nota es opcional (máximo 500 caracteres si se escribe)
+  if (evidencia != null && (typeof evidencia !== 'string' || evidencia.trim().length > 500)) {
+    return jsonError('La nota del cobro no puede superar los 500 caracteres', 400, request)
   }
   const pagosInvalidos = pagos.some(p => {
     if (!p || !METODOS_PAGO_EXTERNOS.has(p.metodo)
       || !tienePrecisionDosDecimales(p.monto)
       || !Number.isFinite(Number(p.monto)) || Number(p.monto) <= 0
-      || (!METODOS_SIN_REFERENCIA.has(p.metodo) && String(p.referencia || '').trim().length < 2)) return true
+      || (!METODOS_SIN_REFERENCIA.has(p.metodo) && String(p.referencia || '').trim().length < 4)) return true
     if (p.metodo !== 'Efectivo Bs') return false
     const montoBs = Number(p.monto_bs)
     const tasa = Number(p.tasa_snapshot)
@@ -84,7 +85,7 @@ export async function handleConciliarPagoCod(request, env) {
       || (p.tasa_actualizada_en != null && (typeof p.tasa_actualizada_en !== 'string'
         || !Number.isFinite(Date.parse(p.tasa_actualizada_en))))
   })
-  if (pagosInvalidos) return jsonError('Método, monto, tasa o referencia de pago inválidos', 400, request)
+  if (pagosInvalidos) return jsonError('Método, monto, tasa o referencia de pago inválidos (la referencia requiere mínimo 4 caracteres)', 400, request)
 
   const key = idempotencyKey(request, body)
   // La clave la genera el cliente (una por conciliación) y la REUTILIZA en reintentos:
@@ -113,13 +114,13 @@ export async function handleConciliarPagoCod(request, env) {
           tasa_actualizada_en: p.tasa_actualizada_en || null,
         } : {}),
       })),
-      p_evidencia: evidencia.trim(),
+      p_evidencia: typeof evidencia === 'string' ? evidencia.trim() : '',
       p_ip_origen: request.headers.get('CF-Connecting-IP') || null,
     }),
   })
   const text = await response.text()
   if (!response.ok) {
-    const businessFailure = /COD_CONCILIACION_(?:PARAMETROS|PAGO_O_REFERENCIA|TASA_BS_INVALIDA|MONTO_INVALIDO|MONTO_NO_COINCIDE|MONTO_NOMINAL_INVALIDO|SIN_DEUDA|ACTOR_NO_AUTORIZADO|ESTADO_INVALIDO|DESPACHO_NO_ENCONTRADO|DESPACHO_CAMBIO|CLIENTE_REQUERIDO|LEDGER_AMBIGUO|CARGO_NO_COINCIDE|FORMA_PAGO_INVALIDA|COD_AMBIGUO|IDEMPOTENCIA_REUTILIZADA)/.test(text)
+    const businessFailure = /COD_CONCILIACION_(?:PARAMETROS|PAGO_O_REFERENCIA|TASA_BS_INVALIDA|MONTO_INVALIDO|MONTO_NO_COINCIDE|MONTO_NOMINAL_INVALIDO|SIN_DEUDA|ACTOR_NO_AUTORIZADO|ESTADO_INVALIDO|DESPACHO_NO_ENCONTRADO|DESPACHO_CAMBIO|CLIENTE_REQUERIDO|LEDGER_AMBIGUO|CARGO_NO_COINCIDE|FORMA_PAGO_INVALIDA|COD_AMBIGUO|IDEMPOTENCIA_REUTILIZADA|ATRIBUCION_AMBIGUA|FLAG_SIN_SOPORTE)/.test(text)
     return jsonError(businessFailure ? text.slice(0, 500) : 'No se pudo registrar el cobro COD atómico', businessFailure ? 400 : 503, request)
   }
   let result

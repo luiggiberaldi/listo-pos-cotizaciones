@@ -9,6 +9,13 @@ import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { convertBsToUsd } from '../../utils/codCurrency.js'
 
 const METODOS_EFECTIVO = new Set(['Efectivo $', 'Efectivo Bs'])
+const MOTIVOS_REVISION = {
+  cod_sin_cargo: 'El pedido declara cobro en entrega pero no tiene su cargo COD en el libro.',
+  cargo_no_coincide: 'El cargo COD del libro no coincide con el monto declarado en la forma de pago.',
+  atribucion_ambigua: 'Hay abonos sin marca que desbordaron la parte a crédito; administración debe atribuirlos con evidencia.',
+  flag_sin_respaldo: 'La marca de "pagado" no tiene movimientos que la respalden; administración debe revisarla.',
+  sin_movimientos: 'La deuda COD está en cero sin movimientos que lo expliquen.',
+}
 const formatUsd = value => `$${(Number(value) || 0).toFixed(2)}`
 const hasMaxTwoDecimals = value => /^\d+(?:\.\d{1,2})?$/.test(String(value).trim())
 const round2 = value => Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100
@@ -64,6 +71,10 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
   const cod = resumen?.cod
   const codLedger = resumen?.ledger
   const totalCod = round2(Number(codLedger?.deuda_cod_usd) || 0)
+  const cargoCxc = round2(Number(codLedger?.cargo_cxc_usd) || 0)
+  const deudaCxc = round2(Number(codLedger?.deuda_cxc_usd) || 0)
+  const desbordeSinMarca = round2(Number(codLedger?.desborde_sin_marca_usd) || 0)
+  const esPagoMixto = cargoCxc > 0
   const totalIngresado = useMemo(
     () => round2(payments.reduce((sum, payment) => sum + getMontoUsd(payment, getTasaPago(payment, tasaEfectiva)), 0)),
     [payments, tasaEfectiva],
@@ -110,12 +121,8 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
       showToast('Verifica el monto en bolívares y la tasa seleccionada antes de confirmar.', 'warning')
       return
     }
-    if (evidencia.trim().length < 4) {
-      showToast('Registra evidencia verificable del pago (referencia, recibo o nota).', 'warning')
-      return
-    }
-    if (payments.some(p => !METODOS_EFECTIVO.has(p.metodo) && String(p.referencia || '').trim().length < 2)) {
-      showToast('Cada transferencia o pago digital requiere su referencia.', 'warning')
+    if (payments.some(p => !METODOS_EFECTIVO.has(p.metodo) && String(p.referencia || '').trim().length < 4)) {
+      showToast('Cada transferencia o pago digital requiere su referencia (mínimo 4 caracteres).', 'warning')
       return
     }
 
@@ -200,18 +207,36 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
               </div>
             </div>
 
+            {esPagoMixto && (
+              <div className="grid grid-cols-2 gap-3 rounded-xl border border-sky-100 bg-sky-50/40 p-3 text-xs dark:border-sky-900/40 dark:bg-sky-950/20">
+                <div>
+                  <p className="font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300">Parte COD · se cobra aquí</p>
+                  <p className="text-lg font-black text-slate-700 dark:text-slate-200">{formatUsd(totalCod)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300">Parte a crédito · se cobra en CxC</p>
+                  <p className="text-lg font-black text-slate-700 dark:text-slate-200">{formatUsd(deudaCxc)}</p>
+                  <p className="text-[11px] text-slate-400">Desde la ficha del cliente</p>
+                </div>
+              </div>
+            )}
+
             {(cod?.revisar || !puedeConciliar) && (
               <div className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
                 <div>
                   <p className="font-bold">Revisión requerida</p>
                   <p>Estado contable: {cod?.estado || 'desconocido'}. No se puede registrar un pago automático hasta resolver la discrepancia.</p>
+                  {cod?.motivo_revision && MOTIVOS_REVISION[cod.motivo_revision] && (
+                    <p className="mt-1">{MOTIVOS_REVISION[cod.motivo_revision]}</p>
+                  )}
                 </div>
               </div>
             )}
 
             <p className="text-xs text-slate-500">
-              Cargos COD {formatUsd(codLedger?.cargo_cod_usd)} · abonos vinculados {formatUsd(codLedger?.abono_cod_usd)} · compensaciones registradas {formatUsd(codLedger?.compensado_usd)}
+              Cargos COD {formatUsd(codLedger?.cargo_cod_usd)} · abonos aplicados al COD {formatUsd(codLedger?.abono_cod_usd)} · compensaciones registradas {formatUsd(codLedger?.compensado_usd)}
+              {desbordeSinMarca > 0 ? ` · desborde sin marca ${formatUsd(desbordeSinMarca)}` : ''}
             </p>
 
             {puedeConciliar && (
@@ -233,7 +258,7 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
                           <input aria-label={`Monto ${payment.metodo}`} type="number" min="0.01" step="0.01" value={payment.monto} onChange={event => actualizarPago(index, { monto: event.target.value })} className="w-1/3 rounded-lg border px-2 py-2 text-sm" />
                         )}
                         {!METODOS_EFECTIVO.has(payment.metodo) && (
-                          <input aria-label={`Referencia ${payment.metodo}`} value={payment.referencia} onChange={event => actualizarPago(index, { referencia: event.target.value })} placeholder="Referencia obligatoria" className="min-w-0 flex-1 rounded-lg border px-2 py-2 text-sm" />
+                          <input aria-label={`Referencia ${payment.metodo}`} value={payment.referencia} onChange={event => actualizarPago(index, { referencia: event.target.value })} placeholder="Referencia obligatoria (mínimo 4)" className="min-w-0 flex-1 rounded-lg border px-2 py-2 text-sm" />
                         )}
                       </div>
                       {payment.metodo === 'Efectivo Bs' && (
@@ -253,8 +278,8 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
                 </div>
 
                 <label className="block space-y-1">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Evidencia del pago (obligatoria)</span>
-                  <textarea value={evidencia} onChange={event => setEvidencia(event.target.value)} maxLength={500} rows={2} placeholder="Nro. recibo, referencia bancaria, quién recibió y cuándo…" className="w-full rounded-xl border px-3 py-2 text-sm" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Nota (opcional)</span>
+                  <textarea value={evidencia} onChange={event => setEvidencia(event.target.value)} maxLength={500} rows={2} placeholder="Nro. recibo, referencia bancaria, quién recibió y cuándo… (opcional)" className="w-full rounded-xl border px-3 py-2 text-sm" />
                 </label>
 
                 {payments.some(p => p.metodo === 'Efectivo Bs') && tasaEfectiva > 0 && (
@@ -271,7 +296,7 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
 
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
           <button type="button" onClick={onClose} disabled={loading} className="rounded-xl px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">Cancelar</button>
-          <button type="button" onClick={confirmar} disabled={loading || loadingResumen || !resumen || !puedeConciliar || !pagoValido || evidencia.trim().length < 4 || payments.length === 0} className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" onClick={confirmar} disabled={loading || loadingResumen || !resumen || !puedeConciliar || !pagoValido || payments.length === 0} className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">
             {loading && <Loader2 size={12} className="animate-spin" />}
             Registrar abono COD
           </button>

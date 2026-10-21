@@ -149,3 +149,29 @@ Paquete aditivo publicado en `supabase/release/principal/02_devolucion_cobro_dif
 - **Grants**: solo `service_role`; el Worker sigue siendo el único consumidor.
 - **Rollback**: `DROP FUNCTION` de la sobrecarga y helpers; no requiere restore ni toca datos.
 - En staging la misma pieza sobrecarga `registrar_devolucion_parcial_finanzas_atomica_staging` (migración 252, sin gate por convención de ese proyecto).
+
+## Release 2026-10-19 — Egreso de inventario al aprobar (fin del stock comprometido)
+
+Paquete en `supabase/release/main/17_egreso_inventario_aprobacion_apply.sql`, con backfill `17_egreso_inventario_backfill.sql`, verificación read-only `17_egreso_inventario_postflight_readonly.sql`, rollback `17_egreso_inventario_rollback_review.sql` y pre-imágenes en `17_backup_cuerpos/`. Plan y criterios de aceptación: `docs/plans/2026-10-19-plan-egreso-inventario-al-aprobar-despacho.md`.
+
+- **Nuevo modelo**: el egreso de inventario ocurre al APROBAR el despacho (descuento + kardex atómicos); la ENTREGA ya no mueve inventario.
+- **RPCs reemplazadas**: `aprobar_despacho_inventario_atomico` (v3), `confirmar_entrega_inventario_atomica`, `revertir_entrega_inventario_atomica` y `editar_despacho_profundidad` (3 sobrecargas). La edición en pendiente sigue sin escribir kardex; la edición de un despacho ya egresado escribe kardex por diferencia.
+- **Reversión**: `despachada → pendiente/anulada` reingresa stock con kardex de reversa y exige re-aprobación posterior.
+- **Backfill**: registra el egreso de despachos ya entregados sin kardex de salida; idempotente y verificado contra checksum.
+- **Worker**: `api/handlers/despachos.js` consume las RPC v3 y devuelve `alertas_stock` en aprobar/entregar.
+- **Frontend**: fin del stock comprometido (se eliminan `useStockComprometido`, `StockComprometidoDetalle` y `useReporteInventario`), badges de bajo stock/cero y avisos al aprobar/entregar.
+- **Rollback**: restaura los cuerpos previos desde `17_backup_cuerpos/*.live.sql` (generar ANTES del apply con `pg_get_functiondef`); los egresos ya registrados no se revierten automáticamente.
+- **Pruebas**: contrato en `src/utils/__tests__/egresoInventarioContract.test.js`; e2e staging `228_e2e_devolucion_staging.sql` adaptado al nuevo modelo.
+
+## Release 2026-10-20 — Cobro COD en pedidos de pago mixto (PREPARADO, sin aplicar)
+
+Artefactos preparados y probados, **no aplicados a producción**. Plan, criterios de éxito y ventana: `docs/plans/2026-10-20-plan-cod-pagos-multiples-e2e.md`.
+
+- **Problema que resuelve**: los pedidos "parte a crédito + parte COD" (ej. #4099) no podían cobrar su porción COD (`manual_review` / `LEDGER_AMBIGUO`); los operadores terminaban registrando el cobro a nivel de cuenta (caso #3879).
+- **Artefactos**: `19_cod_mixto_review.sql` (con gate `REVIEW_ONLY`), `19_cod_mixto_apply.sql` (copia sin gate para la ventana), `19_cod_preflight_readonly.sql`, `19_cod_postflight_readonly.sql` y `19_cod_rollback_review.sql`.
+- **Atribución determinista**: abonos marcados `metodo_pago='cod'` (flujo atómico) aplican a la porción COD; abonos comunes (flujo CxC/legados) aplican primero a la porción a crédito y solo el desborde pasa al COD. Con un solo cargo (100% COD) la fórmula es **idéntica al release 14** (regresión probada por snapshots).
+- **Guardas nuevas**: `COD_CONCILIACION_ATRIBUCION_AMBIGUA` (desborde sin marca con deuda abierta, caso #3064) y `COD_CONCILIACION_FLAG_SIN_SOPORTE` (marca de pagado sin movimientos que la respalden, casos #3879/#2185). `LEDGER_AMBIGUO` solo rechaza COD declarado sin cargo.
+- **Intacto**: política de un centavo, idempotencia, doble JSON `forma_pago`/`forma_pago_cliente`, etiqueta `metodo_pago='cod'` en abonos del flujo atómico, grants solo `service_role` y la tranca de comisiones v4 (comisión nace al saldar la porción COD).
+- **Frontend/Worker**: `ConciliarCodModal.jsx` muestra las dos porciones ("se cobra aquí" / "se cobra en CxC") y el motivo concreto de cada revisión; `api/handlers/cod.js` devuelve los códigos nuevos como error de negocio 400.
+- **Pruebas**: arnés `scripts/test-cod-mixto-release-local.mjs` (ruta real v14→v18 en PostgreSQL desechable: regresión 100% COD idéntica + matriz de 10 casos + rollback restaurado, PASS exit 0); suite vitest 559/559; espejo puro `estadoCodDerivadoV2` en `scripts/lib/invariantes.mjs`.
+- **Rollback**: `19_cod_rollback_review.sql` restaura los cuerpos byte-idénticos del release 14 (más `OR REPLACE` para escribirlos sobre los existentes), sus COMMENTs y grants; no borra asientos, marcas ni registros de idempotencia.

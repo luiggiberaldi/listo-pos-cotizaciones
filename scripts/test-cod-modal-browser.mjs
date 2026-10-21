@@ -72,7 +72,7 @@ try {
   await bsInput.fill('100.00')
   assert((await dialogText()).includes('Tasa seleccionada: 2 Bs/$ (USDT fixture) · Equivalente: $50.00'),
     'convierte Bs a USD con la tasa inicial y muestra el equivalente')
-  await dialog.getByRole('textbox', { name: 'Evidencia del pago (obligatoria)' }).fill('Recibo parcial tasa 2')
+  await dialog.getByRole('textbox', { name: 'Nota (opcional)' }).fill('Recibo parcial tasa 2')
   await dialog.getByRole('button', { name: 'Registrar abono COD' }).click()
   await page.getByRole('button', { name: 'Abrir conciliación COD' }).waitFor()
 
@@ -86,7 +86,7 @@ try {
   await secondInput.fill('400.04')
   assert((await dialogText()).includes('Tasa seleccionada: 4 Bs/$ (USDT fixture) · Equivalente: $100.01'),
     'el nuevo abono utiliza la tasa actualizada sin revaluar el previo')
-  await dialog.getByRole('textbox', { name: 'Evidencia del pago (obligatoria)' }).fill('Recibo parcial tasa 4')
+  // La nota es opcional: este segundo abono se registra sin nota.
   await dialog.getByRole('button', { name: 'Registrar abono COD' }).click()
 
   const payments = await page.evaluate(() => window.__codRequests.flatMap(request => request.pagos))
@@ -95,6 +95,9 @@ try {
     'conserva los Bs, tasa 2 y equivalente USD del primer snapshot')
   assert(payments[1].monto_bs === 400.04 && payments[1].tasa_snapshot === 4 && payments[1].monto === 100.01,
     'guarda para el segundo abono los Bs, tasa 4 y equivalente USD nuevos')
+  const notas = await page.evaluate(() => window.__codRequests.map(request => request.evidencia))
+  assert(notas[0] === 'Recibo parcial tasa 2' && notas[1] === '',
+    'la nota es opcional: se envía vacía cuando no se escribe')
 
   await page.getByRole('button', { name: 'Abrir conciliación COD' }).click()
   await page.getByRole('dialog', { name: /Conciliar COD/ }).waitFor()
@@ -105,7 +108,7 @@ try {
     'no considera liquidada la deuda cuando queda un centavo pendiente')
   await finalInput.fill('50.01')
   await dialog.getByRole('textbox', { name: 'Referencia Zelle' }).fill('TX-OVER-CENT')
-  await dialog.getByRole('textbox', { name: 'Evidencia del pago (obligatoria)' }).fill('Recibo final con un centavo extra')
+  await dialog.getByRole('textbox', { name: 'Nota (opcional)' }).fill('Recibo final con un centavo extra')
   assert((await dialogText()).includes('Liquida COD · excede $0.01'),
     'identifica el excedente permitido de un centavo al liquidar COD')
   await dialog.getByRole('button', { name: 'Registrar abono COD' }).click()

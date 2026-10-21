@@ -11,10 +11,13 @@ describe('ConciliarCodModal — guardarraíles F2', () => {
     expect(source).toContain('resumen?.cod')
   })
 
-  it('registra el cobro solo por la ruta atómica con evidencia e idempotency key estable', () => {
+  it('registra el cobro solo por la ruta atómica con nota opcional e idempotency key estable', () => {
     expect(source).toContain('/api/despachos/conciliar-cod')
     expect(source).toContain('idempotencyKey,')
     expect(source).toContain('evidencia: evidencia.trim()')
+    expect(source).toContain('Nota (opcional)')
+    expect(source).not.toContain('Evidencia del pago (obligatoria)')
+    expect(source).toContain('.trim().length < 4')
     expect(source).toContain("new Set(['Efectivo $', 'Efectivo Bs'])")
   })
 
@@ -53,5 +56,27 @@ describe('ConciliarCodModal — guardarraíles F2', () => {
   it('no infiere si el COD se puede cobrar comparando monto nominal con saldo global del cliente', () => {
     expect(source).not.toContain('codExcedeSaldo')
     expect(source).not.toContain('saldoCliente')
+  })
+})
+
+describe('ConciliarCodModal — pago mixto (release 19)', () => {
+  it('muestra las dos porciones del pedido: COD cobrable aquí y crédito en CxC', () => {
+    expect(source).toContain('cargo_cxc_usd')
+    expect(source).toContain('deuda_cxc_usd')
+    expect(source).toContain('Parte COD · se cobra aquí')
+    expect(source).toContain('Parte a crédito · se cobra en CxC')
+    expect(source).toContain('Desde la ficha del cliente')
+  })
+
+  it('explica el motivo concreto cuando el estado requiere revisión', () => {
+    expect(source).toContain('MOTIVOS_REVISION')
+    expect(source).toContain('motivo_revision')
+    expect(source).toContain('atribucion_ambigua')
+    expect(source).toContain('flag_sin_respaldo')
+  })
+
+  it('hace visible el desborde sin marca cuando existe', () => {
+    expect(source).toContain('desborde_sin_marca_usd')
+    expect(source).toContain('desborde sin marca')
   })
 })

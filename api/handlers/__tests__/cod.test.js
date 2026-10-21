@@ -185,6 +185,8 @@ describe('handleConciliarPagoCod (R2/R3)', () => {
   it.each([
     'COD_CONCILIACION_MONTO_NOMINAL_INVALIDO',
     'COD_CONCILIACION_DESPACHO_CAMBIO',
+    'COD_CONCILIACION_ATRIBUCION_AMBIGUA',
+    'COD_CONCILIACION_FLAG_SIN_SOPORTE',
   ])('devuelve error de negocio %s como 400, no como fallo de servicio', async errorCode => {
     fetchMock.mockResolvedValueOnce(new Response(errorCode, { status: 400 }))
     const response = await handleConciliarPagoCod(request(validBody), ENV)
@@ -192,10 +194,17 @@ describe('handleConciliarPagoCod (R2/R3)', () => {
     expect((await response.json()).error).toContain(errorCode)
   })
 
-  it('requiere evidencia y referencias para medios no efectivo', async () => {
-    expect((await handleConciliarPagoCod(request({ ...validBody, evidencia: ' x ' }), ENV)).status).toBe(400)
+  it('la nota es opcional y exige referencias de mínimo 4 caracteres para medios no efectivo', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, estado_cod: 'cobrado', pago_usd: 174 }))
+    const sinNota = await handleConciliarPagoCod(request({
+      ...validBody, evidencia: ' ', pagos: [{ metodo: 'Zelle', monto: 174, referencia: 'TX99' }],
+    }), ENV)
+    expect(sinNota.status).toBe(200)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).p_evidencia).toBe('')
+    expect((await handleConciliarPagoCod(request({ ...validBody, pagos: [{ metodo: 'Zelle', monto: 174, referencia: 'TX9' }] }), ENV)).status).toBe(400)
     expect((await handleConciliarPagoCod(request({ ...validBody, pagos: [{ metodo: 'Zelle', monto: 174 }] }), ENV)).status).toBe(400)
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect((await handleConciliarPagoCod(request({ ...validBody, evidencia: 'x'.repeat(501) }), ENV)).status).toBe(400)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('rechaza métodos contables y montos inválidos', async () => {

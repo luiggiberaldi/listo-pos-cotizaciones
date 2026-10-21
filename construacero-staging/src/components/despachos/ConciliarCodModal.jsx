@@ -1,396 +1,304 @@
-// src/components/despachos/ConciliarCodModal.jsx
-import { useState, useEffect } from 'react'
-import { X, Plus, Loader2, AlertCircle } from 'lucide-react'
-import { useRegistrarAbono } from '../../hooks/useCuentasCobrar'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertCircle, Loader2, Plus, X } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { showToast } from '../ui/Toast'
 import { FORMAS_PAGO } from '../../constants/formasPago'
 import { authFetch } from '../../services/authFetch'
 import { useQueryClient } from '@tanstack/react-query'
-import supabase from '../../services/supabase/client'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
+import { convertBsToUsd } from '../../utils/codCurrency.js'
+
+const METODOS_EFECTIVO = new Set(['Efectivo $', 'Efectivo Bs'])
+const MOTIVOS_REVISION = {
+  cod_sin_cargo: 'El pedido declara cobro en entrega pero no tiene su cargo COD en el libro.',
+  cargo_no_coincide: 'El cargo COD del libro no coincide con el monto declarado en la forma de pago.',
+  atribucion_ambigua: 'Hay abonos sin marca que desbordaron la parte a crédito; administración debe atribuirlos con evidencia.',
+  flag_sin_respaldo: 'La marca de "pagado" no tiene movimientos que la respalden; administración debe revisarla.',
+  sin_movimientos: 'La deuda COD está en cero sin movimientos que lo expliquen.',
+}
+const formatUsd = value => `$${(Number(value) || 0).toFixed(2)}`
+const hasMaxTwoDecimals = value => /^\d+(?:\.\d{1,2})?$/.test(String(value).trim())
+const round2 = value => Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100
+const getTasaSnapshot = tasa => Number(Number(tasa || 0).toFixed(8))
+const getMontoUsd = (pago, tasa) => pago.metodo === 'Efectivo Bs'
+  ? (convertBsToUsd(pago.monto_bs, getTasaSnapshot(tasa)) || 0)
+  : Number(pago.monto) || 0
+const getTasaPago = (pago, tasaActual) => Number(pago.tasa_snapshot) > 0 ? pago.tasa_snapshot : tasaActual
+const pagoInicial = (metodo, monto = 0, tasa = 0) => metodo === 'Efectivo Bs'
+  ? { metodo, monto_bs: tasa > 0 ? round2(monto * tasa).toFixed(2) : '', referencia: '' }
+  : { metodo, monto: round2(monto), referencia: '' }
 
 export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
   const qc = useQueryClient()
-  const registrarAbono = useRegistrarAbono()
+  const { tasaEfectiva, modoTasa, tasaUsdt, tasaBcv } = useTasaCambio()
+  const tasaFuente = modoTasa === 'manual' ? 'Manual'
+    : modoTasa === 'usdt' ? (tasaUsdt.fuente || 'USDT')
+      : (tasaBcv.fuente || 'BCV')
+  const tasaActualizada = modoTasa === 'usdt' ? tasaUsdt.ultimaActualizacion
+    : modoTasa === 'manual' ? null : tasaBcv.ultimaActualizacion
+  const [resumen, setResumen] = useState(null)
   const [payments, setPayments] = useState([])
+  const [evidencia, setEvidencia] = useState('')
   const [loading, setLoading] = useState(false)
-  const [codMethod, setCodMethod] = useState(null)
-  const [formasPagoOriginales, setFormasPagoOriginales] = useState([])
-  const [hasPropuesto, setHasPropuesto] = useState(false)
-  const [saldoCliente, setSaldoCliente] = useState(null)
-  const [marcandoSinAbono, setMarcandoSinAbono] = useState(false)
+  const [loadingResumen, setLoadingResumen] = useState(false)
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
 
-  // Parse methods on load
   useEffect(() => {
-    if (!despacho || !isOpen) return
-
-    let fps = []
-    try {
-      fps = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : despacho.forma_pago
-      if (!Array.isArray(fps)) fps = []
-    } catch {
-      fps = []
-    }
-    setFormasPagoOriginales(fps)
-
-    const cod = fps.find(f => f.metodo === 'Cobro a destino')
-    if (cod) {
-      setCodMethod(cod)
-      // Initialize payments from metodo_propuesto if it exists, otherwise default to full amount in Efectivo $
-      if (Array.isArray(cod.metodo_propuesto) && cod.metodo_propuesto.length > 0) {
-        setHasPropuesto(true)
-        setPayments(cod.metodo_propuesto.map(p => ({
-          metodo: p.metodo === 'Efectivo' ? 'Efectivo $' : (p.metodo || 'Efectivo $'),
-          monto: Number(p.monto) || 0,
-          referencia: p.referencia || ''
-        })))
-      } else {
-        setHasPropuesto(false)
-        setPayments([{ metodo: 'Efectivo $', monto: Number(cod.monto) || 0, referencia: '' }])
-      }
-    } else {
-      setCodMethod(null)
-      setHasPropuesto(false)
-      setPayments([])
-    }
-
-    // Saldo fresco del cliente (nunca caché): base para detectar el caso
-    // "COD ya pagado fuera del sistema" sin chocar contra el guardarrail 400.
-    async function fetchSaldo() {
-      if (!despacho?.cliente_id) { setSaldoCliente(null); return }
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('saldo_pendiente')
-        .eq('id', despacho.cliente_id)
-        .single()
-      setSaldoCliente(error ? null : Number(data?.saldo_pendiente || 0))
-    }
-    fetchSaldo()
-  }, [despacho, isOpen])
-
-  if (!isOpen || !despacho || !codMethod) return null
-
-  const numDisplay = despacho.cotizacion
-    ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
-    : `DES-${String(despacho.numero).padStart(5, '0')}`
-
-  const totalCod = Number(codMethod.monto) || 0
-  const totalReconciled = payments.reduce((sum, p) => sum + (Number(p.monto) || 0), 0)
-  const difference = totalReconciled - totalCod
-  const isSquare = Math.abs(difference) < 0.02
-  const codExcedeSaldo = saldoCliente !== null && totalCod > saldoCliente + 0.02
-
-  const allowedMethods = FORMAS_PAGO.filter(m => m !== 'Cobro a destino' && m !== 'Cta por cobrar' && m !== 'Donación')
-
-  function toggleForma(metodo) {
-    setPayments(prev => {
-      const existe = prev.some(p => p.metodo === metodo)
-      if (existe) return prev.filter(p => p.metodo !== metodo)
-
-      const remaining = Math.max(0, totalCod - totalReconciled)
-      const montoInicial = remaining > 0 ? Number(remaining.toFixed(2)) : ''
-      return [...prev, { metodo, monto: montoInicial, referencia: '' }]
+    if (!isOpen || !despacho?.id) return
+    let cancelled = false
+    setResumen(null)
+    setPayments([])
+    setEvidencia('')
+    setIdempotencyKey(crypto.randomUUID())
+    setLoadingResumen(true)
+    authFetch('/api/despachos/resumen-financiero', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ despachoId: despacho.id }),
     })
-  }
-
-  function setMontoForma(metodo, monto) {
-    setPayments(prev => prev.map(p => p.metodo === metodo ? { ...p, monto } : p))
-  }
-
-  function setReferenciaForma(metodo, referencia) {
-    setPayments(prev => prev.map(p => p.metodo === metodo ? { ...p, referencia } : p))
-  }
-
-  // FIX-A: camino "el dinero ya fue recibido fuera del sistema" (caso #2185).
-  // Solo expone el flag; NO registra abonos (el guardarrail de /api/cxc/abono
-  // rechazaría cobrar dos veces lo ya cobrado). El worker voltea el flag,
-  // dispara la comisión vía G-COD v4 y audita COD_CONCILIADO_SIN_ABONO.
-  async function handleConfirmarSinAbono() {
-    setMarcandoSinAbono(true)
-    try {
-      const updatedFormasPago = formasPagoOriginales.map(f => {
-        if (f.metodo === 'Cobro a destino') {
-          return {
-            ...f,
-            cobro_destino_pagado: true,
-            metodos_pagados: payments,
-            conciliado_sin_abono: true
-          }
-        }
-        return f
+      .then(async response => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || 'No se pudo leer el saldo del despacho')
+        if (!cancelled) setResumen(data.resumen)
       })
-      const res = await authFetch('/api/despachos/editar-pago', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          despachoId: despacho.id,
-          formaPago: JSON.stringify(updatedFormasPago),
-          formaPagoCliente: JSON.stringify(updatedFormasPago),
-          codSinAbono: true
-        })
+      .catch(error => {
+        if (!cancelled) showToast(error.message || 'No se pudo leer el ledger del despacho', 'error')
       })
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Error al marcar el COD como pagado')
-      }
-      showToast('COD marcado como pagado (sin abono: pago ya recibido)', 'success')
-      qc.invalidateQueries({ queryKey: ['despachos'] })
-      qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
-      qc.invalidateQueries({ queryKey: ['clientes'] })
-      onClose()
-    } catch (err) {
-      showToast(err.message || 'Error al marcar el COD como pagado', 'error')
-    } finally {
-      setMarcandoSinAbono(false)
+      .finally(() => { if (!cancelled) setLoadingResumen(false) })
+    return () => { cancelled = true }
+  }, [isOpen, despacho?.id])
+
+  const cod = resumen?.cod
+  const codLedger = resumen?.ledger
+  const totalCod = round2(Number(codLedger?.deuda_cod_usd) || 0)
+  const cargoCxc = round2(Number(codLedger?.cargo_cxc_usd) || 0)
+  const deudaCxc = round2(Number(codLedger?.deuda_cxc_usd) || 0)
+  const desbordeSinMarca = round2(Number(codLedger?.desborde_sin_marca_usd) || 0)
+  const esPagoMixto = cargoCxc > 0
+  const totalIngresado = useMemo(
+    () => round2(payments.reduce((sum, payment) => sum + getMontoUsd(payment, getTasaPago(payment, tasaEfectiva)), 0)),
+    [payments, tasaEfectiva],
+  )
+  const diferencia = round2(totalIngresado - totalCod)
+  const excedente = Math.max(0, diferencia)
+  const coincide = diferencia >= 0 && diferencia <= 0.01
+  const pagosConPrecisionValida = payments.every(payment =>
+    hasMaxTwoDecimals(payment.metodo === 'Efectivo Bs' ? payment.monto_bs : payment.monto),
+  )
+  const pagoValido = pagosConPrecisionValida && totalIngresado >= 0.01 && diferencia <= 0.01
+  const puedeConciliar = cod?.estado === 'pendiente' || cod?.estado === 'parcial'
+  const metodosPermitidos = FORMAS_PAGO.filter(m =>
+    !['Cobro a destino', 'Cta por cobrar', 'Donación', 'Cruce'].includes(m),
+  )
+  const numeroDespacho = despacho?.cotizacion?.numero ?? despacho?.numero
+  const numDisplay = `DES-${String(numeroDespacho || '').padStart(5, '0')}`
+
+  function agregarMetodo(metodo) {
+    const falta = Math.max(0, totalCod - totalIngresado)
+    if (metodo === 'Efectivo Bs' && !(tasaEfectiva > 0)) {
+      showToast('La tasa seleccionada no está disponible; actualiza la tasa antes de agregar este pago.', 'warning')
+      return
     }
+    setPayments(current => [...current, pagoInicial(metodo, falta, tasaEfectiva)])
   }
 
-  async function handleConfirm() {
-    if (!isSquare) {
-      showToast(`La suma de los pagos ($${totalReconciled.toFixed(2)}) debe coincidir con el total COD ($${totalCod.toFixed(2)})`, 'warning')
+  function actualizarPago(indice, cambios) {
+    setPayments(current => current.map((payment, i) => i === indice ? { ...payment, ...cambios } : payment))
+  }
+
+  function eliminarPago(indice) {
+    setPayments(current => current.filter((_, i) => i !== indice))
+  }
+
+  async function confirmar() {
+    if (!puedeConciliar || !pagoValido) {
+      showToast('El pago debe ser de al menos un centavo y no superar el saldo COD por más de un centavo.', 'warning')
+      return
+    }
+    if (payments.some(p => p.metodo === 'Efectivo Bs'
+      && (!(getTasaPago(p, tasaEfectiva) > 0) || !(Number(p.monto_bs) > 0)
+        || getMontoUsd(p, getTasaPago(p, tasaEfectiva)) <= 0))) {
+      showToast('Verifica el monto en bolívares y la tasa seleccionada antes de confirmar.', 'warning')
+      return
+    }
+    if (payments.some(p => !METODOS_EFECTIVO.has(p.metodo) && String(p.referencia || '').trim().length < 4)) {
+      showToast('Cada transferencia o pago digital requiere su referencia (mínimo 4 caracteres).', 'warning')
       return
     }
 
     setLoading(true)
     try {
-      // 1. Register Abonos for each payment entry
-      for (const p of payments) {
-        if (Number(p.monto) <= 0) continue
-        await registrarAbono.mutateAsync({
-          clienteId: despacho.cliente_id,
-          monto: Number(p.monto),
-          formaPago: p.metodo,
-          referencia: p.referencia || null,
-          descripcion: `COD Despacho ${numDisplay}`,
-          despachoId: despacho.id
-        })
-      }
-
-      // 2. Mark the COD payment method as paid in the despacho JSON
-      const updatedFormasPago = formasPagoOriginales.map(f => {
-        if (f.metodo === 'Cobro a destino') {
-          return {
-            ...f,
-            cobro_destino_pagado: true,
-            metodos_pagados: payments
-          }
+      const pagosConfirmados = payments.map(p => {
+        if (p.metodo !== 'Efectivo Bs') {
+          return { ...p, monto: Number(Number(p.monto).toFixed(2)) }
         }
-        return f
+        const tasaPago = getTasaPago(p, tasaEfectiva)
+        const snapshot = {
+          ...p,
+          tasa_snapshot: getTasaSnapshot(tasaPago),
+          tasa_fuente: p.tasa_fuente || tasaFuente,
+          tasa_actualizada_en: p.tasa_actualizada_en || tasaActualizada || null,
+        }
+        return {
+          metodo: p.metodo,
+          monto: getMontoUsd(snapshot, tasaPago),
+          monto_bs: round2(p.monto_bs),
+          tasa_snapshot: snapshot.tasa_snapshot,
+          tasa_fuente: snapshot.tasa_fuente,
+          tasa_actualizada_en: snapshot.tasa_actualizada_en,
+          referencia: null,
+        }
       })
-
-      // 3. Save the updated forma_pago back to database using worker endpoint
-      const res = await authFetch('/api/despachos/editar-pago', {
+      setPayments(payments.map((payment, index) => payment.metodo === 'Efectivo Bs'
+        ? { ...payment, tasa_snapshot: pagosConfirmados[index].tasa_snapshot,
+          tasa_fuente: pagosConfirmados[index].tasa_fuente,
+          tasa_actualizada_en: pagosConfirmados[index].tasa_actualizada_en }
+        : payment))
+      const response = await authFetch('/api/despachos/conciliar-cod', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           despachoId: despacho.id,
-          formaPago: JSON.stringify(updatedFormasPago),
-          formaPagoCliente: JSON.stringify(updatedFormasPago)
-        })
+          idempotencyKey,
+          pagos: pagosConfirmados,
+          evidencia: evidencia.trim(),
+        }),
       })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Error al actualizar forma de pago del despacho')
-      }
-
-      showToast('Cobro a destino conciliado y pagado exitosamente', 'success')
-      qc.invalidateQueries({ queryKey: ['despachos'] })
-      qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
-      qc.invalidateQueries({ queryKey: ['clientes'] })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'No se pudo registrar el cobro COD')
+      showToast(`COD conciliado: ${formatUsd(result.pago_usd)}`, 'success')
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['despachos'] }),
+        qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] }),
+        qc.invalidateQueries({ queryKey: ['clientes'] }),
+      ])
       onClose()
-    } catch (err) {
-      showToast(err.message || 'Error al conciliar cobro a destino', 'error')
+    } catch (error) {
+      showToast(error.message || 'Error al conciliar el cobro COD', 'error')
     } finally {
       setLoading(false)
     }
   }
 
+  if (!isOpen || !despacho) return null
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Conciliar COD — ${numDisplay}`} className="max-w-md">
       <div className="space-y-4">
-        {/* Banner Total COD */}
-        <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center">
-          <div>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Total a Cobrar</p>
-            <p className="text-2xl font-black text-rose-600 dark:text-rose-400">
-              ${totalCod.toFixed(2)}
-            </p>
+        {loadingResumen ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-500">
+            <Loader2 size={16} className="animate-spin" /> Consultando ledger…
           </div>
-          <div className="text-right">
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Registrado</p>
-            <p className={`text-xl font-bold ${isSquare ? 'text-emerald-600' : 'text-amber-500'}`}>
-              ${totalReconciled.toFixed(2)}
-            </p>
+        ) : !resumen ? (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+            No se pudo consultar el saldo contable. Cierra y vuelve a abrir el modal.
           </div>
-        </div>
-
-        {/* FIX-A: caso COD > saldo del cliente */}
-        {codExcedeSaldo && (
-          <div className="flex gap-2.5 items-start bg-amber-50/70 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40 text-amber-900 dark:text-amber-300 text-xs transition-all">
-            <span className="text-base leading-none mt-0.5">⚠️</span>
-            <div className="flex-1">
-              <p className="font-bold text-amber-950 dark:text-amber-200">
-                El COD (${totalCod.toFixed(2)}) supera el saldo del cliente (${(saldoCliente ?? 0).toFixed(2)})
-              </p>
-              <p className="mt-0.5 leading-relaxed">
-                Si el cliente ya pagó este COD por otra vía (efectivo, transferencia previa, etc.), márcalo como pagado sin registrar un abono nuevo.
-              </p>
-              <button
-                type="button"
-                onClick={handleConfirmarSinAbono}
-                disabled={marcandoSinAbono}
-                className="mt-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 transition-colors"
-              >
-                {marcandoSinAbono ? 'Marcando…' : 'Marcar como pagado (ya recibido)'}
-              </button>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Saldo COD del ledger</p>
+                <p className="text-2xl font-black text-rose-600 dark:text-rose-400">{formatUsd(totalCod)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Estado derivado</p>
+                <p className="text-lg font-bold text-slate-700 dark:text-slate-200">{cod?.estado || 'manual_review'}</p>
+                <p className="text-[11px] text-slate-400">No se usa el flag antiguo como comprobante</p>
+              </div>
             </div>
-          </div>
-        )}
-        {!codExcedeSaldo && saldoCliente !== null && (
-          <p className="text-[11px] text-slate-400 -mt-1">
-            Saldo del cliente: ${saldoCliente.toFixed(2)}
-          </p>
-        )}
 
-        {/* Banner Intento Previo */}
-        {hasPropuesto && (
-          <div className="flex gap-2.5 items-start bg-indigo-50/70 dark:bg-indigo-950/20 p-3 rounded-xl border border-indigo-100/50 dark:border-indigo-900/30 text-indigo-900 dark:text-indigo-300 text-xs transition-all">
-            <span className="text-base leading-none mt-0.5">✨</span>
-            <div>
-              <p className="font-bold text-indigo-950 dark:text-indigo-200">Pago previo auto-completado</p>
-              <p className="text-indigo-850 dark:text-indigo-350 mt-0.5 leading-relaxed">
-                Hemos pre-cargado los métodos del intento anterior para ahorrarte tiempo. Revísalos o edítalos libremente antes de confirmar.
-              </p>
-            </div>
-          </div>
-        )}
+            {esPagoMixto && (
+              <div className="grid grid-cols-2 gap-3 rounded-xl border border-sky-100 bg-sky-50/40 p-3 text-xs dark:border-sky-900/40 dark:bg-sky-950/20">
+                <div>
+                  <p className="font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300">Parte COD · se cobra aquí</p>
+                  <p className="text-lg font-black text-slate-700 dark:text-slate-200">{formatUsd(totalCod)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300">Parte a crédito · se cobra en CxC</p>
+                  <p className="text-lg font-black text-slate-700 dark:text-slate-200">{formatUsd(deudaCxc)}</p>
+                  <p className="text-[11px] text-slate-400">Desde la ficha del cliente</p>
+                </div>
+              </div>
+            )}
 
-        {/* List of Payments */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Métodos de Pago Recibidos</h4>
+            {(cod?.revisar || !puedeConciliar) && (
+              <div className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-bold">Revisión requerida</p>
+                  <p>Estado contable: {cod?.estado || 'desconocido'}. No se puede registrar un pago automático hasta resolver la discrepancia.</p>
+                  {cod?.motivo_revision && MOTIVOS_REVISION[cod.motivo_revision] && (
+                    <p className="mt-1">{MOTIVOS_REVISION[cod.motivo_revision]}</p>
+                  )}
+                </div>
+              </div>
+            )}
 
-          <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
-            {payments.length === 0 ? (
-              <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4 bg-slate-50/30 dark:bg-slate-800/10 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                No hay métodos de pago agregados. Selecciona uno abajo.
-              </p>
-            ) : (
-              payments.map((p) => {
-                const restante = totalCod - totalReconciled
-                return (
-                  <div key={p.metodo} className="space-y-2 bg-sky-50/40 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/40 p-3 rounded-xl transition-all">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-sky-700 dark:text-sky-350 shrink-0 truncate">
-                        {p.metodo}
-                      </span>
-                      <button 
-                        type="button" 
-                        onClick={() => toggleForma(p.metodo)}
-                        className="p-1 rounded-lg hover:bg-sky-100/50 dark:hover:bg-sky-900/40 text-sky-400 hover:text-sky-600 dark:text-sky-500 dark:hover:text-sky-350 transition-colors shrink-0"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                    
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      {/* Monto Input */}
-                      <div className="relative flex-1 flex items-center">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={p.monto}
-                          onChange={e => setMontoForma(p.metodo, e.target.value)}
-                          onFocus={e => e.target.select()}
-                          placeholder="0.00"
-                          className="w-full pl-6 pr-16 py-1.5 rounded-lg text-xs font-semibold border border-sky-100 dark:border-sky-850 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300"
-                        />
-                        {restante > 0.01 && (
-                          <button
-                            type="button"
-                            onClick={() => setMontoForma(p.metodo, Number(((Number(p.monto) || 0) + restante).toFixed(2)))}
-                            className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-md transition-colors shrink-0"
-                            title={`Completar con $${restante.toFixed(2)} restante`}
-                          >
-                            Restante
-                          </button>
+            <p className="text-xs text-slate-500">
+              Cargos COD {formatUsd(codLedger?.cargo_cod_usd)} · abonos aplicados al COD {formatUsd(codLedger?.abono_cod_usd)} · compensaciones registradas {formatUsd(codLedger?.compensado_usd)}
+              {desbordeSinMarca > 0 ? ` · desborde sin marca ${formatUsd(desbordeSinMarca)}` : ''}
+            </p>
+
+            {puedeConciliar && (
+              <>
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Dinero recibido</h4>
+                  {payments.map((payment, index) => (
+                    <div key={`${payment.metodo}-${index}`} className="space-y-2 rounded-xl border border-sky-100 bg-sky-50/40 p-3 dark:border-sky-900/40 dark:bg-sky-950/20">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-sky-700 dark:text-sky-300">{payment.metodo}</span>
+                        <button type="button" aria-label={`Quitar ${payment.metodo}`} onClick={() => eliminarPago(index)} className="rounded p-1 text-sky-500 hover:bg-sky-100">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        {payment.metodo === 'Efectivo Bs' ? (
+                          <input aria-label="Monto Efectivo Bs" type="number" min="0.01" step="0.01" value={payment.monto_bs} onChange={event => actualizarPago(index, { monto_bs: event.target.value })} placeholder="Monto recibido (Bs)" className="w-full rounded-lg border px-2 py-2 text-sm" />
+                        ) : (
+                          <input aria-label={`Monto ${payment.metodo}`} type="number" min="0.01" step="0.01" value={payment.monto} onChange={event => actualizarPago(index, { monto: event.target.value })} className="w-1/3 rounded-lg border px-2 py-2 text-sm" />
+                        )}
+                        {!METODOS_EFECTIVO.has(payment.metodo) && (
+                          <input aria-label={`Referencia ${payment.metodo}`} value={payment.referencia} onChange={event => actualizarPago(index, { referencia: event.target.value })} placeholder="Referencia obligatoria (mínimo 4)" className="min-w-0 flex-1 rounded-lg border px-2 py-2 text-sm" />
                         )}
                       </div>
-
-                      {/* Referencia Input */}
-                      {p.metodo !== 'Efectivo $' && p.metodo !== 'Efectivo Bs' && (
-                        <input
-                          type="text"
-                          value={p.referencia}
-                          onChange={e => setReferenciaForma(p.metodo, e.target.value)}
-                          placeholder="Ref (opcional)"
-                          className="flex-1 min-w-[100px] px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-sky-100 dark:border-sky-850 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300"
-                        />
+                      {payment.metodo === 'Efectivo Bs' && (
+                        <p className="text-xs text-slate-600 dark:text-slate-300">
+                          Tasa seleccionada: {getTasaPago(payment, tasaEfectiva) > 0 ? `${getTasaSnapshot(getTasaPago(payment, tasaEfectiva))} Bs/$ (${payment.tasa_fuente || tasaFuente})` : 'no disponible'} · Equivalente: {formatUsd(getMontoUsd(payment, getTasaPago(payment, tasaEfectiva)))}
+                        </p>
                       )}
                     </div>
+                  ))}
+                  <div className="flex flex-wrap gap-1.5">
+                    {metodosPermitidos.filter(method => !payments.some(p => p.metodo === method)).map(method => (
+                      <button key={method} type="button" onClick={() => agregarMetodo(method)} className="flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                        <Plus size={11} /> {method}
+                      </button>
+                    ))}
                   </div>
-                )
-              })
+                </div>
+
+                <label className="block space-y-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Nota (opcional)</span>
+                  <textarea value={evidencia} onChange={event => setEvidencia(event.target.value)} maxLength={500} rows={2} placeholder="Nro. recibo, referencia bancaria, quién recibió y cuándo… (opcional)" className="w-full rounded-xl border px-3 py-2 text-sm" />
+                </label>
+
+                {payments.some(p => p.metodo === 'Efectivo Bs') && tasaEfectiva > 0 && (
+                  <p className="text-xs text-slate-500">Tasa usada al confirmar: {getTasaSnapshot(tasaEfectiva)} Bs/$ · La conversión de este abono quedará fija.</p>
+                )}
+                <div className={"flex justify-between rounded-lg px-3 py-2 text-sm " + (pagoValido ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800')}>
+                  <span>Ingresado {formatUsd(totalIngresado)} · saldo después {formatUsd(Math.max(0, totalCod - totalIngresado))}</span>
+                  <span>{!pagosConPrecisionValida ? 'Usa máximo dos decimales' : !pagoValido ? 'Monto inválido' : coincide ? (excedente > 0 ? `Liquida COD · excede ${formatUsd(excedente)}` : 'Liquida COD') : 'Pago parcial'}</span>
+                </div>
+              </>
             )}
-          </div>
-        </div>
-
-        {/* Chips de Métodos Inactivos */}
-        {allowedMethods.some(m => !payments.find(f => f.metodo === m)) && (
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-              Agregar Método de Pago
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {allowedMethods
-                .filter(m => !payments.find(f => f.metodo === m))
-                .map(m => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => toggleForma(m)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-650 transition-all active:scale-95 shadow-sm"
-                  >
-                    <Plus size={11} strokeWidth={2.5} className="text-slate-400" />
-                    {m}
-                  </button>
-                ))}
-            </div>
-          </div>
+          </>
         )}
 
-        {/* Warning Alert if mismatch */}
-        {!isSquare && (
-          <div className="flex gap-2 items-start bg-amber-50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-100 dark:border-amber-900/50 text-amber-800 dark:text-amber-300 text-xs">
-            <AlertCircle size={16} className="shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">Monto no coincide</p>
-              <p>
-                Faltan <span className="font-bold">${Math.abs(difference).toFixed(2)}</span> para cuadrar el cobro a destino.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={loading || !isSquare}
-            className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/10"
-          >
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <button type="button" onClick={onClose} disabled={loading} className="rounded-xl px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">Cancelar</button>
+          <button type="button" onClick={confirmar} disabled={loading || loadingResumen || !resumen || !puedeConciliar || !pagoValido || payments.length === 0} className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">
             {loading && <Loader2 size={12} className="animate-spin" />}
-            Confirmar Pago
+            Registrar abono COD
           </button>
         </div>
       </div>

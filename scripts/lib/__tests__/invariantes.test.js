@@ -20,6 +20,7 @@ import {
   replayCliente,
   clasificarDeudaCod,
   estadoCodDerivado,
+  estadoCodDerivadoV2,
   clasificarBucketItem,
   comisionNetaPorBucket,
   desfaseComision,
@@ -28,6 +29,63 @@ import {
 } from '../invariantes.mjs'
 
 const DES = 'e746f381-96f6-4de7-8caf-a9387137cd27'
+
+describe('estadoCodDerivadoV2 — contrato release 19 (pago mixto)', () => {
+  it('mixto sin pagos: pendiente con ambas deudas visibles (#4099)', () => {
+    const e = estadoCodDerivadoV2({ montoNominal: 1076.79, cargoCod: 1076.79, cargoCxc: 1076.19 })
+    expect(e).toEqual({ estado: 'pendiente', revisar: false, motivo: null, deudaCod: 1076.79, deudaCxc: 1076.19, desborde: 0 })
+  })
+
+  it('marca pagada sin respaldo: manual_review flag_sin_respaldo (#3879/#2185)', () => {
+    const e = estadoCodDerivadoV2({ montoNominal: 490, cargoCod: 490, cargoCxc: 5308.75, flagPagado: true })
+    expect(e.estado).toBe('manual_review')
+    expect(e.motivo).toBe('flag_sin_respaldo')
+  })
+
+  it('desborde con deuda restante: manual_review atribucion_ambigua (#3064)', () => {
+    const e = estadoCodDerivadoV2({
+      montoNominal: 2000, cargoCod: 2000, cargoCxc: 2187.78,
+      abonoComunDinero: 2246.28, flagPagado: true,
+    })
+    expect(e.estado).toBe('manual_review')
+    expect(e.motivo).toBe('atribucion_ambigua')
+    expect(e.desborde).toBe(58.5)
+    expect(e.deudaCod).toBe(1941.5)
+  })
+
+  it('desborde que salda todo: cobrado (#2832)', () => {
+    const e = estadoCodDerivadoV2({ montoNominal: 0.1, cargoCod: 0.1, cargoCxc: 15.9, abonoComunDinero: 16 })
+    expect(e.estado).toBe('cobrado')
+    expect(e.deudaCod).toBe(0)
+    expect(e.deudaCxc).toBe(0)
+  })
+
+  it('compensación que desborda al COD con deuda: atribucion_ambigua', () => {
+    const e = estadoCodDerivadoV2({ montoNominal: 100, cargoCod: 100, cargoCxc: 100, abonoComunComp: 150 })
+    expect(e.estado).toBe('manual_review')
+    expect(e.motivo).toBe('atribucion_ambigua')
+    expect(e.deudaCod).toBe(50)
+  })
+
+  it('100% COD: compensación parcial deja pendiente (paridad v14)', () => {
+    const e = estadoCodDerivadoV2({ montoNominal: 270, cargoCod: 270, abonoMarcadoComp: 96 })
+    expect(e.estado).toBe('pendiente')
+    expect(e.deudaCod).toBe(174)
+  })
+
+  it('100% COD saldado solo con compensación: compensado (paridad v14)', () => {
+    const e = estadoCodDerivadoV2({ montoNominal: 200, cargoCod: 200, abonoMarcadoComp: 200 })
+    expect(e.estado).toBe('compensado')
+  })
+
+  it('mixto con crédito pagado por abono común: el COD sigue cobrable', () => {
+    const e = estadoCodDerivadoV2({ montoNominal: 300, cargoCod: 300, cargoCxc: 500, abonoComunDinero: 500 })
+    expect(e.estado).toBe('pendiente')
+    expect(e.deudaCod).toBe(300)
+    expect(e.deudaCxc).toBe(0)
+    expect(e.desborde).toBe(0)
+  })
+})
 
 // ANTES del cierre: cargo 270 − compensación devolución 96 = deuda 174 sin cobrar
 const LEDGER_3368_ANTES = [
