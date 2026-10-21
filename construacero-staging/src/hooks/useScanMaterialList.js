@@ -2,6 +2,7 @@ import { useState } from 'react'
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 
 export function useScanMaterialList() {
   const [loading, setLoading] = useState(false)
@@ -20,7 +21,7 @@ export function useScanMaterialList() {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-        ...(perfil?.id ? { 'X-Operator-Id': perfil.id } : {}),
+        ...getOperatorSessionHeaders(),
       },
       body: JSON.stringify(body),
       signal: controller.signal,

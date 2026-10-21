@@ -11,7 +11,7 @@
 | Aspecto | Staging | Producción |
 |---|---|---|
 | Árbol | `construacero-staging/` | raíz del repo |
-| Supabase | proyecto propio (ref `spupqgkdsgohxxfoxydl` en CI) | proyecto principal |
+| Supabase | proyecto propio (ref `spupqgkdsgohxxfoxydl` en CI; **cuenta Supabase del proyecto staging: `listoposcotizaciones@gmail.com`**) | proyecto principal |
 | Worker local | `localhost:8789` (vite en 5174) | `luigistorelogistics.workers.dev` vía Vercel |
 | Migraciones | incrementales `NNN_staging_*` | releases promovidos `supabase/release/main/` |
 | Datos | fixtures de prueba (tester) | datos reales del negocio |

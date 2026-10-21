@@ -14,6 +14,7 @@ import { getAction, PRIMARY_ACTION_COLORS } from '../../utils/cotizacionActions'
 import { apiUrl } from '../../services/apiBase'
 import DetalleModal from '../ui/DetalleModal'
 import { showToast } from '../ui/Toast'
+import { getOperatorSessionHeaders } from '../../services/operatorSession'
 
 // Helper: fetch cliente via Worker API (bypasses RLS)
 async function fetchClienteViaAPI(clienteId) {
@@ -25,7 +26,7 @@ async function fetchClienteViaAPI(clienteId) {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.access_token}`,
-        'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+        ...getOperatorSessionHeaders(),
       },
       body: JSON.stringify({ ids: [clienteId] }),
     })

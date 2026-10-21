@@ -6,9 +6,10 @@ export const ALLOWED_ORIGINS = new Set([
   'https://listo-pos-cotizaciones.apps.camelai.dev',
   'https://listo-pos-cotizaciones-nqb5ge.apps.camelai.dev',
   'https://listo-pos-cotizaciones.vercel.app',
-  // Desarrollo local
+  // Desarrollo local (staging usa el puerto 5174; el principal 5173/4173)
   'http://localhost:5173',
   'http://localhost:4173',
+  'http://localhost:5174',
 ])
 
 export function getAllowedOrigin(request) {
@@ -19,13 +20,22 @@ export function getAllowedOrigin(request) {
   return ALLOWED_ORIGINS.has(origin) ? origin : null
 }
 
+// Sin Origin (clientes no-navegador) se permite; con Origin debe coincidir con el origen
+// de la propia petición o estar en ALLOWED_ORIGINS.
+export function isSameOriginRequest(request) {
+  const origin = request.headers.get('Origin')
+  if (!origin) return true
+  if (ALLOWED_ORIGINS.has(origin)) return true
+  try { return origin === new URL(request.url).origin } catch { return false }
+}
+
 export function corsHeaders(request) {
   const origin = getAllowedOrigin(request)
   if (!origin) return {}
   return {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Operator-Id, Idempotency-Key, X-Request-Id',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Operator-Id, X-Operator-Session, Idempotency-Key, X-Request-Id',
     'Access-Control-Expose-Headers': 'X-Supabase-Project-Ref',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',

@@ -2,7 +2,6 @@
 // Recordatorios proactivos:
 //   1. Cotización enviada hace ≥ 1 hora sin respuesta → alerta
 //   2. Despacho pendiente hace ≥ 4 horas sin ser despachado → alerta supervisor
-//   3. Stock comprometido > 70% del real → alerta supervisor
 //
 // Corre una vez al montar el layout y luego cada CHECK_INTERVAL_MS.
 // Usa cooldowns en localStorage para no repetir la misma alerta.
@@ -14,13 +13,11 @@ import useAuthStore from '../store/useAuthStore'
 import {
   notifyCotizacionSinRespuesta,
   notifyDespachoPendienteMucho,
-  notifyCompromisoAlto,
 } from '../services/notificationService'
 
 const HORAS_SIN_RESPUESTA     = 1    // horas sin respuesta para alertar
 const HORAS_DESPACHO_PENDIENTE = 4   // horas pendiente para alertar
 const CHECK_INTERVAL_MS       = 15 * 60 * 1000 // cada 15 minutos
-const COMPROMISO_UMBRAL       = 0.7  // 70%
 
 export function useRecordatoriosCotizaciones() {
   const { perfil } = useAuthStore()
@@ -124,35 +121,6 @@ export function useRecordatoriosCotizaciones() {
         }
       }
 
-      // ── 3. Stock comprometido > 70% (solo supervisor) ───────────────────
-      if (esSupervisor) {
-        try {
-          const [productosRes, comprometidoRes] = await Promise.all([
-            supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, unidad').eq('activo', true).gt('stock_actual', 0),
-            supabase.rpc('obtener_stock_comprometido'),
-          ])
-
-          if (productosRes.data && comprometidoRes.data) {
-            const comprometidoMap = Object.fromEntries(
-              (comprometidoRes.data ?? []).map(c => [c.producto_id, c.total_comprometido])
-            )
-
-            const productosAltos = productosRes.data
-              .map(p => {
-                const comprometido = comprometidoMap[p.id] || 0
-                if (comprometido <= 0 || p.stock_actual <= 0) return null
-                const porcentaje = Math.round((comprometido / p.stock_actual) * 100)
-                if (porcentaje < COMPROMISO_UMBRAL * 100) return null
-                return { ...p, comprometido, porcentaje }
-              })
-              .filter(Boolean)
-
-            if (productosAltos.length > 0) {
-              notifyCompromisoAlto(productosAltos)
-            }
-          }
-        } catch { /* silencioso */ }
-      }
     }
 
     // Primera ejecución diferida para no bloquear el render inicial

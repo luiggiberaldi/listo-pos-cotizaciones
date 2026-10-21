@@ -1,12 +1,16 @@
 // src/store/useAuthStore.js
 // Estado global de sesión y perfil de usuario
 // Cuenta única de negocio en auth.users — operadores se identifican con PIN
-// El JWT lleva operator_id y operator_rol en app_metadata
+// Cada pestaña usa una sesión de operador validada; app_metadata no concede permisos.
 import { create } from 'zustand'
-import supabase, { supabaseStorageKey } from '../services/supabase/client'
-import { apiUrl } from '../services/apiBase'
+import supabase from '../services/supabase/client'
+import { apiUrl, fetchConTimeout } from '../services/apiBase'
+import { getValidAccessToken, refreshSessionSingleFlight, resetSessionState } from '../services/sessionManager'
 import queryClient from '../lib/queryClient'
 import { indexedDbPersister } from '../lib/queryPersister'
+import { setOperatorSession, getOperatorSession, getOperatorSessionHeaders, clearOperatorSession, subscribeOperatorSession, checkOperatorSessionExpiry } from '../services/operatorSession'
+
+let operatorAttempt = 0
 
 // ─── Mapear mensajes de error de Supabase a español ───────────────────────────
 function traducirError(mensaje) {
@@ -17,28 +21,24 @@ function traducirError(mensaje) {
     return 'Debes confirmar tu email antes de entrar'
   if (mensaje.includes('Too many requests'))
     return 'Demasiados intentos. Espera unos minutos e intenta de nuevo'
+  if (mensaje.includes('abort') || mensaje.includes('AbortError') || mensaje.includes('TimeoutError') || mensaje.includes('Tiempo de espera') || mensaje.includes('timeout'))
+    return 'La conexión tardó demasiado tiempo. Verifica tu internet e intenta de nuevo'
   if (mensaje.includes('fetch') || mensaje.includes('network') || mensaje.includes('NetworkError'))
     return 'Error de conexión. Verifica tu internet e intenta de nuevo'
   return 'Error al iniciar sesión. Intenta de nuevo'
 }
 
-// ─── Helper: obtener token de sesión actual (con refresh si está expirado) ────
+// ─── Helper: token best-effort (cache offline, logout, switchOut) ────────────
+// Delega en el coordinador global (sessionManager). El camino crítico del PIN
+// usa getValidAccessToken() directo: estricto, nunca devuelve silenciosamente
+// un JWT vencido (causa del ciclo 401 → refresh → 400 → "Verificando…").
 async function getAccessToken() {
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token
-  if (!token) return null
-
-  // Verificar si el token está próximo a expirar (menos de 60s de vida)
-  const exp = data.session.expires_at // epoch en segundos
-  if (exp && exp - Math.floor(Date.now() / 1000) < 60) {
-    try {
-      const { data: refreshed } = await supabase.auth.refreshSession()
-      return refreshed?.session?.access_token ?? token
-    } catch {
-      return token // usar el que hay si falla el refresh
-    }
+  try {
+    return await getValidAccessToken({ timeoutMs: 8000, allowStale: true })
+  } catch {
+    const { data } = await supabase.auth.getSession()
+    return data?.session?.access_token ?? null
   }
-  return token
 }
 
 // ─── Cache por usuario en localStorage ────────────────────────────────────────
@@ -50,8 +50,8 @@ function getStorageKeys(userId) {
   }
 }
 
+const AUTH_CACHE_VERSION = 'v3_20260915_server_sessions'
 const CACHE_MAX_AGE_PERFIL = 1000 * 60 * 60 * 24 // 24h
-const CACHE_MAX_AGE_OPERATORS = 1000 * 60 * 60 * 24 * 7 // 7 días
 
 function guardarPerfilCache(perfil, userId) {
   try {
@@ -83,59 +83,62 @@ function guardarOperadoresCache(operators, userId) {
   try {
     const { operatorsKey } = getStorageKeys(userId)
     if (Array.isArray(operators) && operators.length > 0) {
-      localStorage.setItem(operatorsKey, JSON.stringify({ operators, _cachedAt: Date.now() }))
+      localStorage.setItem(operatorsKey, JSON.stringify({
+        version: AUTH_CACHE_VERSION,
+        operators: operators.map(({ id, nombre, rol, color, codigo, es_externo }) => ({ id, nombre, rol, color, codigo, es_externo })),
+        _cachedAt: Date.now()
+      }))
     }
   } catch { /* ignorar */ }
 }
 
-function leerOperadoresCache(userId) {
-  try {
-    const { operatorsKey } = getStorageKeys(userId)
-    const raw = localStorage.getItem(operatorsKey)
-    if (!raw) return null
-    const cached = JSON.parse(raw)
-    if (cached._cachedAt && Date.now() - cached._cachedAt > CACHE_MAX_AGE_OPERATORS) {
-      localStorage.removeItem(operatorsKey)
-      return null
-    }
-    return cached.operators ?? null
-  } catch { return null }
-}
-
-// ─── Validación local de PIN con PBKDF2 (mismo algoritmo que el worker) ────────
-// Usa WebCrypto API del browser — mismos parámetros: 10k iter, SHA-256, 256 bits
-async function hashPinPBKDF2(pin, salt) {
-  const enc = new TextEncoder()
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']
-  )
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 10_000, hash: 'SHA-256' },
-    keyMaterial, 256
-  )
-  return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-async function verifyPinLocal(pin, storedHash, storedSalt) {
-  try {
-    const hash = await hashPinPBKDF2(pin, storedSalt)
-    return hash === storedHash
-  } catch { return false }
-}
+// Las credenciales de otros operadores nunca se descargan para validación offline.
+// Un cambio de operador requiere verificar el PIN en el servidor.
 
 // ─── Descargar y cachear operadores en background ────────────────────────────
 async function fetchAndCacheOperators(token, userId) {
   try {
-    const res = await fetch(apiUrl('/api/auth/operators'), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) return
-    const { operators } = await res.json()
-    if (Array.isArray(operators) && operators.length > 0) {
-      guardarOperadoresCache(operators, userId)
-      console.log('[AUTH] operadores cacheados para uso offline:', operators.length)
+    const endpoints = import.meta.env.DEV
+      ? [apiUrl('/api/auth/operators')]
+      : [apiUrl('/api/auth/operators'), 'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/operators']
+    for (const url of endpoints) {
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 8000)
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timer))
+        if (!res.ok) continue
+        const { operators } = await res.json()
+        if (Array.isArray(operators) && operators.length > 0) {
+          guardarOperadoresCache(operators, userId)
+          console.log('[AUTH] Operadores cacheados para uso offline (v2):', operators.length)
+          return
+        }
+      } catch { /* intentar siguiente */ }
     }
   } catch { /* ignorar — no crítico */ }
+}
+
+// Purge only authentication/query caches, never offline business records.
+function purgeOperatorState() {
+  operatorAttempt++
+  guardarPerfilCache(null, useAuthStore.getState().user?.id)
+  useAuthStore.setState({ perfil: null, loading: false, _cargandoPerfil: false })
+  clearOperatorSession()
+  void queryClient.cancelQueries().catch(() => {})
+  queryClient.clear()
+  void indexedDbPersister.removeClient().catch(() => {})
+}
+
+function adoptAccount(authUser) {
+  const previousAccountId = useAuthStore.getState().user?.id
+  const sessionAccountId = getOperatorSession()?.accountId
+  if (previousAccountId !== authUser?.id || (sessionAccountId && sessionAccountId !== authUser?.id)) {
+    purgeOperatorState()
+  }
+  useAuthStore.setState({ user: authUser || null })
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -153,13 +156,22 @@ const useAuthStore = create((set, get) => ({
 
   // ─── Inicializar: suscribirse a cambios de auth ────────────────────────────
   initialize: () => {
+    // Eliminar solo el antiguo caché de operadores que podía contener hashes de PIN.
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('listo_operators_cache')) {
+          const cached = JSON.parse(localStorage.getItem(key) || '{}')
+          if (cached.version !== AUTH_CACHE_VERSION) localStorage.removeItem(key)
+        }
+      }
+    } catch { /* la falta de storage nunca concede permisos */ }
     console.log('[AUTH] initialize() llamado')
     // Detectar si hay sesión guardada para dar más tiempo
     let haySession = false
     try {
-      // Leer únicamente la sesión del proyecto configurado. Buscar cualquier
-      // clave "sb-*" mezclaba sesiones de staging y producción en el mismo navegador.
-      if (supabaseStorageKey && localStorage.getItem(supabaseStorageKey)) haySession = true
+      const keys = Object.keys(localStorage)
+      const sbKey = keys.find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+      if (sbKey && localStorage.getItem(sbKey)) haySession = true
     } catch { /* ignorar */ }
     console.log('[AUTH] haySession:', haySession)
 
@@ -167,8 +179,10 @@ const useAuthStore = create((set, get) => ({
     // Obtener userId de la sesión (si existe) para leer cache correcto
     let currentUserId = null
     try {
-      if (supabaseStorageKey) {
-        const sbData = JSON.parse(localStorage.getItem(supabaseStorageKey) || '{}')
+      const keys = Object.keys(localStorage)
+      const sbKey = keys.find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+      if (sbKey) {
+        const sbData = JSON.parse(localStorage.getItem(sbKey))
         currentUserId = sbData?.user?.id
       }
     } catch { /* ignorar */ }
@@ -206,6 +220,21 @@ const useAuthStore = create((set, get) => ({
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
 
+    // Precalentar token al recuperar foco: en producción el tab/tablet queda
+    // suspendida horas, el token expira y el refresh terminaba DENTRO del
+    // camino crítico del PIN (causa del cuelgue "Verificando…"). Aquí ocurre
+    // apenas la app vuelve a ser visible, antes de que el usuario llegue al PIN.
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        checkOperatorSessionExpiry()
+        get().precalentarToken()
+      }
+    }
+    const handleFocus = () => checkOperatorSessionExpiry()
+    document.addEventListener('visibilitychange', handleVisible)
+    window.addEventListener('focus', handleFocus)
+    checkOperatorSessionExpiry()
+
     const timeoutId = setTimeout(() => {
       const state = get()
       console.log('[AUTH] timeout principal disparado — initialized:', state.initialized, 'user:', !!state.user, 'perfil:', !!state.perfil)
@@ -225,14 +254,25 @@ const useAuthStore = create((set, get) => ({
       }
     }, 6000)
 
-    // StrictMode puede montar/desmontar el árbol una vez adicional en desarrollo.
-    // Ignorar callbacks que lleguen tarde después de desmontar esta suscripción.
-    let active = true
     console.log('[AUTH] registrando onAuthStateChange...')
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!active) return
+        checkOperatorSessionExpiry()
+        if (event === 'SIGNED_OUT') {
+          const wasLoggedIn = Boolean(get().user) && !get()._logoutManual
+          purgeOperatorState()
+          set({ user: null, error: wasLoggedIn ? 'Tu sesión ha expirado. Inicia sesión nuevamente.' : null, _logoutManual: false })
+          return
+        }
+        if (session?.user && ['INITIAL_SESSION', 'SIGNED_IN', 'TOKEN_REFRESHED'].includes(event)) {
+          adoptAccount(session.user)
+        } else if (event === 'INITIAL_SESSION' && !session) {
+          adoptAccount(null)
+        }
         console.log('[AUTH] evento:', event, 'session:', !!session, 'user:', session?.user?.email)
+        // Evento positivo (login, sync entre pestañas, refresh OK) → revertir
+        // el estado de sesión muerta del coordinador global.
+        if (session) resetSessionState()
         // Mantener el canal Realtime autenticado con el token actual —
         // necesario para que postgres_changes sobre tablas con RLS entregue eventos
         if (session?.access_token) {
@@ -247,8 +287,7 @@ const useAuthStore = create((set, get) => ({
               // El usuario ya se autentricó con PIN antes — puede continuar offline
               const offline = !navigator.onLine
               const cached = leerPerfilCache(session.user.id)
-              if (offline && cached) {
-                console.log('[AUTH] modo offline: restaurando perfil cacheado —', cached.nombre, '/', cached.rol)
+              if (offline && cached && getOperatorSession()?.accountId === session.user.id && getOperatorSession()?.operatorId === cached.id) {
                 set({ user: session.user, perfil: cached, _cargandoPerfil: false })
               } else {
                 // Online: solo setear user, NO cargar perfil automáticamente (requiere PIN)
@@ -277,33 +316,6 @@ const useAuthStore = create((set, get) => ({
           // El perfil solo se establece a través de switchOperator() (PIN).
         }
 
-        if (event === 'SIGNED_OUT') {
-          // Si estamos offline y no fue un logout manual, ignorar el SIGNED_OUT.
-          // Supabase puede disparar este evento cuando falla el refresco del token por red,
-          // lo que borraría el cache y expulsaría al usuario innecesariamente.
-          const esManual = get()._logoutManual
-          if (!esManual) {
-            console.log('[AUTH] SIGNED_OUT detectado de Supabase (sin logout manual). Verificando si podemos conservar la sesión...')
-            
-            // Si hay un perfil de operador activo en el store, ignoramos el deslogueo automático de Supabase.
-            // Esto previene que micro-cortes de red o fallos momentáneos de Supabase expulsen al usuario.
-            if (get().perfil) {
-              console.log('[AUTH] micro-corte o refresh fallido detectado. Manteniendo sesión local activa.')
-              set({ error: 'Conexión inestable detectada. Operando en modo de respaldo local.' })
-              return
-            }
-          }
-
-          // Si es manual, o si no hay perfil de operador activo (limpieza real)
-          const wasLoggedIn = get().user !== null && !esManual
-          const userId = get().user?.id
-          guardarPerfilCache(null, userId)
-          set({ user: null, perfil: null, error: null, _logoutManual: false })
-          if (wasLoggedIn) {
-            set({ error: 'Tu sesión ha expirado. Inicia sesión nuevamente para no perder tu trabajo.' })
-          }
-        }
-
         if (event === 'TOKEN_REFRESHED' && session?.user) {
           // Solo actualizar user si realmente cambió (evitar re-renders innecesarios)
           const currentUser = get().user
@@ -317,20 +329,22 @@ const useAuthStore = create((set, get) => ({
     )
 
     return () => {
-      active = false
       clearTimeout(timeoutId)
       clearTimeout(safetyTimeoutId)
       if (onlineDebounceId) clearTimeout(onlineDebounceId)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      document.removeEventListener('visibilitychange', handleVisible)
+      window.removeEventListener('focus', handleFocus)
       subscription.unsubscribe()
     }
   },
 
   // ─── Cargar perfil del operador desde public.usuarios ──────────────────────
-  // Lee operator_id de app_metadata. Si no hay → perfil queda null (requiere selección).
+  // Solo con una sesión de operador verificada para esta pestaña.
   _cargarPerfil: async (authUser) => {
-    const operatorId = authUser.app_metadata?.operator_id
+    const operatorSession = getOperatorSession()
+    const operatorId = operatorSession?.accountId === authUser.id ? operatorSession.operatorId : null
     if (!operatorId) {
       // Hay sesión de negocio pero no se ha seleccionado operador
       set({ user: authUser, perfil: null, error: null })
@@ -366,7 +380,9 @@ const useAuthStore = create((set, get) => ({
     const { data, error } = await Promise.race([queryPromise, timeoutPromise])
       .catch(err => ({ data: null, error: err }))
 
+    if (getOperatorSession() !== operatorSession || get().user?.id !== authUser.id) return
     if (error || !data) {
+      purgeOperatorState()
       guardarPerfilCache(null, authUser.id)
       set({
         user: authUser,
@@ -377,22 +393,8 @@ const useAuthStore = create((set, get) => ({
     }
 
     if (!data.activo) {
-      // Operador desactivado — limpiar metadata y volver a selección
-      try {
-        const token = await getAccessToken()
-        if (token) {
-          await fetch(apiUrl('/api/auth/clear-operator'), {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-          })
-        }
-      } catch { /* ignorar */ }
-      guardarPerfilCache(null, authUser.id)
-      set({
-        user: authUser,
-        perfil: null,
-        error: 'Este operador está desactivado. Contacta al supervisor.',
-      })
+      purgeOperatorState()
+      set({ error: 'Este operador está desactivado. Contacta al supervisor.' })
       return
     }
 
@@ -430,26 +432,30 @@ const useAuthStore = create((set, get) => ({
   login: async (email, password) => {
     if (get().loading) return { ok: false }
 
+    const previousAccountId = get().user?.id
+    purgeOperatorState()
     set({ loading: true, error: null, _cargandoPerfil: true })
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    })
+    let data, error
+    try {
+      ({ data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      }))
+    } catch (err) {
+      set({ loading: false, error: traducirError(err?.message), _cargandoPerfil: false })
+      return { ok: false }
+    }
 
     if (error) {
       set({ loading: false, error: traducirError(error.message), _cargandoPerfil: false })
       return { ok: false }
     }
 
-    // Cada login debe empezar con un cache limpio. Las queries no incluyen el
-    // proyecto Supabase en su clave y podrían mostrar datos persistidos de otra
-    // cuenta/proyecto mientras llega la primera respuesta de la BD.
-    queryClient.clear()
-    indexedDbPersister.removeClient().catch(() => {})
-
-    // Setear user — el perfil SOLO se establece al seleccionar operador con PIN
-    set({ user: data.user, loading: false, _cargandoPerfil: false, error: null })
+    // Capture the old account before signInWithPassword emits SIGNED_IN.
+    if (previousAccountId && previousAccountId !== data.user.id) purgeOperatorState()
+    adoptAccount(data.user)
+    set({ loading: false, _cargandoPerfil: false, error: null })
 
     // Descargar operadores en background para cache offline
     const userId = data.user.id
@@ -462,81 +468,169 @@ const useAuthStore = create((set, get) => ({
 
   // ─── Seleccionar operador con PIN ─────────────────────────────────────────
   switchOperator: async (operatorId, pin) => {
-    if (get().loading) return { ok: false }
+    // Intento anterior aún en curso (red lentísima): avisar en vez de fallar en silencio
+    if (get().loading) return { ok: false, busy: true }
 
-    set({ loading: true, error: null })
+    const attempt = ++operatorAttempt
+    const accountId = get().user?.id
+    const isCurrentAttempt = () => attempt === operatorAttempt && get().user?.id === accountId
+    const assertAttempt = () => {
+      if (!isCurrentAttempt()) throw new Error('Selección cancelada.')
+    }
+    set({ perfil: null, loading: true, error: null })
+    const previousSessionHeaders = getOperatorSessionHeaders()
+    clearOperatorSession()
+    void queryClient.cancelQueries().catch(() => {})
+    queryClient.clear()
+    void indexedDbPersister.removeClient().catch(() => {})
 
-    // Helper para hacer la llamada al worker
+    // Helper: acotar cualquier promesa con un timeout duro.
+    // Sin esto, un fetch estancado en red inestable deja el modal
+    // "Verificando…" congelado indefinidamente.
+    const conLimite = (promesa, ms, etiqueta) => {
+      let timer
+      return Promise.race([
+        promesa,
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(etiqueta)), ms) }),
+      ]).finally(() => clearTimeout(timer))
+    }
+
+    console.log(`[AUTH-PIN] 🚀 Paso 1: switchOperator iniciado para operador ${operatorId}`)
+
+    // Helper para hacer la llamada al worker con multi-endpoint y timeout resiliente
     const callWorker = async (token) => {
-      return fetch(apiUrl('/api/auth/switch-operator'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ operator_id: operatorId, pin }),
-      })
+      const endpoints = import.meta.env.DEV
+        ? [apiUrl('/api/auth/switch-operator')]
+        : [
+            apiUrl('/api/auth/switch-operator'),
+            'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/switch-operator',
+          ]
+      const uniqueEndpoints = [...new Set(endpoints)]
+
+      let lastError = null
+      for (const url of uniqueEndpoints) {
+        assertAttempt()
+        console.log(`[AUTH-PIN] 📡 Paso 3: Enviando POST a ${url} (timeout 10s)...`)
+        const tw0 = Date.now()
+        try {
+          const response = await fetchConTimeout(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+              'X-Request-Id': `auth-${crypto.randomUUID()}`,
+              ...previousSessionHeaders,
+            },
+            body: JSON.stringify({ operator_id: operatorId, pin }),
+          }, 10000)
+          console.log(`[AUTH-PIN] 📥 Paso 4: Respuesta del Worker recibida en ${Date.now() - tw0}ms con status ${response.status}`)
+          return response
+        } catch (workerErr) {
+          console.warn(`[AUTH-PIN] ⚠️ Endpoint ${url} falló tras ${Date.now() - tw0}ms (${workerErr.message}), intentando siguiente...`)
+          lastError = workerErr
+        }
+      }
+      throw lastError
     }
 
     // Vite/Wrangler puede devolver una respuesta 500 vacía cuando el Worker
     // local no está levantado; no asumir que toda respuesta es JSON.
     const readResponseJson = async (response) => {
       const text = await response.text()
+      // La respuesta contiene una credencial de sesión: no registrar su contenido.
       if (!text) return {}
-      try { return JSON.parse(text) } catch { return {} }
+      try { return JSON.parse(text) } catch { return { rawText: text } }
     }
 
     try {
-      let token = await getAccessToken()
+      // Tope de 8s y ESTRICTO: si Supabase Auth no entrega un token válido,
+      // NO se envía el JWT vencido al Worker (evita 401→refresh→400);
+      // caemos directo al catch donde el fallback offline PBKDF2 resuelve.
+      console.log('[AUTH-PIN] 🔑 Paso 2: Obteniendo token válido de Supabase...')
+      let token = await getValidAccessToken({ timeoutMs: 8000, allowStale: false })
+      assertAttempt()
+      // No registrar tokens, ni siquiera parcialmente.
       if (!token) {
         set({ loading: false, error: 'No hay sesión activa. Inicia sesión primero.' })
-        return { ok: false }
+        return { ok: false, error: 'No hay sesión activa. Inicia sesión primero.' }
       }
 
       let res = await callWorker(token)
       let result = await readResponseJson(res)
 
+      if (!isCurrentAttempt()) {
+        if (result.operatorSession?.token) {
+          void fetchConTimeout(apiUrl('/api/auth/clear-operator'), { method: 'POST', headers: {
+            Authorization: `Bearer ${token}`, 'X-Operator-Session': result.operatorSession.token,
+          } }, 5000).catch(() => {})
+        }
+        return { ok: false, error: 'La selección de operador fue cancelada.' }
+      }
+
       // Si el worker responde 401 "No autenticado" → sesión expirada
       // Intentar refrescar el token y reintentar una vez
-      if (!res.ok && res.status === 401 && result.error?.includes('autenticado')) {
-        console.log('[AUTH] switchOperator: sesión expirada, intentando refresh...')
+      if (!res.ok && res.status === 401 && result?.error === 'No autenticado') {
+        console.log('[AUTH-PIN] 🔄 Worker respondió 401 (token expirado). Refrescando sesión...')
         try {
-          const { data: refreshData } = await supabase.auth.refreshSession()
+          const { data: refreshData } = await conLimite(refreshSessionSingleFlight(), 8000, 'refresh_timeout')
+          assertAttempt()
           const freshToken = refreshData?.session?.access_token
-          if (freshToken) {
-            set({ user: refreshData.user })
+          const refreshedUser = refreshData?.session?.user || refreshData?.user
+          if (freshToken && refreshedUser?.id === accountId) {
+            token = freshToken
+            set({ user: refreshedUser })
+            try { supabase.realtime.setAuth(freshToken) } catch { /* Realtime failure cannot change login authority. */ }
             res = await callWorker(freshToken)
-            result = await res.json()
+            result = await readResponseJson(res)
           } else {
-            // El refresh falló, lanzamos error para disparar la validación offline de respaldo en el catch
+            console.warn('[AUTH-PIN] ⚠️ Refresh no entregó nuevo token.')
             throw new Error('refresh_failed_offline_fallback')
           }
         } catch (e) {
-          // Lanzamos error para disparar la validación offline en el catch principal
+          console.warn('[AUTH-PIN] ⚠️ Error durante refresh:', e.message)
           throw new Error(e.message || 'refresh_failed_offline_fallback')
         }
       }
 
+      if (!isCurrentAttempt()) {
+        if (result.operatorSession?.token) {
+          void fetchConTimeout(apiUrl('/api/auth/clear-operator'), { method: 'POST', headers: {
+            Authorization: `Bearer ${token}`, 'X-Operator-Session': result.operatorSession.token,
+          } }, 5000).catch(() => {})
+        }
+        return { ok: false, error: 'La selección de operador fue cancelada.' }
+      }
       if (!res.ok) {
+        console.warn(`[AUTH-PIN] ⚠️ Worker respondió con error status: ${res.status}`, result)
+        // PIN incorrecto: devolver de inmediato sin intentar reautenticación
+        if (result?.error === 'PIN incorrecto') {
+          set({ loading: false, error: 'PIN incorrecto' })
+          return { ok: false, error: 'PIN incorrecto' }
+        }
+
+        // Un 401 confirmado después del refresh
+        if (res.status === 401) {
+          set({ loading: false, error: 'La sesión no fue aceptada. Vuelve a iniciar sesión.' })
+          return { ok: false, sessionExpired: true, error: 'La sesión no fue aceptada. Vuelve a iniciar sesión.' }
+        }
+
         // Si el worker está caído (500) → intentar validación offline con cache
-        // Esto evita falsos "PIN incorrecto" cuando wrangler no corre localmente
-        if (res.status === 500) {
+        if (res.status >= 500) {
           throw new Error('worker_unavailable')
         }
+        if (res.status === 401 && result.error === 'No autenticado') {
+          throw new Error('auth_session_invalid')
+        }
         set({ loading: false, error: result.error || 'PIN incorrecto' })
-        return { ok: false }
+        return { ok: false, error: result.error || 'PIN incorrecto' }
       }
 
-      // Setear perfil inmediatamente con datos del worker (sin esperar refresh)
       const op = result.operator
+      if (!op || op.id !== operatorId) throw new Error('Respuesta de operador inválida')
       if (op) {
-        // Invalidar queries sensibles al operador (no borrar todo el cache)
-        queryClient.invalidateQueries({ queryKey: ['cotizaciones'] })
-        queryClient.invalidateQueries({ queryKey: ['despachos'] })
-        queryClient.invalidateQueries({ queryKey: ['comisiones'] })
-        queryClient.invalidateQueries({ queryKey: ['dashboard_metricas'] })
-        queryClient.invalidateQueries({ queryKey: ['dashboard_metrics'] })
-        queryClient.invalidateQueries({ queryKey: ['cuentas_por_cobrar'] })
+        // No await entre la comprobación del intento, la credencial y el perfil publicado.
+        queryClient.clear()
+        setOperatorSession(result.operatorSession, { accountId, operatorId: op.id })
 
         const perfilOp = {
           id: op.id,
@@ -554,87 +648,62 @@ const useAuthStore = create((set, get) => ({
         set({ perfil: perfilOp, loading: false, error: null })
       }
 
-      // Refrescar JWT en background — no bloquear al usuario
-      // Guard: solo un refresh concurrente a la vez para evitar bucle de eventos
-      if (!get()._refreshingToken) {
-        set({ _refreshingToken: true })
-        supabase.auth.refreshSession()
-          .then(({ data }) => { if (data?.user) set({ user: data.user }) })
-          .catch(() => { /* ignorar — perfil ya está seteado */ })
-          .finally(() => set({ _refreshingToken: false }))
-      }
-
       return { ok: true }
     } catch (err) {
-      console.warn('[AUTH] Error en switchOperator, intentando fallback offline:', err.message);
-      // Error de red — intentar validación local con PBKDF2 usando operadores cacheados
-      const userId = get().user?.id
-      const operators = leerOperadoresCache(userId)
-      const op = operators?.find(o => o.id === operatorId)
+      if (attempt !== operatorAttempt || get().user?.id !== accountId) return { ok: false, error: 'Selección cancelada.' }
+      clearOperatorSession()
+      guardarPerfilCache(null, get().user?.id)
+      // Sin prueba del servidor no se reutilizan privilegios ni hashes cacheados.
+      // El usuario puede reintentar cuando haya conexión.
+      const sesionExpirada = err.code === 'SESSION_EXPIRED' || err.message === 'auth_session_invalid'
+      const esTimeout = err.code === 'SESSION_REFRESH_TIMEOUT'
+        || ['timeout_red', 'token_timeout', 'refresh_timeout'].includes(err.message)
+      const errorMsg = sesionExpirada
+        ? 'Tu sesión expiró. Inicia sesión nuevamente con tu correo.'
+        : (esTimeout
+          ? 'El servidor tardó más de 15 segundos en responder (timeout_red). Revisa que el Worker esté corriendo.'
+          : (err.message === 'worker_unavailable'
+            ? 'El servidor local (Worker) devolvió un error 500 o no está disponible.'
+            : (!navigator.onLine
+              ? 'Sin conexión a internet.'
+              : `Error de conexión: ${err.message}`)))
 
-      if (op && op.pin_hash && op.pin_salt) {
-        const pinValido = await verifyPinLocal(pin, op.pin_hash, op.pin_salt)
-        if (pinValido) {
-          const perfilOp = {
-            id: op.id,
-            nombre: op.nombre,
-            email: get().user?.email,
-            rol: op.rol,
-            activo: true,
-            color: op.color ?? null,
-            markup_pct: op.markup_pct ?? null,
-            comision_pct: op.comision_pct ?? null,
-            comision_pct_cabilla: op.comision_pct_cabilla ?? null,
-            es_externo: !!op.es_externo,
-            _offline: true,
-          }
-          guardarPerfilCache(perfilOp, userId)
-          set({ perfil: perfilOp, loading: false, error: null })
-          console.log('[AUTH] PIN validado localmente (offline) —', op.nombre)
-          return { ok: true, offline: true }
-        }
-        // PIN incorrecto — validación local determinó que es incorrecto
-        set({ loading: false, error: 'PIN incorrecto' })
-        return { ok: false }
-      }
-
-      // No hay cache de operadores — no se puede validar offline
-      set({
-        loading: false,
-        error: !navigator.onLine
-          ? 'Sin conexión. Conecta a internet la primera vez para habilitar el modo offline.'
-          : 'Error de conexión. Verifica tu internet e intenta de nuevo.',
-      })
-      return { ok: false }
+      console.error(`[AUTH-PIN] ❌ switchOperator terminado con error final:`, errorMsg)
+      set({ loading: false, error: errorMsg })
+      return { ok: false, sessionExpired: sesionExpirada, error: errorMsg }
     }
   },
 
   // ─── Cambiar de operador (volver a selección) ─────────────────────────────
   switchOut: async () => {
-    set({ loading: true, error: null })
+    const previousSessionHeaders = getOperatorSessionHeaders()
+    purgeOperatorState()
+    set({ error: null })
 
-    try {
-      const token = await getAccessToken()
-      if (token) {
-        await fetch(apiUrl('/api/auth/clear-operator'), {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-      }
-
-      // Refrescar para limpiar app_metadata del JWT
-      await supabase.auth.refreshSession()
-
-      // Limpiar cache de datos del operador anterior (memoria + persistido)
-      queryClient.clear()
-      indexedDbPersister.removeClient().catch(() => {})
-      const userId = get().user?.id
-      guardarPerfilCache(null, userId)
-      set({ perfil: null, loading: false, error: null })
-    } catch {
-      guardarPerfilCache(null, get().user?.id)
-      set({ perfil: null, loading: false })
-    }
+    // 2. Limpieza en el backend en background (no bloquea la UI)
+    ;(async () => {
+      try {
+        const token = await getAccessToken()
+        if (token) {
+          const endpoints = import.meta.env.DEV
+            ? [apiUrl('/api/auth/clear-operator')]
+            : [apiUrl('/api/auth/clear-operator'), 'https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/auth/clear-operator']
+          for (const url of endpoints) {
+            try {
+              const controller = new AbortController()
+              const timer = setTimeout(() => controller.abort(), 6000)
+              await fetch(url, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, ...previousSessionHeaders },
+                signal: controller.signal,
+              }).finally(() => clearTimeout(timer))
+              break
+            } catch { /* intentar siguiente */ }
+          }
+        }
+        await refreshSessionSingleFlight().catch(() => {})
+      } catch { /* best-effort background */ }
+    })()
   },
 
   // ─── Reset de contraseña (email) ───────────────────────────────────────────
@@ -647,29 +716,58 @@ const useAuthStore = create((set, get) => ({
 
   // ─── Logout completo ─────────────────────────────────────────────────────
   logout: async () => {
-    // Limpiar operador antes de cerrar sesión
+    const previousSessionHeaders = getOperatorSessionHeaders()
+    const businessToken = getAccessToken()
+    purgeOperatorState()
+    void businessToken.then(token => token && previousSessionHeaders['X-Operator-Session']
+      ? fetchConTimeout(apiUrl('/api/auth/clear-operator'), {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, ...previousSessionHeaders },
+      }, 5000) : null).catch(() => {})
+    // 1. Limpieza síncrona e inmediata del estado local y storage
+    set({ user: null, perfil: null, error: null, _logoutManual: true })
+    resetSessionState()
+
     try {
-      const token = await getAccessToken()
-      if (token) {
-        await fetch(apiUrl('/api/auth/clear-operator'), {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
+      const keys = Object.keys(localStorage)
+      for (const k of keys) {
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          localStorage.removeItem(k)
+        }
+        if (k.startsWith('listo_perfil_cache')) {
+          localStorage.removeItem(k)
+        }
       }
     } catch { /* ignorar */ }
 
-    set({ _logoutManual: true })
-    const userId = get().user?.id
-    await supabase.auth.signOut()
-    // Limpiar TODO el cache (memoria + persistido) — evita fugas entre cuentas de negocio
-    queryClient.clear()
-    indexedDbPersister.removeClient().catch(() => {})
-    guardarPerfilCache(null, userId)
-    set({ user: null, perfil: null, error: null, _logoutManual: false })
+    // 2. Limpieza en background (no bloquea la UI)
+    ;(async () => {
+      try {
+        await Promise.race([
+          supabase.auth.signOut(),
+          new Promise(r => setTimeout(r, 1000))
+        ])
+      } catch { /* ignorar */ }
+      set({ _logoutManual: false })
+    })()
+  },
+
+  // ─── Precalentar token en background ──────────────────────────────────
+  // Refresca el JWT si está por vencer SIN bloquear la UI. Se invoca al abrir
+  // el modal de PIN y al recuperar foco, para que switchOperator nunca espere
+  // un refresh síncrono (la causa del cuelgue "Verificando…" en producción).
+  precalentarToken: async () => {
+    try {
+      if (!get().user) return
+      await getValidAccessToken({ timeoutMs: 4000, allowStale: false })
+    } catch { /* no crítico — switchOperator tiene tope propio + fallback offline */ }
   },
 
   // ─── Limpiar error manualmente ─────────────────────────────────────────────
   limpiarError: () => set({ error: null }),
 }))
+
+subscribeOperatorSession(() => {
+  if (!getOperatorSession() && useAuthStore.getState().perfil) purgeOperatorState()
+})
 
 export default useAuthStore

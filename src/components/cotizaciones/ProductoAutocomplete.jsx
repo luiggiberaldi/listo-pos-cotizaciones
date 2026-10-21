@@ -5,7 +5,7 @@ import { Search, Plus, Package, X } from 'lucide-react'
 import { smartSearchProductos } from '../../utils/smartSearch'
 import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
 
-export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgregados = new Set(), placeholder = 'Búsqueda rápida por nombre o código...', stockComprometido = {} }) {
+export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgregados = new Set(), placeholder = 'Búsqueda rápida por nombre o código...' }) {
   const [texto, setTexto] = useState('')
   const [focused, setFocused] = useState(false)
   const ref = useRef(null)
@@ -59,8 +59,7 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
             const yaAgregado = idsAgregados.has(p.id)
             const sinStock = p.stock_actual != null && p.stock_actual <= 0
             const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
-            const bloqueado = sinStock || sinPrecio
-            const comprometido = stockComprometido[p.id] || 0
+            const bloqueado = sinPrecio
             return (
               <button
                 key={p.id}
@@ -84,10 +83,9 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
                     {p.codigo && <span className="text-[10px] text-slate-400 font-mono">{p.codigo}</span>}
                     <span className={`text-[10px] font-bold ${
                       sinStock ? 'text-red-500' :
-                      comprometido > 0 && (p.stock_actual - comprometido) <= 0 ? 'text-amber-600' :
                       (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
                     }`}>
-                      {sinStock ? 'Agotado' : comprometido > 0 ? `Stock: ${p.stock_actual} (${comprometido} comp.)` : `Stock: ${p.stock_actual}`}
+                      {sinStock ? 'Agotado' : `Stock: ${p.stock_actual}`}
                     </span>
                   </div>
                 </div>

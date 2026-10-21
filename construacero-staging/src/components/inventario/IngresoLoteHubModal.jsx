@@ -118,6 +118,77 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
     }
   }, [isOpen, tab])
 
+  // --- 4. Creador de objetos de fila y lógica de coincidencia (Matching) ---
+  const crearFilaObjeto = useCallback((codigo, nombre, cantidad, costo, precio, catSugerida = '', unidad = 'und') => {
+    const codUpper = codigo?.toUpperCase().trim()
+    const nomUpper = nombre?.toUpperCase().trim()
+
+    // Intentar buscar coincidencia en el inventario actual utilizando fuzzy matching inteligente sobre el código
+    let match = null
+    if (codUpper) {
+      match = findBestFuzzyCodeMatch(codUpper, productos)
+    }
+    if (!match && nomUpper) {
+      // Buscar por nombre exacto
+      match = productos.find(p => p.nombre?.toUpperCase() === nomUpper)
+      // Si no, búsqueda difusa simple
+      if (!match) {
+        const matches = smartSearchProductos(productos, nombre)
+        // smartSearchProductos ya devuelve solo coincidencias válidas y
+        // conserva cobertura/score para ordenarlas; no usar _relevance porque
+        // esa propiedad no forma parte de su contrato.
+        if (matches.length > 0) {
+          match = matches[0]
+        }
+      }
+    }
+
+    // Si coincide con un producto existente, auto-corregimos el código y nombre con los datos oficiales del catálogo
+    let finalCodigo = codUpper || ''
+    let finalNombre = nomUpper || ''
+    let finalUnidad = unidad
+    if (match) {
+      finalCodigo = match.codigo
+      finalNombre = match.nombre
+      finalUnidad = match.unidad
+    }
+
+    // Determinar categoría por palabras clave si no tiene
+    let finalCat = catSugerida || (match ? match.categoria : '')
+    if (!finalCat) {
+      const nom = finalNombre || ''
+      if (nom.includes('TUBO') && nom.includes('PVC')) finalCat = 'TUBOS PVC'
+      else if (nom.includes('TUBO') && nom.includes('ESTRUCTURAL')) finalCat = 'TUBOS ESTRUCTURALES'
+      else if (nom.includes('TUBO') && nom.includes('GALV')) finalCat = 'TUBOS GALVANIZADO'
+      else if (nom.includes('TUBO')) finalCat = 'TUBOS'
+      else if (nom.includes('LAMINA') || nom.includes('LÁMINA')) finalCat = 'LAMINAS'
+      else if (nom.includes('VIGA')) finalCat = 'VIGAS'
+      else if (nom.includes('PERFIL') || nom.includes('CABILLA') || nom.includes('ANGULO')) finalCat = 'PERFILES'
+      else if (nom.includes('SOLDADURA') || nom.includes('ELECTRODO')) finalCat = 'SOLDADURA'
+      else finalCat = 'VARIOS'
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      codigo: finalCodigo,
+      nombre: finalNombre,
+      cantidadInput: cantidad,
+      costoInput: costo || (match ? match.costo_usd || 0 : 0),
+      precioInput: precio || (match ? match.precio_usd || 0 : 0),
+      categoria: finalCat,
+      unidad: finalUnidad,
+      
+      // Metadatos de coincidencia
+      matchedProduct: match, // Referencia al producto existente
+      modoExistente: 'sumar', // 'sumar' | 'sobrescribir' (para stock en coincidentes)
+      actualizarCosto: true,  // Si se debe actualizar el costo en existentes
+      
+      // Estado de validación
+      estado: match ? 'existente' : 'nuevo', // 'nuevo' | 'existente' | 'error'
+      errorMsg: ''
+    }
+  }, [productos])
+
   // --- 1. Parser Excel / TSV (Tab Separated Values) ---
   const procesarExcel = useCallback(() => {
     if (!excelText.trim()) return
@@ -305,76 +376,6 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
     }
   }
 
-  // --- 4. Creador de objetos de fila y lógica de coincidencia (Matching) ---
-  const crearFilaObjeto = useCallback((codigo, nombre, cantidad, costo, precio, catSugerida = '', unidad = 'und') => {
-    const codUpper = codigo?.toUpperCase().trim()
-    const nomUpper = nombre?.toUpperCase().trim()
-
-    // Intentar buscar coincidencia en el inventario actual utilizando fuzzy matching inteligente sobre el código
-    let match = null
-    if (codUpper) {
-      match = findBestFuzzyCodeMatch(codUpper, productos)
-    }
-    if (!match && nomUpper) {
-      // Buscar por nombre exacto
-      match = productos.find(p => p.nombre?.toUpperCase() === nomUpper)
-      // Si no, búsqueda difusa simple
-      if (!match) {
-        const matches = smartSearchProductos(productos, nombre)
-        // smartSearchProductos ya devuelve solo coincidencias válidas y
-        // conserva cobertura/score para ordenarlas; no usar _relevance porque
-        // esa propiedad no forma parte de su contrato.
-        if (matches.length > 0) {
-          match = matches[0]
-        }
-      }
-    }
-
-    // Si coincide con un producto existente, auto-corregimos el código y nombre con los datos oficiales del catálogo
-    let finalCodigo = codUpper || ''
-    let finalNombre = nomUpper || ''
-    let finalUnidad = unidad
-    if (match) {
-      finalCodigo = match.codigo
-      finalNombre = match.nombre
-      finalUnidad = match.unidad
-    }
-
-    // Determinar categoría por palabras clave si no tiene
-    let finalCat = catSugerida || (match ? match.categoria : '')
-    if (!finalCat) {
-      const nom = finalNombre || ''
-      if (nom.includes('TUBO') && nom.includes('PVC')) finalCat = 'TUBOS PVC'
-      else if (nom.includes('TUBO') && nom.includes('ESTRUCTURAL')) finalCat = 'TUBOS ESTRUCTURALES'
-      else if (nom.includes('TUBO') && nom.includes('GALV')) finalCat = 'TUBOS GALVANIZADO'
-      else if (nom.includes('TUBO')) finalCat = 'TUBOS'
-      else if (nom.includes('LAMINA') || nom.includes('LÁMINA')) finalCat = 'LAMINAS'
-      else if (nom.includes('VIGA')) finalCat = 'VIGAS'
-      else if (nom.includes('PERFIL') || nom.includes('CABILLA') || nom.includes('ANGULO')) finalCat = 'PERFILES'
-      else if (nom.includes('SOLDADURA') || nom.includes('ELECTRODO')) finalCat = 'SOLDADURA'
-      else finalCat = 'VARIOS'
-    }
-
-    return {
-      id: crypto.randomUUID(),
-      codigo: finalCodigo,
-      nombre: finalNombre,
-      cantidadInput: cantidad,
-      costoInput: costo || (match ? match.costo_usd || 0 : 0),
-      precioInput: precio || (match ? match.precio_usd || 0 : 0),
-      categoria: finalCat,
-      unidad: finalUnidad,
-      
-      // Metadatos de coincidencia
-      matchedProduct: match, // Referencia al producto existente
-      modoExistente: 'sumar', // 'sumar' | 'sobrescribir' (para stock en coincidentes)
-      actualizarCosto: true,  // Si se debe actualizar el costo en existentes
-      
-      // Estado de validación
-      estado: match ? 'existente' : 'nuevo', // 'nuevo' | 'existente' | 'error'
-      errorMsg: ''
-    }
-  }, [productos])
 
   // --- 5. Validaciones y Lógica de Edición en Grilla ---
   const handleFilaChange = (id, campo, valor) => {

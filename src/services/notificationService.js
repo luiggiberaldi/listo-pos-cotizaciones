@@ -463,33 +463,6 @@ export function notifyDespachoPendienteMucho(numero, clienteNombre, horas) {
   )
 }
 
-/**
- * Stock comprometido supera el 70% del stock real.
- */
-export function notifyCompromisoAlto(productos) {
-  const key = 'compromiso_alto'
-  if (hasCooldown(key)) return
-  setCooldown(key)
-  createNotification(
-    NOTIF_TYPES.COMPROMISO_ALTO,
-    productos.length === 1
-      ? `Compromiso alto: ${productos[0].nombre}`
-      : `${productos.length} productos con compromiso alto`,
-    productos.length === 1
-      ? `${productos[0].comprometido} de ${productos[0].stock_actual} ${productos[0].unidad || 'und'} comprometidos (${productos[0].porcentaje}%)`
-      : productos.slice(0, 5).map(p => `${p.nombre} (${p.porcentaje}%)`).join(', '),
-    {
-      productos: productos.slice(0, 10).map(p => ({
-        nombre: p.nombre,
-        stock_actual: p.stock_actual,
-        comprometido: p.comprometido,
-        porcentaje: p.porcentaje,
-        unidad: p.unidad || 'und',
-      })),
-      total: productos.length,
-    },
-  )
-}
 
 // ─── Recordatorios proactivos (cooldown system) ──────────────────────────────
 

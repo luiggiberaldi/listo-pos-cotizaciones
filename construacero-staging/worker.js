@@ -24,6 +24,8 @@ import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSu
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleCambiarFechaEntregaDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho, handleRegularizarCodEfectivo } from './api/handlers/despachos.js'
+import { handleResumenFinancieroDespacho, handleConciliarPagoCod } from './api/handlers/cod.js'
+import { isSameOriginRequest } from './api/lib/utils.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleGetRates } from './api/handlers/rates.js'
 import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleDesignacion, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
@@ -54,6 +56,12 @@ export default {
     if (url.pathname.startsWith('/api/')) {
       try {
 
+    // Guarda de escritura en el borde del router — cubre handlers que no pasan
+    // por validateOperator o que se montan por rutas especiales.
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !isSameOriginRequest(request)) {
+      return jsonError('Origen de la petición no permitido', 403, request)
+    }
+
     // ── API: recibir log del frontend ─────────────────────────────────────
     if (url.pathname === '/api/logs' && request.method === 'POST') {
       return handleLogFromClient(request, env);
@@ -79,6 +87,8 @@ export default {
     if (url.pathname === '/api/rates' && request.method === 'GET') {
       return handleGetRates(request, env)
     }
+
+    // ── API: resumen del panel de inicio (ya se construye en el frontend staging) ──
 
     // ── API: leer configuración del negocio ─────────────────────────────
     if (url.pathname === '/api/config' && request.method === 'GET') {
@@ -206,6 +216,13 @@ export default {
     }
 
     // ── API: editar forma de pago del despacho ──────────────────────────
+    if (url.pathname === '/api/despachos/resumen-financiero' && request.method === 'POST') {
+      return handleResumenFinancieroDespacho(request, env);
+    }
+    if (url.pathname === '/api/despachos/conciliar-cod' && request.method === 'POST') {
+      return handleConciliarPagoCod(request, env);
+    }
+
     if (url.pathname === '/api/despachos/editar-pago' && request.method === 'POST') {
       return handleEditarPagoDespacho(request, env);
     }

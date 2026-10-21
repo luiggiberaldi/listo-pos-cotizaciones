@@ -4,7 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { RefreshCw, Mail, Key, Eye, EyeOff, ArrowRight, Download, LogOut } from 'lucide-react'
 import supabase from '../../services/supabase/client'
 import useAuthStore from '../../store/useAuthStore'
-import { apiUrl } from '../../services/apiBase'
+import { apiUrl, fetchConTimeout } from '../../services/apiBase'
+import { getOperatorSession, setOperatorSession } from '../../services/operatorSession'
+import queryClient from '../../lib/queryClient'
 import LoginAvatar from '../../components/auth/LoginAvatar'
 import LoginPinModal from '../../components/auth/LoginPinModal'
 
@@ -126,8 +128,6 @@ function UserCard({ user, onClick, index }) {
     </div>
   )
 }
-
-const USUARIOS_CACHE_KEY = 'construacero_usuarios_cache'
 
 // ─── Botón de instalación PWA ─────────────────────────────────────────────────
 function PwaInstallButton() {
@@ -379,18 +379,21 @@ function GateStep({ onPass }) {
 
 // ─── Paso 2: Seleccionar operador ────────────────────────────────────────────
 function UserSelectStep({ onLogout }) {
-  const cached = (() => { try { return JSON.parse(localStorage.getItem(USUARIOS_CACHE_KEY) || '[]').filter(u => u.rol !== 'desarrollador') } catch { return [] } })()
-  const [usuarios,     setUsuarios]     = useState(cached)
-  const [cargando,     setCargando]     = useState(cached.length === 0)
+  // La lista previa al PIN se verifica por cuenta; no reutilizar la de otro negocio.
+  const accountId = useAuthStore(state => state.user?.id)
+  const rosterRequest = React.useRef(0)
+  const superAttempt = React.useRef(0)
+  const [usuarios,     setUsuarios]     = useState([])
+  const [cargando,     setCargando]     = useState(true)
   const [errorLista,   setErrorLista]   = useState(null)
   const [seleccionado, setSeleccionado] = useState(null)
-  const [visible,      setVisible]      = useState(false)
 
   // ── Super Admin Easter Egg ──
   const [logoTaps, setLogoTaps]         = useState(0)
   const [showSuperPin, setShowSuperPin] = useState(false)
   const [superPin, setSuperPin]         = useState('')
   const [superError, setSuperError]     = useState('')
+  const [superWorking, setSuperWorking] = useState(false)
   const logoTapTimer = React.useRef(null)
 
   const { switchOperator } = useAuthStore()
@@ -410,40 +413,63 @@ function UserSelectStep({ onLogout }) {
     }
   }
 
+  function closeSuperPin() {
+    superAttempt.current++
+    setShowSuperPin(false)
+    setSuperWorking(false)
+    setSuperPin('')
+    setSuperError('')
+  }
+
   async function handleSuperPinSubmit(e) {
     e.preventDefault()
+    if (superWorking) return
+    const attempt = ++superAttempt.current
+    const requestedAccount = accountId
+    const previousSession = getOperatorSession()
+    const isCurrent = () => attempt === superAttempt.current
+      && useAuthStore.getState().user?.id === requestedAccount
+      && getOperatorSession() === previousSession
+    let token
+    let issuedSession
+    const discardSession = () => {
+      if (issuedSession?.token && token) void fetchConTimeout(apiUrl('/api/auth/clear-operator'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'X-Operator-Session': issuedSession.token },
+      }, 5000).catch(() => {})
+    }
+    setSuperWorking(true)
     setSuperError('')
-
     try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData?.session?.access_token
-      if (!token) {
-        setSuperError('No hay sesión activa. Inicia sesión primero.')
-        return
-      }
-
-      // El backend valida el código — nunca viaja en el bundle del cliente
-      const res = await fetch(apiUrl('/api/auth/super-admin'), {
+      const { data } = await supabase.auth.getSession()
+      if (!isCurrent()) return
+      token = data?.session?.access_token
+      if (!token || data.session.user?.id !== requestedAccount) throw new Error('No autenticado')
+      const response = await fetchConTimeout(apiUrl('/api/auth/super-admin'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code: superPin }),
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setSuperError(err.error || 'Código incorrecto')
+        cache: 'no-store',
+      }, 10000)
+      const result = await response.json()
+      issuedSession = result.operatorSession
+      if (!isCurrent()) { discardSession(); return }
+      if (!response.ok) {
+        setSuperError(result.error || 'Código incorrecto')
         setSuperPin('')
         return
       }
-
-      await supabase.auth.refreshSession()
-
-      const store = useAuthStore.getState()
+      if (result.operator?.id !== '00000000-0000-0000-0000-000000000000'
+        || result.operator?.rol !== 'desarrollador') throw new Error('Operador inválido')
+      // Sin await entre la última validación y publicar la nueva identidad.
+      void queryClient.cancelQueries().catch(() => {})
+      queryClient.clear()
+      setOperatorSession(issuedSession, { accountId: requestedAccount, operatorId: result.operator.id })
       useAuthStore.setState({
         perfil: {
-          id: '00000000-0000-0000-0000-000000000000',
+          id: result.operator.id,
           nombre: 'Desarrollador',
-          email: store.user?.email || 'dev@system',
+          email: useAuthStore.getState().user?.email,
           rol: 'desarrollador',
           activo: true,
           color: '#8b5cf6',
@@ -453,37 +479,85 @@ function UserSelectStep({ onLogout }) {
       })
       setShowSuperPin(false)
       navigate('/', { replace: true })
-    } catch (err) {
-      setSuperError('Error inesperado')
-      setSuperPin('')
+    } catch {
+      discardSession()
+      if (isCurrent()) {
+        setSuperError('No se pudo verificar el acceso. Intenta nuevamente.')
+        setSuperPin('')
+      }
+    } finally {
+      if (attempt === superAttempt.current) setSuperWorking(false)
     }
   }
 
-  async function cargarUsuarios(silencioso = false) {
-    if (!silencioso) setCargando(usuarios.length === 0)
+  async function cargarUsuarios() {
+    const requestId = ++rosterRequest.current
+    const requestedAccount = accountId
+    const isCurrent = () => requestId === rosterRequest.current
+      && useAuthStore.getState().user?.id === requestedAccount
+    setCargando(true)
     setErrorLista(null)
-    const { data, error } = await supabase.rpc('listar_usuarios_login')
-    if (error) {
-      if (usuarios.length === 0) setErrorLista('No se pudo cargar la lista de usuarios')
-    } else {
-      const lista = (data ?? []).filter(u => u.rol !== 'desarrollador')
-      setUsuarios(lista)
-      localStorage.setItem(USUARIOS_CACHE_KEY, JSON.stringify(lista))
+    try {
+      const { data } = await supabase.auth.getSession()
+      if (!isCurrent()) return
+      const session = data?.session
+      if (!session?.access_token || session.user?.id !== requestedAccount) throw new Error('No autenticado')
+      // Esta ruta admite solo la cuenta verificada y nunca devuelve credenciales de PIN.
+      // Las tablas/RPC operativas siguen exigiendo una sesión de operador con PIN.
+      const response = await fetchConTimeout(apiUrl('/api/auth/operators'), {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      }, 10000)
+      if (!response.ok) throw new Error('Lista no disponible')
+      const result = await response.json()
+      if (!isCurrent()) return
+      if (!Array.isArray(result.operators)) throw new Error('Lista inválida')
+      const roles = new Set(Object.keys(ROL_ACCENT))
+      setUsuarios(result.operators
+        .filter(operator => operator?.id && roles.has(operator.rol))
+        .map(({ id, nombre, rol, codigo, color, es_externo }) => ({ id, nombre, rol, codigo, color, es_externo: !!es_externo })))
+    } catch {
+      if (isCurrent()) {
+        setUsuarios([])
+        setErrorLista('No se pudo cargar la lista de usuarios. Verifica tu conexión e intenta nuevamente.')
+      }
+    } finally {
+      if (isCurrent()) setCargando(false)
     }
-    setCargando(false)
   }
 
   useEffect(() => {
-    cargarUsuarios(cached.length > 0)
-    const t = setTimeout(() => setVisible(true), 50)
-    return () => clearTimeout(t)
+    // Retirar únicamente el antiguo caché de selección compartido entre cuentas.
+    try { localStorage.removeItem('construacero_usuarios_cache_v4') } catch { /* Storage no concede acceso. */ }
+    cargarUsuarios()
+    return () => {
+      rosterRequest.current++
+      superAttempt.current++
+      clearTimeout(logoTapTimer.current)
+    }
   }, [])
+
+  function seleccionarUsuario(u) {
+    setSeleccionado(u)
+    // Precalentar el token MIENTRAS se teclea el PIN — saca el refresh del JWT
+    // del camino crítico (causa del cuelgue "Verificando…" en producción)
+    useAuthStore.getState().precalentarToken()
+  }
+
+  function cancelPendingPin() {
+    if (useAuthStore.getState().loading) void useAuthStore.getState().switchOut()
+  }
 
   async function handlePin(pin) {
     if (!seleccionado) return false
-    const { ok } = await switchOperator(seleccionado.id, pin)
-    if (ok) navigate('/', { replace: true })
-    return ok
+    const res = await switchOperator(seleccionado.id, pin)
+    if (res.ok) {
+      navigate('/', { replace: true })
+    } else if (res.sessionExpired) {
+      // Sesión principal de negocio expirada por inactividad → volver al login de email/clave
+      if (typeof onLogout === 'function') onLogout()
+    }
+    return res
   }
 
   return (
@@ -585,10 +659,7 @@ function UserSelectStep({ onLogout }) {
                   <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
                 </button>
                 <button
-                  onClick={async () => {
-                    await supabase.auth.signOut()
-                    onLogout()
-                  }}
+                  onClick={onLogout}
                   className="p-2 sm:p-2.5 rounded-xl transition-all"
                   style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'rgba(239,68,68,0.7)' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = 'rgba(239,68,68,0.9)' }}
@@ -636,7 +707,7 @@ function UserSelectStep({ onLogout }) {
                   return (orden[a.rol] ?? 4) - (orden[b.rol] ?? 4)
                 }).map((u, i) => (
                   <div key={u.id} className="min-w-0">
-                    <UserCard user={u} onClick={setSeleccionado} index={i} />
+                    <UserCard user={u} onClick={seleccionarUsuario} index={i} />
                   </div>
                 ))}
               </div>
@@ -658,7 +729,7 @@ function UserSelectStep({ onLogout }) {
       {/* Modal Desarrollador secreto */}
       {showSuperPin && (
         <>
-          <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm" onClick={() => setShowSuperPin(false)} />
+          <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm" onClick={closeSuperPin} />
           <div className="fixed inset-0 z-[201] flex items-center justify-center px-4">
             <form
               onSubmit={handleSuperPinSubmit}
@@ -686,6 +757,7 @@ function UserSelectStep({ onLogout }) {
               <input
                 type="password"
                 value={superPin}
+                aria-label="Código de desarrollador"
                 onChange={e => { setSuperPin(e.target.value.replace(/\D/g, '').slice(0, 8)); setSuperError('') }}
                 className="w-full text-center text-lg font-mono font-bold tracking-[0.3em] py-3 rounded-xl outline-none text-white"
                 style={{
@@ -701,7 +773,7 @@ function UserSelectStep({ onLogout }) {
               {superError && <p className="text-xs text-red-400 text-center mt-2">{superError}</p>}
               <button
                 type="submit"
-                disabled={superPin.length < 8}
+                disabled={superWorking || superPin.length < 8}
                 className="w-full mt-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-30"
                 style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}
               >
@@ -709,7 +781,7 @@ function UserSelectStep({ onLogout }) {
               </button>
               <button
                 type="button"
-                onClick={() => setShowSuperPin(false)}
+                onClick={closeSuperPin}
                 className="w-full mt-2 py-2 text-xs font-medium transition-all"
                 style={{ color: 'rgba(255,255,255,0.3)' }}
               >
@@ -724,7 +796,8 @@ function UserSelectStep({ onLogout }) {
       <LoginPinModal
         isOpen={!!seleccionado}
         user={seleccionado}
-        onClose={() => setSeleccionado(null)}
+        onClose={() => { cancelPendingPin(); setSeleccionado(null) }}
+        onCancelPending={cancelPendingPin}
         onSubmit={handlePin}
       />
     </>
@@ -789,11 +862,30 @@ export default function LoginPage() {
     )
   }
 
-  // Si no hay sesión de negocio → pedir email/contraseña (solo la primera vez)
-  if (!gatePassed && !user) {
-    return <GateStep onPass={() => setGatePassed(true)} />
-  }
+  return (
+    <>
+      {/* ── Badge de Versión (Superior Izquierda en Desktop y Móvil) ── */}
+      <div className="fixed top-3 left-3 sm:top-5 sm:left-5 z-50 pointer-events-none select-none">
+        <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.06] border border-white/[0.1] backdrop-blur-md shadow-lg shadow-black/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-[10px] sm:text-xs font-semibold tracking-wider text-slate-300 font-mono">
+            v1.0.4
+          </span>
+        </div>
+      </div>
 
-  // Sesión activa → selección de operador + PIN
-  return <UserSelectStep onLogout={() => setGatePassed(false)} />
+      {/* Si no hay sesión de negocio o se cerró sesión → pedir email/contraseña */}
+      {!gatePassed || !user ? (
+        <GateStep onPass={() => setGatePassed(true)} />
+      ) : (
+        <UserSelectStep
+          key={user.id}
+          onLogout={() => {
+            setGatePassed(false)
+            useAuthStore.getState().logout()
+          }}
+        />
+      )}
+    </>
+  )
 }

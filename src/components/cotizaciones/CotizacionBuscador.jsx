@@ -6,7 +6,6 @@ import {
 } from 'lucide-react'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
-import { useStockComprometido } from '../../hooks/useStockComprometido'
 import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
@@ -206,7 +205,6 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
   const { data: inventarioData, isLoading } = useInventario({ pageSize: 1000 })
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
-  const { data: stockComprometido = {} } = useStockComprometido()
 
   const filtrados = useProductSearch(todosProductos, texto, catActiva)
 
@@ -341,7 +339,6 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
           <div className="grid grid-cols-3 gap-1 md:grid-cols-5 lg:grid-cols-6 md:gap-1.5">
             {filtrados.slice(0, 60).map(p => {
               const itemInCart = itemsMap[p.id]
-              const comprometido = stockComprometido[p.id] || 0
               return (
                 <ProductCard
                   key={p.id}
@@ -349,7 +346,6 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
                   agregado={idsAgregados.has(p.id)}
                   cantidad={itemInCart?.cantidad ?? null}
                   tasa={tasa}
-                  comprometido={comprometido}
                   onAgregar={agregarConReciente}
                   onMas={() => onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad + 1)}
                   onMenos={() => itemInCart.cantidad <= 1 ? onEliminarItem(itemInCart._idx) : onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad - 1)}
@@ -400,13 +396,12 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
                 type="number"
                 inputMode="numeric"
                 min={1}
-                max={editQty.stock || 99999}
                 defaultValue={editQty.cantidad}
                 autoFocus
                 className="flex-1 text-center text-lg font-black border-2 border-slate-200 rounded-xl py-2 focus:border-primary focus:outline-none"
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
-                    const val = Math.max(1, Math.min(Number(e.target.value) || 1, editQty.stock || 99999))
+                    const val = Math.max(1, (Number(e.target.value) || 1))
                     onCambiarCantidad(editQty.idx, 'cantidad', val)
                     setEditQty(null)
                   }
@@ -416,7 +411,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
                 className="px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl">Cancelar</button>
               <button onClick={(e) => {
                   const input = e.target.closest('.space-y-3')?.querySelector('input')
-                  const val = Math.max(1, Math.min(Number(input?.value) || 1, editQty.stock || 99999))
+                  const val = Math.max(1, (Number(input?.value) || 1))
                   onCambiarCantidad(editQty.idx, 'cantidad', val)
                   setEditQty(null)
                 }}

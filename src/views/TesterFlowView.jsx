@@ -128,17 +128,17 @@ const STEPS = [
   { id: 'create_draft', label: '6. Crear cotización borrador', group: 'Cotizaciones' },
   { id: 'assert_draft', label: '7. Assert: cotización estado=borrador, total=$260.00', group: 'Cotizaciones' },
   { id: 'assert_items', label: '8. Assert: items con total_linea=$250.00', group: 'Cotizaciones' },
-  { id: 'assert_stock_comprometido_pre', label: '9. Assert: stock comprometido tras borrador', group: 'Cotizaciones' },
+  { id: 'assert_stock_comprometido_pre', label: '9. Assert: stock sin cambios tras borrador', group: 'Cotizaciones' },
   { id: 'send_quote', label: '10. Enviar cotización', group: 'Cotizaciones' },
   { id: 'assert_sent', label: '11. Assert: estado=enviada', group: 'Cotizaciones' },
   { id: 'accept_quote', label: '12. Aceptar cotización', group: 'Cotizaciones' },
   { id: 'assert_accepted', label: '13. Assert: estado=aceptada', group: 'Cotizaciones' },
-  { id: 'assert_stock_comprometido_aceptada', label: '14. Assert: stock comprometido tras aceptar', group: 'Cotizaciones' },
+  { id: 'assert_stock_comprometido_aceptada', label: '14. Assert: stock sin cambios tras aceptar', group: 'Cotizaciones' },
   { id: 'create_despacho', label: '15. Crear despacho (Cta por cobrar)', group: 'Despachos' },
   { id: 'assert_despacho', label: '16. Assert: despacho estado=pendiente, total=$260.00', group: 'Despachos' },
   { id: 'assert_stock_post', label: '17. Assert: stock_actual=90 (100-10)', group: 'Despachos' },
   { id: 'assert_kardex_egreso', label: '18. Assert: kardex egreso 100→90, motivo=venta', group: 'Despachos' },
-  { id: 'assert_stock_comprometido_post', label: '19. Assert: stock comprometido=0 (liberado)', group: 'Despachos' },
+  { id: 'assert_stock_comprometido_post', label: '19. Assert: stock egresado al aprobar', group: 'Despachos' },
   { id: 'assert_cxc_cargo', label: '20. Assert: CxC cargo=$260.00, saldo=$260.00', group: 'Cuentas por Cobrar' },
   { id: 'apply_descuento', label: '21. Aplicar descuento $2/u al artículo (10u → -$20)', group: 'Descuentos' },
   { id: 'assert_descuento', label: '22. Assert: descuento_total=$20, CxC y saldo actualizados', group: 'Descuentos' },
@@ -594,13 +594,11 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertStockComprometidoPre(id) {
-    const { data: sc } = await supabase.rpc('obtener_stock_comprometido')
-    const entry = (sc || []).find(s => s.producto_id === dataRef.current.productoId)
-    // Borrador: depende de la RPC si incluye borradores o solo enviadas/aceptadas
-    const comprometido = entry ? Number(entry.total_comprometido) : 0
-    addLog(id, `  stock comprometido = ${comprometido} und`)
-    dataRef.current.stockComprometidoPre = comprometido
-    addLog(id, `Valor registrado para comparación posterior`, 'success')
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', dataRef.current.productoId).single()
+    const stock = Number(prod?.stock_actual || 0)
+    addLog(id, `  stock físico = ${stock} und`)
+    dataRef.current.stockComprometidoPre = stock
+    addLog(id, 'Valor registrado para comparación posterior', 'success')
   }
 
   async function stepSendQuote(id) {
@@ -636,18 +634,16 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertStockComprometidoAceptada(id) {
-    const { data: sc } = await supabase.rpc('obtener_stock_comprometido')
-    const entry = (sc || []).find(s => s.producto_id === dataRef.current.productoId)
-    const comprometido = entry ? Number(entry.total_comprometido) : 0
-    addLog(id, `  stock comprometido = ${comprometido} und`)
-    // Con cotización aceptada (sin despacho), debería haber stock comprometido
-    if (comprometido >= TEST.cotizacion.cantidad) {
-      addLog(id, `  comprometido >= ${TEST.cotizacion.cantidad} und (incluye nuestra cotización) ✓`, 'success')
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', dataRef.current.productoId).single()
+    const stock = Number(prod?.stock_actual || 0)
+    addLog(id, `  stock físico = ${stock} und`)
+    const pre = dataRef.current.stockComprometidoPre || 0
+    if (stock === pre) {
+      addLog(id, 'Stock sin cambios tras aceptar (el egreso ocurre al aprobar el despacho) ✓', 'success')
     } else {
-      addLog(id, `  comprometido=${comprometido} (la RPC puede no incluir estado aceptada)`, 'info')
+      addLog(id, `  stock cambió (${pre} → ${stock})`, 'info')
     }
-    dataRef.current.stockComprometidoAceptada = comprometido
-    addLog(id, 'Stock comprometido registrado', 'success')
+    dataRef.current.stockComprometidoAceptada = stock
   }
 
   async function stepCreateDespacho(id) {
@@ -726,17 +722,14 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertStockComprometidoPost(id) {
-    const { data: sc } = await supabase.rpc('obtener_stock_comprometido')
-    const entry = (sc || []).find(s => s.producto_id === dataRef.current.productoId)
-    const comprometido = entry ? Number(entry.total_comprometido) : 0
-    // Tras despachar, nuestra cotización ya no debería comprometer stock
-    const prevComprometido = dataRef.current.stockComprometidoAceptada || 0
-    const diff = prevComprometido - comprometido
-    addLog(id, `  Antes del despacho: ${prevComprometido} → Ahora: ${comprometido} (liberado: ${diff})`)
-    if (comprometido < prevComprometido || comprometido === 0) {
-      addLog(id, 'Stock comprometido fue liberado ✓', 'success')
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', dataRef.current.productoId).single()
+    const stock = Number(prod?.stock_actual || 0)
+    const prevStock = dataRef.current.stockComprometidoAceptada || 0
+    addLog(id, `  Stock antes de aprobar: ${prevStock} → ahora: ${stock}`)
+    if (stock < prevStock) {
+      addLog(id, 'Stock egresado al aprobar el despacho ✓', 'success')
     } else {
-      addLog(id, 'Stock comprometido sin cambios (puede que la RPC no trackee este estado)', 'success')
+      addLog(id, 'Stock sin cambios (¿el despacho ya estaba egresado?)', 'info')
     }
   }
 

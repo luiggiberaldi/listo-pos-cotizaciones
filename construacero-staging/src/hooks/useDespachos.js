@@ -10,6 +10,7 @@ import { broadcastEntidad } from '../services/supabase/realtimeBus'
 import { notifyDespachoCreado, notifyStockBajo, notifyDespachoEnRuta, notifyDespachoEntregado, notifyDespachoCancelado } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 
 export const DESPACHOS_KEY = ['despachos']
 
@@ -62,7 +63,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
                 Authorization: `Bearer ${session.access_token}`,
                 // Respaldo del operador: si el JWT aún no trae app_metadata.operator_id
                 // (refresh pendiente), el Worker respondería 400 y esta rama moriría en [].
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               }
             })
             .then(r => r.ok ? r.json() : [])
@@ -193,7 +194,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: clienteIds }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])

@@ -14,6 +14,7 @@ import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
 import { notifyClienteAjeno, notifyDespachoClienteAjeno, notifyDespachoCreado } from '../services/notificationService'
 import { enqueue } from '../lib/mutationQueue'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 
 export function useVentaRapida() {
   const qc = useQueryClient()
@@ -81,7 +82,7 @@ export function useVentaRapida() {
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${session?.access_token}`,
-              'X-Operator-Id': perfil?.id || '',
+              ...getOperatorSessionHeaders(),
             },
             body: JSON.stringify({ ids: [clienteId] }),
           })

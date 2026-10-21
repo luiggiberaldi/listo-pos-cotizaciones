@@ -14,6 +14,7 @@ import queryClient from './lib/queryClient'
 import { indexedDbPersister, CACHE_BUSTER } from './lib/queryPersister'
 import OfflineBanner from './components/ui/OfflineBanner'
 import useAuthStore from './store/useAuthStore'
+import { mayPersistQuery } from './utils/dashboardAccess'
 import { ToastProvider } from './components/ui/Toast'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
 
@@ -248,14 +249,23 @@ function RutaSoloVendedor() {
   return <Outlet />
 }
 
+let authInitializationPromise = null
+
 // ─── App raíz ─────────────────────────────────────────────────────────────────
 function AppRoutes() {
   const initialize = useAuthStore((s) => s.initialize)
 
   // Inicializar listener de auth una sola vez al montar la app
   useEffect(() => {
-    const cleanup = initialize()
-    return cleanup
+    // StrictMode desmonta/remonta efectos en desarrollo. Reutilizar la misma
+    // inicialización evita listeners concurrentes y locks de Supabase huérfanos.
+    if (!authInitializationPromise) {
+      authInitializationPromise = Promise.resolve(initialize())
+    }
+    return () => {
+      // No desuscribir durante el remount de StrictMode; el singleton vive con
+      // la aplicación y se limpia solo al recargar la página.
+    }
   }, [initialize])
 
   const perfil = useAuthStore(s => s.perfil)
@@ -360,7 +370,7 @@ export default function App() {
           maxAge: 1000 * 60 * 60 * 24,            // 24h — coincide con gcTime
           buster: CACHE_BUSTER,                   // git hash → invalida en cada deploy
           dehydrateOptions: {
-            shouldDehydrateQuery: (q) => q.state.status === 'success',
+            shouldDehydrateQuery: mayPersistQuery,
           },
         }}>
         <BrowserRouter unstable_useTransitions={false}>

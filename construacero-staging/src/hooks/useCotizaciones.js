@@ -18,6 +18,7 @@ import { sendPushNotification } from './usePushNotifications'
 import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { enqueue } from '../lib/mutationQueue'
 import { broadcastEntidad } from '../services/supabase/realtimeBus'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 
 export const COTIZACIONES_KEY = ['cotizaciones']
 
@@ -74,7 +75,7 @@ export function useCotizaciones({ estado = '', clienteId = '', veTodos = false }
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: clienteIds }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])
@@ -184,7 +185,7 @@ export function useBuscarCotizaciones(busqueda, { enabled = true } = {}) {
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: clienteIds }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])
@@ -250,7 +251,7 @@ export function useCotizacion(id) {
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: [cot.cliente_id] }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])
@@ -454,7 +455,7 @@ export function useEnviarCotizacion() {
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${session2?.access_token}`,
-              'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+              ...getOperatorSessionHeaders(),
             },
             body: JSON.stringify({ ids: [cot.cliente_id] }),
           })

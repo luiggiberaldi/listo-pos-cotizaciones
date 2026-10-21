@@ -15,6 +15,7 @@ import {
   notifyDespachoPendienteMucho,
   notifyCompromisoAlto,
 } from '../services/notificationService'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 
 const HORAS_SIN_RESPUESTA     = 1    // horas sin respuesta para alertar
 const HORAS_DESPACHO_PENDIENTE = 4   // horas pendiente para alertar
@@ -100,7 +101,7 @@ export function useRecordatoriosCotizaciones() {
                   headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${session.access_token}`,
-                    'X-Operator-Id': useAuthStore.getState().perfil?.id || '',
+                    ...getOperatorSessionHeaders(),
                   },
                   body: JSON.stringify({ ids: clienteIds }),
                 })

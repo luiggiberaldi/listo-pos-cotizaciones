@@ -16,7 +16,6 @@ import {
 } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
-import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { enqueue } from '../lib/mutationQueue'
 import { broadcastEntidad } from '../services/supabase/realtimeBus'
 
@@ -477,7 +476,6 @@ export function useEnviarCotizacion() {
     onSuccess: async ({ numero, clienteNombre, vendedorNombre, totalUsd, esClienteAjeno, clienteVendedorNombre }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
       broadcastEntidad('cotizaciones')
-      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       // Guard: si no hay numero, algo falló (evitar Ghost Toast)
       if (!numero || numero === '—') return
       showToast(`Cotización #${numero} enviada`, 'success')
@@ -516,7 +514,6 @@ export function useAnularCotizacion() {
     onSuccess: async ({ numero }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
       broadcastEntidad('cotizaciones')
-      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       showToast(`Cotización #${numero} anulada`, 'warning')
       notifyCotizacionAnulada(numero, usuarioNombre, rol)
       // Push al otro rol
@@ -550,7 +547,6 @@ export function useActualizarEstado() {
     onSuccess: async ({ estado, numero, clienteNombre, totalUsd, vendedorId }) => {
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
       broadcastEntidad('cotizaciones')
-      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       // Guard: si no hay numero, algo falló (evitar Ghost Toast)
       if (!numero) return
       showToast(`Cotización #${numero} → ${estado}`, 'success')

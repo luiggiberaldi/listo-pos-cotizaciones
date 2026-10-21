@@ -1607,7 +1607,6 @@ function Step1Productos({
                 agregado={added}
                 cantidad={itemInCart?.cantidad ?? null}
                 tasa={tasa}
-                comprometido={0}
                 onAgregar={agregarProducto}
                 onMas={() => cambiarCantidad(p.id, 1)}
                 onMenos={() => itemInCart.cantidad <= 1 ? quitarItem(p.id) : cambiarCantidad(p.id, -1)}
@@ -1814,7 +1813,6 @@ function Step1Productos({
               inputMode="numeric"
               autoFocus
               min={1}
-              max={editQty.stock || 99999}
               defaultValue={editQty.cantidad}
               onFocus={e => e.target.select()}
               onKeyDown={e => {

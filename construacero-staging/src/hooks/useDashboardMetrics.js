@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 
 export const DASHBOARD_KEY = ['dashboard_metrics']
 
@@ -118,7 +119,7 @@ export function useDashboardMetrics() {
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: clienteIds }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])
@@ -202,7 +203,7 @@ export function useDashboardMetrics() {
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.access_token}`,
-                'X-Operator-Id': perfil?.id || '',
+                ...getOperatorSessionHeaders(),
               },
               body: JSON.stringify({ ids: clienteIds }),
             }).then(r => r.ok ? r.json() : []).catch(() => [])

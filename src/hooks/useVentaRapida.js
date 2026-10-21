@@ -9,7 +9,6 @@ import { DESPACHOS_KEY } from './useDespachos'
 import { INVENTARIO_KEY } from './useInventario'
 import { COTIZACIONES_KEY } from './useCotizaciones'
 import { COMISIONES_KEY } from './useComisiones'
-import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 import { CXC_KEY } from './useCuentasCobrar'
 import { showToast } from '../components/ui/Toast'
 import { sendPushNotification } from './usePushNotifications'
@@ -126,7 +125,6 @@ export function useVentaRapida() {
       qc.invalidateQueries({ queryKey: INVENTARIO_KEY, exact: false })
       qc.invalidateQueries({ queryKey: COMISIONES_KEY, exact: false })
       qc.invalidateQueries({ queryKey: COTIZACIONES_KEY, exact: false })
-      qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
       qc.invalidateQueries({ queryKey: CXC_KEY })
       showToast(`Venta rápida #${numero ?? '—'} creada`, 'success')
       const displayNum = String(numero || '').padStart(5, '0')

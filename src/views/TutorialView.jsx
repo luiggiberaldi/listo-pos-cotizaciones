@@ -172,7 +172,7 @@ const TUTORIAL_MODULES = [
     steps: [
       {
         title: 'Consulta de Precios y Stock',
-        desc: 'Accede al módulo de Inventario para consultar rápidamente los precios de cualquier material (precio de lista, al mayor o en bolívares según la tasa del día) y verificar el stock disponible (tanto la cantidad en almacén como el stock comprometido en despachos pendientes).',
+        desc: 'Accede al módulo de Inventario para consultar rápidamente los precios de cualquier material (precio de lista, al mayor o en bolívares según la tasa del día) y verificar el stock disponible en almacén.',
         tip: 'Usa la barra de búsqueda superior para filtrar productos por nombre o código.',
         mockupType: 'inv_consulta'
       },
@@ -1418,8 +1418,8 @@ export default function TutorialView() {
                   <span className="font-bold text-emerald-600">420 piezas</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Comprometido:</span>
-                  <span className="font-bold text-amber-500">10 piezas</span>
+                  <span className="text-slate-400">Stock mínimo:</span>
+                  <span className="font-bold text-amber-500">50 piezas</span>
                 </div>
               </div>
 
