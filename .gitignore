@@ -223,6 +223,10 @@ outputs/
 !scripts/test-release17-rollback-local.mjs
 !scripts/test-cxc-reporte-ui.mjs
 
+# Release 17 — smokes de verificación post-ventana (producción)
+!scripts/smoke-release17-produccion.mjs
+!scripts/smoke-cxc-reporte-produccion.mjs
+
 # Copias de seguridad y respaldos locales (nunca se suben)
 construacero-backups/
 .env.bak-wrangler

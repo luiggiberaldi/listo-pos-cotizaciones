@@ -4513,3 +4513,53 @@ error, sin avanzar). La ventana queda para correr con un solo comando el día el
 
 **Estado:** ventana lista para el día elegido. El comando NO hace los pasos 4-7 de la ventana
 (commit + empuje a main, smokes de la aplicación, aviso al equipo): siguen siendo manuales.
+
+## SESIÓN 22/10/2026 — VENTANA DE PRODUCCIÓN EJECUTADA: Release 17 + Lote ERP EN PRODUCCIÓN
+
+**En resumen:** la ventana se ejecutó y CERRÓ CON ÉXITO. Los 4 pasos del comando de la ventana
+salieron en verde (comprobaciones, respaldo verificado, instalación, plan B listo), el release se
+empujó a producción (commit `48ecfbc`), y los smokes finales contra la aplicación REAL también
+salieron en verde: el inventario se descuenta al aprobar y se revierte exacto, y el reporte
+Crédito/CxC cuadra con los números reales del negocio. **La ventana está cerrada.**
+
+**Orden en que corrió todo (22-oct):**
+1. **Comando de la ventana** (`ventana-release17-produccion.mjs`): los 4 pasos en verde —
+   comprobaciones LISTO, respaldo de 14.836 filas restaurado idéntico en local y re-verificado
+   contra producción viva (12/12), instalación del release 17 (pre-imágenes → apply → backfill →
+   postflight → smoke), y prueba en seco del plan B (la reversión de emergencia quedó lista).
+   Respaldo de la ventana: `C:\Users\luigg\Desktop\construacero-backups\ventana-release17-2026-10-22-03-58-11`.
+2. **Commit + empuje** del release completo (Release 17 + motivo de reapertura + Lote ERP) →
+   `main` = commit `48ecfbc`. Vercel desplegó el frontend solo y GitHub Actions desplegó el
+   Worker (`Deploy Worker a Cloudflare` → completed success).
+3. **Aplicación nueva verificada activa (paso 5):** el Worker responde `/api/ping` = `ok` (200)
+   y el frontend ya sirve el código nuevo (el paquete de Reportes contiene el "Cuadre de
+   movimientos" del reporte nuevo).
+4. **Smoke semántico en producción (paso 6)** — `scripts/smoke-release17-produccion.mjs`,
+   26 comprobaciones en verde con un producto de prueba en un tenant E2E temporal (se limpia
+   todo al salir): crear producto (100 und) + despacho → **aprobar** descuenta 100→97 con kardex
+   `egreso "Despacho #4165 aprobado"` firmado por el operador real y lote asignado →
+   **entregar** NO toca inventario (sigue en 97, kardex sin movimientos nuevos) → **revertir con
+   motivo** reingresa las 3 und (97→100) con kardex `ingreso`, limpia el lote, y **el motivo queda
+   guardado** en la nota. Cuadre final: 103 ingresos − 3 egresos = stock 100. La historia del
+   kardex se conserva (el egreso nunca se borra).
+5. **Smoke del reporte Crédito/CxC (paso 7)** — `scripts/smoke-cxc-reporte-produccion.mjs`
+   (solo lectura, mismo motor de cálculo que la pantalla) con los datos REALES del negocio,
+   rango 1-22 oct: 6/6 comprobaciones en verde. **Cuadre: $173.056,39 (saldo inicial) +
+   $119.670,91 (45 cargos) − $124.144,61 (68 abonos) = $168.582,69 (neto al cierre), que es
+   exactamente la deuda actual** ("Saldo actual coincide", diferencia $0.00). La pestaña
+   Movimientos tiene 113 filas del período; Clientes 58. Cruce independiente contra el libro
+   crudo: cargos y abonos idénticos a los KPIs.
+
+**Herramientas nuevas de esta sesión (para repetir las verificaciones cuando se quiera):**
+- `scripts/smoke-release17-produccion.mjs` — smoke semántico del ciclo aprobar→entregar→revertir
+  en producción (con guardia de entorno y confirmación por variable; crea y borra sus propios
+  fixtures en un tenant aislado).
+- `scripts/smoke-cxc-reporte-produccion.mjs` — verificación de solo lectura del reporte
+  Crédito/CxC contra los datos reales (acepta rango por argumento).
+
+**Pendiente menor (decisión del usuario 22-oct):** la confirmación VISUAL del reporte en la
+pantalla (KPIs, PDFs con los ojos) se dejó para cuando se desee; los datos ya cuadran por el
+motor de cálculo. Aviso al equipo ("ventana cerrada, pueden trabajar"): pendiente de enviarlo
+por el canal que se use internamente.
+
+**Estado:** Release 17 + Lote ERP **en producción y verificados**. Ventana cerrada.
