@@ -24,6 +24,10 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- ⚠️  AJUSTE OBLIGATORIO antes de ejecutar: indique el usuario operador
 --     (se usa como autor del kardex de migración).
+-- ⚠️  EXCLUSIÓN DECIDIDA 2026-10-21: los despachos #1930, #1933 y #2144
+--     quedaron OBSOLETOS (ya no se tocarán en el sistema) y su mercancía ya está
+--     en el conteo exacto del inventario. Se saltean por completo: ni egreso, ni
+--     sello, ni movimiento. Ver v_excluir_numeros más abajo.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -33,6 +37,10 @@ DECLARE
   -- ── Usuario que ejecuta la migración (kardex de evidencia) ──────────────
   v_usuario_id     uuid := 'b40a90d3-e9a8-41f2-b631-edd4ea14ad78'::uuid;  -- operador cutover: luigi (supervisor)
   v_usuario_nombre text := 'MIGRACIÓN release 17';        -- autor visible del kardex de migración
+
+  -- ── Despachos obsoletos que NUNCA mueven inventario (decisión 2026-10-21) ──
+  -- Quedaron fuera del sistema; su mercancía ya está en el conteo exacto.
+  v_excluir_numeros integer[] := ARRAY[1930, 1933, 2144];
 
   v_despacho    RECORD;
   v_producto    RECORD;
@@ -45,6 +53,7 @@ DECLARE
   v_egresados   integer := 0;
   v_sellados    integer := 0;
   v_movimientos integer := 0;
+  v_omitidos    integer := 0;
 BEGIN
   IF v_usuario_id IS NULL OR v_usuario_nombre IS NULL OR char_length(trim(v_usuario_nombre)) = 0 THEN
     RAISE EXCEPTION 'BACKFILL_17: configure v_usuario_id y v_usuario_nombre antes de ejecutar';
@@ -57,6 +66,15 @@ BEGIN
       AND estado IN ('despachada', 'entregada')
     ORDER BY numero
   LOOP
+    -- Obsoletos por decisión (2026-10-21): se saltean por completo,
+    -- sin egreso, sin sello y sin movimiento — su stock NO se toca.
+    IF v_despacho.numero = ANY (v_excluir_numeros) THEN
+      v_omitidos := v_omitidos + 1;
+      RAISE NOTICE 'BACKFILL_17: despacho #% SALTADO — obsoleto por decisión (nunca mueve inventario)',
+        v_despacho.numero;
+      CONTINUE;
+    END IF;
+
     IF v_despacho.estado = 'entregada' THEN
       -- El modelo viejo ya egresó al entregar ('Entrega confirmada — Despacho
       -- #N' en kardex). Solo se sella para que el invariante de egreso_lote_id
@@ -175,8 +193,8 @@ BEGIN
       v_despacho.numero, v_despacho.id, v_lote_id;
   END LOOP;
 
-  RAISE NOTICE 'BACKFILL_17 resumen: % despachos egresados (% movimientos), % sellados como legado',
-    v_egresados, v_movimientos, v_sellados;
+  RAISE NOTICE 'BACKFILL_17 resumen: % despachos egresados (% movimientos), % sellados como legado, % obsoletos omitidos (sin tocar)',
+    v_egresados, v_movimientos, v_sellados, v_omitidos;
 END;
 $backfill$;
 

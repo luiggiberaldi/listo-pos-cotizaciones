@@ -194,3 +194,35 @@ outputs/
 !scripts/test-cod-mixto-release-local.mjs
 !scripts/test-cod-idempotencia-release-local.mjs
 !docs/plans/2026-10-20-plan-cod-pagos-multiples-e2e.md
+
+# Lote seguro ERP — promoción 2026-10-18 (reportes Crédito/CxC + pruebas)
+!src/utils/__tests__/adminClientAuth.test.js
+!src/utils/__tests__/devolucionReembolso.test.js
+!src/utils/__tests__/pdfCodigosDeterminista.test.js
+!src/utils/__tests__/reporteDescuentos.test.js
+!src/utils/__tests__/smartSearchStrict.test.js
+!src/utils/__tests__/testerClientContract.test.js
+!src/utils/__tests__/testerDispatchContract.test.js
+!src/utils/__tests__/transportistaColors.test.js
+!src/utils/__tests__/transportistaSchema.test.js
+!api/handlers/__tests__/clientesPrestamoAtomic.test.js
+!api/handlers/__tests__/despachosAtomic.test.js
+!api/handlers/__tests__/inventarioAtomic.test.js
+!api/handlers/__tests__/origenMutaciones.test.js
+!api/handlers/__tests__/transportistasAtomic.test.js
+!api/lib/__tests__/isSameOriginRequest.test.js
+!api/lib/__tests__/transportistaUtils.test.js
+
+# Release 17 — ventana de producción 2026-10-22 (respaldo, instalación, plan B)
+!scripts/apply-release17-produccion.mjs
+!scripts/backup-release17-produccion.mjs
+!scripts/verify-release17-backup-local.mjs
+!scripts/rollback-release17-produccion.mjs
+!scripts/ventana-release17-produccion.mjs
+!scripts/test-release17-backfill-local.mjs
+!scripts/test-release17-rollback-local.mjs
+!scripts/test-cxc-reporte-ui.mjs
+
+# Copias de seguridad y respaldos locales (nunca se suben)
+construacero-backups/
+.env.bak-wrangler

@@ -4,8 +4,8 @@ import { useState, useMemo, useCallback } from 'react'
 import {
   BarChart3, CreditCard, RefreshCw, Download,
   FileText, DollarSign, AlertTriangle,
-  Clock, Users, Percent, ArrowUpCircle, Loader2, Briefcase,
-  ChevronDown, Globe, UserCheck, Printer, CheckCircle, Truck
+  Clock, Users, Percent, ArrowUpCircle, ArrowDownCircle, Loader2, Briefcase,
+  ChevronDown, ChevronLeft, ChevronRight, Globe, UserCheck, Printer, CheckCircle, Truck
 } from 'lucide-react'
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useReporteExternos } from '../hooks/useReporteExternos'
@@ -13,6 +13,7 @@ import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useComisiones, useComisionesResumen } from '../hooks/useComisiones'
 
 import { useResumenCxC } from '../hooks/useCuentasCobrar'
+import { useReportePeriodoCxC } from '../hooks/useReportePeriodoCxC'
 import { useProveedores } from '../hooks/useProveedores'
 import { getDayRange, getCorteSemanalRange, getMonthRange } from '../utils/dateHelpers'
 import { fmtUsd, fmtBs } from '../utils/format'
@@ -23,6 +24,7 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import EmptyState from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
+import { showToast } from '../components/ui/Toast'
 import CustomSelect from '../components/ui/CustomSelect'
 import KpiCards from '../components/reportes/KpiCards'
 import TablaVendedores from '../components/reportes/TablaVendedores'
@@ -1842,21 +1844,67 @@ function AgingBars({ aging }) {
   )
 }
 
+function paginarReporte(items, pagina, porPagina) {
+  const totalPaginas = Math.max(1, Math.ceil(items.length / porPagina))
+  const paginaSegura = Math.min(Math.max(1, pagina), totalPaginas)
+  return items.slice((paginaSegura - 1) * porPagina, paginaSegura * porPagina)
+}
+
+function PaginacionReporte({ pagina, totalItems, porPagina, onCambiar }) {
+  if (totalItems === 0) return null
+  const totalPaginas = Math.max(1, Math.ceil(totalItems / porPagina))
+  const paginaSegura = Math.min(Math.max(1, pagina), totalPaginas)
+  const desde = (paginaSegura - 1) * porPagina + 1
+  const hasta = Math.min(paginaSegura * porPagina, totalItems)
+
+  return (
+    <div aria-live="polite" className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
+      <span className="text-[11px] text-slate-500">Mostrando {desde}–{hasta} de {totalItems}</span>
+      {totalPaginas > 1 && (
+        <div className="flex items-center gap-2">
+          <button type="button" aria-label="Página anterior" onClick={() => onCambiar(Math.max(1, paginaSegura - 1))} disabled={paginaSegura <= 1}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            <ChevronLeft size={16} />
+          </button>
+          <span className="min-w-24 text-center text-xs font-semibold text-slate-600">Página {paginaSegura} de {totalPaginas}</span>
+          <button type="button" aria-label="Página siguiente" onClick={() => onCambiar(Math.min(totalPaginas, paginaSegura + 1))} disabled={paginaSegura >= totalPaginas}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TabCredito() {
   const [rango, setRango] = useState(() => {
     const month = getMonthRange()
     return { from: month.from, to: month.to }
   })
-  const { data: cxcData, isLoading: cxcLoading, isError: cxcError, refetch: refetchCxc } = useResumenCxC(rango)
+  // El reporte del período (KPIs de saldo inicial/cargos/abonos, cuadre de
+  // movimientos y movimientos del rango) lo construye el módulo probado
+  // cxcPeriodReport.js a través de useReportePeriodoCxC.
+  const { data: cxcData, isLoading: cxcLoading, isError: cxcError, refetch: refetchCxc } = useReportePeriodoCxC(rango)
   const { data: proveedores = [], isLoading: provLoading, isError: provError, refetch: refetchProv } = useProveedores()
 
-  const [seccionCredito, setSeccionCredito] = useState('cxc') // 'cxc' | 'cxp'
+  const [vistaCredito, setVistaCredito] = useState('resumen')
+  const [busquedaAlertas, setBusquedaAlertas] = useState('')
+  const [busquedaClientes, setBusquedaClientes] = useState('')
+  const [busquedaMovimientos, setBusquedaMovimientos] = useState('')
+  const [busquedaProveedores, setBusquedaProveedores] = useState('')
+  const [paginaClientes, setPaginaClientes] = useState(1)
+  const [paginaAlertas, setPaginaAlertas] = useState(1)
+  const [paginaMovimientos, setPaginaMovimientos] = useState(1)
+  const [paginaProveedores, setPaginaProveedores] = useState(1)
   const [sortBy, setSortBy] = useState('saldo') // 'saldo' | 'dias' | 'diasRestantes'
   const [sortDir, setSortDir] = useState('desc')
+  const porPagina = 20
   const { perfil } = useAuthStore()
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe'
 
   const [exportandoCxC, setExportandoCxC] = useState(false)
+  const [tipoReporteCxC, setTipoReporteCxC] = useState('detallado')
   const { data: configNeg = {} } = useConfigNegocio()
 
   const isLoading = cxcLoading || provLoading
@@ -1867,7 +1915,13 @@ function TabCredito() {
     refetchProv()
   }
 
-  async function exportarCxCPDF(tipoReporte = 'detallado', accion = 'descargar') {
+  async function exportarCxCPDF(accion = 'descargar') {
+    const ventanaImpresion = accion === 'imprimir' ? window.open('', '_blank') : null
+    if (accion === 'imprimir' && !ventanaImpresion) {
+      showToast('Permite las ventanas emergentes para imprimir el PDF.', 'warning')
+      return
+    }
+
     setExportandoCxC(true)
     try {
       const { generarReporteCxCPDF } = await import('../services/pdf/cxcPDF')
@@ -1875,17 +1929,22 @@ function TabCredito() {
         data: cxcData,
         config: configNeg,
         action: accion === 'imprimir' ? 'print' : 'download',
-        tipo: tipoReporte,
-        rango: rango
+        tipo: tipoReporteCxC,
+        rango,
+        printWindow: ventanaImpresion,
       })
+      if (accion === 'descargar') showToast('Reporte CxC descargado.', 'success')
     } catch (e) {
+      ventanaImpresion?.close()
       console.error('Error generando reporte de CxC:', e)
+      showToast('No se pudo generar el reporte de CxC.', 'error')
     } finally {
       setExportandoCxC(false)
     }
   }
 
   function toggleSort(col) {
+    setPaginaClientes(1)
     if (sortBy === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
     else { setSortBy(col); setSortDir(col === 'diasRestantes' ? 'asc' : 'desc') }
   }
@@ -1898,23 +1957,14 @@ function TabCredito() {
   const clientesConDeuda = cxcData?.clientesConDeuda || []
   const aging = cxcData?.aging || []
   const alertasVencimiento = cxcData?.alertasVencimiento || []
-  const abonos = cxcData?.abonos || []
+  const movimientosPeriodo = cxcData?.movimientosDelPeriodo || []
 
   // Calcular métricas de CxP (Proveedores)
   const proveedoresConDeuda = proveedores.filter(p => Number(p.saldo_pendiente || 0) > 0)
   const totalCxC = Number(kpis.totalDeuda || 0)
   const totalCxP = proveedores.reduce((sum, p) => sum + (p.activo ? Number(p.saldo_pendiente || 0) : 0), 0)
+  const actividadCxC = movimientosPeriodo.length > 0
   const balanceNeto = totalCxC - totalCxP
-
-  if (totalCxC === 0 && proveedoresConDeuda.length === 0) {
-    return (
-      <EmptyState
-        icon={CreditCard}
-        title="Sin saldos pendientes"
-        description="No hay deudas de clientes (CxC) ni cuentas por pagar a proveedores (CxP) actualmente."
-      />
-    )
-  }
 
   const clientesOrdenados = [...clientesConDeuda].sort((a, b) => {
     let va, vb
@@ -1936,8 +1986,24 @@ function TabCredito() {
     const sb = Number(b.saldo_pendiente)
     return sb - sa // Mayor deuda primero
   })
-
-  const maxSaldo = Math.max(...clientesConDeuda.map(c => Number(c.saldo_pendiente)), 1)
+  const alertaVencidasOrdenadas = [...alertasVencimiento].sort((a, b) => Number(a.diasRestantes) - Number(b.diasRestantes))
+  const alertasFiltradas = alertaVencidasOrdenadas.filter(alerta =>
+    `${alerta.cliente_nombre || ''} ${alerta.metodo_pago || ''}`.toLowerCase().includes(busquedaAlertas.trim().toLowerCase())
+  )
+  const clientesFiltrados = clientesOrdenados.filter(cliente =>
+    `${cliente.nombre || ''} ${cliente.rif_cedula || ''} ${cliente.vendedor?.nombre || ''}`.toLowerCase().includes(busquedaClientes.trim().toLowerCase())
+  )
+  const movimientosFiltrados = movimientosPeriodo.filter(movimiento =>
+    `${movimiento.cliente?.nombre || ''} ${movimiento.descripcion || ''} ${movimiento.referencia || ''} ${movimiento.tipo || ''} ${movimiento.metodo_pago || ''} ${JSON.stringify(movimiento.forma_pago_abono || '')}`.toLowerCase().includes(busquedaMovimientos.trim().toLowerCase())
+  )
+  const proveedoresFiltrados = proveedoresOrdenados.filter(proveedor =>
+    `${proveedor.nombre || ''} ${proveedor.rif_cedula || ''} ${proveedor.telefono || ''} ${proveedor.email || ''}`.toLowerCase().includes(busquedaProveedores.trim().toLowerCase())
+  )
+  const clientesPaginados = paginarReporte(clientesFiltrados, paginaClientes, porPagina)
+  const alertasPaginadas = paginarReporte(alertasFiltradas, paginaAlertas, porPagina)
+  const movimientosPaginados = paginarReporte(movimientosFiltrados, paginaMovimientos, porPagina)
+  const proveedoresPaginados = paginarReporte(proveedoresFiltrados, paginaProveedores, porPagina)
+  const maxSaldo = clientesConDeuda.reduce((max, cliente) => Math.max(max, Number(cliente.saldo_pendiente) || 0), 1)
 
   const SortBtn = ({ col, label }) => (
     <button
@@ -1948,7 +2014,6 @@ function TabCredito() {
       <span className="text-[9px] ml-0.5">{sortBy === col ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}</span>
     </button>
   )
-
   const rangoLabel = `${new Date(`${rango.from}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })} - ${new Date(`${rango.to}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
 
   return (
@@ -1958,156 +2023,180 @@ function TabCredito() {
         <div className="flex flex-col gap-6">
           <div className="w-full">
             <div className="flex items-center gap-2 ml-1 mb-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo de Cobranza (Abonos)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Período del reporte CxC (corte y movimientos)</label>
               <span className="hidden sm:inline-flex text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
                 {rangoLabel}
               </span>
             </div>
-            <DateRangeSelector value={rango} onChange={setRango} />
+            <DateRangeSelector value={rango} onChange={nuevoRango => {
+              setRango(nuevoRango)
+              setPaginaAlertas(1)
+              setPaginaClientes(1)
+              setPaginaMovimientos(1)
+              setPaginaProveedores(1)
+            }} envolverPresets />
           </div>
         </div>
       </div>
 
-      {/* Alertas de Vencimiento para Admin */}
-      {esAdmin && alertasVencimiento?.length > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="text-orange-600" size={18} />
-            <h3 className="text-sm font-bold text-orange-900">Alertas de Vencimiento de Crédito</h3>
-            <span className="bg-orange-200 text-orange-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-              {alertasVencimiento.length}
-            </span>
-          </div>
-          <div className="space-y-2">
-            {alertasVencimiento.map(alerta => (
-              <div key={alerta.id} className="flex items-center justify-between bg-white border border-orange-100 rounded-lg p-2.5">
-                <div>
+      <div className="sticky top-0 z-30 -mx-1 space-y-2 bg-white/95 pb-1 backdrop-blur sm:mx-0">
+      {/* Acciones principales accesibles sin bajar hasta las tablas */}
+      <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-md sm:flex-row sm:items-center sm:justify-between sm:p-3">        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">Reporte CxC</span>
+
+          <span className="text-[10px] font-semibold text-slate-400">{rangoLabel}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="sr-only" htmlFor="formato-reporte-cxc">Formato del reporte</label>
+          <select id="formato-reporte-cxc" aria-label="Formato de reporte CxC" value={tipoReporteCxC} onChange={event => setTipoReporteCxC(event.target.value)} disabled={exportandoCxC} className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 sm:flex-none">
+            <option value="resumen">Resumen PDF</option>
+            <option value="detallado">Detallado PDF</option>
+          </select>
+          <button type="button" aria-label="Imprimir reporte CxC" onClick={() => exportarCxCPDF('imprimir')} disabled={exportandoCxC || (!clientesConDeuda.length && !actividadCxC)}
+            className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 sm:flex-none">
+            {exportandoCxC ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Imprimir
+          </button>
+          <button type="button" aria-label="Descargar reporte CxC" onClick={() => exportarCxCPDF('descargar')} disabled={exportandoCxC || (!clientesConDeuda.length && !actividadCxC)}
+            className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-600 px-3 text-xs font-bold text-white shadow-sm hover:bg-red-700 disabled:opacity-50 sm:flex-none">
+            {exportandoCxC ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+            {exportandoCxC ? 'Generando…' : 'Descargar'}
+          </button>
+        </div>
+      </div>
+
+      <nav aria-label="Secciones del reporte de crédito" className="-mx-1 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1 sm:mx-0">
+        {[
+          { id: 'resumen', label: 'Resumen' },
+          ...(esAdmin ? [{ id: 'alertas', label: `Alertas (${alertasVencimiento.length})` }] : []),
+          { id: 'clientes', label: `Clientes (${clientesConDeuda.length})` },
+          { id: 'movimientos', label: `Movimientos (${movimientosPeriodo.length})` },
+          { id: 'cxp', label: `Proveedores (${proveedoresConDeuda.length})` },
+        ].map(seccion => (
+          <button key={seccion.id} type="button" onClick={() => setVistaCredito(seccion.id)} aria-current={vistaCredito === seccion.id ? 'page' : undefined}
+            className={`min-h-9 shrink-0 rounded-lg px-3 text-xs font-bold transition-colors ${vistaCredito === seccion.id ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:bg-white/70 hover:text-slate-700'}`}>
+            {seccion.label}
+          </button>
+        ))}
+      </nav>
+      </div>
+
+      {vistaCredito === 'alertas' && esAdmin && (
+        <section aria-labelledby="alertas-cxc-titulo" className="overflow-hidden rounded-xl border border-orange-200 bg-orange-50">
+          <div className="flex flex-col gap-3 border-b border-orange-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="shrink-0 text-orange-600" size={18} />
+              <h2 id="alertas-cxc-titulo" className="text-sm font-bold text-orange-900">Alertas de vencimiento</h2>
+              <span className="rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-800">{alertasFiltradas.length} / {alertasVencimiento.length}</span>
+            </div>              <input type="search" aria-label="Buscar alertas por cliente" placeholder="Buscar cliente…" value={busquedaAlertas}
+                onChange={event => { setBusquedaAlertas(event.target.value); setPaginaAlertas(1) }}
+                onKeyDown={event => { if (event.key === 'Enter') setPaginaAlertas(1) }}
+                className="min-h-10 w-full rounded-lg border border-orange-200 bg-white px-3 text-sm sm:max-w-xs" />
+
+          </div>            <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+
+            {alertasPaginadas.map(alerta => (
+              <div key={alerta.id} className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-orange-100 bg-white p-3">
+                <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <div className="text-xs font-bold text-slate-800">{alerta.cliente_nombre}</div>
-                    {alerta.metodo_pago === 'cod' && (
-                      <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase border border-blue-200 shrink-0">
-                        COD
-                      </span>
-                    )}
+                    <div className="truncate text-xs font-bold text-slate-800">{alerta.cliente_nombre}</div>
+                    {alerta.metodo_pago === 'cod' && <span className="shrink-0 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-blue-800">COD</span>}
                   </div>
-                  <div className="text-[10px] text-slate-500">
-                    Cargo: {new Date(alerta.creado_en).toLocaleDateString()}
-                  </div>
+                  <div className="text-[10px] text-slate-500">Cargo: {new Date(alerta.creado_en).toLocaleDateString()}</div>
                 </div>
-                <div className="text-right">
-                  <div className="text-xs font-black text-orange-600">
-                    {fmtUsd(alerta.saldo_usd)}
-                  </div>
-                  <div className="text-[10px] font-semibold text-orange-500">
-                    {alerta.diasRestantes < 0 
-                      ? `Vencido hace ${Math.abs(alerta.diasRestantes)} días` 
-                      : alerta.diasRestantes === 0 
-                        ? 'Vence hoy' 
-                        : `Vence en ${alerta.diasRestantes} días`
-                    }
-                  </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-xs font-black text-orange-600">{fmtUsd(alerta.saldo_usd)}</div>
+                  <div className="text-[10px] font-semibold text-orange-500">{alerta.diasRestantes < 0 ? `Vencido hace ${Math.abs(alerta.diasRestantes)} días` : alerta.diasRestantes === 0 ? 'Vence hoy' : `Vence en ${alerta.diasRestantes} días`}</div>
                 </div>
               </div>
             ))}
+            {alertasFiltradas.length === 0 && <p className="col-span-full p-6 text-center text-sm text-slate-500">No hay alertas que coincidan con la búsqueda.</p>}
           </div>
-        </div>
+          <PaginacionReporte pagina={paginaAlertas} totalItems={alertasFiltradas.length} porPagina={porPagina} onCambiar={setPaginaAlertas} />
+        </section>
       )}
 
-      {/* KPIs — 5 tarjetas */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard
-          icon={DollarSign} label="Total por cobrar (CxC)"
-          value={fmtUsd(totalCxC)}
-          sub={`${kpis.numClientesConDeuda} clientes con deuda`}
-          gradient="linear-gradient(135deg, #991b1b, #b91c1c)" border="rgba(255,255,255,0.10)"
-        />
-        <KpiCard
-          icon={CheckCircle} label="Saldo a favor clientes"
-          value={fmtUsd(kpis.totalSaldoFavorClientes || 0)}
-          sub={`${kpis.numClientesConSaldoFavor || 0} clientes con saldo a favor`}
-          gradient="linear-gradient(135deg, #059669, #047857)" border="rgba(255,255,255,0.10)"
-        />
-        <KpiCard
-          icon={Briefcase} label="Total por pagar (CxP)"
-          value={fmtUsd(totalCxP)}
-          sub={`${proveedoresConDeuda.length} proveedores con deuda`}
-          gradient="linear-gradient(135deg, #7c3aed, #6d28d9)" border="rgba(255,255,255,0.10)"
-        />
-        <KpiCard
-          icon={DollarSign} label="Balance Neto (CxC - CxP)"
-          value={fmtUsd(balanceNeto)}
-          sub={balanceNeto >= 0 ? "Superávit de cartera" : "Déficit de cartera"}
-          gradient={balanceNeto >= 0 ? "linear-gradient(135deg, #065f46, #047857)" : "linear-gradient(135deg, #b45309, #92400e)"} border="rgba(255,255,255,0.10)"
-        />
-        <KpiCard
-          icon={Clock} label="Deuda más antigua"
-          value={`${kpis.diasMasAntiguo || 0}d`}
-          sub="días transcurridos"
-          gradient="linear-gradient(135deg, #1e3a5f, #1B365D)" border="rgba(255,255,255,0.07)"
-        />
-      </div>
-
-      {/* Selector de Sección: CxC Clientes vs CxP Proveedores */}
-      <div className="flex p-0.5 bg-slate-100/80 rounded-xl max-w-md h-9">
-        <button
-          onClick={() => setSeccionCredito('cxc')}
-          className={`flex-1 text-xs font-bold rounded-lg transition-all ${seccionCredito === 'cxc' ? 'bg-white shadow-md text-primary font-black' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          Clientes (CxC)
+      {vistaCredito === 'resumen' && esAdmin && alertasVencimiento.length > 0 && (
+        <button type="button" onClick={() => { setPaginaAlertas(1); setVistaCredito('alertas') }} className="flex w-full items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-left hover:bg-orange-100">
+          <span className="flex min-w-0 items-center gap-2"><AlertTriangle size={17} className="shrink-0 text-orange-600" /><span className="truncate text-xs font-bold text-orange-900">{alertasVencimiento.length} alertas de vencimiento · {alertasVencimiento.filter(alerta => alerta.diasRestantes < 0).length} vencidas</span></span>
+          <span className="shrink-0 text-xs font-bold text-orange-800">Ver alertas →</span>
         </button>
-        <button
-          onClick={() => setSeccionCredito('cxp')}
-          className={`flex-1 text-xs font-bold rounded-lg transition-all ${seccionCredito === 'cxp' ? 'bg-white shadow-md text-primary font-black' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          Proveedores (CxP)
-        </button>
-      </div>
+      )}
 
-      {seccionCredito === 'cxc' ? (
+      {/* Resumen CxC para las fechas seleccionadas */}
+      {vistaCredito === 'resumen' && <>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <KpiCard icon={DollarSign} label="Saldo inicial (deuda)" value={fmtUsd(kpis.saldoInicial || 0)} sub={`Neto: ${fmtUsd(kpis.saldoInicialNeto || 0)}`} gradient="linear-gradient(135deg, #1e3a5f, #1B365D)" border="rgba(255,255,255,0.07)" />
+        <KpiCard icon={ArrowUpCircle} label="Cargos del período" value={fmtUsd(kpis.totalCargos || 0)} sub="Crédito generado en el rango" gradient="linear-gradient(135deg, #b45309, #92400e)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={ArrowDownCircle} label="Abonos aplicados" value={fmtUsd(kpis.totalAbonos || 0)} sub={`Saldo a favor/cruces: ${fmtUsd(kpis.totalAbonosSaldoFavor || 0)}`} gradient="linear-gradient(135deg, #047857, #065f46)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={CheckCircle} label="Cobros en dinero" value={fmtUsd(kpis.totalCobrado || 0)} sub="Excluye cruces internos y devoluciones" gradient="linear-gradient(135deg, #059669, #047857)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={CreditCard} label="CxC al cierre" value={fmtUsd(totalCxC)} sub={`${kpis.numClientesConDeuda || 0} clientes con deuda`} gradient="linear-gradient(135deg, #991b1b, #b91c1c)" border="rgba(255,255,255,0.10)" />
+          <KpiCard icon={DollarSign} label="Saldo a favor actual" value={fmtUsd(kpis.totalSaldoFavorClientes || 0)} sub="Saldo disponible hoy, no al corte" light />
+        </div>
+
+        <AgingBars aging={aging} />
+
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-950">
+        <div className="font-black uppercase tracking-wide text-[10px] text-indigo-700">Cuadre de movimientos · ${rangoLabel}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold">
+          <span>Neto inicial {fmtUsd(kpis.saldoInicialNeto || 0)}</span><span>+</span>
+          <span>cargos {fmtUsd(kpis.totalCargos || 0)}</span><span>−</span>
+          <span>abonos {fmtUsd(kpis.totalAbonos || 0)}</span><span>=</span>
+          <span>neto al cierre {fmtUsd(kpis.saldoFinalNeto || 0)}</span>
+            {kpis.saldoActualComparado ? (
+            <span className={`ml-auto font-black ${Math.abs(Number(kpis.diferenciaSaldoActual || 0)) < 0.01 ? 'text-emerald-700' : 'text-red-700'}`}>
+              {Math.abs(Number(kpis.diferenciaSaldoActual || 0)) < 0.01 ? 'Saldo actual coincide' : `Revisar saldo: ${fmtUsd(kpis.diferenciaSaldoActual)} · ${kpis.clientesConDiferenciaSaldoActual || 0} clientes`}
+            </span>
+          ) : <span className="ml-auto font-black text-amber-800">Cuadre matemático; ledger no validado</span>}
+        </div>
+        {kpis.totalAbonosAjuste > 0 && <div className="mt-1 text-[10px] text-indigo-700">Incluye {fmtUsd(kpis.totalAbonosAjuste)} de abonos por devolución/ajustes, separados de los cobros monetarios.</div>}
+        {kpis.totalAbonosSinClasificar > 0 && <div className="mt-1 text-[10px] font-bold text-red-700">Revisar {fmtUsd(kpis.totalAbonosSinClasificar)} en abonos sin método o con desglose incompleto; no se cuentan como dinero cobrado.</div>}
+        {cxcData?.revisionesSaldoActual?.length > 0 && (
+          <details className="mt-2 rounded-lg border border-red-200 bg-white p-2 text-[10px] text-red-800">
+            <summary className="cursor-pointer font-bold">Ver diferencias por cliente ({cxcData.revisionesSaldoActual.length})</summary>
+            <ul className="mt-1 space-y-1">
+              {cxcData.revisionesSaldoActual.map(cliente => <li key={cliente.id}>{cliente.nombre}: ledger {fmtUsd(cliente.saldoLedger)} · saldo actual {fmtUsd(cliente.saldoAlmacenado)} · diferencia {fmtUsd(cliente.diferencia)}</li>)}
+            </ul>
+          </details>
+        )}
+        <div className="mt-1 text-[10px] text-indigo-700">El saldo a favor mostrado es el disponible actual; CxP corresponde al saldo actual de proveedores y no se recorta al rango.</div>
+        </div>
+      </>}
+
+      {vistaCredito === 'clientes' && (
         <>
-          {/* Aging con barras */}
-          <AgingBars aging={aging} />
-
-          {/* Tabla de clientes mejorada */}
-          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <Users size={14} className="text-red-500" />
-                <h3 className="text-xs sm:text-sm font-black text-slate-800">Clientes con saldo pendiente</h3>
-                <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold">{clientesConDeuda.length}</span>
+                <h2 className="text-sm font-black text-slate-800">Clientes con saldo pendiente</h2>
+                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">{clientesFiltrados.length} / {clientesConDeuda.length}</span>
               </div>
-
-              <div className="flex items-center gap-2">
-                {/* BOTÓN IMPRIMIR */}
-                <button
-                  onClick={() => exportarCxCPDF('detallado', 'imprimir')}
-                  disabled={exportandoCxC}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-                  title="Imprimir Reporte CxC"
-                >
-                  <Printer size={13} className="text-slate-500" />
-                  <span className="hidden sm:inline">Imprimir</span>
-                </button>
-
-                {/* BOTÓN DESCARGAR */}
-                <button
-                  onClick={() => exportarCxCPDF('detallado', 'descargar')}
-                  disabled={exportandoCxC}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-                  title="Descargar Reporte CxC"
-                >
-                  {exportandoCxC ? (
-                    <Loader2 size={13} className="animate-spin text-white" />
-                  ) : (
-                    <Download size={13} className="text-white" />
-                  )}
-                  <span className="hidden sm:inline">{exportandoCxC ? 'Generando...' : 'Descargar'}</span>
-                </button>
+              <div className="flex w-full flex-col gap-2 sm:max-w-xl sm:flex-row">
+                <input type="search" aria-label="Buscar clientes por nombre, RIF o vendedor" placeholder="Buscar cliente, RIF o vendedor…" value={busquedaClientes}
+                  onChange={event => { setBusquedaClientes(event.target.value); setPaginaClientes(1) }}
+                  className="min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" />
+                <label className="sr-only" htmlFor="orden-clientes-cxc">Ordenar clientes</label>
+                <select id="orden-clientes-cxc" value={sortBy} onChange={event => { const col = event.target.value; setSortBy(col); setSortDir(col === 'diasRestantes' ? 'asc' : 'desc'); setPaginaClientes(1) }}
+                  className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 sm:w-44">
+                  <option value="saldo">Mayor saldo</option>
+                  <option value="dias">Más antigüedad</option>
+                  <option value="diasRestantes">Próximo vencimiento</option>
+                </select>
               </div>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+            <div className="grid gap-2 p-3 lg:hidden">
+              {clientesFiltrados.length === 0 ? <p className="p-6 text-center text-sm text-slate-500">No se encontraron clientes con ese filtro.</p> : clientesPaginados.map(cliente => {
+                const dias = cliente.diasSinPago ?? 0
+                const riesgo = riesgoCliente(dias)
+                return <article key={cliente.id} className="rounded-xl border border-slate-100 p-3">
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-words text-sm font-bold text-slate-800">{cliente.nombre}</p><p className="text-[10px] text-slate-400">{cliente.rif_cedula || 'Sin RIF'}{cliente.vendedor?.nombre ? ` · ${cliente.vendedor.nombre}` : ''}</p></div><strong className="shrink-0 text-sm text-red-600">{fmtUsd(cliente.saldo_pendiente)}</strong></div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5"><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${riesgo.bg} ${riesgo.text}`}>{riesgo.label} · {dias}d</span><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-600">{cliente.diasRestantes === null ? 'Sin vencimiento' : cliente.diasRestantes < 0 ? `Vencido ${Math.abs(cliente.diasRestantes)}d` : cliente.diasRestantes === 0 ? 'Vence hoy' : `${cliente.diasRestantes}d restantes`}</span></div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-2 text-[10px]"><span className="text-slate-500">Inicial<strong className="block text-slate-700">{fmtUsd(cliente.saldo_inicial || 0)}</strong></span><span className="text-amber-700">Cargos<strong className="block">{fmtUsd(cliente.monto_otorgado || 0)}</strong></span><span className="text-emerald-700">Abonos<strong className="block">{fmtUsd(cliente.total_abonado_periodo || 0)}</strong></span></div>
+                </article>
+              })}
+            </div>
+              <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1050px] text-xs">
                 <thead>
                   <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
                     <th className="px-4 py-2.5 text-left font-semibold">Cliente</th>
@@ -2119,15 +2208,20 @@ function TabCredito() {
                     <th className="px-3 py-2.5 text-center">
                       <SortBtn col="diasRestantes" label="Días Restantes" />
                     </th>
-                    <th className="px-3 py-2.5 text-right font-semibold">Otorgado USD</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-700">Cobrado USD</th>
-                    <th className="px-3 py-2.5 text-right">
-                      <SortBtn col="saldo" label="Saldo USD" />
-                    </th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Saldo inicial</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-amber-700">Cargos período</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-700">Abonos período</th>
+                    <th className="px-3 py-2.5 text-right"><SortBtn col="saldo" label="Saldo al cierre" /></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {clientesOrdenados.map((c, i) => {
+                  {clientesFiltrados.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-8 text-center text-xs font-medium text-slate-400">
+                        No hay clientes con saldo pendiente al cierre de este período o no coinciden con la búsqueda.
+                      </td>
+                    </tr>
+                  ) : clientesPaginados.map((c, i) => {
                     const saldo = Number(c.saldo_pendiente)
                     const dias = c.diasSinPago ?? 0
                     const riesgo = riesgoCliente(dias)
@@ -2190,20 +2284,9 @@ function TabCredito() {
                             </span>
                           )}
                         </td>
-                        {/* Otorgado */}
-                        <td className="px-3 py-3 text-right">
-                          <span className="font-bold text-slate-600">
-                            {fmtUsd(c.monto_otorgado || 0)}
-                          </span>
-                        </td>
-                        {/* Cobrado */}
-                        <td className="px-3 py-3 text-right">
-                          {(rango?.from || rango?.to) ? (
-                            <span className="font-bold text-emerald-600">
-                              {fmtUsd(c.monto_cobrado || 0)}
-                            </span>
-                          ) : <span className="text-slate-300">—</span>}
-                        </td>
+                        <td className="px-3 py-3 text-right font-semibold text-slate-600">{fmtUsd(c.saldo_inicial || 0)}</td>
+                        <td className="px-3 py-3 text-right font-semibold text-amber-700">{fmtUsd(c.monto_otorgado || 0)}</td>
+                        <td className="px-3 py-3 text-right font-semibold text-emerald-700">{fmtUsd(c.total_abonado_periodo || 0)}</td>
                         {/* Saldo */}
                         <td className="px-3 py-3 text-right">
                           <span className={`font-black text-sm ${saldo > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
@@ -2216,38 +2299,73 @@ function TabCredito() {
                 </tbody>
               </table>
             </div>
-
-            {/* Footer resumen */}
-            <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[10px] text-slate-400">{clientesConDeuda.length} cliente{clientesConDeuda.length !== 1 ? 's' : ''} con deuda activa</span>
-              <div className="flex flex-wrap gap-4">
-                {(rango?.from || rango?.to) && (
-                  <span className="text-xs font-bold text-slate-500">
-                    Otorgado: {fmtUsd(kpis.totalOtorgado || totalCxC)}
-                  </span>
-                )}
-                {(rango?.from || rango?.to) && (
-                  <span className="text-xs font-bold text-emerald-600">
-                    Cobrado: {fmtUsd(kpis.totalCobrado || 0)}
-                  </span>
-                )}
-                <span className="text-xs font-black text-red-600">
-                  Saldo Pendiente: {fmtUsd(totalCxC)}
-                </span>
+            <PaginacionReporte pagina={paginaClientes} totalItems={clientesFiltrados.length} porPagina={porPagina} onCambiar={setPaginaClientes} />
+            <div className="border-t border-slate-100 bg-slate-50 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[10px] text-slate-500">{kpis.numClientesConDeuda || 0} cliente{(kpis.numClientesConDeuda || 0) !== 1 ? 's' : ''} con deuda al cierre · {kpis.numClientesConActividad || 0} con saldo o movimientos</span>
+                <div className="flex flex-wrap gap-3">
+                  <span className="text-xs font-bold text-amber-700">Cargos: {fmtUsd(kpis.totalCargos || 0)}</span>
+                  <span className="text-xs font-bold text-emerald-700">Abonos: {fmtUsd(kpis.totalAbonos || 0)}</span>
+                  <span className="text-xs font-bold text-emerald-600">Cobrado: {fmtUsd(kpis.totalCobrado || 0)}</span>
+                  <span className="text-xs font-black text-red-600">CxC al cierre: {fmtUsd(totalCxC)}</span>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
+        </>
+      )}
 
-          {/* Tabla de Abonos Recientes */}
-          {abonos && abonos.length > 0 && (
+
+      {/* Actividad conciliada del período */}
+      {vistaCredito === 'movimientos' && (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <DollarSign size={14} className="text-emerald-500" />
+              <h2 className="text-sm font-black text-slate-800">Actividad CxC del período</h2>
+              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-600">{movimientosFiltrados.length}</span>
+            </div>
+            <input type="search" aria-label="Buscar movimientos CxC" placeholder="Buscar cliente, referencia o descripción…" value={busquedaMovimientos}
+              onChange={event => { setBusquedaMovimientos(event.target.value); setPaginaMovimientos(1) }}
+              className="min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm sm:max-w-sm" />
+          </div>
+          {movimientosFiltrados.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">No hay movimientos para mostrar con este filtro.</p> : (
+            <>
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[850px] text-xs">
+                  <thead><tr className="border-b border-slate-100 bg-slate-50 text-[10px] uppercase text-slate-400">
+                    <th className="px-4 py-2.5 text-left font-semibold">Fecha</th><th className="px-3 py-2.5 text-left font-semibold">Cliente</th><th className="px-3 py-2.5 text-center font-semibold">Movimiento</th><th className="px-3 py-2.5 text-center font-semibold">Método</th><th className="px-3 py-2.5 text-left font-semibold">Ref / Descripción</th><th className="px-3 py-2.5 text-center font-semibold">Despacho</th><th className="px-4 py-2.5 text-right font-semibold">Monto USD</th>
+                  </tr></thead>
+                  <tbody>{movimientosPaginados.map(movimiento => {
+                    const numDes = movimiento.despacho?.numero ? `DES-${String(movimiento.despacho.numero).padStart(5, '0')}` : (movimiento.despacho?.cotizacion?.numero ? `COT-${String(movimiento.despacho.cotizacion.numero).padStart(5, '0')}` : '—')
+                    return <tr key={movimiento.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-slate-500">{new Date(movimiento.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td><td className="px-3 py-2.5 font-bold text-slate-700">{movimiento.cliente?.nombre || 'Desconocido'}</td><td className={`px-3 py-2.5 text-center font-bold ${movimiento.tipo === 'cargo' ? 'text-amber-700' : 'text-emerald-700'}`}>{movimiento.tipo === 'cargo' ? 'Cargo' : 'Abono'}</td><td className="px-3 py-2.5 text-center font-semibold text-slate-600">{movimiento.tipo === 'abono' ? formatMetodoPago(movimiento.forma_pago_abono || movimiento.metodo_pago) : (movimiento.metodo_pago === 'cod' ? 'COD' : 'Crédito')}</td><td className="max-w-xs truncate px-3 py-2.5 italic text-slate-500" title={movimiento.descripcion}>{movimiento.referencia ? `Ref: ${movimiento.referencia} · ` : ''}{movimiento.descripcion || 'Sin descripción'}</td><td className="px-3 py-2.5 text-center">{numDes}</td><td className={`px-4 py-2.5 text-right font-black ${movimiento.tipo === 'cargo' ? 'text-amber-700' : 'text-emerald-700'}`}>{movimiento.tipo === 'cargo' ? '+' : '−'}{fmtUsd(movimiento.monto_usd)}</td>
+                    </tr>
+                  })}</tbody>
+                </table>
+              </div>
+              <div className="grid gap-2 p-3 lg:hidden">{movimientosPaginados.map(movimiento => (
+                <article key={movimiento.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-800">{movimiento.cliente?.nombre || 'Desconocido'}</p><p className="text-[11px] text-slate-500">{new Date(movimiento.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}</p></div><span className={`shrink-0 text-sm font-black ${movimiento.tipo === 'cargo' ? 'text-amber-700' : 'text-emerald-700'}`}>{movimiento.tipo === 'cargo' ? '+' : '−'}{fmtUsd(movimiento.monto_usd)}</span></div>
+                  <div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-600">{movimiento.tipo === 'cargo' ? 'Cargo' : 'Abono'}</span><span className="rounded-full bg-white px-2 py-1 text-[10px] text-slate-600">{movimiento.tipo === 'abono' ? formatMetodoPago(movimiento.forma_pago_abono || movimiento.metodo_pago) : (movimiento.metodo_pago === 'cod' ? 'COD' : 'Crédito')}</span></div>
+                  {(movimiento.referencia || movimiento.descripcion) && <p className="mt-2 break-words text-xs text-slate-600">{movimiento.referencia ? `Ref: ${movimiento.referencia} · ` : ''}{movimiento.descripcion || 'Sin descripción'}</p>}
+                </article>
+              ))}</div>
+              <PaginacionReporte pagina={paginaMovimientos} totalItems={movimientosFiltrados.length} porPagina={porPagina} onCambiar={setPaginaMovimientos} />
+            </>
+          )}
+        </section>
+      )}
+
+      {/*
             <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden shadow-sm mt-4">
               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <DollarSign size={14} className="text-emerald-500" />
                   <h3 className="text-xs sm:text-sm font-black text-slate-800">
-                    Historial de Cobranza ({rango.from === rango.to ? "Abonos del Día" : "Abonos del Periodo"})
+                    Actividad CxC ({rango.from === rango.to ? "del Día" : "del Período"})
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold">{abonos.length}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold">{movimientosPeriodo.length}</span>
                 </div>
               </div>
 
@@ -2257,14 +2375,15 @@ function TabCredito() {
                     <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
                       <th className="px-4 py-2.5 text-left font-semibold">Fecha</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Cliente</th>
+                      <th className="px-3 py-2.5 text-center font-semibold">Movimiento</th>
                       <th className="px-3 py-2.5 text-center font-semibold">Método</th>
                       <th className="px-3 py-2.5 text-left font-semibold">Ref / Descripción</th>
                       <th className="px-3 py-2.5 text-center font-semibold">Despacho</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Monto</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Monto USD</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {abonos.map((a) => {
+                    {movimientosPeriodo.map((a) => {
                       const numDes = a.despacho?.numero 
                         ? `DES-${String(a.despacho.numero).padStart(5, '0')}` 
                         : (a.despacho?.cotizacion?.numero 
@@ -2279,9 +2398,8 @@ function TabCredito() {
                           <td className="px-3 py-2.5 font-bold text-slate-700">
                             {a.cliente?.nombre || 'Desconocido'}
                           </td>
-                          <td className="px-3 py-2.5 text-center font-semibold text-slate-600">
-                            {formatMetodoPago(a.forma_pago_abono || a.metodo_pago)}
-                          </td>
+                          <td className={`px-3 py-2.5 text-center font-bold ${a.tipo === 'cargo' ? 'text-amber-700' : 'text-emerald-700'}`}>{a.tipo === 'cargo' ? 'Cargo' : 'Abono'}</td>
+                          <td className="px-3 py-2.5 text-center font-semibold text-slate-600">{a.tipo === 'abono' ? formatMetodoPago(a.forma_pago_abono || a.metodo_pago) : (a.metodo_pago === 'cod' ? 'COD' : 'Crédito')}</td>
                           <td className="px-3 py-2.5 text-slate-500 italic max-w-xs truncate" title={a.descripcion}>
                             {a.referencia ? `Ref: ${a.referencia} · ` : ''}{a.descripcion || 'Sin descripción'}
                           </td>
@@ -2294,8 +2412,8 @@ function TabCredito() {
                               <span className="text-slate-300">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-right font-black text-emerald-600 text-sm">
-                            +{fmtUsd(a.monto_usd)}
+                          <td className={`px-4 py-2.5 text-right font-black text-sm ${a.tipo === 'cargo' ? 'text-amber-700' : 'text-emerald-700'}`}>
+                            {a.tipo === 'cargo' ? '+' : '−'}{fmtUsd(a.monto_usd)}
                           </td>
                         </tr>
                       )
@@ -2304,21 +2422,29 @@ function TabCredito() {
                 </table>
               </div>
             </div>
-          )}
-        </>
-      ) : (
-        /* Tabla de Proveedores con Cuentas por Pagar (CxP) */
-        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden shadow-sm animate-in fade-in duration-200">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+      */}
+      {vistaCredito === 'cxp' && (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <Briefcase size={14} className="text-purple-500" />
-              <h3 className="text-xs sm:text-sm font-black text-slate-800">Proveedores con saldo pendiente (CxP)</h3>
-              <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 text-[10px] font-bold">{proveedoresConDeuda.length}</span>
+              <h2 className="text-sm font-black text-slate-800">Proveedores con saldo pendiente (CxP)</h2>
+              <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-600">{proveedoresFiltrados.length} / {proveedoresConDeuda.length}</span>
             </div>
+            <input type="search" aria-label="Buscar proveedores por nombre, RIF, correo o teléfono" placeholder="Buscar proveedor…" value={busquedaProveedores}
+              onChange={event => { setBusquedaProveedores(event.target.value); setPaginaProveedores(1) }}
+              className="min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm sm:max-w-sm" />
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+          <div className="grid gap-2 p-3 lg:hidden">
+            {proveedoresFiltrados.length === 0 ? <p className="p-6 text-center text-sm text-slate-500">No hay proveedores con saldo para este filtro.</p> : proveedoresPaginados.map(proveedor => (
+              <article key={proveedor.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                <div className="min-w-0"><p className="break-words text-sm font-bold text-slate-800">{proveedor.nombre}</p><p className="text-[10px] text-slate-500">{proveedor.tipo_proveedor || 'Proveedor'}{proveedor.rif_cedula ? ` · ${proveedor.rif_cedula}` : ''}</p><p className="mt-1 break-all text-[10px] text-slate-500">{[proveedor.telefono, proveedor.email].filter(Boolean).join(' · ') || 'Sin contacto'}</p></div>
+                <strong className="shrink-0 text-sm text-purple-600">{fmtUsd(proveedor.saldo_pendiente)}</strong>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto lg:block">
+            <table className="w-full min-w-[760px] text-xs">
               <thead>
                 <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
                   <th className="px-4 py-2.5 text-left font-semibold">Proveedor</th>
@@ -2329,7 +2455,9 @@ function TabCredito() {
                 </tr>
               </thead>
               <tbody>
-                {proveedoresOrdenados.map((p, i) => {
+                {proveedoresFiltrados.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">No hay proveedores con saldo para este filtro.</td></tr>
+                ) : proveedoresPaginados.map((p, i) => {
                   const saldo = Number(p.saldo_pendiente)
                   return (
                     <tr key={p.id} className={`border-b border-slate-50 hover:bg-slate-50/60 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
@@ -2363,15 +2491,12 @@ function TabCredito() {
               </tbody>
             </table>
           </div>
-
-          {/* Footer resumen */}
-          <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-[10px] text-slate-400">{proveedoresConDeuda.length} proveedor{proveedoresConDeuda.length !== 1 ? 'es' : ''} con saldo pendiente</span>
-            <span className="text-xs font-black text-purple-600">
-              Total por pagar: {fmtUsd(totalCxP)}
-            </span>
+          <PaginacionReporte pagina={paginaProveedores} totalItems={proveedoresFiltrados.length} porPagina={porPagina} onCambiar={setPaginaProveedores} />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3">
+            <span className="text-[10px] text-slate-500">{proveedoresConDeuda.length} proveedor{proveedoresConDeuda.length !== 1 ? 'es' : ''} con saldo pendiente</span>
+            <span className="text-xs font-black text-purple-600">Total por pagar: {fmtUsd(totalCxP)}</span>
           </div>
-        </div>
+        </section>
       )}
     </div>
   )
@@ -2448,7 +2573,6 @@ function TabArticulosExternos({ configNeg }) {
       setExportando(false)
     }
   }
-
   const rangoLabel = `${new Date(`${rango.from}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })} - ${new Date(`${rango.to}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
 
   if (isLoading) return <SkeletonReporte />

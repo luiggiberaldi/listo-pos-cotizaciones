@@ -16,6 +16,12 @@
 -- migración. Con tráfico nuevo, coordinar el revert del commit de app + cuerpos
 -- previos en la misma ventana (plan §7). Las columnas alerta_stock,
 -- alerta_stock_items y egreso_lote_id se conservan (evidencia).
+--
+-- AJUSTE 2026-10-22 (defecto hallado en el ensayo general del plan B):
+-- inventario_movimientos.usuario_id es NOT NULL con FK a usuarios — los
+-- movimientos de reversión necesitan un operador REAL. Autor visible:
+-- 'ROLLBACK release 17'; referencia interna: v_usuario_id (decisión 21-oct:
+-- cuenta técnica Desarrollador, misma que la migración).
 
 BEGIN;
 
@@ -58,6 +64,8 @@ $rollback_guard$;
 -- ═══ Reingreso espejo del backfill (solo lotes de migración) ═══
 DO $reingreso_espejo$
 DECLARE
+  -- ── Operador autor de los movimientos de reversión (usuario_id NOT NULL) ──
+  v_usuario_id  uuid := '00000000-0000-0000-0000-000000000000'::uuid;  -- cuenta técnica Desarrollador
   v_despacho    RECORD;
   v_producto    RECORD;
   v_item        RECORD;
@@ -66,6 +74,9 @@ DECLARE
   v_nuevo_stock NUMERIC(12,2);
   v_movimientos integer := 0;
 BEGIN
+  IF v_usuario_id IS NULL THEN
+    RAISE EXCEPTION 'ROLLBACK_17: configure v_usuario_id (operador autor de los movimientos de reversión)';
+  END IF;
   FOR v_despacho IN
     SELECT id, cuenta_id, numero, estado, egreso_lote_id
     FROM public.notas_despacho
@@ -133,9 +144,9 @@ BEGIN
         v_producto.id,
         COALESCE(v_item.nombre_snap, v_producto.nombre),
         v_item.cantidad,
-        COALESCE(v_producto.stock_actual, 0),
+        COALESCE(        v_producto.stock_actual, 0),
         v_nuevo_stock,
-        NULL,
+        v_usuario_id,
         'ROLLBACK release 17',
         NULL,
         v_producto.cuenta_id

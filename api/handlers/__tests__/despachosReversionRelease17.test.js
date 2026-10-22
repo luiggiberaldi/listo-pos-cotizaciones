@@ -43,11 +43,11 @@ function post(body) {
   })
 }
 
-function dispatchRow() {
+function dispatchRow(estado = 'despachada') {
   return {
     id: despachoId,
     cuenta_id: cuentaId,
-    estado: 'despachada',
+    estado,
     numero: 4127,
     cliente_id: '88888888-8888-4888-8888-888888888888',
     cliente_factura_id: null,
@@ -76,7 +76,7 @@ const ERROR_FUNCION_AUSENTE = {
  * `t4Response` define la respuesta del RPC del release 17
  * (status + cuerpo) para simular base con o sin release 17.
  */
-function installFetch({ abonos = [], t4Response } = {}) {
+function installFetch({ abonos = [], t4Response, reversaResponse, estado = 'despachada' } = {}) {
   const calls = []
   const fetchMock = vi.fn(async (url, options = {}) => {
     const method = (options.method || 'GET').toUpperCase()
@@ -84,7 +84,10 @@ function installFetch({ abonos = [], t4Response } = {}) {
     calls.push(call)
 
     if (String(url).includes('/notas_despacho?id=')) {
-      return new Response(JSON.stringify([dispatchRow()]), { status: 200 })
+      return new Response(JSON.stringify([dispatchRow(estado)]), { status: 200 })
+    }
+    if (String(url).includes('/rpc/revertir_entrega_finanzas_idempotente')) {
+      return new Response(JSON.stringify(reversaResponse.body), { status: reversaResponse.status })
     }
     if (String(url).includes('/comisiones?')) {
       return new Response(JSON.stringify([]), { status: 200 })
@@ -172,6 +175,58 @@ describe('handleActualizarEstadoDespacho — compatibilidad de rollout release 1
     expect(result.body).toMatchObject({ ok: true, nuevoEstado: 'anulada' })
     const patch = calls.find(c => c.method === 'PATCH' && c.url.includes('/notas_despacho?id='))
     expect(patch.body).toMatchObject({ estado: 'anulada', motivo_anulacion: 'Prueba de rollout', flete_pagado: false })
+  })
+
+  it('persiste el motivo cuando la reversión la resuelve la RPC atómica (entregada→pendiente)', async () => {
+    // entregada→pendiente pasa por revertir_entrega_finanzas_idempotente: esa
+    // ruta salta el PATCH de estado, así que el motivo exige su propio PATCH.
+    const { calls } = installFetch({
+      estado: 'entregada',
+      reversaResponse: { status: 200, body: { ok: true, nuevo_estado: 'pendiente' } },
+    })
+
+    const response = await handleActualizarEstadoDespacho(post({
+      despachoId,
+      nuevoEstado: 'pendiente',
+      motivo_devolucion: 'Cliente ausente',
+      idempotencyKey,
+    }), ENV)
+    const result = await bodyOf(response)
+
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({ ok: true, nuevoEstado: 'pendiente' })
+
+    const rpc = calls.find(c => c.url.includes('/rpc/revertir_entrega_finanzas_idempotente'))
+    expect(rpc).toBeTruthy()
+    expect(rpc.body).toMatchObject({ p_despacho_id: despachoId, p_nuevo_estado: 'pendiente' })
+
+    // El motivo elegido en la interfaz se persiste pese al salto del PATCH de estado.
+    const patch = calls.find(c => c.method === 'PATCH' && c.url.includes('/notas_despacho?id='))
+    expect(patch).toBeTruthy()
+    expect(patch.body).toEqual({ motivo_devolucion: 'Cliente ausente' })
+
+    // La RPC atómica es la autoridad de finanzas: sin DELETE de CxC por REST.
+    expect(calls.some(c => c.method === 'DELETE')).toBe(false)
+  })
+
+  it('no permite anular directamente desde entregada (hay que reabrir primero)', async () => {
+    validateOperator.mockResolvedValue(auth('administracion'))
+    const { calls } = installFetch({ estado: 'entregada' })
+
+    const response = await handleActualizarEstadoDespacho(post({
+      despachoId,
+      nuevoEstado: 'anulada',
+      motivo_anulacion: 'Error de captura',
+      idempotencyKey,
+    }), ENV)
+    const result = await bodyOf(response)
+
+    expect(result.status).toBe(400)
+    expect(result.body.error).toContain('No se puede pasar de')
+    expect(result.body.error).toContain('anulada')
+    // Nada avanzó: sin RPC de reversión ni PATCH de motivo.
+    expect(calls.some(c => c.url.includes('/rpc/revertir_entrega_finanzas_idempotente'))).toBe(false)
+    expect(calls.some(c => c.method === 'PATCH')).toBe(false)
   })
 
   it('un error distinto de "función no encontrada" sigue bloqueando la operación', async () => {

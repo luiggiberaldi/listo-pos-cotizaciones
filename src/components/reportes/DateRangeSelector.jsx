@@ -1,5 +1,5 @@
 // src/components/reportes/DateRangeSelector.jsx
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Calendar } from 'lucide-react'
 import { getDayRange, getWeekRange, getUltimoSabadoRange, getCorteSemanalRange, getMonthRange, getLocalISODate } from '../../utils/dateHelpers'
 
@@ -17,7 +17,7 @@ function mismoRango(a, b) {
   return a?.from === b?.from && a?.to === b?.to
 }
 
-export default function DateRangeSelector({ value, onChange, ocultarPresets }) {
+export default function DateRangeSelector({ value, onChange, ocultarPresets, envolverPresets = false }) {
   const [showCustom, setShowCustom] = useState(false)
   const presetsVisibles = useMemo(() => PRESETS.filter(p => !ocultarPresets?.includes(p.id)), [ocultarPresets])
   const [activePresetId, setActivePresetId] = useState(() => {
@@ -28,31 +28,18 @@ export default function DateRangeSelector({ value, onChange, ocultarPresets }) {
   const [localFrom, setLocalFrom] = useState(value?.from || '')
   const [localTo, setLocalTo] = useState(value?.to || '')
 
-  // Sincronizar el preset activo si el valor cambia externamente
-  useEffect(() => {
-    const currentPreset = presetsVisibles.find(p => p.id === activePresetId)
-    if (currentPreset && mismoRango(value, currentPreset.getRango())) {
-      return
-    }
-    const matching = presetsVisibles.find(p => mismoRango(value, p.getRango()))
-    setActivePresetId(matching ? matching.id : '')
-    if (!matching) {
-      setShowCustom(true)
-    }
-  }, [value, activePresetId, presetsVisibles])
-
-  // Sincronizar inputs locales si el rango cambia externamente
-  useEffect(() => {
-    if (value?.from) setLocalFrom(value.from)
-    if (value?.to) setLocalTo(value.to)
-  }, [value?.from, value?.to])
-
-  const customActivo = showCustom || !activePresetId
+  const rangoPresetActual = presetsVisibles.find(p => mismoRango(value, p.getRango()))?.id || ''
+  const presetSeleccionado = presetsVisibles.some(p => p.id === activePresetId && mismoRango(value, p.getRango()))
+  const presetActivoId = presetSeleccionado ? activePresetId : rangoPresetActual
+  const rangoPersonalizado = !rangoPresetActual
+  const customActivo = showCustom || rangoPersonalizado
 
   function selectPreset(preset) {
     setShowCustom(false)
     setActivePresetId(preset.id)
     const rango = preset.getRango()
+    setLocalFrom(rango.from)
+    setLocalTo(rango.to)
     const prev = preset.getPrev()
     onChange({ from: rango.from, to: rango.to, prevFrom: prev.from, prevTo: prev.to })
   }
@@ -93,13 +80,13 @@ export default function DateRangeSelector({ value, onChange, ocultarPresets }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide pb-0.5">
+      <div className={`flex items-center gap-1.5 sm:gap-2 pb-0.5 ${envolverPresets ? 'flex-wrap' : 'overflow-x-auto scrollbar-hide'}`}>
         <Calendar size={12} className="text-slate-400 shrink-0 sm:w-3.5 sm:h-3.5" />
         {presetsVisibles.map(p => (
           <button key={p.id}
             onClick={() => selectPreset(p)}
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
-              activePresetId === p.id && !showCustom
+              presetActivoId === p.id && !showCustom
                 ? 'bg-primary text-white border-primary'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
             }`}>
@@ -111,6 +98,8 @@ export default function DateRangeSelector({ value, onChange, ocultarPresets }) {
           onClick={() => {
             setShowCustom(true)
             setActivePresetId('')
+            setLocalFrom(value?.from || '')
+            setLocalTo(value?.to || '')
           }}
           className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
             customActivo
@@ -121,7 +110,7 @@ export default function DateRangeSelector({ value, onChange, ocultarPresets }) {
           <span className="hidden sm:inline">Personalizado</span>
         </button>
       </div>
-      {showCustom && (
+      {customActivo && (
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 mt-2 transition-all duration-300">
           <div className="flex flex-col flex-1 min-w-0">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Desde</span>

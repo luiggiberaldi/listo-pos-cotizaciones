@@ -1102,6 +1102,23 @@ export async function handleActualizarEstadoDespacho(request, env) {
         console.error('[DESPACHOS] Error al hacer PATCH notas_despacho:', err);
         return jsonError(`Error BD al actualizar despacho: ${err}`, 500, request);
       }
+    } else if (reversaAtomica && ['pendiente', 'anulada'].includes(nuevoEstado)) {
+      // La RPC de reversión atómica no recibe el motivo (su firma no lo
+      // contempla) y el PATCH anterior se salta en esa ruta. Sin este paso el
+      // motivo elegido en la interfaz al devolver/anular un despacho entregado
+      // se pierde: aquí se persiste solo ese metadato.
+      const motivoPatch = {};
+      if (nuevoEstado === 'pendiente' && body.motivo_devolucion) motivoPatch.motivo_devolucion = body.motivo_devolucion;
+      if (nuevoEstado === 'anulada' && body.motivo_anulacion) motivoPatch.motivo_anulacion = body.motivo_anulacion;
+      if (Object.keys(motivoPatch).length > 0) {
+        const motivoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}`, {
+          method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify(motivoPatch),
+        });
+        if (!motivoRes.ok) {
+          console.error('[DESPACHOS] Error al guardar motivo de la reversión:', await motivoRes.text());
+        }
+      }
     }
 
     // 5. Al aprobar (despachada): registrar cargo CxC si hay saldo a crédito / abono si hay Saldo a Favor

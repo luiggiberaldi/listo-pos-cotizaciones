@@ -114,7 +114,7 @@ beforeEach(() => {
 })
 
 describe('handleActualizarEstadoDespacho — reversión consciente de devoluciones (release 06)', () => {
-  it('permite revertir un despacho con abonos solo de devolución, delegando en la RPC sin mutaciones REST', async () => {
+  it('permite revertir un despacho con abonos solo de devolución, delegando en la RPC (solo PATCH del motivo)', async () => {
     const { calls } = installFetch({
       abonos: [{ id: 'cxc-ab-1', monto_usd: 1.9, forma_pago_abono: 'Devolución' }],
     })
@@ -135,8 +135,11 @@ describe('handleActualizarEstadoDespacho — reversión consciente de devolucion
     expect(rpc.body).toMatchObject({ p_despacho_id: despachoId, p_nuevo_estado: 'pendiente' })
 
     // La reversión es 100% RPC: sin DELETE de CxC ni PATCH de estado por REST.
+    // El único PATCH es el del motivo, que la RPC no almacena por sí sola.
     expect(calls.some(c => c.method === 'DELETE')).toBe(false)
-    expect(calls.some(c => c.method === 'PATCH')).toBe(false)
+    const patch = calls.find(c => c.method === 'PATCH')
+    expect(patch).toBeTruthy()
+    expect(patch.body).toEqual({ motivo_devolucion: 'Cliente ausente' })
   })
 
   it('bloquea la reversión cuando existe un cobro real (forma de pago distinta de Devolución/Saldo a favor)', async () => {

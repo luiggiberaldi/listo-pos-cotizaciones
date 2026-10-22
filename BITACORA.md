@@ -4321,3 +4321,195 @@ Producción completa con las 3 fases. Pendiente opcional: espejo 262 en staging 
 
 **Estado:** release 19 aplicado y verificado en producción. Pendientes manuales: prueba visual rápida en la app (2 min, recomendada) y despliegue del frontend/Worker por su canal habitual (el contrato nuevo ya está vivo en la base de datos).
 
+
+## SESIÓN 21/10/2026 — Arreglo: el motivo de "Reabrir despacho" se perdía (devolver/anular un despacho entregado)
+
+**En resumen:** al reabrir un despacho entregado (o anularlo desde entregado), la pantalla pedía un motivo y avisaba que habría reversión de stock, comisiones y cuentas por cobrar… pero ese motivo nunca se guardaba. Ya está arreglado en el código del Worker y con pruebas automáticas que lo vigilan. El arreglo llega al entorno con el próximo despliegue normal.
+
+**Hallazgo (probando en vivo, despacho #3184):** la reversión se aplicó bien (stock 97→100, kardex con "Devolución a pendiente #3184", lote limpio) pero `motivo_devolucion` quedó vacío aunque la interfaz lo exige. Causa: cuando la reversión la resuelve la ruta atómica (una función de la base de datos que hace todo el deshacer de una vez), el Worker se saltaba por completo la escritura del despacho —incluido el motivo— porque "ya la RPC lo hizo todo". Pero esa función de la base no recibe ni guarda el motivo: era el único dato que se perdía (el reset de COD/flete sí vive en la función).
+
+**Arreglo (mínimo):** después de una reversión atómica exitosa, el Worker guarda solo el motivo en un pequeño paso aparte (`api/handlers/despachos.js`). Si ese paso fallara, no bloquea la operación (la reversión ya está hecha); solo queda registro en el log. La copia de staging ya tenía este mismo comportamiento; el hueco existía solo en el árbol principal (y en producción).
+
+**Verificación:**
+- Prueba nueva que protege el arreglo: devolver a pendiente desde entregada por la ruta atómica persiste exactamente el motivo, sin tocar finanzas por REST (`api/handlers/__tests__/despachosReversionRelease17.test.js`).
+- Contrato actualizado en `api/handlers/__tests__/despachosReversionDevoluciones.test.js`: en la ruta atómica el único PATCH permitido es el del motivo (antes se exigía "cero PATCH", que era justo lo que hacía perder el dato).
+- Documentado también que no se puede anular directamente desde entregada (hay que reabrir primero) — la máquina de estados lo rechaza.
+- Suite completa: **673/673 pruebas en verde** (60 archivos) + ESLint sin errores.
+
+**Estado:** arreglo listo en el árbol principal; pendiente del despliegue habitual del Worker para que quede activo en producción.
+
+## SESIÓN 21/10/2026 — Verificación en staging: Release 17 (interfaz) + Lote ERP (Reportes Crédito/CxC)
+
+**En resumen:** Release 17 se probó a fondo por la interfaz de staging y **está listo para producción** (2 observaciones menores). El Lote ERP (pestaña Crédito/CxC) **no está listo**: la mitad de sus indicadores muestra $0.00 aunque hay datos reales, porque el cálculo nuevo (`cxcPeriodReport.js`) quedó sin conectar a la pantalla. Informe completo: `docs/operaciones/verificacion-r17-lote-erp-staging-2026-10-21.md`.
+
+**Release 17 — 8 pruebas por interfaz, todas conformes:** aprobar egresa (100→97 + kardex + lote), editar en pendiente no toca stock, aprobar con stock insuficiente advierte pero nunca bloquea (100→−100, alerta NEGATIVO visible en la tarjeta), entregar no descuenta, reabrir entregado y devolver desde aprobada reingresan con **motivo guardado** (arreglo del bug de reapertura confirmado de punta a punta), inventario sin chip "comprometidas", consola limpia. Observaciones: O1 `despachada_en` conserva la primera fecha al reaprobar; O2 el modal de edición acepta pagos mayores que el total ($200 vs $30).
+
+**Lote ERP — hallazgo bloqueante:** KPIs "Saldo inicial / Cargos / Abonos", bloque "Cuadre de movimientos" y pestaña "Movimientos" muestran $0.00 con 11 movimientos reales en octubre (cargos $367.55 / abonos $337.55). Causa: la UI espera campos del hook `useResumenCxC` que el hook del repositorio no produce; el módulo puro con el cálculo correcto existe y tiene sus pruebas en verde, pero nada lo invoca (era el riesgo 2 del plan de promoción). Rangos de fecha, antigüedad de deuda, tabla de clientes y PDFs sí funcionan.
+
+**Veredicto:** Release 17 puede planear su ventana de producción (backup → apply SQL → backfill → deploy Worker+frontend juntos → smoke). Lote ERP se queda fuera de esa ventana hasta conectar el cálculo del reporte. Gates: vitest 673/673 y `vite build` en verde.
+
+**Estado:** informe entregado; pendiente de decisión del usuario (arreglar el cableado del reporte Crédito antes de promover).
+
+## SESIÓN 21/10/2026 — Arreglo del reporte Crédito/CxC (Lote ERP) + plan de producción de Release 17
+
+**En resumen:** el reporte Crédito/CxC ya muestra cifras reales (estaba mostrando $0.00 porque el cálculo nuevo nunca se conectó a la pantalla). Se conectó con un gancho nuevo que respeta la contingencia del plan (sin tocar el cálculo probado ni el gancho viejo), se re-verificó por la interfaz real con datos de montos conocidos (18 comprobaciones en verde) y se escribió el **plan de paso a producción** del Release 17 + Lote ERP.
+
+**Arreglo (mínimo):** nuevo `src/hooks/useReportePeriodoCxC.js` que trae clientes y movimientos del libro de cuentas por cobrar y los pasa por el módulo probado `src/utils/cxcPeriodReport.js`; `src/views/ReportesView.jsx` (pestaña Crédito) consume ese gancho. `useCuentasCobrar.js` intacto.
+
+**Verificación por interfaz real** (`scripts/test-cxc-reporte-ui.mjs`, nuevo y reutilizable): crea cuenta + datos de prueba en staging con montos conocidos (saldo inicial $30, cargos $150, abonos $30 → cierre $150), entra como operador real (jefe con PIN) y valida pantalla por pantalla: KPIs reales, cuadre "30 + 150 − 30 = 150 · Saldo actual coincide", Movimientos (3) con montos correctos, y la tabla de Clientes cuadrando horizontalmente (antes mostraba $0.00 en "Saldo inicial" y "Abonos período"). Limpieza completa de fixtures y cuenta al salir. Evidencia: `tmp/cxc-reporte-ui/` + informe `docs/operaciones/verificacion-r17-lote-erp-staging-2026-10-21.md` §6.
+
+**Gates:** 673/673 pruebas, build OK, ESLint sin errores. (Nota honesta: hubo UNA pasada con 1 fallo intermitente que no se reprodujo en 6 pasadas siguientes; vigilarlo antes de la ventana.)
+
+**Hallazgos de staging (no bloquean, para reparar):** (1) la secuencia de IDs de `configuracion_negocio` está desincronizada y bloquea el alta directa de usuarios nuevos; (2) las consultas devuelven 0 filas sin sesión de operador válida — diseño vigente, pero engaña al probar con cuentas nuevas.
+
+**Plan de producción:** `docs/plans/2026-10-21-plan-produccion-release17-lote-erp.md` — una ventana para ambos bloques: gates → backup+restore probado → apply SQL release 17 (protocolo md5) → backfill idempotente → commit/despliegue Worker+frontend juntos → smoke en producción → cierre. Con plan B documentado y la regla de oro: entre el cambio de base y el despliegue no se aprueban ni devuelven despachos.
+
+**Estado:** Release 17 y Lote ERP listos; pendiente del usuario abrir la ventana de producción (y decidir O1/O2 como trabajos aparte).
+
+## SESIÓN 21/10/2026 — Instalador del Release 17 para producción + prueba en seco
+
+**En resumen:** ya existe el instalador que ejecutará el Release 17 en producción (`scripts/apply-release17-produccion.mjs`) y quedó probado en seco contra la base real **sin tocar nada**: veredicto **"LISTO PARA LA VENTANA"**. La ventana de producción queda reducida a ejecutar un solo comando (tras el backup y el aviso al equipo).
+
+**Qué hace el instalador (en orden):** huellas SHA-256 de los artefactos → estado previo reconocido → pre-imágenes de las 6 funciones que va a reemplazar (respaldo byte a byte para el plan B) → apply del SQL → backfill de los 1.824 despachos ya cerrados (firmado "MIGRACIÓN release 17", idempotente: se re-ejecuta solo para probarlo) → postflight → smoke read-only → evidencia en `docs/operaciones/`. Si detecta cualquier estado que no sea el esperado, aborta sin mutar.
+
+**Guardias probadas:** sin la confirmación explícita por variable se niega a mutar (probado); el destino está fijado a producción (`oyfyuszgjwcepjpngclv`); las pre-imágenes van a `17_backup_cuerpos_produccion/` para no pisar el material de rollback de staging; y las firmas se buscan por `to_regprocedure` porque este Postgres devuelve los argumentos con nombres de parámetro (lección del cutover release 19, aplicada de entrada).
+
+**Hallazgos de la prueba en seco:** (1) el operador "luigi" de staging no existe en producción — con la aprobación del usuario, el kardex de migración queda con la referencia interna a la cuenta técnica **Desarrollador** (`00000000-…`, misma que el ensayo de staging) y nombre visible "MIGRACIÓN release 17"; (2) estado de producción exactamente como se esperaba: release 17 ausente, 6 firmas legacy vivas, 1.824 despachos cerrados por migrar, kardex actual 6.584 movimientos, stock total 261.941 ud.
+
+**Comando de la ventana (también en el plan §4):**
+`PRODUCCION_RELEASE17_CONFIRM=APLICAR_RELEASE17_PRODUCCION RELEASE17_OPERADOR_ID=00000000-0000-0000-0000-000000000000 node scripts/apply-release17-produccion.mjs --apply`
+
+**Estado:** Release 17 + Lote ERP listos con su instalador probado; pendiente solo abrir la ventana (backup con restauración probada → comando → deploy Worker+frontend juntos → smoke).
+
+## SESIÓN 21/10/2026 (noche) — Release 17: exclusión de despachos obsoletos #1930, #1933, #2144
+
+**En resumen:** el usuario decidió que los despachos #1930, #1933 y #2144 quedaron obsoletos (ya
+no se tocarán en el sistema) y NO deben descontar inventario en la migración. El backfill del
+Release 17 ahora los saltea por completo: solo #4019 (15 uds) y #4161 (6.315 uds) descuentan
+= 6.330 unidades en total. La mercancía de los tres obsoletos (71 uds) queda en el conteo exacto.
+
+**Qué se hizo:**
+- `supabase/release/main/17_egreso_inventario_backfill.sql`: lista `v_excluir_numeros` (decisión
+  2026-10-21) — los excluidos se saltan sin egreso, sin sello y sin movimiento; el resumen los
+  cuenta como "obsoletos omitidos".
+- `scripts/apply-release17-produccion.mjs`: la prueba en seco ahora imprime el PLAN de inventario
+  por despacho (DESCUENTA / SALTADO + total) y la verificación final acepta "sin lote" SOLO para
+  los obsoletos decididos (cualquier otro despacho sin lote sigue siendo fallo).
+- `scripts/test-release17-backfill-local.mjs` (nuevo): ensayo del backfill en PostgreSQL
+  desechable local — **PASS 17/17**: solo #4019/#4161 descuentan, obsoletos intactos, entregadas
+  solo se sellan, ítems externos y préstamos no cuentan, re-ejecución sin doble efecto.
+- Huellas SHA-256 regeneradas (solo cambia el backfill; apply/postflight/rollback siguen
+  byte-idénticos al paquete probado en staging).
+- Prueba en seco contra producción (solo lectura) → **LISTO PARA LA VENTANA** con el plan:
+  #1930/#1933/#2144 SALTADO · #4019 DESCUENTA 15 · #4161 DESCUENTA 6.315 · 1.819 entregadas
+  solo se sellan. Tests de contrato del release 17: 73/73 en verde.
+
+**⚠️ Advertencia para el equipo:** #1930, #1933 y #2144 quedan CONGELADOS — no se deben devolver,
+anular ni editar desde el sistema (una acción así sumaría unidades que nunca salieron). Si algún
+día hay que moverlos, avisar antes.
+
+**Estado:** ventana lista; falta solo elegir día/hora y el backup de producción con restauración
+probada. Comando de la ventana en el plan §4.
+
+## SESIÓN 21/10/2026 (noche, cont.) — Respaldo de producción con restauración verificada
+
+**En resumen:** queda lista y probada la herramienta de respaldo de producción para la ventana
+del Release 17. Un solo comando respalda las 4 tablas críticas, restaura todo en una base de
+datos de juguete local y comprueba que cada dato volvió idéntico, más una re-verificación contra
+la producción viva. Resultado: **PASS** (triple verificación). La ventana queda 100% lista para
+ejecutar: ahora solo falta elegir día y hora.
+
+**Qué se creó:**
+- `scripts/backup-release17-produccion.mjs` — respaldo por solo lectura de `productos`,
+  `inventario_movimientos`, `notas_despacho` y `notas_despacho_items`, con SHA-256 de archivos y
+  huella de CONTENIDO por tabla (cada fila serializada y ordenada). Con `--verify` encadena la
+  prueba de restauración. Maneja los tipos especiales del esquema (enums `tipo_movimiento` /
+  `motivo_movimiento` y el `vector(768)` de búsqueda, que viaja como texto).
+- `scripts/verify-release17-backup-local.mjs` — prueba de restauración en PostgreSQL desechable
+  local: valida huellas de archivos, restaura con `ON_ERROR_STOP` (cualquier error SQL = FAIL),
+  compara por contenido tabla por tabla y, con `--contra-produccion`, exige coincidencia triple.
+
+**Resultados (21-oct noche):**
+- Respaldo real: 466 productos + 6.584 movimientos + 2.293 despachos + 5.493 ítems
+  = 14.836 filas. Carpeta: `C:\Users\luigg\Desktop\construacero-backups\release17-2026-10-22\`.
+- Restauración verificada: **PASS** — producción = manifiesto = restauración local, fila por fila.
+- Prueba negativa: una copia alterada fue detectada al instante (SHA-256); una alteración con la
+  huella parcheada también fue detectada por la verificación de contenido. El verificador sale
+  con código de error y el comando de la ventana se detiene.
+
+**Comando del GATE en la ventana** (fresco, el mismo día):
+`node scripts/backup-release17-produccion.mjs --verify`
+
+**Estado:** ventana 100% lista. Solo falta decidir día/hora y avisar al equipo.
+
+## SESIÓN 22/10/2026 (madrugada) — Plan B empaquetado: reversión de emergencia en un comando
+
+**En resumen:** el plan B del Release 17 (deshacerlo si algo sale mal) quedó empaquetado en UN
+comando, con su prueba en seco y un ensayo general completo que terminó en PASS: instalación +
+reversión sobre una copia real del respaldo, con retorno EXACTO al punto de partida. El ensayo
+atrapó un defecto real que habría hecho fallar una reversión de emergencia en producción.
+
+**Comandos:**
+- Prueba en seco (solo lectura): `node scripts/rollback-release17-produccion.mjs`
+- Reversión real: `PRODUCCION_RELEASE17_ROLLBACK_CONFIRM=REVERTIR_RELEASE17_PRODUCCION node scripts/rollback-release17-produccion.mjs --apply`
+- Ensayo general: `node scripts/test-release17-rollback-local.mjs --verify-local`
+
+**Defecto hallado y corregido (22-oct):** los movimientos de reversión se registraban sin firma
+de usuario (NULL), pero `inventario_movimientos.usuario_id` es obligatorio y con llave foránea en
+producción — el plan B tal estaba habría fallado en una emergencia real. Corregido en
+`17_egreso_inventario_rollback_review.sql` (autor visible "ROLLBACK release 17", operador real
+inyectado como en la migración) y actualizadas las huellas SHA-256. Apply y postflight siguen
+byte-idénticos al paquete probado en staging.
+
+**Resultado del ensayo general (PASS):** sobre la copia restaurada del respaldo del 22-oct:
+instalación baja el stock 6.330 unidades (solo #4019/#4161) → reversión con el comando real →
+stock vuelve exacto (261.941), tablas idénticas al punto de partida, kardex antiguo intacto
+(+12 movimientos de evidencia: 6 migración + 6 reversión, nada borrado), obsoletos
+#1930/#1933/#2144 sin tocar, 6 cuerpos de funciones restaurados byte a byte y función nueva
+eliminada. La verificación de huellas también detectó copias alteradas (prueba negativa del
+respaldo, 21-oct).
+
+**Estado:** ventana 100% lista — respaldo verificado, instalador probado, plan B probado.
+Solo falta decidir día/hora.
+
+## SESIÓN 22/10/2026 (madrugada, cont.) — La ventana completa en un solo comando
+
+**En resumen:** la ventana de producción del Release 17 quedó empaquetada en UN comando que la
+recorre paso a paso y se DETIENE en el primero que falle: comprobaciones → respaldo con
+restauración probada → instalación → verificaciones. Probado el mismo día: prueba en seco
+completa en PASS y ensayo del mecanismo de parada (un fallo simulado detuvo todo con código de
+error, sin avanzar). La ventana queda para correr con un solo comando el día elegido.
+
+**Comando:**
+- Ventana real: `node scripts/ventana-release17-produccion.mjs`
+  (antes del único paso que escribe en producción pide escribir APLICAR con el teclado)
+- Prueba en seco de la ventana (todo menos la instalación):
+  `node scripts/ventana-release17-produccion.mjs --dry-run`
+- Ensayo del mecanismo de parada: `... --dry-run --simular-fallo <paso>`
+
+**Qué encadena (y en qué orden):**
+1. Comprobaciones rápidas: paquete completo, huellas SHA-256, destino producción y preflight
+   solo lectura contra la base real (veredicto LISTO / YA INSTALADO).
+2. Respaldo fresco en carpeta nueva con fecha y hora (`ventana-release17-<ts>`, nunca pisa el
+   respaldo de referencia) + restauración entera en un PostgreSQL desechable local, comparando
+   fila por fila, más re-verificación contra producción viva.
+3. Instalación del release 17 (`apply-release17-produccion.mjs --apply`: pre-imágenes → apply →
+   backfill → postflight → smoke), con el operador del kardex fijado por defecto en la cuenta
+   técnica "Desarrollador" (plan §4).
+4. Verificaciones: prueba en seco del plan B (reversión de emergencia), para dejar constancia de
+   que la reversión está lista. Cierre con resumen y evidencia en `docs/operaciones/`.
+
+**Pruebas del 22-oct (madrugada):**
+- Prueba en seco completa (`--dry-run`): **PASS** — paso 1 "LISTO PARA LA VENTANA" y paso 2 con
+  respaldo de 14.836 filas (466 + 6.584 + 2.293 + 5.493) restaurado idéntico en local y
+  re-verificado contra producción viva (12/12 comprobaciones, triple verificación).
+- Mecanismo de parada: `--simular-fallo 2` → el comando se detuvo exactamente en el paso 2, dejó
+  evidencia del abort y salió con código de error 1, sin ejecutar nada posterior.
+- Defecto menor encontrado por las propias guardas del comando: el preflight corría con el
+  operador por defecto del backfill (luigi, que NO existe en producción) y decía "NO LISTO";
+  corregido para que el preflight y la instalación usen el MISMO operador (cuenta técnica
+  "Desarrollador" por defecto), de modo que el veredicto del paso 1 corresponde a lo que hará el
+  paso 3.
+
+**Estado:** ventana lista para el día elegido. El comando NO hace los pasos 4-7 de la ventana
+(commit + empuje a main, smokes de la aplicación, aviso al equipo): siguen siendo manuales.
