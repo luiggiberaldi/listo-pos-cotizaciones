@@ -4563,3 +4563,78 @@ motor de cálculo. Aviso al equipo ("ventana cerrada, pueden trabajar"): pendien
 por el canal que se use internamente.
 
 **Estado:** Release 17 + Lote ERP **en producción y verificados**. Ventana cerrada.
+
+---
+
+## SESIÓN 22/10/2026 (cont.) — Corrección de códigos de productos externos al aprobar
+
+**En resumen:** cuando un vendedor agrega artículos externos (fuera del catálogo), el sistema
+les pone un código automático al azar (algo como `EXT4839201`). Ahora, cuando el despacho llega
+a administración, **el mismo diálogo de "Aprobar despacho" muestra esos productos con el código
+editable**: administración escribe el código real y al confirmar se guardan los códigos y se
+aprueba en un solo paso. Solo cambia el texto del código — no toca inventario, precios, pagos ni
+totales.
+
+**Decisión del usuario (22-oct):** solo corregir el código (sin enlazar a inventario) y hacerlo
+justo al aprobar (sin botón aparte).
+
+**Cómo quedó:**
+- **Endpoint** `POST /api/despachos/editar-codigos-externos` (`api/handlers/despachos.js` →
+  `handleEditarCodigosExternos`): solo roles administración/jefatura/desarrollo, solo despachos
+  en estado `pendiente`, y solo líneas externas (`producto_id IS NULL` — el filtro va también en
+  el `UPDATE`, así que es imposible tocar una línea de inventario). Cada cambio va con auditoría
+  (`CORREGIR_CODIGO_EXTERNO`) que guarda código anterior y nuevo. Máximo 40 caracteres por código.
+- **Interfaz** (`src/components/despachos/CodigosExternosEditor.jsx`): lista compacta dentro del
+  modal de aprobación con una caja de texto por producto externo (el código actual aparece
+  precargado). Si no hay productos externos, no aparece nada.
+- **Orden seguro:** al confirmar, primero se guardan los códigos corregidos y solo si eso sale
+  bien se aprueba el despacho. Si el guardado falla, la aprobación NO se ejecuta.
+- **Ruta y hook:** `worker.js` registra el endpoint; `useEditarCodigosExternos` en
+  `src/hooks/useDespachos.js`.
+
+**Verificación (22-oct):** Vitest 62 archivos / 686 pruebas en verde (incluidas las 15 nuevas:
+  guardas de rol y estado, solo-líneas-externas, PATCH que solo escribe `codigo_snap`, auditoría
+  con código anterior/nuevo, y contrato de interfaz). `npm run build` OK.
+
+**Notas de diseño:**
+- La corrección es un `PATCH` por código modificado (solo se escribe si cambió), no pasa por la
+  edición profunda: así no se reescriben ítems ni se validan pagos para cambiar un texto.
+- El editor muestra TODAS las líneas externas (incluidas flete/corte si vienen como ítems),
+  porque todas llevan código en la factura y la guía.
+- Queda pendiente portar el cambio al árbol de staging (`construacero-staging/`) cuando se
+  programe la próxima sincronización.
+
+**Añadido (22-oct, cont.) — aviso en la tarjeta:** la tarjeta del despacho pendiente ahora
+muestra un aviso ("N productos externos con código automático · Revisa el código al aprobar")
+cuando aún hay líneas con el código al azar que inventa el sistema (patrón `EXT` + números).
+Así administración sabe de un vistazo cuáles despachos necesitan revisión antes de abrir el
+detalle. El aviso solo aparece para roles privilegiados y mientras el despacho está por aprobar;
+si todos los códigos ya fueron corregidos, no aparece. Helper `esCodigoAutomatico` en
+`CodigosExternosEditor.jsx` (compartido con el editor del modal). Verificación: Vitest 687/687
+en verde (1 test nuevo del aviso) y build OK.
+
+**Porte a staging (22-oct, cont.) — ambos entornos iguales:** se portó la corrección de códigos
+externos completa (endpoint + hook + ruta del Worker + editor en el modal de aprobación + aviso
+en la tarjeta + sus dos suites de tests) al árbol de `construacero-staging/`, que quedó idéntico
+al principal. Ajustes propios de staging: se agregó `isSameOriginRequest` al import de
+`api/handlers/despachos.js` (en staging no se usaba aún en ese archivo), se incluyó la carpeta de
+pruebas de componentes en `vitest.config.js` y se blanquearon los dos archivos de test en el
+`.gitignore` de staging (que ignora `*.test.js` por defecto). Verificación en staging: Vitest 5
+archivos / 33 pruebas en verde (14 nuevas: 8 del endpoint + 6 de contrato) y `npm run build` OK.
+
+**Fix (22-oct, cont.) — cuelgue "Verificando…" del PIN en staging, corregido de raíz:** el
+login por PIN de staging se quedaba congelado en "Verificando…" para siempre. Dos causas:
+(1) el modal de PIN de staging era la versión vieja que trataba cualquier respuesta de error
+como éxito (miraba si el objeto era "truthy" en vez de mirar `res.ok === true`), así que un PIN
+incorrecto o un Worker caído dejaban el spinner girando eternamente; (2) los procesos
+`workerd.exe` del Worker local quedaban vivos como "fantasma" tras cierres forzados
+(reinicio del PC/IDE) y secuestraban el puerto 8789, colgando todas las peticiones. Se portó a
+staging el `LoginPinModal.jsx` corregido del principal (watchdog de 20s + `submissionId` +
+mensajes de error visibles + cancelación de intentos pendientes) y se agregó
+`scripts/free-dev-ports.mjs` en staging, que libera los puertos 5174/8789 de todo proceso
+fantasma antes de arrancar (enganchado en `predev` y `predev:worker` de `package.json`).
+Prueba de regresión: `src/components/auth/__tests__/LoginPinModal.test.js` (5 tests).
+Verificación en staging: Vitest 6 archivos / 38 pruebas en verde, `npm run build` OK, y prueba
+manual en navegador: dos PIN incorrectos respondieron en <700 ms y el modal se recuperó en
+ambos (antes: congelado permanente). Además, al arrancar, el limpiador mató solo a un
+proceso fantasma real (PID 19072) que secuestraba el 8789 — reproducción y arreglo confirmados.

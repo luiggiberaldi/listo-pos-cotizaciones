@@ -158,6 +158,8 @@ outputs/
 # F2 COD modal regression contract
 !src/components/despachos/__tests__/
 !src/components/despachos/__tests__/ConciliarCodModal.test.js
+!src/components/despachos/__tests__/CodigosExternosEditor.test.js
+!api/handlers/__tests__/codigosExternos.test.js
 !src/utils/__tests__/codCurrency.test.js
 !src/test-fixtures/
 !src/test-fixtures/cod-modal/

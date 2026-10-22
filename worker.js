@@ -23,7 +23,7 @@ import { handleRegistrarAbono, handleRevertirAbono, handleRegistrarSaldoFavor, h
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp, handleActualizarProductoMetadatos, handleCrearProductoConKardex, handleActualizarProductoConKardex, handleBorrarProductoConKardex } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
-import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
+import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleEditarCodigosExternos, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
 import { handleResumenFinancieroDespacho, handleConciliarPagoCod } from './api/handlers/cod.js'
 
 import { handleDevTools } from './api/handlers/dev.js'
@@ -225,6 +225,11 @@ export default {
     // ── API: editar items de un despacho (administracion) ───────────────────
     if (url.pathname === '/api/despachos/editar-items' && request.method === 'POST') {
       return handleEditarItemsDespacho(request, env);
+    }
+
+    // ── API: corregir códigos de productos externos (antes de aprobar) ──────
+    if (url.pathname === '/api/despachos/editar-codigos-externos' && request.method === 'POST') {
+      return handleEditarCodigosExternos(request, env);
     }
 
     // ── API: reciclar despacho anulado (bypass RLS) ─────────────────────────
