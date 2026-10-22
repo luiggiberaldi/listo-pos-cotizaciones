@@ -4,35 +4,97 @@ import { useState, useRef, useEffect } from 'react'
 import { X, Delete, Loader2 } from 'lucide-react'
 import LoginAvatar from './LoginAvatar'
 
-export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
+export default function LoginPinModal({ isOpen, onClose, onCancelPending, user, onSubmit }) {
   const PIN_LEN = (user?.rol === 'vendedor' || user?.rol === 'vendedor_sin_comision') ? 4 : 6
 
   const [pin,     setPin]     = useState('')
   const [error,   setError]   = useState(false)
   const [working, setWorking] = useState(false)
+  const [msg,     setMsg]     = useState(null)
 
   const inputRef = useRef(null)
+  const submissionId = useRef(0)
+  const watchdog = useRef(null)
   const isTactil = () => window.matchMedia('(hover: none) and (pointer: coarse)').matches
 
   useEffect(() => {
+    submissionId.current++
+    clearTimeout(watchdog.current)
+    setWorking(false)
+    let focusTimer
     if (isOpen) {
-      setPin(''); setError(false)
-      if (!isTactil()) setTimeout(() => inputRef.current?.focus(), 100)
+      setPin(''); setError(false); setMsg(null)
+      if (!isTactil()) focusTimer = setTimeout(() => inputRef.current?.focus(), 100)
     }
-  }, [isOpen])
+    return () => {
+      submissionId.current++
+      clearTimeout(watchdog.current)
+      clearTimeout(focusTimer)
+    }
+  }, [isOpen, user?.id])
 
   useEffect(() => {
-    if (pin.length === PIN_LEN && !working) submit()
+    if (isOpen && pin.length === PIN_LEN && !working) submit()
   }, [pin]) // eslint-disable-line
 
   async function submit() {
     if (pin.length !== PIN_LEN || working) return
     setWorking(true)
-    const ok = await onSubmit(pin)
-    if (!ok) {
-      setError(true); setPin(''); setWorking(false)
-      setTimeout(() => setError(false), 600)
-      if (!isTactil()) setTimeout(() => inputRef.current?.focus(), 100)
+
+    // Watchdog: si la verificación no resuelve en 20s, liberar la UI.
+    // Garantiza que el spinner "Verificando…" NUNCA quede congelado,
+    // aunque alguna promesa de abajo se cuelgue (red estancada, etc.).
+    const attempt = ++submissionId.current
+    const isCurrent = () => attempt === submissionId.current
+    const later = (callback, delay) => setTimeout(() => { if (isCurrent()) callback() }, delay)
+    const vigilante = setTimeout(() => {
+      if (!isCurrent()) return
+      submissionId.current++
+      // Cancelar también la autoridad del intento, no solo esconder el spinner.
+      onCancelPending?.()
+      setWorking(false)
+      setError(true)
+      setPin('')
+      setMsg('La verificación tardó demasiado. Revisa tu conexión e intenta de nuevo.')
+      if (!isTactil()) inputRef.current?.focus()
+    }, 20000)
+    watchdog.current = vigilante
+
+    try {
+      const res = await onSubmit(pin)
+      const ok = res === true || res?.ok === true
+      if (!isCurrent()) return
+      if (!ok) {
+        // Sesión principal expirada (refresh token rechazado): mensaje claro y
+        // cierre del modal para volver al login de correo. NUNCA quedarse girando.
+        if (res?.sessionExpired) {
+          setMsg(res.error || 'Tu sesión expiró. Inicia sesión nuevamente con tu correo.')
+          setPin('')
+          later(() => { setMsg(null); setError(false); onClose() }, 2600)
+          return
+        }
+        // Verificación anterior aún en curso — explicar el shake en vez de
+        // hacer parecer un PIN incorrecto
+        if (res?.busy) {
+          setMsg('La verificación anterior sigue en curso. Espera unos segundos…')
+          later(() => setMsg(null), 4000)
+        } else if (res?.error) {
+          setMsg(res.error)
+          later(() => setMsg(null), 3500)
+        }
+        setError(true); setPin('')
+        later(() => setError(false), 600)
+        if (!isTactil()) later(() => inputRef.current?.focus(), 100)
+      }
+    } catch (err) {
+      console.error('[AUTH] Error procesando PIN:', err)
+      if (!isCurrent()) return
+      setError(true)
+      setPin('')
+      later(() => setError(false), 600)
+    } finally {
+      clearTimeout(vigilante)
+      if (isCurrent()) setWorking(false)
     }
   }
 
@@ -72,6 +134,9 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ingreso de PIN"
         className="relative w-full sm:max-w-sm sm:mx-4 rounded-t-3xl sm:rounded-3xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 max-h-[95dvh] overflow-y-auto"
         style={{
           background: 'linear-gradient(160deg, #0d1f3c 0%, #0a1628 60%, #081520 100%)',
@@ -103,7 +168,7 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
         <div className="relative z-10 px-5 sm:px-7 pt-4 sm:pt-8 pb-5 sm:pb-7">
 
           {/* Botón cerrar */}
-          <button onClick={onClose}
+          <button onClick={onClose} aria-label="Cancelar ingreso de PIN"
             className="absolute top-3 sm:top-5 right-4 sm:right-5 p-1.5 rounded-xl transition-colors"
             style={{ color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.05)' }}
             onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}
@@ -119,6 +184,13 @@ export default function LoginPinModal({ isOpen, onClose, user, onSubmit }) {
               Ingresa tu PIN de {PIN_LEN} dígitos
             </p>
           </div>
+
+          {/* Mensaje de estado (timeout, etc.) */}
+          {msg && (
+            <p className="text-[11px] font-semibold text-center -mt-3 mb-3 sm:-mt-4 sm:mb-4" style={{ color: '#fbbf24' }}>
+              {msg}
+            </p>
+          )}
 
           {/* Puntos indicadores */}
           <div className={`flex justify-center gap-3 sm:gap-3.5 mb-5 sm:mb-8 ${error ? 'animate-shake' : ''}`}>

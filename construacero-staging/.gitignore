@@ -93,8 +93,19 @@ scripts/*
 !scripts/test-revertir-movimiento-staging.mjs
 !scripts/detect-double-credit-cxc-staging.mjs
 !scripts/test-saldo-favor-272.mjs
+!scripts/free-dev-ports.mjs
 
 # Keep the regression test that protects the nightly E2E guards.
 !api/lib/__tests__/
 !api/lib/__tests__/e2eRunnerConfig.test.js
 !api/lib/__tests__/kardexAudit.test.js
+
+# Corrección de códigos de productos externos (portado desde el árbol principal)
+!src/components/despachos/__tests__/
+!src/components/despachos/__tests__/CodigosExternosEditor.test.js
+!api/handlers/__tests__/
+!api/handlers/__tests__/codigosExternos.test.js
+
+# Fix anti-congelamiento del PIN (watchdog del modal, portado desde el árbol principal)
+!src/components/auth/__tests__/
+!src/components/auth/__tests__/LoginPinModal.test.js

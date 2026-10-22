@@ -2036,6 +2036,51 @@ Logs de Postgres en Supabase con error 22P02 `invalid input value for enum log_o
 
 ---
 
+## SESIÓN 22/10/2026 — Porte: corrección de códigos de productos externos al aprobar
+
+**En resumen:** se portó desde el árbol principal la función de corregir códigos de productos
+externos justo al aprobar un despacho. Antes, los artículos externos (fuera del catálogo) se
+quedaban con el código automático al azar (`EXT#######`) que inventa el sistema. Ahora, al
+presionar "Aprobar despacho", el diálogo muestra esos productos con el código editable y al
+confirmar se guardan los códigos y se aprueba en un solo paso. Solo cambia el texto del código:
+no toca inventario, precios, pagos ni totales. La tarjeta del despacho pendiente también avisa
+("N productos externos con código automático") para que administración sepa de un vistazo qué
+hay que revisar.
+
+**Archivos (idénticos al árbol principal):** `api/handlers/despachos.js` (endpoint
+`POST /api/despachos/editar-codigos-externos` con guardas de rol/estado/solo-externos y
+auditoría), `worker.js` (ruta), `src/hooks/useDespachos.js` (`useEditarCodigosExternos`),
+`src/components/despachos/CodigosExternosEditor.jsx` (editor + helpers),
+`src/components/despachos/DespachoCard.jsx` (editor al aprobar + aviso en tarjeta). Tests:
+`api/handlers/__tests__/codigosExternos.test.js` y
+`src/components/despachos/__tests__/CodigosExternosEditor.test.js`.
+
+**Ajustes locales de staging:** import de `isSameOriginRequest` agregado en
+`api/handlers/despachos.js`, carpeta de pruebas de componentes incluida en `vitest.config.js`
+y los dos archivos de test blanqueados en `.gitignore` (que ignora `*.test.js` por defecto).
+
+**Verificación (22-oct):** Vitest 5 archivos / 33 pruebas en verde (14 nuevas) y
+`npm run build` OK.
+
+**Fix (22-oct, cont.) — cuelgue "Verificando…" del PIN:** el login por PIN se quedaba
+congelado en "Verificando…" para siempre. Dos causas: (1) `LoginPinModal.jsx` era la versión
+vieja que trataba cualquier respuesta de error como éxito (miraba si el objeto era "truthy"
+en vez de `res.ok === true`), así que un PIN incorrecto o un Worker caído dejaban el spinner
+eternamente; (2) los procesos `workerd.exe` quedaban vivos como "fantasma" tras cierres
+forzados y secuestraban el puerto 8789, colgando las peticiones. Arreglos: se portó el
+`LoginPinModal.jsx` corregido del proyecto principal (watchdog de 20s, `submissionId`,
+mensajes de error visibles y cancelación de intentos pendientes — era un "PROMOVER raíz"
+pendiente de la auditoría de divergencias 2026-10-19) y se agregó `scripts/free-dev-ports.mjs`
+que libera los puertos 5174/8789 de procesos fantasma antes de arrancar (enganchado en
+`predev`/`predev:worker` de `package.json`). Prueba de regresión:
+`src/components/auth/__tests__/LoginPinModal.test.js` (5 tests, incluida en `vitest.config.js`).
+Verificación: Vitest 6 archivos / 38 pruebas en verde, `npm run build` OK, y prueba manual en
+navegador: dos PIN incorrectos respondieron en <700 ms y el modal se recuperó en ambos.
+Al arrancar, el limpiador mató solo a un proceso fantasma real (PID 19072) que secuestraba
+el 8789 — reproducción y arreglo confirmados.
+
+---
+
 *Mantener este archivo actualizado al inicio y fin de cada sesión de trabajo.*
 
 

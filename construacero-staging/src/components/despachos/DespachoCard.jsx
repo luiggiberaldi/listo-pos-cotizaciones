@@ -4,7 +4,8 @@ import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
 import useAuthStore from '../../store/useAuthStore'
-import { useEditarDespacho } from '../../hooks/useDespachos'
+import { useEditarDespacho, useEditarCodigosExternos } from '../../hooks/useDespachos'
+import CodigosExternosEditor, { esItemExterno, esCodigoAutomatico } from './CodigosExternosEditor'
 import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoActions'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import supabase from '../../services/supabase/client'
@@ -67,6 +68,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const { tasaBcv, tasaUsdt } = useTasaCambio()
 
   const editarDespacho = useEditarDespacho()
+  const editarCodigosExternos = useEditarCodigosExternos()
+  // Códigos escritos por administración sobre líneas externas (itemId → código)
+  const [codigosExternos, setCodigosExternos] = useState({})
   const [showNotaModal, setShowNotaModal] = useState(false)
   const [nuevaNota, setNuevaNota] = useState('')
   const [nuevoTituloNota, setNuevoTituloNota] = useState('nota')
@@ -284,6 +288,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   useEffect(() => {
     if (accionPendiente && (accionPendiente.estado === 'despachada' || accionPendiente.estado === 'entregada')) {
       setLoadingItems(true)
+      setCodigosExternos({})
       fetchItemsDespacho()
         .then(data => {
           // Excluir cortes, fletes y servicios que no forman parte del inventario físico
@@ -380,6 +385,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const itemsDelDespachoConFallback = tienePrestamos && !itemsDelDespacho.some(x => x.es_prestamo)
     ? itemsDelDespacho.map(it => ({ ...it, es_prestamo: true }))
     : itemsDelDespacho
+
+  // Líneas externas (sin producto del catálogo): candidatas a corrección de código al aprobar
+  const itemsExternosAprobacion = itemsDelDespacho.filter(esItemExterno)
+  // De esas, las que aún traen el código automático (EXT#######) inventado por el sistema
+  const itemsCodigoAutomatico = itemsExternosAprobacion.filter(it => esCodigoAutomatico(it.codigo_snap))
 
   let isCtaPorCobrar = false
   let isMixtoCxc = false
@@ -1140,6 +1150,17 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         </div>
       </div>
 
+      {/* Aviso: productos externos con código automático, por corregir antes de aprobar */}
+      {itemsCodigoAutomatico.length > 0 && despacho.estado === 'pendiente' && esPrivilegiado && (
+        <div className="mx-3 mb-2 p-2 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center gap-2 text-indigo-700 animate-in slide-in-from-top-2 duration-300">
+          <Tag size={16} className="shrink-0" />
+          <span className="text-[10px] font-black uppercase leading-tight">
+            {itemsCodigoAutomatico.length} producto{itemsCodigoAutomatico.length === 1 ? '' : 's'} externo{itemsCodigoAutomatico.length === 1 ? '' : 's'} con código automático
+            <span className="font-semibold normal-case block opacity-80">Revisa el código al aprobar</span>
+          </span>
+        </div>
+      )}
+
       {/* Banner Advertencia Stock (Admin) */}
       {hayFaltaStock && ['pendiente', 'despachada'].includes(despacho.estado) && esPrivilegiado && (
         <div className="mx-3 mb-2 p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-700 animate-in slide-in-from-top-2 duration-300">
@@ -1444,6 +1465,15 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         onClose={() => setAccionPendiente(null)}
         onConfirm={async () => {
           if (!accionPendiente) return
+          // 1) Si administración corrigió códigos de externos, guardarlos ANTES de aprobar.
+          //    Si esto falla, la aprobación no se ejecuta (el error aborta el confirm).
+          const codigosModificados = itemsExternosAprobacion
+            .filter(it => typeof codigosExternos[it.id] === 'string' && codigosExternos[it.id].trim() !== (it.codigo_snap || '').trim())
+            .map(it => ({ itemId: it.id, codigo: codigosExternos[it.id].trim() }))
+            .filter(c => c.codigo.length > 0)
+          if (accionPendiente.estado === 'despachada' && codigosModificados.length > 0) {
+            await editarCodigosExternos.mutateAsync({ despachoId: accionPendiente.id, codigos: codigosModificados })
+          }
           await onCambiarEstado(accionPendiente.id, accionPendiente.estado)
           setAccionPendiente(null)
         }}
@@ -1633,6 +1663,15 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                       </div>
                     )}
                   </div>
+
+                  {/* Revisión de códigos externos — solo al aprobar */}
+                  {accionPendiente?.estado === 'despachada' && itemsExternosAprobacion.length > 0 && (
+                    <CodigosExternosEditor
+                      items={itemsExternosAprobacion}
+                      codigos={codigosExternos}
+                      onChange={(itemId, codigo) => setCodigosExternos(prev => ({ ...prev, [itemId]: codigo }))}
+                    />
+                  )}
                 </>
               )
             })()}

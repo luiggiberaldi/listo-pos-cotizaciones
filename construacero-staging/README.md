@@ -89,7 +89,9 @@ El archivo `.env` alimenta el frontend y contiene el Access Token de Supabase. E
 
 No uses la clave de producción. Sin `SUPABASE_SERVICE_KEY`, `switch-operator` responde `503 Worker no configurado` en vez de intentar una llamada administrativa inválida.
 
-En este staging el PIN maestro está configurado deliberadamente con ceros: usa `0000` para vendedores y `000000` para supervisor, administración, logística o jefe. La pantalla exige esas longitudes según el rol; no hace falta modificar `pin_hash` en la base de datos.
+Cada operador tiene su propio PIN, guardado de forma segura (irreversible) en la base de datos y asignado desde **Personal**. El antiguo "PIN maestro" de ceros (`0000`/`000000`) **ya no funciona**: ese atajo se eliminó del sistema por seguridad y hoy solo se acepta el PIN real de cada operador. Las variables `DEV_MASTER_PIN_*` que aún quedan en `wrangler.toml` y `wrangler.dev.jsonc` no tienen ningún efecto (el código no las lee) y no deben copiarse a producción.
+
+PINs de los usuarios de prueba actuales: el Jefe de pruebas usa `246813` (ver `../docs/operaciones/release-cod-e2e-staging-20261020.md`); los demás operadores de prueba se crean sin PIN y hay que asignarles uno desde Personal. La pantalla exige 4 dígitos para vendedores y 6 para el resto de roles.
 
 ## Restauración y secuencias
 

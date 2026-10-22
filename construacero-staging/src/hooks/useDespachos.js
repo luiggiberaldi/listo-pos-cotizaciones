@@ -561,6 +561,34 @@ export function useEditarItemsDespacho() {
   })
 }
 
+// ─── Corregir códigos de productos externos antes de aprobar ────────────────
+// Operación ligera: solo cambia el texto del código de líneas externas de un
+// despacho aún pendiente. No toca inventario, precios ni pagos.
+export function useEditarCodigosExternos() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ despachoId, codigos }) => {
+      const res = await authFetch('/api/despachos/editar-codigos-externos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ despachoId, codigos }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al corregir códigos de productos externos')
+      return result
+    },
+    onSuccess: async () => {
+      qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
+      qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
+      broadcastEntidad(['despachos'])
+    },
+    onError: (error) => {
+      showToast(error.message || 'Error al corregir códigos', 'error')
+    },
+  })
+}
+
 // ─── Reciclar despacho anulado → cotización borrador (via Worker API) ────────
 export function useReciclarDespacho() {
   const qc = useQueryClient()

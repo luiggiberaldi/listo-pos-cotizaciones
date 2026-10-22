@@ -1,4 +1,4 @@
-import { json, jsonError, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { validateOperator, SUPER_ADMIN_UUID } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
@@ -1752,6 +1752,113 @@ export async function handleReciclarDespacho(request, env) {
     return json({ id: nueva.id, numero: nueva.numero }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al reciclar despacho', 500, request);
+  }
+}
+
+// ── Corregir códigos de productos externos antes de aprobar ─────────────────
+// Solo cambia el texto codigo_snap de líneas externas (sin producto_id) de un
+// despacho aun 'pendiente'. No toca inventario, precios, pagos ni totales:
+// es la operacion ligera que administracion usa al aprobar para reemplazar el
+// codigo automatico (EXT#######) por el codigo real del producto.
+export async function handleEditarCodigosExternos(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+
+  if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
+    return jsonError('No tienes permiso para corregir códigos de productos externos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonError('Body inválido', 400, request); }
+  const { despachoId, codigos } = body;
+  // codigos: [{ itemId, codigo }]
+
+  if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+  if (!Array.isArray(codigos) || codigos.length === 0) return jsonError('codigos no puede estar vacío', 400, request);
+
+  const cambios = [];
+  const vistos = new Set();
+  for (const c of codigos) {
+    const itemId = c?.itemId;
+    const codigo = typeof c?.codigo === 'string' ? c.codigo.trim() : '';
+    if (!itemId || !isValidUuid(itemId)) return jsonError('itemId inválido', 400, request);
+    if (!codigo) return jsonError('El código no puede estar vacío', 400, request);
+    if (codigo.length > 40) return jsonError('El código no puede exceder 40 caracteres', 400, request);
+    if (vistos.has(itemId)) return jsonError('Item repetido en la petición', 400, request);
+    vistos.add(itemId);
+    cambios.push({ itemId, codigo });
+  }
+
+  try {
+    // 1. El despacho debe pertenecer a la cuenta y seguir por aprobar.
+    const despachoRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=id,estado,numero`,
+      { headers },
+    );
+    if (!despachoRes.ok) return jsonError('Error al verificar despacho', 500, request);
+    const [despacho] = await despachoRes.json();
+    if (!despacho) return jsonError('Despacho no encontrado', 404, request);
+    if (despacho.estado !== 'pendiente') {
+      return jsonError('Los códigos solo pueden corregirse antes de aprobar el despacho', 400, request);
+    }
+
+    // 2. Solo líneas externas (producto_id IS NULL) de este despacho.
+    const itemsRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/notas_despacho_items?despacho_id=eq.${despachoId}&producto_id=is.null&select=id,codigo_snap,nombre_snap`,
+      { headers },
+    );
+    if (!itemsRes.ok) return jsonError('Error al verificar productos externos', 500, request);
+    const externos = await itemsRes.json();
+    const externosMap = new Map(externos.map(it => [it.id, it]));
+    for (const { itemId } of cambios) {
+      if (!externosMap.has(itemId)) {
+        return jsonError('Solo se pueden corregir códigos de productos externos de este despacho', 400, request);
+      }
+    }
+
+    // 3. Aplicar un PATCH por código modificado (el filtro producto_id=is.null
+    //    hace imposible tocar aquí una línea de inventario).
+    const aplicados = [];
+    for (const { itemId, codigo } of cambios) {
+      const actual = externosMap.get(itemId);
+      if ((actual.codigo_snap || '') === codigo) continue;
+      const patchRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/notas_despacho_items?id=eq.${itemId}&despacho_id=eq.${despachoId}&producto_id=is.null`,
+        {
+          method: 'PATCH',
+          headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({ codigo_snap: codigo }),
+        },
+      );
+      if (!patchRes.ok) return jsonError('Error al actualizar el código del producto', 500, request);
+      const filas = await patchRes.json();
+      if (!Array.isArray(filas) || filas.length === 0) {
+        return jsonError('No se pudo actualizar el código del producto', 409, request);
+      }
+      aplicados.push({
+        item_id: itemId,
+        nombre: actual.nombre_snap,
+        codigo_anterior: actual.codigo_snap,
+        codigo_nuevo: codigo,
+      });
+    }
+
+    if (aplicados.length > 0) {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+        categoria: 'DESPACHO', accion: 'CORREGIR_CODIGO_EXTERNO',
+        descripcion: `Corrigió ${aplicados.length} código(s) de productos externos del despacho DES-${String(despacho.numero).padStart(5, '0')}`,
+        entidadTipo: 'nota_despacho', entidadId: despachoId,
+        meta: { cambios: aplicados }, ip,
+      });
+    }
+
+    return json({ ok: true, actualizados: aplicados.length }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al corregir códigos', 500, request);
   }
 }
 

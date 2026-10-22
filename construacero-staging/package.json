@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/free-dev-ports.mjs 5174 8789",
     "dev": "npx concurrently -n VITE,API -c cyan,yellow \"vite\" \"npm run dev:worker\"",
+    "predev:worker": "node scripts/free-dev-ports.mjs 8789",
     "dev:vite": "vite",
     "dev:api": "npm run dev:worker",
     "dev:worker": "npx wrangler dev --config wrangler.toml --port 8789 --local --env-file .dev.vars",
