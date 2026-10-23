@@ -4753,3 +4753,28 @@ no del módulo oculto, y se conservó.
 grep de restos = 0 en los seis archivos tocados de cada árbol. Lint sin errores nuevos (los
 2 errores `no-empty` de `catch (e) {}` que aparecen ya existían en HEAD, igual que los 182
 avisos de siempre).
+
+## 2026-10-23 — DESPLIEGUE A PRODUCCIÓN: Seguimiento Operativo oculto de la interfaz
+
+**En resumen:** el ocultamiento del Seguimiento Operativo (aprobado por el usuario) quedó
+DESPLEGADO Y VERIFICADO en producción. Commit `2e63beb` (13 archivos) desplegado por el
+flujo normal: Vercel (frontend) + GitHub Actions (Worker, job en verde en 54 s). La app
+real ya no muestra el módulo en ninguna parte.
+
+**Smoke tests (producción, 2026-10-23 ~12:30 UTC):**
+- Frontend `listo-pos-cotizaciones.vercel.app` → 200, y verificado por CONTENIDO que sirve
+  la versión nueva: el asset principal servido (`index-*.js`, 488 kB) contiene 0 apariciones
+  de `seguimiento-operativo` — la ruta/pantalla ya no está en el bundle.
+- `GET /api/ping` → 200 "ok".
+- `GET /api/clientes` sin sesión → 401 "No autenticado" (guard activo, no 404/500).
+- `GET /api/seguimiento` sin sesión → 401 "No autenticado": el servidor queda INTACTO por
+  diseño (reversible), protegido y sin uso desde la interfaz. Base de datos: nada que
+  aplicar (sin cambios de datos).
+
+**Pendiente manual (usuario):** entrar a la app real y confirmar a ojo que el menú lateral
+ya no tiene "Seguimiento Operativo" y que ningún despacho muestra el sobre rojo. Los smoke
+tests automáticos no tienen credenciales de operador.
+
+**Nota:** las dos corridas programadas que aparecen fallidas hoy ("Auditor de saldos" 10:43
+UTC y "Staging E2E nocturno" 09:46 UTC) corrieron ANTES de este despliegue (12:23 UTC) y son
+fallas preexistentes sin relación con este cambio.
