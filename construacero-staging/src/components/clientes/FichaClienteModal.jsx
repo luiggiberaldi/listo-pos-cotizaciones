@@ -1,11 +1,10 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
 import { useState, useEffect } from 'react'
-import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, MessageSquare, Handshake, RotateCcw, ShoppingBag, ChevronDown, Briefcase, Repeat } from 'lucide-react'
+import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, Handshake, RotateCcw, ShoppingBag, ChevronDown, Briefcase, Repeat } from 'lucide-react'
 import { useCuentasCobrar, useRegistrarAbono, useRevertirAbono, useRegistrarSaldoFavor, useRegistrarDevolucionCredito, useCruzarSaldoFavor } from '../../hooks/useCuentasCobrar'
 import { useVentasCliente } from '../../hooks/useClientes'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
-import SeguimientoTimeline from '../ui/SeguimientoTimeline'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import { rankEntities } from '../../utils/entitySearch'
@@ -887,17 +886,6 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
             <Handshake size={13} />
             Préstamos
           </button>
-          <button
-            onClick={() => setActiveTab('seguimiento')}
-            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'seguimiento'
-                ? 'bg-white text-slate-800 shadow-sm border border-slate-100'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
-            }`}
-          >
-            <MessageSquare size={13} />
-            Bitácora
-          </button>
         </div>
 
         {/* Body scrollable */}
@@ -1129,16 +1117,6 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
             </div>
           )}
 
-          {/* PESTAÑA: SEGUIMIENTO / TIMELINE */}
-          {activeTab === 'seguimiento' && (
-            <div>
-              <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-3">
-                <MessageSquare size={14} className="text-slate-500" />
-                Seguimiento Operativo
-              </h3>
-              <SeguimientoTimeline clienteId={cliente.id} />
-            </div>
-          )}
 
           {/* PESTAÑA: PRÉSTAMOS (NUEVA) */}
           {activeTab === 'prestamos' && (

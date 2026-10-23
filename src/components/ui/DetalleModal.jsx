@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Truck, DollarSign, Pencil, AlertTriangle, Clock, MessageSquare, Handshake, LockKeyhole } from 'lucide-react'
+import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Truck, DollarSign, Pencil, AlertTriangle, Clock, Handshake, LockKeyhole } from 'lucide-react'
 import EditarItemsDespachoModal from '../despachos/EditarItemsDespachoModal'
 import supabase from '../../services/supabase/client'
 import { fetchDespachoConsolidado } from '../../services/despachoItemsService'
-import SeguimientoTimeline from './SeguimientoTimeline'
 import { apiUrl } from '../../services/apiBase'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtBs, usdToBs } from '../../utils/format'
 import useAuthStore from '../../store/useAuthStore'
@@ -585,18 +584,6 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             </div>
           )}
 
-          {/* ── Sección de Seguimiento Operativo (Solo en Despachos) ── */}
-          {tipo === 'despacho' && (
-            <div className="mt-6 pt-6 border-t border-slate-100">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                <MessageSquare size={12} className="text-slate-400" /> Seguimiento Operativo
-              </h3>
-              <SeguimientoTimeline 
-                despachoId={registro.id}
-                clienteId={registro.cliente_id || registro.cliente?.id || registro.cliente_factura?.id} 
-              />
-            </div>
-          )}
         </div>
 
         {/* Totales */}

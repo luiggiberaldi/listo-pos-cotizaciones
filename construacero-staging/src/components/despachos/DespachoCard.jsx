@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo, Fragment } from 'react'
-import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, MoreVertical, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck, Mail, Handshake, PackageX } from 'lucide-react'
+import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, MoreVertical, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck, Handshake, PackageX } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import MobileActionSheet from '../cotizaciones/MobileActionSheet'
 import ConfirmModal from '../ui/ConfirmModal'
@@ -24,7 +24,6 @@ import FacturaModal from './FacturaModal'
 import DevolucionParcialModal from './DevolucionParcialModal'
 import { showToast } from '../ui/Toast'
 import { MessageCircle, StickyNote } from 'lucide-react'
-import SeguimientoFijadoModal from '../ui/SeguimientoFijadoModal'
 import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { calcComisionEstimada } from '../../utils/comisionUtils'
 
@@ -44,7 +43,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [guiaLoading, setGuiaLoading]   = useState(false)
   const [printLoading, setPrintLoading] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
-  const [showFijadoModal, setShowFijadoModal] = useState(false)
   const [showDescuento, setShowDescuento] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [showSheet, setShowSheet]     = useState(false)
@@ -323,8 +321,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const numDisplay = despacho.cotizacion
     ? `DES-${String(despacho.cotizacion.numero).padStart(5, '0')}`
     : `DES-${String(despacho.numero).padStart(5, '0')}`
-  const tieneSeguimientoActivo = despacho.seguimiento?.some(s => s.prioridad === 'pendiente' || s.prioridad === 'urgente' || s.fijada)
-  const tieneSeguimientoFijado = despacho.seguimiento?.some(s => s.fijada)
   const esVendedorExterno = !!despacho.vendedor?.es_externo || (despacho.vendedor?.markup_pct != null && Number(despacho.vendedor.markup_pct) > 0)
   const vendedorColor = esVendedorExterno ? '#D97706' : (despacho.vendedor?.color || '#64748b')
   const esVendedorSinComision = (despacho.cliente_factura || despacho.cliente)?.vendedor?.rol === 'vendedor_sin_comision'
@@ -934,23 +930,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <p className="font-black text-white font-mono leading-none drop-shadow text-sm sm:text-base whitespace-nowrap">{numDisplay}</p>
-            {tieneSeguimientoActivo && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (esAdministracion && tieneSeguimientoFijado) {
-                    setShowFijadoModal(true);
-                  } else {
-                    setShowDetalle(true);
-                  }
-                }}
-                className="cursor-pointer text-rose-500 hover:text-rose-600 bg-white shrink-0 transition-transform active:scale-95 flex items-center justify-center h-6 w-6 rounded-full shadow-sm hover:shadow-md ml-1"
-                title="Seguimiento activo o fijado (Ver detalle)"
-              >
-                <Mail className="animate-envelope-vibrate" size={14} strokeWidth={2} />
-              </button>
-            )}
             {esCreditoVenta && (
               <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none"
                 title={tooltipPendiente || 'Venta a crédito'}>
@@ -1736,14 +1715,6 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         tipo="despacho"
         registro={despacho}
         tasa={tasa}
-      />
-
-      <SeguimientoFijadoModal
-        isOpen={showFijadoModal}
-        onClose={() => setShowFijadoModal(false)}
-        despachoId={despacho.id}
-        clienteId={despacho.cliente_id}
-        entradas={despacho.seguimiento || []}
       />
 
       <DescuentoModal

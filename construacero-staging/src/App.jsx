@@ -72,7 +72,6 @@ const ProveedoresView   = lazyRetry(() => import('./views/ProveedoresView'))
 const LogsView              = lazyRetry(() => import('./views/LogsView'))
 const ReporteVendedoresView = lazyRetry(() => import('./views/ReporteVendedoresView'))
 const OrdenCompraView       = lazyRetry(() => import('./views/OrdenCompraView'))
-const SeguimientoOperativoView = lazyRetry(() => import('./views/SeguimientoOperativoView'))
 const TesterView        = lazyRetry(() => import('./views/TesterView'))
 const TesterFlowView    = lazyRetry(() => import('./views/TesterFlowView'))
 const TutorialView      = lazyRetry(() => import('./views/TutorialView'))
@@ -324,10 +323,9 @@ function AppRoutes() {
               <Route path="/proveedores"   element={<ProveedoresView />} />
             </Route>
 
-            {/* Configuración y Seguimiento Operativo: supervisor y administracion */}
+            {/* Configuración: supervisor y administracion */}
             <Route element={<RutaSupervisorOAdmin />}>
               <Route path="/configuracion" element={<ConfiguracionView />} />
-              <Route path="/seguimiento-operativo" element={<SeguimientoOperativoView />} />
             </Route>
 
             {/* Rutas exclusivas de supervisor */}

@@ -4730,3 +4730,26 @@ operador.
 **Nota:** el build local y el de Vercel producen nombres de archivo distintos por diseño
 (`__APP_VERSION__` = hash de commit). Las verificaciones de deploy deben comparar contenido
 (grep de símbolos) o versión servida, nunca nombres de archivos.
+
+## 2026-10-23 — Seguimiento Operativo OCULTO de toda la interfaz (principal + staging)
+
+**En resumen:** el módulo de Seguimiento Operativo desapareció de toda la interfaz en ambos
+árboles, por decisión del usuario ("solo la interfaz"): el servidor y los datos guardados
+quedan intactos, así que es completamente reversible. Quitarlo de la vista lo silencia del
+todo porque nada lo crea automáticamente.
+
+**Superficies retiradas:** entrada del menú lateral, pantalla `/seguimiento-operativo` (ruta
+incluida), pestaña "Bitácora" de la ficha del cliente (timeline), sección de Seguimiento
+Operativo del detalle del despacho, marcador de sobre en tarjetas y filas de despachos, y el
+modal de seguimientos fijados. Los iconos huérfanos también se limpiaron.
+
+**Deliberadamente intacto:** las rutas de servidor `/api/seguimiento*`, el módulo
+`api/handlers/seguimiento.js`, los hooks y componentes `Seguimiento*` (el código queda por si
+se reactiva), los datos guardados y las notificaciones históricas. La tarjeta del tutorial
+"Seguimiento: Transporte y Pagos" habla de trazabilidad de transporte (chofer/camión/placa),
+no del módulo oculto, y se conservó.
+
+**Verificación:** principal Vitest 706/706 + `vite build` OK; staging 66/66 + build OK;
+grep de restos = 0 en los seis archivos tocados de cada árbol. Lint sin errores nuevos (los
+2 errores `no-empty` de `catch (e) {}` que aparecen ya existían en HEAD, igual que los 182
+avisos de siempre).
