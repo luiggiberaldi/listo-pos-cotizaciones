@@ -439,17 +439,23 @@ export function useRegistrarAbono() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion, despachoId }) => {
+    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion, despachoId, idempotencyKey }) => {
       const res = await authFetch('/api/cxc/abono', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // Clave estable por operación (no por petición): un reintento reutiliza la
+          // misma clave y el servidor devuelve el abono ya registrado en vez de duplicarlo.
+          ...(idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey) } : {})
+        },
         body: JSON.stringify({
           clienteId,
           monto,
           formaPago: formaPago || null,
           referencia: referencia || null,
           descripcion: descripcion || 'Abono recibido',
-          despachoId: despachoId || null
+          despachoId: despachoId || null,
+          ...(idempotencyKey ? { idempotencyKey } : {})
         }),
       })
       const result = await res.json()
@@ -490,6 +496,33 @@ export function useRevertirAbono() {
 }
 
 // ─── Registrar saldo a favor (Worker API) ──────────────────────────────────
+// ─── Revertir (parcial o total) el cargo CxC de un despacho (Worker API) ────
+// Cuadre automático de la corrección de métodos de pago: cuando la parte a
+// crédito era un error de captura, el cargo baja a `montoNuevo` (0 lo elimina).
+// El servidor valida el rol, exige motivo y es idempotente por monto objetivo.
+export function useRevertirCargoCxc() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ despachoId, montoNuevo, motivo }) => {
+      const res = await authFetch('/api/cxc/revertir-cargo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ despachoId, montoNuevo, motivo }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Error al revertir el cargo de CxC')
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CXC_KEY })
+      qc.invalidateQueries({ queryKey: CLIENTES_KEY })
+      qc.invalidateQueries({ queryKey: ['despachos'] })
+      showToast('Cargo de CxC revertido exitosamente', 'success')
+    },
+  })
+}
+
 export function useRegistrarSaldoFavor() {
   const qc = useQueryClient()
 

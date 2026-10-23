@@ -16,6 +16,7 @@
     "test:staging:contracts": "vitest run --config vitest.staging.config.js",
     "test:cod": "node scripts/test-cod.mjs",
     "test:cod:browser": "node scripts/test-cod-modal-browser.mjs",
+    "test:editar-pago:browser": "node scripts/test-editar-pago-entregado-browser.mjs",
     "verify:cod:release-local": "node scripts/test-cod-main-release-local.mjs --verify-local",
 
     "verify:cod:rollback-local": "node scripts/test-cod-rollback-local.mjs",

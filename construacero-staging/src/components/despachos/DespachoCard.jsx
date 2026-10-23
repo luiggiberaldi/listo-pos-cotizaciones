@@ -19,6 +19,7 @@ import EditDespachoModal from './EditDespachoModal'
 import DevolverAnularModal from './DevolverAnularModal'
 import CambiarTransportistaModal from './CambiarTransportistaModal'
 import ConciliarCodModal from './ConciliarCodModal'
+import EditarPagoEntregadoModal from './EditarPagoEntregadoModal'
 import FacturaModal from './FacturaModal'
 import DevolucionParcialModal from './DevolucionParcialModal'
 import { showToast } from '../ui/Toast'
@@ -60,6 +61,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const [porcentajePdf, setPorcentajePdf] = useState('')
   const [showCambiarTransportista, setShowCambiarTransportista] = useState(false)
   const [showConciliarCod, setShowConciliarCod] = useState(false)
+  const [showEditarPago, setShowEditarPago] = useState(false)
   const [showFacturaModal, setShowFacturaModal] = useState(false)
   const [showDevolucionParcial, setShowDevolucionParcial] = useState(false)
   const [facturaActionType, setFacturaActionType] = useState('download')
@@ -853,6 +855,18 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         icon: DollarSign,
         onClick: () => setShowConciliarCod(true),
         textColor: 'text-rose-600 font-bold'
+      })
+    }
+
+    // Corregir métodos de pago de un despacho entregado (vía soloPagoEntregado del servidor:
+    // solo administración/jefe/desarrollador, y solo los campos de pago).
+    const canEditarPagoEntregado = despacho.estado === 'entregada' && ['administracion', 'jefe', 'desarrollador'].includes(rol)
+    if (canEditarPagoEntregado) {
+      actions.push({
+        label: 'Editar métodos de pago',
+        icon: CreditCard,
+        onClick: () => setShowEditarPago(true),
+        textColor: 'text-indigo-600'
       })
     }
 
@@ -1753,6 +1767,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       <ConciliarCodModal
         isOpen={showConciliarCod}
         onClose={() => setShowConciliarCod(false)}
+        despacho={despacho}
+      />
+
+      <EditarPagoEntregadoModal
+        isOpen={showEditarPago}
+        onClose={() => setShowEditarPago(false)}
         despacho={despacho}
       />
 

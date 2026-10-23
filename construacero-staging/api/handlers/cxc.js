@@ -1,9 +1,10 @@
-import { json, jsonError, isValidUuid } from '../lib/utils.js'
+import { json, jsonError, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 
 export async function handleRegistrarAbono(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -16,11 +17,43 @@ export async function handleRegistrarAbono(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { clienteId, monto, formaPago, referencia, descripcion, despachoId } = body;
+  const { clienteId, monto, formaPago, referencia, descripcion, despachoId, idempotencyKey } = body;
   if (!clienteId || !isValidUuid(clienteId)) return jsonError('clienteId inválido', 400, request);
   if (!monto || monto <= 0) return jsonError('Monto inválido', 400, request);
 
   try {
+    // 0. Anti-replay (porte desde el árbol principal; solo si el cliente envió
+    //    Idempotency-Key): un reintento del mismo cobro devuelve el abono ya
+    //    registrado en lugar de duplicarlo. Se detecta por coincidencia exacta
+    //    de la clave natural del abono (cliente + despacho + monto + forma +
+    //    referencia + descripción) en las últimas 24h. Sin clave,
+    //    comportamiento histórico intacto (llamadas sin idempotencia, p.ej.
+    //    abonos manuales de FichaCliente).
+    const idemKey = typeof idempotencyKey === 'string' ? idempotencyKey.trim() : '';
+    if (idemKey) {
+      const descripcionFinal = descripcion || 'Abono recibido';
+      const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const params = new URLSearchParams({
+        select: 'id,saldo_usd',
+        tipo: 'eq.abono',
+        monto_usd: `eq.${monto}`,
+        descripcion: `eq.${descripcionFinal}`,
+        creado_en: `gt.${desde}`,
+        limit: '1',
+      });
+      params.set('cliente_id', `eq.${clienteId}`);
+      params.set('despacho_id', despachoId ? `eq.${despachoId}` : 'is.null');
+      params.set('forma_pago_abono', formaPago ? `eq.${formaPago}` : 'is.null');
+      params.set('referencia', referencia ? `eq.${referencia}` : 'is.null');
+      const replayRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?${params.toString().replace(/\+/g, '%20')}`, { headers });
+      if (replayRes.ok) {
+        const previos = await replayRes.json();
+        if (Array.isArray(previos) && previos.length > 0) {
+          return json({ id: previos[0].id, nuevoSaldo: Number(previos[0].saldo_usd), idempotent: true }, 200, request);
+        }
+      }
+    }
+
     // 1. Obtener cliente y su saldo actual
     const cRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteId}&select=saldo_pendiente`, { headers });
     const [cliente] = await cRes.json();
@@ -136,7 +169,7 @@ export async function handleRegistrarAbono(request, env) {
       await registrarAuditoria(env, headers, {
         usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
         categoria: 'FINANZAS', accion: 'REGISTRAR_ABONO', descripcion: `Abono de $${montoAbonar} registrado para cliente ${clienteId}`,
-        entidadTipo: 'cliente', entidadId: clienteId, meta: { monto: montoAbonar, forma_pago: formaPago, saldo_anterior: saldoActual, saldo_nuevo: nuevoSaldo }, ip,
+        entidadTipo: 'cliente', entidadId: clienteId, meta: { monto: montoAbonar, forma_pago: formaPago, saldo_anterior: saldoActual, saldo_nuevo: nuevoSaldo, ...(idemKey ? { idempotency_key: idemKey } : {}) }, ip,
       });
     } catch {}
 
@@ -237,6 +270,91 @@ export async function handleRevertirAbono(request, env) {
     return json({ success: true }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al revertir la transacción', 500, request);
+  }
+}
+
+// Reversión (parcial o total) del cargo CxC de un despacho: deja el cargo en
+// `montoNuevo`. Usado por el "cuadre automático" de la corrección de métodos de
+// pago cuando la parte a crédito era un error de captura (no hubo dinero de por
+// medio). Es idempotente por diseño: un reintento con el mismo montoNuevo no
+// vuelve a aplicar.
+export async function handleRevertirCargoCxc(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { operador, headers, ip } = v;
+
+  const ROLES_REVERSION = ['administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_REVERSION.includes(operador.rol)) {
+    return jsonError('Solo administración, jefe o desarrollador pueden revertir cargos de CxC', 403, request);
+  }
+  if (!isValidUuid(operador.cuenta_id)) return jsonError('Cuenta del operador no disponible', 403, request);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const { despachoId, montoNuevo, motivo } = body || {};
+  if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+  const objetivo = Number(montoNuevo);
+  if (!Number.isFinite(objetivo) || objetivo < 0) return jsonError('montoNuevo inválido', 400, request);
+  const motivoTxt = typeof motivo === 'string' ? motivo.trim() : '';
+  if (motivoTxt.length < 4) return jsonError('El motivo de la reversión es obligatorio (mínimo 4 caracteres)', 400, request);
+
+  try {
+    // Cargo CxC del despacho (mismo criterio que la edición profunda: metodo_pago
+    // 'cxc'; los cargos COD no se tocan por esta vía).
+    const cRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&tipo=eq.cargo&metodo_pago=eq.cxc&select=id,monto_usd,cliente_id`,
+      { headers },
+    );
+    const cargos = await cRes.json();
+    if (!Array.isArray(cargos) || cargos.length === 0) {
+      return jsonError('No hay cargo en cuentas por cobrar (CxC) para este despacho', 404, request);
+    }
+    const cargo = cargos[0];
+    const montoAnterior = Number(cargo.monto_usd) || 0;
+    const montoObjetivo = Math.round(objetivo * 10000) / 10000;
+    if (montoObjetivo > montoAnterior + 0.0001) {
+      return jsonError('La reversión solo puede reducir el cargo', 400, request);
+    }
+
+    if (montoObjetivo === montoAnterior) {
+      // Reintento de una reversión ya aplicada: no se vuelve a escribir.
+      return json({ ok: true, montoAnterior, montoNuevo: montoObjetivo, idempotent: true }, 200, request);
+    }
+
+    if (montoObjetivo <= 0) {
+      const delRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${cargo.id}`, {
+        method: 'DELETE', headers,
+      });
+      if (!delRes.ok) return jsonError('Error al revertir el cargo', 500, request);
+    } else {
+      const patchRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${cargo.id}`, {
+        method: 'PATCH',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ monto_usd: montoObjetivo }),
+      });
+      if (!patchRes.ok) return jsonError('Error al revertir el cargo', 500, request);
+    }
+
+    // Recalcular el saldo del cliente desde los movimientos (mismo mecanismo que
+    // la edición profunda y los abonos).
+    await recalcularSaldoPendienteCliente(cargo.cliente_id, env, headers);
+
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+        categoria: 'FINANZAS', accion: 'REVERTIR_CARGO_CXC',
+        descripcion: `Reversión de cargo CxC del despacho ${despachoId.slice(0, 8)}: ${motivoTxt}`,
+        entidadTipo: 'despacho', entidadId: despachoId,
+        meta: { monto_anterior: montoAnterior, monto_nuevo: montoObjetivo, motivo: motivoTxt },
+        ip,
+      });
+    } catch { /* auditoría best-effort */ }
+
+    return json({ ok: true, montoAnterior, montoNuevo: montoObjetivo }, 200, request);
+  } catch (e) {
+    return jsonError('Error al revertir el cargo: ' + (e?.message || e), 500, request);
   }
 }
 

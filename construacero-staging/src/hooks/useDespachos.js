@@ -500,11 +500,11 @@ export function useEditarDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado }) => {
+    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, soloPagoEntregado }) => {
       const res = await authFetch('/api/despachos/editar-pago', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado }),
+        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, soloPagoEntregado }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al editar despacho')

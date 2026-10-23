@@ -19,7 +19,7 @@ import { handlePush } from './api/handlers/push.js'
 import { handleLogFromClient, handleGetLogs, handleGetLogStats, handleDownloadLogs, handleAnalyzeLogs, handlePurgeLogs } from './api/handlers/logs.js'
 import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/handlers/audit.js'
 import { handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
-import { handleRegistrarAbono, handleRevertirAbono, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
+import { handleRegistrarAbono, handleRevertirAbono, handleRevertirCargoCxc, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp, handleActualizarProductoMetadatos, handleCrearProductoConKardex, handleActualizarProductoConKardex, handleBorrarProductoConKardex } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
@@ -328,6 +328,10 @@ export default {
     // ── API: revertir abono CxC (bypass RLS) ──────────────────────────────
     if (url.pathname === '/api/cxc/revertir-abono' && request.method === 'POST') {
       return handleRevertirAbono(request, env);
+    }
+
+    if (url.pathname === '/api/cxc/revertir-cargo' && request.method === 'POST') {
+      return handleRevertirCargoCxc(request, env);
     }
 
     // ── API: registrar saldo a favor CxC (bypass RLS) ──────────────────────

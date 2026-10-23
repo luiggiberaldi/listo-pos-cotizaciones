@@ -473,11 +473,15 @@ export function useEditarDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado }) => {
+    // soloPagoEntregado: vía especial para corregir SOLO los métodos de pago de un despacho
+    // entregado (administración/jefe/desarrollador). En ese modo el body debe llevar únicamente
+    // despachoId, formaPago, formaPagoCliente y referenciaPago: el servidor rechaza la operación
+    // completa si llega cualquier otro campo (flete, transportista, notas, cliente, dirección).
+    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, soloPagoEntregado }) => {
       const res = await authFetch('/api/despachos/editar-pago', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado }),
+        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, soloPagoEntregado }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al editar despacho')

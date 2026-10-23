@@ -1,0 +1,25 @@
+-- 278_categoria_auditoria_finanzas.sql
+-- Habilita la categoría 'FINANZAS' en el enum categoria_auditoria.
+--
+-- Problema: el enum nunca incluyó 'FINANZAS', así que TODA la auditoría financiera
+-- (pagos a clientes, cobros de entrega, conciliaciones COD, cuadre CxC) se descartaba
+-- en silencio: registrarAuditoria() hace POST a /rest/v1/auditoria y la respuesta
+-- (400 22P02 "invalid input value for enum categoria_auditoria") se ignora a propósito
+-- porque la operación es best-effort. Descubierto el 2026-10-22 con el arnés del cuadre
+-- CxC contra staging (construacero-staging/scripts/test-cuadre-cxc-staging.mjs).
+--
+-- Aplicado en:
+--   * staging   : 2026-10-22 vía Management API (migración registrada
+--                 "staging_categoria_auditoria_finanzas"). Archivo espejo:
+--                 construacero-staging/supabase/migrations/277_staging_categoria_auditoria_finanzas.sql
+--   * producción: 2026-10-23 vía Management API (migración registrada
+--                 "categoria_auditoria_finanzas"), SIN respaldo previo por decisión
+--                 explícita del usuario (token de acceso caducado y sin respaldos
+--                 automáticos ni PITR en el plan). El cambio es aditivo sobre un
+--                 catálogo: no toca filas ni datos de ninguna tabla.
+--
+-- Rollback: NO-OP. Agregar un valor a un enum es inocuo y no es reversible en la
+-- práctica (quitarlo obligaría a recrear el tipo). Si hiciera falta el comportamiento
+-- anterior, se ignora en la aplicación, no en la base de datos.
+
+ALTER TYPE public.categoria_auditoria ADD VALUE IF NOT EXISTS 'FINANZAS';

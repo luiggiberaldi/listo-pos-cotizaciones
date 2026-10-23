@@ -544,7 +544,7 @@ export async function handleEditarPagoDespacho(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, codSinAbono } = body;
+  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, codSinAbono, soloPagoEntregado } = body;
   if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
     return jsonError('transportistaId inválido', 400, request);
   }
@@ -557,11 +557,62 @@ export async function handleEditarPagoDespacho(request, env) {
   if (!despachoId) return jsonError('Falta despachoId', 400, request);
 
   if (!operador.cuenta_id) return jsonError('Cuenta del operador no disponible', 403, request);
-  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id,cliente_id,transportista_id,direccion_envio_estado,flete_pagado`, { headers: h });
+
+  // Vía nueva (porte desde el árbol principal): editar métodos de pago en un
+  // despacho entregado (solo administración/jefe/desarrollador). Decisión de
+  // autorización y contrato del body ANTES de consultar la base: solo
+  // forma_pago/forma_pago_cliente (+ referencia opcional); sin tocar montos,
+  // transportista, cliente, descuentos ni dirección.
+  const esAdminPago = ['administracion', 'jefe', 'desarrollador'].includes(operador.rol);
+  const soloPagoEntregadoFlag = body.soloPagoEntregado === true;
+  if (soloPagoEntregadoFlag) {
+    if (!esAdminPago) {
+      return jsonError('Solo administración, jefe o desarrollador pueden editar métodos de pago de un despacho entregado', 403, request);
+    }
+    const extrasSoloPago = transportistaId !== undefined
+      || fleteUsd !== undefined
+      || corteUsd !== undefined
+      || clienteId !== undefined
+      || notas !== undefined
+      || notasTitulo !== undefined
+      || direccionEnvioDireccion !== undefined
+      || direccionEnvioCiudad !== undefined
+      || direccionEnvioEstado !== undefined;
+    if (extrasSoloPago || formaPago === undefined || formaPagoCliente === undefined) {
+      return jsonError('Editar métodos de pago en entregado solo acepta forma de pago del despacho y del cliente (más la referencia opcional)', 400, request);
+    }
+  }
+
+  const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=id,estado,vendedor_id,flete_usd,corte_usd,total_usd,cotizacion_id,cliente_id,transportista_id,direccion_envio_estado,flete_pagado,forma_pago,forma_pago_cliente`, { headers: h });
   if (!checkRes.ok) return jsonError('Error al verificar despacho', 500, request);
   const despachos = await checkRes.json();
   if (!despachos.length) return jsonError('Despacho no encontrado', 404, request);
   const despacho = despachos[0];
+
+  // Solo la RPC atómica puede cambiar el estado financiero de un COD (guardas
+  // portadas del árbol principal). En staging el flujo legacy codSinAbono
+  // conserva su excepción documentada hasta que se retire ese camino.
+  if ((formaPago !== undefined || formaPagoCliente !== undefined) && codSinAbono !== true) {
+    const rawAntes = despacho.forma_pago_cliente || despacho.forma_pago
+    const rawDespues = formaPagoCliente !== undefined ? formaPagoCliente : formaPago
+    const parse = raw => { try { const x = typeof raw === 'string' ? JSON.parse(raw) : raw; if (Array.isArray(x)) return x; return typeof raw === 'string' && /cobro a destino/i.test(raw) ? [{ metodo: 'Cobro a destino', legacy: true }] : [] } catch { return typeof raw === 'string' && /cobro a destino/i.test(raw) ? [{ metodo: 'Cobro a destino', legacy: true }] : [] } }
+    const antes = parse(rawAntes).find(f => f?.metodo === 'Cobro a destino')
+    const formasDespues = parse(rawDespues)
+    const despues = formasDespues.find(f => f?.metodo === 'Cobro a destino')
+      || (antes && antes.legacy ? antes : null)
+    if (antes && !despues) {
+      return jsonError('No se puede quitar una obligación COD desde editar-pago; use el flujo de reversión autorizado.', 400, request)
+    }
+    if (despues?.cobro_destino_pagado === true && antes?.cobro_destino_pagado !== true) {
+      return jsonError('El COD solo puede conciliarse mediante el registro atómico de pago con evidencia.', 400, request)
+    }
+    if (antes && despues && Number(antes.monto) !== Number(despues.monto)) {
+      return jsonError('No se puede cambiar el monto nominal COD desde editar-pago.', 400, request)
+    }
+    if (antes?.cobro_destino_pagado === true && JSON.stringify(antes) !== JSON.stringify(despues)) {
+      return jsonError('El registro de un COD cobrado no se puede editar; use la reversión financiera autorizada.', 400, request)
+    }
+  }
 
   const camposFlete = transportistaId !== undefined
     || fleteUsd !== undefined
@@ -611,7 +662,12 @@ export async function handleEditarPagoDespacho(request, env) {
   const esConciliacionCod = formaPago !== undefined && 
     (['administracion', 'desarrollador', 'supervisor', 'jefe'].includes(operador.rol));
 
-  if (despacho.estado === 'entregada' && !esConciliacionCod) {
+  // La vía nueva ya fue validada al inicio del handler (rol + contrato del body
+  // ANTES de consultar la base); aquí solo se marca para exentar de los guards
+  // de estado entregada/aprobada.
+  const editandoSoloMetodosPagoEntregado = soloPagoEntregadoFlag;
+
+  if (despacho.estado === 'entregada' && !esConciliacionCod && !editandoSoloMetodosPagoEntregado) {
     const editandoSoloNotas = notas !== undefined && 
       formaPago === undefined && 
       formaPagoCliente === undefined && 
@@ -641,7 +697,7 @@ export async function handleEditarPagoDespacho(request, env) {
     }
   }
 
-  if (despacho.estado !== 'pendiente' && !esConciliacionCod) {
+  if (despacho.estado !== 'pendiente' && !esConciliacionCod && !editandoSoloMetodosPagoEntregado) {
     const tieneCamposFinancierosRestringidos = formaPago !== undefined || formaPagoCliente !== undefined || referenciaPago !== undefined || corteUsd !== undefined || clienteId !== undefined;
     if (tieneCamposFinancierosRestringidos) {
       return jsonError('No se pueden editar datos financieros en un despacho aprobado', 400, request);
@@ -756,7 +812,7 @@ export async function handleEditarPagoDespacho(request, env) {
     const fpAhora = formaPagoCliente !== undefined ? formaPagoCliente
       : (formaPago !== undefined ? formaPago : (despacho.forma_pago_cliente || despacho.forma_pago))
     const codPagadoAhora = formaPagoTieneCodPagado(fpAhora)
-    if (!codPagadoAntes && codPagadoAhora && ['despachada', 'entregada'].includes(despacho.estado)) {
+    if (!codPagadoAntes && codPagadoAhora && ['despachada', 'entregada'].includes(despacho.estado) && !soloPagoEntregadoFlag) {
       const vendIdCod = await obtenerVendedorComisionId(despacho, h, env)
       const vendRolResCod = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendIdCod}&select=rol,markup_pct`, { headers: h })
       const [vendCod] = await vendRolResCod.json()

@@ -4638,3 +4638,68 @@ Verificación en staging: Vitest 6 archivos / 38 pruebas en verde, `npm run buil
 manual en navegador: dos PIN incorrectos respondieron en <700 ms y el modal se recuperó en
 ambos (antes: congelado permanente). Además, al arrancar, el limpiador mató solo a un
 proceso fantasma real (PID 19072) que secuestraba el 8789 — reproducción y arreglo confirmados.
+
+## 2026-10-22 — CxC (cuadre COD) VERIFICADO EN VIVO EN STAGING + hallazgo: auditoría financiera se pierde en AMBOS entornos
+
+**En resumen:** el arnés E2E del cuadre corrió contra staging vivo con un despacho de prueba
+creado, despachado y conciliado por el Worker real: **22/24 ✓**. Todo el flujo del cuadre pasó
+(cierre automático CxC al conciliar el COD, contador cuadre 0→1, estados y montos exactos,
+filtro CALCULADO sin efecto, auditoría del evento del Worker). Las 2 fallas son la bitácora de
+auditoría y revelaron un **bug previo que afecta también a PRODUCCIÓN**: la categoría
+'FINANZAS' no existe en el enum `categoria_auditoria`, así que TODA la auditoría financiera
+(pagos a clientes, cobros de entrega, conciliaciones) se pierde en silencio. Prueba directa
+contra staging: `insert categoria 'FINANZAS' → 400 "invalid input value for enum
+categoria_auditoria"`. El arreglo es la migración `277_staging_categoria_auditoria_finanzas.sql`
+(y el equivalente para producción), con aplicador `apply-277-staging.mjs`, pero **el token de
+Supabase del `.env` caducó** (401 Invalid access token) y no pude aplicarla sin el usuario.
+ARREGLADO el 2026-10-22: el usuario conectó la cuenta de Supabase correcta al conector
+(`supabase_embira-laity`, que ve staging pero NO producción) y la migración 277 se aplicó vía la
+Management API como migración registrada `staging_categoria_auditoria_finanzas`. Verificado:
+el enum ahora incluye FINANZAS (consulta a `pg_enum`) y el arnés completo quedó
+**24 OK · 0 FALLAS** contra staging vivo, con la bitácora financiera del cuadre registrada.
+PRODUCCIÓN sigue con el enum viejo: toda su auditoría financiera se sigue perdiendo en
+silencio y falta aplicar el equivalente con el protocolo de respaldo.
+Arnés: `construacero-staging/scripts/test-cuadre-cxc-staging.mjs`.
+
+## 2026-10-23 — Auditoría financiera CORREGIDA EN PRODUCCIÓN (enum categoria_auditoria)
+
+**En resumen:** producción dejó de perder en silencio toda la auditoría financiera. La
+categoría 'FINANZAS' no existía en el enum `categoria_auditoria`, así que cada registro de
+pago a cliente, cobro de entrega, conciliación COD o cuadre CxC era rechazado por la base de
+datos (400 22P02) y la aplicación lo tragaba sin avisar. Aplicada la migración
+`278_categoria_auditoria_finanzas.sql` en producción el 2026-10-23 vía Management API
+(migración registrada `categoria_auditoria_finanzas`), tras triple verificación de identidad
+(ref del repo = URL de la app = proyecto del conector). Verificación post-apply: el enum pasó
+de 9 a 10 valores y un registro de prueba con categoría FINANZAS se insertó y borró sin error
+(id `9a79d813…`). Staging ya estaba corregido el 2026-10-22 (277_staging_*, arnés CxC 24/24).
+
+**Nota de protocolo:** se aplicó SIN respaldo previo por decisión explícita del usuario
+(«proceder sin respaldo»): el token de Supabase del `.env` está caducado, el plan no tiene
+respaldos automáticos ni PITR, y el cambio es aditivo sobre un catálogo (no toca filas). Si
+se renueva el token, conviene tomar el respaldo lógico (`scripts/backup-supabase-logical.mjs`)
+como red de seguridad general y habilitar respaldos automáticos en el plan.
+
+**Pendiente conocido:** la aplicación sigue ignorando los errores de auditoría (best-effort).
+Conviene endurecer `api/lib/audit.js` para que un rechazo quede en los logs del sistema y un
+bug como este se vea el mismo día, no meses después.
+
+## 2026-10-23 — Endurecimiento de la bitácora: sin fallos silenciosos (principal + staging)
+
+**En resumen:** la bitácora ya no puede volver a perder registros sin que nadie se entere.
+Si la base de datos rechaza un registro de auditoría (como pasaba con el enum 'FINANZAS') o
+la red falla, ahora queda un AVISO en los logs del sistema (consola + tabla `system_logs` en
+el principal) con el estado del rechazo, la acción y la entidad afectada. El contrato con los
+llamadores no cambia: la operación sigue siendo best-effort y nunca bloquea el flujo.
+
+**Qué se cambió:** `registrarAuditoria()` en `api/lib/audit.js` (principal) y su espejo en
+`construacero-staging/api/lib/audit.js` ahora revisan `response.ok` y registran el fallo; antes
+la respuesta se devolvía pero nadie la miraba, que es exactamente por lo que el bug del enum
+estuvo meses invisible.
+
+**Pruebas:** `api/lib/__tests__/audit.test.js` (3 casos: aceptado sin aviso, rechazado por la
+BD con aviso y respuesta intacta, error de red con aviso) + espejo en staging. Principal:
+706 pruebas en verde y lint limpio en los archivos tocados; staging: 66/66.
+**Observación:** en una corrida del principal apareció 1 fallo intermitente en
+`src/utils/__tests__/egresoInventarioContract.test.js` (contrato de stock comprometido, área
+sin relación con este cambio); no volvió a reproducirse en 3 corridas posteriores completas —
+posible escritura concurrente en el checkout compartido. Queda anotado por si reaparece.

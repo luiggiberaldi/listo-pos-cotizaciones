@@ -1,0 +1,19 @@
+-- 277_staging_categoria_auditoria_finanzas.sql
+-- Añade la categoría 'FINANZAS' al enum categoria_auditoria.
+--
+-- Problema: la tabla auditoria tipifica su columna categoria con el enum creado
+-- en la migración 008 (AUTH, CLIENTE, COTIZACION, INVENTARIO, TRANSPORTISTA,
+-- USUARIO, REASIGNACION, CONFIGURACION, SISTEMA), pero el Worker registra
+-- acciones financieras con categoria = 'FINANZAS' (REGISTRAR_ABONO,
+-- REVERTIR_ABONO, REGISTRAR_SALDO_FAVOR, REVERTIR_CARGO_CXC, DEVOLVER_PRESTAMO,
+-- FACTURAR_PRESTAMO, ...). PostgREST rechaza el valor fuera del enum y
+-- api/lib/audit.js ignora la respuesta, así que TODA esa bitácora financiera se
+-- perdía en silencio.
+--
+-- Verificación post-apply: SELECT unnest(enum_range(NULL::categoria_auditoria))
+-- debe incluir 'FINANZAS'.
+--
+-- Nota: el árbol principal (producción) tiene el mismo hueco y requiere el
+-- mismo cambio vía el proceso de release (backup → preflight → apply →
+-- postflight), nunca a mano.
+ALTER TYPE public.categoria_auditoria ADD VALUE IF NOT EXISTS 'FINANZAS';
