@@ -4703,3 +4703,30 @@ BD con aviso y respuesta intacta, error de red con aviso) + espejo en staging. P
 `src/utils/__tests__/egresoInventarioContract.test.js` (contrato de stock comprometido, área
 sin relación con este cambio); no volvió a reproducirse en 3 corridas posteriores completas —
 posible escritura concurrente en el checkout compartido. Queda anotado por si reaparece.
+
+## 2026-10-23 — DESPLIEGUE A PRODUCCIÓN: cuadre automático de CxC + bitácora sin fallos silenciosos
+
+**En resumen:** el cuadre automático de CxC (probado 24/24 en staging con despacho de prueba)
+y el endurecimiento de la bitácora quedaron DESPLEGADOS Y VERIFICADOS en producción. Commit
+`fc85314` (33 archivos) desplegado por el flujo normal: Vercel (frontend) + GitHub Actions
+(Worker). Smoke tests del runbook en verde; solo queda el chequeo manual de login real.
+
+**Smoke tests (producción, 2026-10-23 ~03:00 UTC):**
+- Frontend `listo-pos-cotizaciones.vercel.app` → 200, y verificado por CONTENIDO que sirve
+  la versión nueva (el entry contiene `revertir-cargo` y el chunk de DespachosView contiene
+  "Editar métodos de pago"; las huellas de nombre difieren del build local porque `__APP_VERSION__`
+  graba el hash de git — lección: comparar contenido, no nombres).
+- `GET /api/ping` → 200 "ok".
+- `GET /api/clientes` sin sesión → 401 "No autenticado" (guard activo, no 404/500).
+- Nueva ruta `POST /api/cxc/revertir-cargo` → pasó de 404 (código viejo) a 401 (código nuevo
+  vivo, exigiendo sesión). Prueba de firma de despliegue del Worker.
+- Base de datos: nada que aplicar (el cuadre usa solo REST sobre `cuentas_por_cobrar` y
+  helpers existentes; la migración 278 del enum ya estaba aplicada).
+
+**Pendiente manual (usuario):** login de un operador real en la app y probar "Editar métodos
+de pago" en un despacho entregado — los smoke tests automáticos no tienen credenciales de
+operador.
+
+**Nota:** el build local y el de Vercel producen nombres de archivo distintos por diseño
+(`__APP_VERSION__` = hash de commit). Las verificaciones de deploy deben comparar contenido
+(grep de símbolos) o versión servida, nunca nombres de archivos.
