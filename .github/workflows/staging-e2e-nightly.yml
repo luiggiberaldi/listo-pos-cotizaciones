@@ -30,10 +30,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node 22 (igual que deploy-worker.yml): Wrangler 4.87+ exige >=22 y el
+      # Worker local de staging no arranca con Node 20 (falla el E2E nocturno).
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: construacero-staging/package-lock.json
 
