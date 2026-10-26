@@ -72,6 +72,12 @@ jobs:
         working-directory: construacero-staging
         run: npm run provision:e2e:staging
 
+      # Wrangler exige que exista la carpeta dist/ (assets del Worker); sin
+      # compilarla primero, el Worker local no arranca y el E2E no corre.
+      - name: Compilar frontend (genera dist/ para el Worker local)
+        working-directory: construacero-staging
+        run: npm run build
+
       - name: Levantar Worker y frontend locales
         working-directory: construacero-staging
         shell: bash
