@@ -497,7 +497,7 @@ export default function EditarPagoEntregadoModal({ isOpen, onClose, despacho }) 
             <div className="text-[11px] text-amber-800 leading-relaxed">
               <span className="font-bold">Este cambio NO mueve dinero.</span> Es corregir cómo quedó
               registrado el pago: si el despacho generó una cuenta por cobrar, la deuda sigue en los
-              libros y hay que cuadrarla —después de guardar te lo ofreceremos aquí mismo. La comisión
+              libros y <span className="font-bold">no se ajusta sola</span>. Si tu corrección cambia la parte a crédito, al guardar te ofreceremos aquí mismo cuadrarla. La comisión
               del vendedor puede cambiar: revísala después de guardar.
             </div>
           </div>

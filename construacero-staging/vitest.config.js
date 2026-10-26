@@ -7,6 +7,7 @@ export default {
       'api/handlers/__tests__/**/*.test.js',
       'src/components/despachos/__tests__/**/*.test.js',
       'src/components/auth/__tests__/**/*.test.js',
+      'src/services/__tests__/**/*.test.js',
     ],
     exclude: [
       '**/node_modules/**',

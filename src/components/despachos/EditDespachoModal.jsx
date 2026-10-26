@@ -6,11 +6,13 @@ import { useTransportistas, useCrearTransportista } from '../../hooks/useTranspo
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import { useClientes } from '../../hooks/useClientes'
+import useClienteFresco from '../../hooks/useClienteFresco'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { useSaldoFavorOrigen } from '../../hooks/useCuentasCobrar'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { round2 } from '../../utils/dinero'
+import { reglaEstadoDestinoFlete } from '../../utils/fleteDestino'
 import CustomSelect from '../ui/CustomSelect'
 import TransportistaFormCompact from '../transportistas/TransportistaFormCompact'
 import ClienteForm from '../clientes/ClienteForm'
@@ -65,11 +67,28 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
   }, [selectedCliente, perfil])
 
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
-  const estadoDestinoFlete = direccionEnvioActiva
-    ? direccionEnvioEstado
-    : (selectedCliente?.estado || '')
-  const fleteLocalRequiereEstado = !!transportistaSeleccionado?.es_local && Number(fleteUsd) > 0
-  const destinoFleteValido = !fleteLocalRequiereEstado || !!estadoDestinoFlete
+  // Refresco de la ficha del cliente al abrir el modal: la lista puede traer una
+  // copia de hasta 5 minutos y el bloqueo del chofer local necesita el estado
+  // actual del cliente (se refresca el cliente del despacho, que es el que usa
+  // la regla del flete).
+  const clienteEnvioFresco = useClienteFresco(clienteId || despacho?.cliente_id, isOpen)
+  const clienteEnvio = clienteEnvioFresco || selectedCliente
+  // Regla del estado del destino (2026-10-25): el destino es el estado de la
+  // ficha del cliente; solo con dirección alternativa —cuyo bloque trae su propio
+  // selector— se elige otro estado. (2026-10-26: eliminado el selector de
+  // respaldo "Estado del destino"; ya ningún cliente real queda sin estado.)
+  const {
+    requiere: fleteLocalRequiereEstado,
+    estadoEnvioEfectivo,
+    estadoDestino: estadoDestinoFlete,
+    valido: destinoFleteValido,
+  } = reglaEstadoDestinoFlete({
+    esLocal: transportistaSeleccionado?.es_local,
+    fleteUsd,
+    direccionEnvioActiva,
+    estadoEnvio: direccionEnvioEstado,
+    estadoCliente: clienteEnvio?.estado,
+  })
   const estadoNormalizado = String(estadoDestinoFlete).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
   const esDestinoFueraCarabobo = !!estadoDestinoFlete && estadoNormalizado !== 'carabobo'
   const tipoCalculoTransportista = config?.transp_tipo_calculo === 'fija' ? 'fija' : 'porcentaje'
@@ -233,7 +252,9 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     setCorteUsd(despacho.corte_usd ? String(Number(despacho.corte_usd)) : '')
     setNotas(despacho.notas || '')
     setClienteId(despacho.cliente_id || '')
-    const dirAct = !!(despacho.direccion_envio_direccion || despacho.direccion_envio_ciudad || despacho.direccion_envio_estado)
+    // Solo cuenta como "dirección alternativa" si hay dirección o ciudad; un
+    // estado solo es el estado del destino del flete y no debe forzar el toggle.
+    const dirAct = !!(despacho.direccion_envio_direccion || despacho.direccion_envio_ciudad)
     setDireccionEnvioActiva(dirAct)
     setDireccionEnvioEstado(despacho.direccion_envio_estado || '')
     setDireccionEnvioCiudad(despacho.direccion_envio_ciudad || '')
@@ -261,7 +282,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
       clienteId: clienteId || null,
       direccionEnvioDireccion: direccionEnvioActiva ? direccionEnvioDireccion : null,
       direccionEnvioCiudad: direccionEnvioActiva ? direccionEnvioCiudad : null,
-      direccionEnvioEstado: direccionEnvioActiva ? direccionEnvioEstado : null,
+      direccionEnvioEstado: estadoEnvioEfectivo || null,
     })
     onClose()
   }

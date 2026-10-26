@@ -58,16 +58,13 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
           {sugerencias.map(p => {
             const yaAgregado = idsAgregados.has(p.id)
             const sinStock = p.stock_actual != null && p.stock_actual <= 0
-            const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
-            const bloqueado = sinPrecio
+            // El precio 0 es un precio válido ($0.00): no bloquea la selección.
             return (
               <button
                 key={p.id}
                 type="button"
-                onClick={() => !bloqueado && seleccionar(p)}
-                disabled={bloqueado}
+                onClick={() => seleccionar(p)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors border-b border-slate-50 last:border-0 ${
-                  bloqueado ? 'opacity-40 cursor-not-allowed' :
                   yaAgregado ? 'bg-emerald-50/50 hover:bg-emerald-50' : 'hover:bg-slate-50'
                 }`}
               >
@@ -95,7 +92,7 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
                     <p className="text-[9px] font-bold text-primary/60">{[precio2Visible(p) && 'P2', precio3Visible(p) && 'P3'].filter(Boolean).length + 1} precios</p>
                   )}
                 </div>
-                {!bloqueado && !yaAgregado && (
+                {!yaAgregado && (
                   <div className="shrink-0 w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Plus size={14} className="text-primary" />
                   </div>

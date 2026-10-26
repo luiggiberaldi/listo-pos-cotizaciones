@@ -59,9 +59,11 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
   const baseCliente = despacho.cliente_factura || despacho.cliente || {}
   const cliente = { ...baseCliente }
   if (despacho.direccion_envio_estado || despacho.direccion_envio_ciudad || despacho.direccion_envio_direccion) {
-    cliente.estado = despacho.direccion_envio_estado || ''
-    cliente.ciudad = despacho.direccion_envio_ciudad || ''
-    cliente.direccion = despacho.direccion_envio_direccion || ''
+    // Con dirección parcial (p. ej. solo el estado del destino del flete) se
+    // conserva lo que falte de la ficha del cliente.
+    cliente.estado = despacho.direccion_envio_estado || cliente.estado || ''
+    cliente.ciudad = despacho.direccion_envio_ciudad || cliente.ciudad || ''
+    cliente.direccion = despacho.direccion_envio_direccion || cliente.direccion || ''
   }
   const diasSemana = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO']
   const fechaObj = despacho.creado_en ? new Date(despacho.creado_en) : new Date()

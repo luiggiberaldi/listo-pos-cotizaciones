@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { X, Truck, Plus, Pencil, Loader2, MapPin, Building, ArrowLeft } from 'lucide-react'
 import { useTransportistas, useCrearTransportista, useActualizarTransportista } from '../../hooks/useTransportistas'
+import useClienteFresco from '../../hooks/useClienteFresco'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import CustomSelect from '../ui/CustomSelect'
@@ -38,6 +39,17 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
     setVista('seleccion')
     setErrorVista('')
   }, [despacho, isOpen])
+
+  // Refresco de la ficha del cliente al abrir el modal: si el estado del destino
+  // quedó vacío (el despacho no trae snapshot ni dirección y la copia del cliente
+  // estaba vieja), se completa con el estado ACTUAL del cliente. Solo rellena
+  // campos vacíos para no pisar lo que el usuario ya haya elegido.
+  const clienteEnvioFresco = useClienteFresco(despacho?.cliente_id, isOpen)
+  useEffect(() => {
+    if (!isOpen || !clienteEnvioFresco) return
+    setEstadoDestino(prev => prev || clienteEnvioFresco.estado || '')
+    setCiudadDestino(prev => prev || clienteEnvioFresco.ciudad || '')
+  }, [isOpen, clienteEnvioFresco])
 
   const cargando = editarDespacho.isPending
 

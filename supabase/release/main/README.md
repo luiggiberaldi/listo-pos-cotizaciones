@@ -175,3 +175,52 @@ Artefactos preparados y probados, **no aplicados a producción**. Plan, criterio
 - **Frontend/Worker**: `ConciliarCodModal.jsx` muestra las dos porciones ("se cobra aquí" / "se cobra en CxC") y el motivo concreto de cada revisión; `api/handlers/cod.js` devuelve los códigos nuevos como error de negocio 400.
 - **Pruebas**: arnés `scripts/test-cod-mixto-release-local.mjs` (ruta real v14→v18 en PostgreSQL desechable: regresión 100% COD idéntica + matriz de 10 casos + rollback restaurado, PASS exit 0); suite vitest 559/559; espejo puro `estadoCodDerivadoV2` en `scripts/lib/invariantes.mjs`.
 - **Rollback**: `19_cod_rollback_review.sql` restaura los cuerpos byte-idénticos del release 14 (más `OR REPLACE` para escribirlos sobre los existentes), sus COMMENTs y grants; no borra asientos, marcas ni registros de idempotencia.
+
+## Release 2026-10-25 — Precios: ingreso de lote no pisa, vaciar limpia, precio 0 (APLICADO)
+
+Paquete `supabase/release/main/279_280_precios_*`, aplicado y verificado en producción el
+2026-10-25 (evidencia `docs/operaciones/apply-279-280-2026-10-25-19-01-22.md`). Equivalente
+en staging: migraciones `278`/`279` de `construacero-staging`.
+
+- **Problema que resuelve**: (1) el ingreso de lote reescribía los precios de productos
+  existentes con los valores pre-cargados de la lista — el «precio cambia y vuelve»;
+  (2) vaciar precio_2/precio_3/porcentajes no limpiaba el valor (semántica COALESCE);
+  (3) el precio 0 no viaja/válida como precio real.
+- **Artefactos**: `279_280_precios_preflight_readonly.sql` (veredicto
+  `YA_APLICADO` / `LISTO_PARA_APLICAR` / `REVISAR`), `279_280_precios_apply.sql` (copias
+  literales de las migraciones `279_batch_ingest_no_pisa_precios.sql` y
+  `280_precios_vacios_y_cero.sql`, en ese orden), `279_280_precios_postflight_readonly.sql`
+  (veredicto `POSTFLIGHT_OK`) y `279_280_precios_rollback_review.sql` (restaura las
+  pre-imágenes de `backup_pre_279_280/`). Huellas en `279_280_precios_SHA256SUMS.txt`
+  (`sha256sum -c`), que cubren también los originales de `supabase/migrations/` y las
+  pre-imágenes.
+- **Semántica fijada**: los precios de venta SOLO se fijan al crear el producto; un ingreso
+  de lote sobre existente únicamente suma (o sobrescribe) existencias y puede actualizar el
+  costo si el operador lo marca. En la edición: precio_2/precio_3/porcentajes van por envío
+  directo (vacío = NULL = limpiado) y precio_usd 0 es un valor válido que se guarda tal cual.
+- **Instalador probado**: `scripts/aplicar-279-280.mjs` (preflight → apply → postflight →
+  prueba de comportamiento con rollback automático → evidencia). Re-aplicable: si un proceso
+  re-escribe los cuerpos con semántica vieja, correrlo de nuevo. (La supuesta «pérdida» de
+  staging del 2026-10-25 quedó desmentida por la forense: nadie re-escribió los cuerpos.)
+- **Guarda de precios (2026-10-25, tarde)**: las migraciones `supabase/migrations/
+  281_guarda_precios_ddl.sql` (principal) y `construacero-staging/supabase/migrations/
+  280_staging_guarda_precios_ddl.sql` (staging) instalan dos resortes (event triggers) que
+  RECHAZAN cualquier re-definición o borrado de las funciones de precios sin el marcador del
+  arreglo. Reversión autorizada solo con `SET LOCAL app.precios_rollback_autorizado =
+  'REVERTIR_PRECIOS'` en la misma transacción (los archivos `*_rollback.sql` del lote ya lo
+  incluyen). Probada en vivo en AMBOS entornos con 5 sondas (re-definición sin arreglo
+  rechazada, DROP rechazado, cuerpos canónicos permitidos, pase autorizado permitido, DDL
+  ajeno sin estorbar), todo en transacciones revertidas.
+- **Actualización 2026-10-25 (tarde)**: los rollbacks `279_batch_ingest_no_pisa_precios_
+  rollback.sql`, `280_precios_vacios_y_cero_rollback.sql` y su copia `279_280_precios_
+  rollback_review.sql` ganaron el pase autorizado de la guarda (3 huellas de
+  `279_280_precios_SHA256SUMS.txt` regeneradas; los `*_apply` y pre/postflight siguen byte a
+  byte los aplicados).
+- **Rollback**: `279_280_precios_rollback_review.sql` restaura la pre-imagen EXACTA previa al
+  apply (al aplicarlo, `md5(pg_get_functiondef)` vuelve a `044ad4e5…` para
+  `ingresar_lote_inventario_atomico` y `1ba1e4dd…` para
+  `actualizar_producto_con_kardex_tenant_safe`). Probado en vivo en staging (ida y vuelta +
+  regresión 8/8); NO probado en producción por diseño.
+- **Verificación del paquete (2026-10-25, solo lectura sobre producción)**: preflight
+  `YA_APLICADO`, postflight `POSTFLIGHT_OK`, 468 productos con huella de precios
+  `7e5c9d0e…` idéntica en ambos, `sha256sum -c` 10/10 OK.

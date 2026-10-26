@@ -1869,7 +1869,17 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                             total_usd: totalUsd,
                             costo_envio_usd: Number(costoEnvioUsd) || 0,
                             corte_usd: Number(corteUsd) || 0,
-                            cliente: { nombre: clienteSeleccionado?.nombre }
+                            // Datos completos del cliente: el modal de despacho necesita
+                            // cliente_id y el estado/ciudad de la ficha para la regla del
+                            // flete de chofer local (antes solo pasaba el nombre y el modal
+                            // de éxito bloqueaba con "indica el estado del destino").
+                            cliente_id: clienteId,
+                            cliente: {
+                              id: clienteSeleccionado?.id,
+                              nombre: clienteSeleccionado?.nombre,
+                              estado: clienteSeleccionado?.estado,
+                              ciudad: clienteSeleccionado?.ciudad,
+                            }
                           })
                         }
                       }}
@@ -1934,7 +1944,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             total_usd: totalUsd,
             costo_envio_usd: Number(costoEnvioUsd) || 0,
             corte_usd: Number(corteUsd) || 0,
-            cliente: { nombre: clienteSeleccionado?.nombre }
+            cliente_id: clienteId,
+            cliente: {
+              id: clienteSeleccionado?.id,
+              nombre: clienteSeleccionado?.nombre,
+              estado: clienteSeleccionado?.estado,
+              ciudad: clienteSeleccionado?.ciudad,
+            }
           })
         }}
         onCancelar={() => setShowModalDespachar(false)}

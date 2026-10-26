@@ -1560,7 +1560,7 @@ export async function handleEditarItemsDespacho(request, env) {
   if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
-  const { user, operador, headers } = v;
+  const { user, operador, headers, ip } = v;
 
   // ── 1. Roles autorizados para edición profunda ─────────────────────────────
   // La edición profunda queda reservada a administración, jefatura y desarrollo.
@@ -1684,6 +1684,18 @@ export async function handleEditarItemsDespacho(request, env) {
     }
 
     console.log('[DEEP_EDIT][WORKER_AFTER_RPC]', { despachoId, status: res.status, sentItemCount: items.length })
+
+    // ── 2a-bis. Retirar el libro de devoluciones/intercambios ya absorbidos ────
+    // Los ítems recién guardados son el consolidado (neto) del despacho. Si las
+    // devoluciones/intercambios siguieran vivos, la vista los volvería a aplicar
+    // y duplicaría artículos (bug DES-04161 / DES-04243). Los movimientos de
+    // Kardex de la entrega se conservan: solo se retira el registro de control.
+    const devolucionesRetiradas = await retirarDevolucionesAbsorbidas(despachoId, headers, env, {
+      usuarioId: operador.id,
+      usuarioNombre: operador.nombre,
+      usuarioRol: operador.rol,
+      ip,
+    });
 
     // ── 2b. Sincronizar Cuentas por Cobrar ────────────────────────────────────
     // Release 17: la edición profunda admite 'pendiente' (sin efecto en stock) y
@@ -1940,11 +1952,61 @@ export async function handleEditarItemsDespacho(request, env) {
       }
     }
 
-    return json({ ok: true }, 200, request);
+    return json({ ok: true, devoluciones_retiradas: devolucionesRetiradas }, 200, request);
   } catch (e) {
     console.error('[EDITAR_ITEMS] Error:', e);
     return jsonError(e.message || 'Error interno al procesar el cambio', 500, request);
   }
+}
+
+// Retira los registros de devolución/intercambio de un despacho cuando la
+// edición profunda reescribió sus ítems al estado consolidado (neto). Esos
+// registros ya quedaron absorbidos en las líneas nuevas; de conservarlos, la
+// vista los volvería a aplicar y duplicaría artículos (bug DES-04161/DES-04243).
+// Devuelve la cantidad de registros retirados y deja bitácora del retiro.
+export async function retirarDevolucionesAbsorbidas(despachoId, headers, env, auditoria) {
+  const [devRes, intRes] = await Promise.all([
+    fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=eq.${despachoId}&select=id`, { headers }),
+    fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devolucion_intercambios?despacho_id=eq.${despachoId}&select=id`, { headers }),
+  ]);
+  if (!devRes.ok || !intRes.ok) {
+    throw new Error('No se pudieron leer las devoluciones del despacho');
+  }
+  const devoluciones = (await devRes.json()) || [];
+  const intercambios = (await intRes.json()) || [];
+  const retirados = devoluciones.length + intercambios.length;
+  if (retirados === 0) return 0;
+
+  // Orden seguro: primero intercambios (hijos), luego devoluciones (padres).
+  const delInt = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devolucion_intercambios?despacho_id=eq.${despachoId}`, {
+    method: 'DELETE', headers: { ...headers, Prefer: 'return=minimal' },
+  });
+  if (!delInt.ok) throw new Error('No se pudieron retirar los intercambios absorbidos por la edición profunda');
+  const delDev = await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=eq.${despachoId}`, {
+    method: 'DELETE', headers: { ...headers, Prefer: 'return=minimal' },
+  });
+  if (!delDev.ok) throw new Error('No se pudieron retirar las devoluciones absorbidas por la edición profunda');
+  const flagRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}`, {
+    method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' },
+    body: JSON.stringify({ tiene_devoluciones: false }),
+  });
+  if (!flagRes.ok) throw new Error('No se pudo actualizar tiene_devoluciones del despacho');
+
+  await registrarAuditoria(env, headers, {
+    usuarioId: auditoria.usuarioId,
+    usuarioNombre: auditoria.usuarioNombre,
+    usuarioRol: auditoria.usuarioRol,
+    categoria: 'COTIZACION',
+    accion: 'EDICION_PROFUNDA_RETIRA_DEVOLUCIONES',
+    descripcion: `Edición profunda del despacho ${despachoId}: retiradas ${devoluciones.length} devolución(es) y ${intercambios.length} intercambio(s) ya absorbidos por los ítems guardados`,
+    entidadTipo: 'despacho',
+    entidadId: despachoId,
+    meta: { devoluciones_retiradas: devoluciones.length, intercambios_retirados: intercambios.length },
+    ip: auditoria.ip || null,
+  });
+
+  console.log(`[EDITAR_ITEMS] Retiradas ${devoluciones.length} devolución(es) y ${intercambios.length} intercambio(s) absorbidos del despacho ${despachoId}.`);
+  return retirados;
 }
 
 export async function handleGuardarDescuentos(request, env) {

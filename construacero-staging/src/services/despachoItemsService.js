@@ -42,26 +42,48 @@ export async function fetchDespachoConsolidado(despachoId, despacho) {
       .eq('despacho_id', despachoId),
     supabase
       .from('despacho_devolucion_intercambios')
-      .select('id, producto_id, nombre_snap, codigo_snap, unidad_snap, cantidad, precio_unit_usd, total_usd')
+      .select('id, producto_id, nombre_snap, codigo_snap, unidad_snap, cantidad, precio_unit_usd, total_usd, productos(codigo)')
       .eq('despacho_id', despachoId)
   ])
 
-  // 3. Mapear cantidades devueltas separando ítems originales de intercambios
+  // 3. Mapear cantidades devueltas separando ítems originales de intercambios.
+  //    La edición profunda reescribe las líneas del despacho y la FK con
+  //    ON DELETE SET NULL deja las devoluciones sin enlace a su línea. Cuando
+  //    falta el enlace (o apunta a una línea que ya no existe), se descuenta por
+  //    producto sobre los ítems originales; si el producto no está entre los
+  //    originales, la devolución aplica a los productos de intercambio.
   const devData = devRes.data ?? []
+  const itemsIds = new Set(itemsOriginales.map(i => i.id))
+  const productosOriginales = new Set(itemsOriginales.map(i => i.producto_id).filter(Boolean))
   const returnedOrigMap = {}
+  const returnedPorProducto = {}
   const returnedExchangeMap = {}
   devData.forEach(d => {
-    if (d.despacho_item_id) {
-      returnedOrigMap[d.despacho_item_id] = (returnedOrigMap[d.despacho_item_id] || 0) + Number(d.cantidad_devuelta)
+    const qty = Number(d.cantidad_devuelta) || 0
+    if (qty <= 0) return
+    if (d.despacho_item_id && itemsIds.has(d.despacho_item_id)) {
+      returnedOrigMap[d.despacho_item_id] = (returnedOrigMap[d.despacho_item_id] || 0) + qty
+    } else if (d.producto_id && productosOriginales.has(d.producto_id)) {
+      returnedPorProducto[d.producto_id] = (returnedPorProducto[d.producto_id] || 0) + qty
     } else if (d.producto_id) {
-      returnedExchangeMap[d.producto_id] = (returnedExchangeMap[d.producto_id] || 0) + Number(d.cantidad_devuelta)
+      returnedExchangeMap[d.producto_id] = (returnedExchangeMap[d.producto_id] || 0) + qty
     }
   })
 
-  // 4. Ajustar ítems originales: restar cantidades devueltas
+  // 4. Ajustar ítems originales: restar cantidades devueltas (por línea y, si el
+  //    enlace se perdió, por producto consumiendo las líneas en orden).
+  const pendientePorProducto = { ...returnedPorProducto }
   const itemsAjustados = itemsOriginales
     .map(item => {
-      const devuelto = returnedOrigMap[item.id] || 0
+      let devuelto = returnedOrigMap[item.id] || 0
+
+      const pendienteProd = pendientePorProducto[item.producto_id] || 0
+      if (pendienteProd > 0) {
+        const aplicado = Math.min(pendienteProd, Math.max(0, Number(item.cantidad) - devuelto))
+        pendientePorProducto[item.producto_id] = pendienteProd - aplicado
+        devuelto += aplicado
+      }
+
       if (devuelto <= 0) return item // Sin cambios
 
       const cantidadNeta = Number(item.cantidad) - devuelto
@@ -105,7 +127,9 @@ export async function fetchDespachoConsolidado(despachoId, despacho) {
     return {
       id: it.id,
       producto_id: it.producto_id,
-      codigo_snap: it.codigo_snap,
+      // El intercambio puede no traer código (se registró solo con nombre):
+      // completar con el código del producto para que la vista no quede en blanco.
+      codigo_snap: it.codigo_snap || it.productos?.codigo || null,
       nombre_snap: it.nombre_snap,
       unidad_snap: it.unidad_snap,
       cantidad: cantidadNeta,

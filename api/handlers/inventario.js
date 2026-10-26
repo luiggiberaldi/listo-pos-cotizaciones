@@ -355,8 +355,9 @@ RESPOnde ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
         unidad: p.unidad,
         precio_usd: Number(p.precio_usd),
         // Precio inhabilitado → se oculta en selectores de venta/cotización.
-        precio_2: p.precio_2 && p.precio2_habilitado !== false ? Number(p.precio_2) : null,
-        precio_3: p.precio_3 && p.precio3_habilitado !== false ? Number(p.precio_3) : null,
+        // El precio 0 es un precio real ($0.00): no se convierte en null (se escondía).
+        precio_2: p.precio_2 != null && p.precio2_habilitado !== false ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 != null && p.precio3_habilitado !== false ? Number(p.precio_3) : null,
         stock_actual: Number(p.stock_actual),
         stock_minimo: Number(p.stock_minimo),
         imagen_url: p.imagen_url,
@@ -506,8 +507,9 @@ RESPOnde ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
         unidad: p.unidad,
         precio_usd: Number(p.precio_usd),
         // Precio inhabilitado → se oculta en selectores de venta/cotización.
-        precio_2: p.precio_2 && p.precio2_habilitado !== false ? Number(p.precio_2) : null,
-        precio_3: p.precio_3 && p.precio3_habilitado !== false ? Number(p.precio_3) : null,
+        // El precio 0 es un precio real ($0.00): no se convierte en null (se escondía).
+        precio_2: p.precio_2 != null && p.precio2_habilitado !== false ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 != null && p.precio3_habilitado !== false ? Number(p.precio_3) : null,
         stock_actual: Number(p.stock_actual),
         stock_minimo: Number(p.stock_minimo),
         imagen_url: p.imagen_url,
@@ -1206,7 +1208,11 @@ export async function handleBatchIngest(request, env) {
       unidad: p.unidad || 'und',
       cantidad,
       costo_usd: Number(p.costo) || 0,
-      precio_usd: Number(p.precio) || 0,
+      // Los precios de venta SOLO aplican a productos nuevos (migración 280):
+      // un ingreso de lote nunca pisa los precios guardados de un producto
+      // existente — la fila trae el precio pre-cargado y pisarlo hacía que
+      // "el precio cambiado volviera al antiguo".
+      precio_usd: isNuevo ? (Number(p.precio) || 0) : null,
       modo_existente: isNuevo ? null : (p.modoExistente || 'sumar'),
       actualizar_costo: p.actualizarCosto === true,
     });

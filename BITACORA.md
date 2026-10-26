@@ -4778,3 +4778,432 @@ tests automáticos no tienen credenciales de operador.
 **Nota:** las dos corridas programadas que aparecen fallidas hoy ("Auditor de saldos" 10:43
 UTC y "Staging E2E nocturno" 09:46 UTC) corrieron ANTES de este despliegue (12:23 UTC) y son
 fallas preexistentes sin relación con este cambio.
+
+## SESIÓN 25/10/2026 — Lote 278/279 de precios APLICADO Y VERIFICADO en staging
+
+**En resumen:** el lote de arreglos de precios quedó APLICADO y VERIFICADO en la base de
+staging: el ingreso de lote ya no pisa los precios de productos existentes (278) y la ficha
+de producto permite vaciar un precio y respeta el precio 0 como válido (279). Verificación
+re-ejecutada hoy contra la base real: regresión 8/8 y suite de staging 89/89. El mismo lote
+ya está promovido al principal como migraciones `279`/`280` (en el repo, con pruebas), pero
+AÚN NO se aplican en producción — allí siguen vivos los dos problemas.
+
+**Qué se aplicó (staging):**
+- `construacero-staging/supabase/migrations/278_staging_batch_ingest_no_pisa_precios.sql`
+  (redactada 2026-10-24): redefine `ingresar_lote_inventario_atomico` con el marcador
+  "ARREGLO 278" en el cuerpo. Los precios solo se fijan al CREAR el producto; un ingreso de
+  lote sobre un producto existente únicamente suma existencias (y solo actualiza el costo si
+  el operador lo marca explícitamente). Es la causa raíz del bug «cambio el precio y vuelve
+  el antiguo»: el ingreso de lote llegaba con los precios viejos pre-cargados y los pisaba.
+- `construacero-staging/supabase/migrations/279_staging_precios_vacios_y_cero.sql`:
+  redefine `actualizar_producto_con_kardex` — vaciar un precio guarda NULL de verdad (antes
+  el vacío se ignoraba) y el precio 0 se respeta como valor válido.
+
+**Cómo se aplicó:** el SQL del lote se ejecutó en el editor de Supabase del proyecto de
+staging el 2026-10-25 (decisión del usuario: «ya pegué el SQL en Supabase»). El instalador
+programático quedó listo por si se necesita repetir: `construacero-staging/scripts/
+apply-278-staging.mjs` (guardia de confirmación `STAGING_278_CONFIRM=APLICAR_278_STAGING`,
+destino fijado al proyecto de staging y preflight/postflight de solo lectura con marcadores
+en el cuerpo de cada función). Su pasada formal no pudo correr por permisos del token (ver
+Pendientes).
+
+**Verificación (2026-10-25, contra la base de staging real; re-ejecutada hoy):**
+- Regresión `construacero-staging/scripts/test-278-no-pisa-precios.mjs`: **8/8 ✓**.
+  Reproduce el caso reportado: producto creado por ingreso de lote con precios 10/8/6 → el
+  usuario los cambia a 12/10/9 → llega OTRO ingreso de lote con los precios viejos (10/8/6)
+  → existencias suman (3 + 2 = 5) y los precios siguen en 12/10/9. Fixtures con limpieza
+  total, también en fallo.
+- Suite de staging (`npx vitest run`): **89/89 ✓** (15 archivos), incluidos los contratos de
+  precios 0/vacíos (`api/handlers/__tests__/preciosCeroYVacios.test.js`).
+- El cuerpo vivo de las funciones quedó confirmado en la auditoría de escritores de precios
+  (2026-10-25, `docs/operaciones/auditoria-escritores-precios-productos-20261025.md`):
+  `ingresar_lote_inventario_atomico` «ya no pisa precios de existentes» y el contrato de
+  `actualizar_producto_con_kardex` «vaciar limpia, precio 0 válido».
+
+**Promoción al principal (2026-10-25, lista en el repo, SIN aplicar):**
+- `supabase/migrations/279_batch_ingest_no_pisa_precios.sql` → `ingresar_lote_inventario_atomico`
+  (rollback documentado en la cabecera: restaurar el cuerpo de
+  `supabase/release/main/02_inventory_atomic_operations.sql`).
+- `supabase/migrations/280_precios_vacios_y_cero.sql` →
+  `actualizar_producto_con_kardex_tenant_safe` (rollback: restaurar el cuerpo de
+  `supabase/release/main/05_inventory_guardrails_and_reconciliation.sql`; aplica DESPUÉS de
+  279). Llevan las pruebas del principal, pero nada se ejecutó todavía contra producción.
+
+**Pendientes conocidos:**
+1. Pasada formal del script oficial (preflight/postflight) para cerrar el rastro documental
+   del apply de staging: bloqueada porque el token de Supabase del `.env` fue creado sin el
+   permiso `database_read` (error 403). Acción del usuario: regenerar el token en
+   https://supabase.com/dashboard/account/tokens con permiso «Database» y reemplazar la línea
+   `SUPABASE_ACCESS_TOKEN=` del `.env` (sin pasar el valor por el chat).
+2. Producción: aplicar las migraciones `279`/`280` con la misma verificación para cerrar los
+   dos problemas conocidos (ingreso de lote pisa precios; vaciar un precio no limpia) — ver
+   `docs/operaciones/auditoria-escritores-precios-productos-20261025.md`.
+3. El lote no tiene archivos de rollback separados (tampoco staging): la reversión es
+   restaurar el cuerpo previo de cada RPC; para el principal, las referencias exactas quedan
+   en las cabeceras de 279/280.
+
+## SESIÓN 25/10/2026 (tarde) — Lote 279/280 de precios APLICADO Y VERIFICADO en PRODUCCIÓN
+
+**En resumen:** las migraciones `279`/`280` del lote de precios quedaron APLICADAS y
+VERIFICADAS en la base de PRODUCCIÓN, con respaldo previo completo y una verificación que
+incluye prueba de comportamiento real (revertida sola, sin persistir nada). Quedan cerrados
+en producción los dos problemas reportados: el ingreso de lote ya no pisa los precios de
+productos existentes, y la ficha de producto permite vaciar un precio y respeta el precio 0.
+
+**Respaldo previo (antes de tocar nada):**
+- Respaldo lógico completo: 85 tablas / 62.726 filas en
+  `C:\Users\luigg\Desktop\construacero-backups\pre-279-280-2026-10-25-14-53-54\`
+  (SHA-256 esquema `6f645c5c…`, datos `04a21847…`).
+- Pre-imágenes de los dos cuerpos de función reemplazados (para rollback exacto) en
+  `supabase/release/main/backup_pre_279_280/`: `ingresar_lote_inventario_atomico`
+  (md5 `044ad4e5…`) y `actualizar_producto_con_kardex_tenant_safe` (md5 `1ba1e4dd…`).
+
+**Cómo se aplicó:** `node scripts/aplicar-279-280.mjs --aplicar` (nuevo instalador modelado en
+`aplicar-276-277.mjs`, mismo canal Management API `database/query` que el respaldo). Primero
+corrió el modo solo-preflight (lectura pura, evidencia
+`docs/operaciones/preflight-279-280-2026-10-25-18-59-56.md`), luego apply de 279 y 280 en ese
+orden (ambos 201). El token regenerado por el usuario con permiso «Database» ya funciona.
+
+**Hallazgo del preflight:** el cuerpo vivo de producción tenía una variante distinta de la de
+staging del mismo bug: `precio_usd = CASE WHEN COALESCE(v_item.precio_usd,0) > 0 THEN …` y
+`precio_2/3 = COALESCE(...)` en el UPDATE de productos existentes — pisaba precios aunque la
+lista traía el precio pre-cargado. La 279 elimina TODA escritura de precios sobre existentes.
+
+**Verificación post-apply (producción):**
+- Marcadores: «ARREGLO 279» vivo en `ingresar_lote_inventario_atomico`; «280: contrato de
+  precios» + envío directo `precio_2 = p_precio_2` vivo en
+  `actualizar_producto_con_kardex_tenant_safe`; semántica vieja (`COALESCE`) ausente.
+- Firmas intactas: 7 y 21 argumentos, SECURITY DEFINER, retorna jsonb. Grants: EXECUTE solo
+  para `service_role` (más el `postgres` del sistema); anon/authenticated sin acceso.
+- Datos intactos: 468 productos con huella de precios idéntica antes y después
+  (`precios_md5 = 7e5c9d0e…`) — el apply solo cambió funciones.
+- **Prueba de comportamiento real, revertida sola** (bloque `DO` que termina en `RAISE
+  EXCEPTION`: la sentencia completa se revierte, no persiste ni el producto de prueba):
+  producto de prueba con precios 9.50/7.25/8.75 y 10/20/30 % → ingreso de lote que traía
+  111.11/222.22/333.33 y 99/98/97 % → precios INTACTOS (9.50/7.25/8.75/10 %) y existencias
+  sumadas (10→15). Luego edición con precio_usd=0 y el resto vacío → precio_usd=0 guardado
+  tal cual y precio_2/3/porcentajes limpiados a NULL. Evidencia completa:
+  `docs/operaciones/apply-279-280-2026-10-25-19-01-22.md`.
+
+**Rollback (si hiciera falta):** `supabase/migrations/279_batch_ingest_no_pisa_precios.sql`
+rollback documentado en su cabecera (restaurar cuerpo de
+`supabase/release/main/02_inventory_atomic_operations.sql`), ídem 280
+(`05_inventory_guardrails_and_reconciliation.sql`), o directamente las pre-imágenes de
+`supabase/release/main/backup_pre_279_280/` (byte a byte, con sus md5).
+
+**Pendientes conocidos:**
+1. Smoke manual en la app real (pantalla de producto e ingreso de lote) por parte del usuario:
+   la verificación de hoy fue a nivel de base de datos. OJO: el detalle «precio 0 viaja tal
+   cual» también depende del Worker desplegado en producción — conviene confirmar que el
+   Worker corra el build actual del principal (`api/handlers/inventario.js`), donde el precio 0
+   no se convierte en null y los precios solo viajan al crear productos.
+2. La pasada formal del script oficial para el apply de STAGING (pendiente #1 de la sesión
+   anterior) sigue abierta: el token actual ve el proyecto de producción; para el proyecto de
+   staging haría falta un token con alcance sobre él.
+3. Sin archivos de rollback separados (igual que staging): la reversión es restaurar el
+   cuerpo previo de cada RPC (referencias exactas en las cabeceras de 279/280).
+
+## SESIÓN 25/10/2026 (tarde, cont.) — Pasada formal del lote 278/279 en STAGING: rastro cerrado
+
+**En resumen:** la pasada formal del script oficial del lote 278/279 corrió completa contra la
+base de staging y el rastro documental quedó cerrado: preflight → apply → postflight con
+marcadores confirmados en los cuerpos vivos, más la regresión oficial 8/8 contra la base real.
+Dos hallazgos en el camino: (1) el arreglo de la mañana se había PERDIDO en staging — los
+cuerpos vivos no tenían los marcadores y el script tuvo que re-aplicar el lote; (2) el
+instalador leía el `.env` equivocado, que era la causa real de los intentos fallidos de
+pasadas formales anteriores (ya corregido y probado).
+
+**Qué se corrió:**
+- Pasada formal: `STAGING_278_CONFIRM=APLICAR_278_STAGING node scripts/apply-278-staging.mjs`
+  con el token nuevo (permiso «Database», en `construacero-staging/.env`):
+  - 278 (ingreso de lote no pisa precios): preflight `aplicada:false` → apply 201 → postflight
+    `aplicada:true` ✓.
+  - 279 (vaciar precio limpia; precio 0 = válido): preflight `aplicada:false` → apply 201 →
+    postflight `aplicada:true` ✓.
+- Regresión oficial `scripts/test-278-no-pisa-precios.mjs` contra la base real: **8/8 ✓**
+  (producto con precios 10/8/6 → el usuario los cambia a 12/10/9 → un ingreso de lote con los
+  precios viejos suma existencias 3+2=5 y NO pisa los precios). Fixtures con limpieza total.
+- Segunda corrida del instalador (sin inyección de entorno): ambas migraciones detectadas
+  como ya aplicadas (idempotente, se omite) ✓.
+
+**Hallazgo 1 — el arreglo se había perdido en staging (ojo con esto):**
+⚠️ **CORREGIDO la misma tarde por la sesión forense (ver abajo): nada re-escribió los
+cuerpos — el arreglo NUNCA se perdió.** Lo que se aplicó a mano en la mañana fue una
+variante del arreglo SIN los comentarios-marcador, y el chequeo oficial (que busca
+marcadores) la leyó como «no aplicada». El texto original se conserva como registro:
+
+el preflight de la
+pasada formal encontró los marcadores «ARREGLO 278» y «279: contrato de precios» AUSENTES en
+los cuerpos vivos, pese a que la verificación de la mañana los confirmó presentes. Algo
+re-escribió esas funciones con las versiones viejas entre la mañana y la tarde (el patrón
+documentado en la lección 262→263: un `CREATE OR REPLACE` posterior pisa fixes anteriores —
+p. ej. re-ejecutar un paquete de release con los cuerpos viejos). El script oficial los
+re-aplicó y el postflight confirma los marcadores vivos de nuevo. Si el síntoma «el precio
+vuelve» reapareciera en staging, esa es la primera sospecha. Nota: PRODUCCIÓN no fue afectada
+— allí 279/280 se aplicaron y verificaron hoy con marcadores vivos (sesión anterior).
+
+**Hallazgo 2 — defecto del instalador corregido:** las pasadas formales anteriores fallaban
+porque `apply-278-staging.mjs` leía el token del `.env` de la RAÍZ (que es el de producción),
+mientras la convención de la matriz de entornos dice que las credenciales de staging viven en
+`construacero-staging/.env` (donde el usuario puso el token nuevo). Se corrigió la precedencia:
+el token del archivo de staging gana sobre uno exportado en el terminal (que suele ser viejo y
+daba 403 `missing database_read`), salvo `SUPABASE_ACCESS_TOKEN_STAGING` explícito. Verificado:
+la segunda corrida funcionó tal cual, con la variable vieja del terminal todavía presente.
+
+**Pendientes conocidos:**
+1. ~~Queda abierto identificar QUÉ re-escribió los cuerpos de funciones en staging esta
+   tarde (el Hallazgo 1).~~ **RESUELTO por la forense de la sesión siguiente: nadie los
+   re-escribió** (evidencia en `pg_stat_statements`, `dealloc: 0`), y una **guarda de
+   precios** ya impide que cualquier re-definición futura pierda el arreglo.
+2. Smoke manual en la app real de producción (pendiente #1 de la sesión anterior): el detalle
+   «precio 0 tal cual» en pantalla depende también del Worker desplegado.
+
+## SESIÓN 25/10/2026 (tarde, cont.) — Rollbacks del lote de precios creados y PROBADOS en vivo
+
+**En resumen:** los cuatro archivos de reversión de emergencia del lote de precios quedaron
+creados y registrados en la matriz, y los de staging fueron PROBADOS en vivo con una ida y
+vuelta completa: revertir → verificar que restaura el estado previo byte a byte → re-aplicar
+el arreglo → regresión 8/8. Los del principal están construidos sobre las pre-imágenes
+exactas capturadas antes del apply de producción (verificables por su huella md5).
+
+**Archivos creados:**
+- Principal: `supabase/migrations/279_batch_ingest_no_pisa_precios_rollback.sql` y
+  `280_precios_vacios_y_cero_rollback.sql` — restauran la pre-imagen EXACTA del cuerpo vivo de
+  producción previa al apply (huellas de verificación en cada cabecera: al aplicarlos,
+  `md5(pg_get_functiondef)` vuelve a `044ad4e5…` / `1ba1e4dd…`). NO se probaron en vivo (son
+  para producción; su validez SQL está probada porque son el mismo `CREATE OR REPLACE` que
+  PostgreSQL devolvió de la base viva).
+- Staging: `construacero-staging/supabase/migrations/278_rollback.sql` y `279_rollback.sql` —
+  restauran el cuerpo previo documentado en cada migración (el de la 246 para
+  `ingresar_lote_inventario_atomico`, el de la 173 para `actualizar_producto_con_kardex`),
+  extraído byte a byte.
+
+**Prueba de ida y vuelta en staging (2026-10-25):**
+1. Aplicar `278_rollback.sql` + `279_rollback.sql`: los cuerpos vivos volvieron EXACTAMENTE a
+   las fuentes (prosrc md5 `d57d23cf…` = cuerpo de 246 y `5bd0422b…` = cuerpo de 173) y los
+   marcadores del arreglo desaparecieron — el estado previo quedó restaurado de verdad.
+2. Re-aplicar con el script oficial (`apply-278-staging.mjs`): ambas migraciones detectadas y
+   aplicadas de nuevo, postflight con marcadores vivos ✓.
+3. Regresión `test-278-no-pisa-precios.mjs`: **8/8 ✓** — staging queda con el arreglo activo.
+
+**Registro:** la matriz de migraciones ya apunta a los 4 archivos de rollback (columna
+«Rollback» de las filas 278/279 staging y 279/280 principal), y las cabeceras de las
+migraciones forward referencian su rollback.
+
+**Lección aplicada:** siguiendo el defecto que el ensayo del Release 17 detectó (un rollback
+sin probar puede fallar en la emergencia), el rollback se probó en staging antes de darlo por
+bueno.
+
+## SESIÓN 25/10/2026 (tarde, cont.) — Paquete de release 279/280 PREPARADO para producción
+
+**En resumen:** el lote de precios 279/280 quedó empaquetado con la convención formal de
+releases del repo (`supabase/release/main/`): preflight, apply, postflight y rollback de
+solo lectura/uso controlado, con huellas SHA-256 y sección en el README del release. El
+paquete fue validado hoy contra producción en modo solo lectura: preflight `YA_APLICADO`,
+postflight `POSTFLIGHT_OK`. Sirve para re-aplicar el arreglo si algún proceso vuelve a
+pisar los cuerpos o para restaurar en una emergencia. (Ojo: la «pérdida» de staging de
+este día quedó desmentida por la forense — ver sesión siguiente.)
+
+**Artefactos (`supabase/release/main/`):**
+- `279_280_precios_preflight_readonly.sql` — solo lectura; devuelve un jsonb con el estado
+  de marcadores, firmas, dependencias y huella de precios, con veredicto
+  `YA_APLICADO` / `LISTO_PARA_APLICAR` / `REVISAR`.
+- `279_280_precios_apply.sql` — copias literales de las migraciones `279` y `280` del
+  principal (orden obligatorio 279 → 280, cada bloque transaccional).
+- `279_280_precios_postflight_readonly.sql` — solo lectura; veredicto `POSTFLIGHT_OK` con
+  marcadores vivos, semántica vieja ausente, firmas, grants solo `service_role` y huella de
+  datos idéntica al preflight.
+- `279_280_precios_rollback_review.sql` — copias literales de los rollbacks (pre-imágenes
+  exactas; huellas de verificación `044ad4e5…` / `1ba1e4dd…`).
+- `279_280_precios_SHA256SUMS.txt` — 10 huellas (4 del paquete + 4 originales de
+  `supabase/migrations/` + 2 pre-imágenes de `backup_pre_279_280/`); `sha256sum -c` 10/10 OK.
+
+**Validación (2026-10-25, solo lectura sobre producción):** preflight `YA_APLICADO` y
+postflight `POSTFLIGHT_OK`, 468 productos con huella de precios `7e5c9d0e…` idéntica en
+ambos (confirma que el apply no toca datos). Las copias del apply/rollback se generaron por
+comando (byte a byte desde sus fuentes), no a mano.
+
+**Cómo se usa en el futuro:** para re-aplicar, correr el instalador ya probado
+`node scripts/aplicar-279-280.mjs --aplicar` (o ejecutar `279_280_precios_apply.sql` desde
+una ventana autorizada con respaldo previo). Para revertir en emergencia:
+`279_280_precios_rollback_review.sql`. Siempre verificar con el pre/postflight del paquete.
+
+## SESIÓN 25/10/2026 (tarde, cont.) — Forense: nadie pisó los cuerpos + GUARDA DE PRECIOS instalada
+
+**En resumen:** (1) se investigó con huellas digitales qué "re-escribió" las funciones de
+precios en staging y la respuesta es: **nadie**. El arreglo nunca se perdió: lo que se pegó
+a mano en la mañana era una copia del arreglo SIN las etiquetas de texto (los
+"comentarios-marcador") que la verificación oficial busca, así que el verificador dijo "no
+aplicado" y lo re-aplicó sin necesidad. Se corrigieron la bitácora y la matriz, que decían
+"pérdida de cuerpos". (2) Para que una pérdida REAL sea imposible de pasar en silencio, se
+instaló una **guarda de precios** en staging y en producción: un resorte dentro de la base
+que rechaza cualquier re-escritura o borrado de las funciones de precios sin el arreglo.
+Probada en vivo en ambos entornos.
+
+**La forense (cómo se cerró el caso):**
+- `pg_stat_statements` (la memoria de la base que guarda los textos de las consultas
+  ejecutadas; estaba intacta desde septiembre, `dealloc: 0`) retiene el texto exacto de
+  todo el DDL corrido. Cada texto se identificó por su huella (md5) contra los archivos del
+  repo. TODAS las ejecuciones del día cuadran sin sobrar ninguna:
+  - aplicación manual de la mañana: variante del arreglo SIN marcador ×2 + el cuerpo de la
+    migración 173 (que ya traía el contrato de precios) ×1;
+  - pasada formal de la tarde: los archivos canónicos 278/279 ×1 cada uno;
+  - prueba de ida y vuelta: los rollbacks (cuerpos viejos) + re-aplicación de canónicos;
+  - el único cuerpo "viejo que pisa precios" de todo el día fue el rollback de PRUEBA de
+    esta sesión (revertido minutos después), no ningún proceso externo.
+- No hubo script, workflow, restore ni proceso silencioso re-escribiendo funciones. La
+  alerta fue un falso positivo del chequeo por marcadores sobre una copia sin etiquetas.
+
+**La guarda de precios (nuevo):**
+- Archivos: `supabase/migrations/281_guarda_precios_ddl.sql` + `281_…_rollback.sql`
+  (principal) y `construacero-staging/supabase/migrations/280_staging_guarda_precios_ddl.sql`
+  + `280_staging_…_rollback.sql` (staging).
+- Qué hace: dos resortes en la base (`guarda_precios_ddl` y `guarda_precios_drop`). Si una
+  sentencia crea, reemplaza o borra `ingresar_lote_inventario_atomico`,
+  `actualizar_producto_con_kardex` o `actualizar_producto_con_kardex_tenant_safe` sin el
+  marcador del arreglo (o con el patrón que vuelve a pisar precios), la sentencia se
+  RECHAZA entera y la base queda como estaba. Cualquier otro cambio en la base no se
+  entera.
+- Reversión legítima: los 4 archivos `*_rollback.sql` del lote de precios ahora incluyen
+  `SET LOCAL app.precios_rollback_autorizado = 'REVERTIR_PRECIOS'` dentro de su
+  transacción — solo así pasa una reversión deliberada, y queda dicho en el propio error.
+- Pruebas en vivo (5/5 pasando en staging Y en producción): re-definición sin arreglo →
+  rechazada; borrar función protegida → rechazado; cuerpos canónicos del lote →
+  permitidos; reversión con pase autorizado → permitida; cualquier otro DDL (crear/borrar
+  funciones ajenas) → sin estorbo. En producción TODAS las pruebas corrieron dentro de
+  transacciones revertidas: los 3 cuerpos protegidos quedaron con md5 idéntico antes y
+  después.
+- Paquete del release 279/280: los rollbacks y su copia empaquetada ganaron el pase
+  autorizado; se regeneraron 3 huellas de `279_280_precios_SHA256SUMS.txt` (`sha256sum -c`
+  10/10 OK; los archivos aplicados siguen byte a byte los verificados).
+- Límite honesto: la guarda frena re-definiciones inadvertidas (restore, paquete release,
+  SQL pegado a mano). Quien tenga superusuario puede desactivarla primero, y un RENAME de
+  la función escapa a la vigilancia (pero rompería la app de forma ruidosa).
+
+**Hallazgo nuevo (pendiente aparte):** en producción existe también la variante
+`actualizar_producto_con_kardex` de 16 argumentos ~~y su cuerpo NO lleva todavía el
+contrato de precios~~ **[CORREGIDO por la sesión siguiente: su cuerpo YA cumple el contrato
+y la función ya no se usa — ver sesión «Verificación variante 16 parámetros»]**. La guarda
+ya la protege: su próxima re-definición solo se aceptará con el marcador del arreglo.
+
+**Pendientes conocidos:**
+1. ~~Verificar si la variante `actualizar_producto_con_kardex` (16 args) de producción se
+   usa en la app; si es así, aplicarle el contrato de precios.~~ **RESUELTO la misma tarde:
+   no se usa desde el 2026-08-18 y su cuerpo ya cumple el contrato** (ver sesión «Verificación
+   variante 16 parámetros»).
+2. Smoke manual en la app real de producción (pendiente #1 de las sesiones anteriores).
+
+**Limpieza:** los scripts temporales de forense y de prueba de la guarda fueron borrados;
+quedan los archivos canónicos (guardas, rollbacks con pase autorizado, paquete regenerado).
+
+## SESIÓN 25/10/2026 (tarde, cont.) — Verificación variante 16 parámetros: no se usa y ya cumple el contrato
+
+**En resumen:** se verificó si la variante `actualizar_producto_con_kardex` de 16 parámetros
+se usa en producción, por encargo del usuario (que pedía aplicarle el contrato de precios
+SI se usaba). Respuesta: **no se usa, y además su cuerpo ya cumple el contrato**, así que
+NO se aplicó ninguna migración (el encargo era condicional) y se corrigió la documentación
+que decía lo contrario.
+
+**Cuatro evidencias de que ya no se usa (producción):**
+1. **Permisos:** solo `service_role` puede ejecutarla; `authenticated` y `anon` no. La app
+   (el navegador) ya NO puede ni siquiera llamarla.
+2. **Código:** la app y el Worker usan `/api/productos/actualizar` →
+   `actualizar_producto_con_kardex_tenant_safe` (el contrato de pruebas del repo lo exige).
+   Ninguna otra función de la base la invoca.
+3. **Datos:** los movimientos de kardex «Ajuste de stock al editar producto» sin sello de
+   idempotencia (la forma de escribir de esta variante) son 162 y terminan el **2026-08-18**;
+   desde el 2026-08-24 todos llevan el sello de la ruta Worker/tenant_safe (57 filas, hasta
+   el 2026-10-22). Ojo: la tabla tiene un rellenador automático de `cuenta_id`, por eso la
+   discriminación se hizo por `idempotency_key`/`origen_tipo`, que esta variante nunca escribe.
+4. **Memoria de consultas:** sus llamadas reales (RPC con parámetros `p_id, p_codigo, …`) son
+   de abril–agosto 2026 (la ruta antigua del navegador, antes del Worker); la ruta actual
+   (tenant_safe) registra llamadas desde el 2026-08-22.
+
+**Su cuerpo YA cumple el contrato de precios:** por huella md5 (normalizada) el cuerpo vivo
+es **byte a byte el de la migración 173** — envío directo `precio_2 = p_precio_2` /
+`precio_3 = p_precio_3` / porcentajes, y `precio_usd = COALESCE(p_precio_usd, 0)`. Es decir:
+«vaciar limpia» y «precio 0 válido» ya funcionan por ese camino (si alguien lo usara). Lo
+único que no lleva es el comentario-marcador, que la guarda le exigirá en su próxima
+re-definición.
+
+**Documentación corregida:** la tabla de la auditoría de escritores decía «vaciar aún no
+limpia» para esta variante en producción (incorrecto) — corregida con la evidencia; la
+cabecera de `281_guarda_precios_ddl.sql` decía «aún NO lleva el contrato» — corregida; y
+los pendientes de la sesión anterior quedan cerrados.
+
+**Decisión:** no tocar producción (el encargo era «si se usa, aplícale el contrato»). Opciones
+futuras disponibles: dejarla como está (bajo la guarda), o retirarla en un release futuro
+(con el pase autorizado de la guarda) para reducir confusión.
+
+## SESIÓN 26/10/2026 (madrugada) — Release 281/282: retiro de la variante de 16 parámetros
+
+**En resumen:** se preparó y aplicó el release que retira la variante
+`actualizar_producto_con_kardex` de 16 parámetros, la de la pantalla de Editar
+producto de antes del Worker. El usuario encargó el retiro («ya no se usa») con
+rollback y verificación, en los dos entornos. En producción era un DROP simple
+(0 referencias verificadas en vivo); en staging la variante SÍ la usaba la
+pantalla vía el envoltorio `actualizar_producto_con_kardex_staging`, así que el
+envoltorio absorbió la implementación (mismo comportamiento, contrato de
+precios incluido) antes de eliminarla. El camino real de la gente no cambió.
+
+**Alcance y orden:** primero staging (aprendizaje + prueba del esquema del
+release), luego producción con respaldo previo. Decisión del usuario tomada con
+pregunta estructurada («Producción y staging»).
+
+**Producción (282_retira_actualizar_producto_kardex_16.sql):**
+- Respaldo previo: pre-imagen exacta (`pg_get_functiondef`, huella
+  `deefcba22799d0d8ae3ffa272e97a0cc`) + grants (solo postgres/service_role) en
+  `supabase/release/main/backup_pre_282/`. El preflight del apply verificó que
+  la pre-imagen del rollback coincide byte a byte con la definición viva ANTES
+  de tocar nada.
+- Apply con guardia `PROD_282_CONFIRM=APLICAR_282_PRODUCCION` y pase autorizado
+  de la guarda de precios (281) en la misma transacción (la guarda rechaza el
+  DROP de funciones protegidas; el pase documenta que el retiro es decisión de
+  este release).
+- Postflight: `retirada=true`; `tenant_safe` (21 args) intacta (md5
+  `5a4cc393…` idéntico antes/después); 0 referencias huérfanas; datos idénticos
+  (468 productos, huella de precios sin cambios).
+- Comportamiento revertido (el error `ROLLBACK_POR_SEGURIDAD` revierte todo):
+  edición vía `tenant_safe` con precio 0 y vaciado → precio_usd=0 guardado como
+  0 y precio_2/3 a NULL. La ruta viva funciona igual tras el retiro.
+- Rollback: `282_retira_..._rollback.sql` (re-crea la función byte a byte desde
+  la pre-imagen + restaura grants; lleva el pase autorizado porque el cuerpo
+  histórico no tiene el marcador del contrato). Paquete con preflight/apply/
+  postflight/rollback + SHA256SUMS en `supabase/release/main/282_retiro_16_*`.
+
+**Staging (281_staging_retira_actualizar_producto_kardex_16.sql):**
+- El envoltorio `actualizar_producto_con_kardex_staging` absorbe la
+  implementación (cuerpo idéntico al que delegaba: el de la migración 279_staging
+  con el contrato de precios), conserva su control de cuenta y sus permisos, y
+  luego se elimina la variante (con el pase autorizado de la guarda 280_staging).
+- Postflight: `retirada=true`; envoltorio con `sigue_delegando=false`,
+  `contrato_precios=true`, `kardex_intacto=true`; grants intactos
+  (authenticated conserva EXECUTE); 0 referencias huérfanas; datos idénticos
+  (458 productos, huella de precios sin cambios).
+- Comportamiento revertido vía el CAMINO REAL de la pantalla (envoltorio con
+  sesión de operador: token de `operator_sessions` + PIN, como arma el Worker):
+  precio 0 = válido y vaciar limpia a NULL ✓.
+- Rollback: `281_staging_..._rollback.sql` (restaura envoltorio delegador y
+  variante byte a byte desde `backup_pre_281_staging/`).
+
+**Dos aprendizajes de las pruebas de comportamiento (ambas corregidas y en verde):**
+1. El operador NO se resuelve por `app_metadata` del token sino por sesión de
+   dispositivo (tabla `operator_sessions` con token + PIN, migración 241): la
+   prueba de staging hubo que montarle su sesión real dentro de la transacción
+   revertida.
+2. `actualizar_producto_con_kardex_tenant_safe` exige llave de idempotencia: la
+   prueba pasa una aleatoria descartable (la transacción se revierte entera).
+
+**Evidencia:** `docs/operaciones/apply-281-retiro-16-staging-2026-10-26-01-52-00.md`,
+`docs/operaciones/apply-282-retiro-16-produccion-2026-10-26-01-55-00.md`, capturas
+`captura-pre-281-staging-…`/`captura-pre-282-…`. Scripts oficiales:
+`construacero-staging/scripts/apply-281-retiro-16-staging.mjs` y
+`scripts/apply-282-retiro-16-produccion.mjs` (modos `captura` / apply /
+`test`, guardia de proyecto y de confirmación en cada uno).
+
+**Notas:** la guarda de precios sigue protegiendo el nombre retirado en ambos
+entornos: si alguien lo recrea, exigirá el marcador «contrato de precios» (o el
+pase autorizado). Ninguna otra función, la app ni el Worker quedaron tocados;
+los `test-*` y suites del repo no cambian (no hay pruebas que apunten a la
+variante retirada). Cierra la opción «retirarla en un release futuro» de la
+sesión anterior.

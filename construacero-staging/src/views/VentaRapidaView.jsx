@@ -19,6 +19,7 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { calcComisionEstimada } from '../utils/comisionUtils'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
+import useClienteFresco from '../hooks/useClienteFresco'
 import { useFormasPago } from '../hooks/useFormasPago'
 import { useSaldoFavorOrigen } from '../hooks/useCuentasCobrar'
 import CustomSelect from '../components/ui/CustomSelect'
@@ -29,6 +30,7 @@ import { ESTADOS, getCiudades } from '../data/venezuelaGeo'
 import { MapPin, Building } from 'lucide-react'
 import { apiUrl } from '../services/apiBase'
 import { round2, mulR } from '../utils/dinero'
+import { reglaEstadoDestinoFlete } from '../utils/fleteDestino'
 import { calcTotales } from '../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { buscarClientes } from '../utils/clienteSearch'
@@ -717,11 +719,27 @@ export default function VentaRapidaView() {
   }, [productos])
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
-  const estadoDestinoFlete = direccionEnvioActiva
-    ? direccionEnvioEstado
-    : (clienteSeleccionado?.estado || '')
-  const esChoferLocalConFlete = !!transportistaSeleccionado?.es_local && Number(fleteUsd) > 0
-  const destinoFleteValido = !esChoferLocalConFlete || !!estadoDestinoFlete
+  // Refresco de la ficha del cliente al abrir el paso de pago/envío: la lista
+  // puede traer una copia de hasta 5 minutos y el bloqueo del chofer local
+  // necesita el estado actual del cliente.
+  const clienteEnvioFresco = useClienteFresco(clienteId, step === 2)
+  const clienteEnvio = clienteEnvioFresco || clienteSeleccionado
+  // Regla del estado del destino (2026-10-25): el destino es el estado de la
+  // ficha del cliente; solo con "¿Enviar a otra dirección?" —cuyo bloque trae su
+  // propio selector— o como respaldo si el cliente no tiene estado se elige otro.
+  const {
+    requiere: esChoferLocalConFlete,
+    mostrarSelector: mostrarSelectorEstadoDestino,
+    estadoEnvioEfectivo,
+    estadoDestino: estadoDestinoFlete,
+    valido: destinoFleteValido,
+  } = reglaEstadoDestinoFlete({
+    esLocal: transportistaSeleccionado?.es_local,
+    fleteUsd,
+    direccionEnvioActiva,
+    estadoEnvio: direccionEnvioEstado,
+    estadoCliente: clienteEnvio?.estado,
+  })
 
   // Validaciones
   const step1Valid = !!clienteId && items.length > 0
@@ -844,7 +862,7 @@ export default function VentaRapidaView() {
       tasaBcv: tasa,
       direccionEnvioDireccion: direccionEnvioActiva ? direccionEnvioDireccion : null,
       direccionEnvioCiudad: direccionEnvioActiva ? direccionEnvioCiudad : null,
-      direccionEnvioEstado: direccionEnvioActiva ? direccionEnvioEstado : null,
+      direccionEnvioEstado: estadoEnvioEfectivo || null,
     }, {
       onSuccess: (result) => {
         clearDraft(perfil?.id)
@@ -1024,7 +1042,7 @@ export default function VentaRapidaView() {
             config={config}
             clienteRef={clienteRef}
             clienteId={clienteId}
-            clienteSeleccionado={clienteSeleccionado}
+            clienteSeleccionado={clienteEnvio}
             clienteBusqueda={clienteBusqueda}
             setClienteBusqueda={setClienteBusqueda}
             clienteOpen={clienteOpen}
@@ -1105,7 +1123,7 @@ export default function VentaRapidaView() {
             tasa={tasa}
             esCod={esCod}
             setEsCod={handleToggleCod}
-            clienteSeleccionado={clienteSeleccionado}
+            clienteSeleccionado={clienteEnvio}
             esPrestamoPuro={esPrestamoPuro}
             direccionEnvioActiva={direccionEnvioActiva}
             setDireccionEnvioActiva={setDireccionEnvioActiva}
@@ -1128,7 +1146,7 @@ export default function VentaRapidaView() {
         {step === 2 && (
           <Step3Confirmar
             config={config}
-            clienteSeleccionado={clienteSeleccionado}
+            clienteSeleccionado={clienteEnvio}
             items={items}
             subtotal={subtotal}
             totalUsd={totalUsd}
@@ -2083,11 +2101,18 @@ function Step2Pago({
     (clienteSeleccionado?.vendedor_id === perfil?.id && perfil?.rol === 'vendedor_sin_comision');
 
   const totalConFlete = totalParaPago + Math.max(0, Number(fleteUsd) || 0)
-  const estadoDestinoFlete = direccionEnvioActiva
-    ? direccionEnvioEstado
-    : (clienteSeleccionado?.estado || '')
-  const esChoferLocalConFlete = !!transportistas.find(t => t.id === transportistaId)?.es_local && Number(fleteUsd) > 0
-  const destinoFleteValido = !esChoferLocalConFlete || !!estadoDestinoFlete
+  const {
+    requiere: esChoferLocalConFlete,
+    mostrarSelector: mostrarSelectorEstadoDestino,
+    estadoDestino: estadoDestinoFlete,
+    valido: destinoFleteValido,
+  } = reglaEstadoDestinoFlete({
+    esLocal: transportistas.find(t => t.id === transportistaId)?.es_local,
+    fleteUsd,
+    direccionEnvioActiva,
+    estadoEnvio: direccionEnvioEstado,
+    estadoCliente: clienteSeleccionado?.estado,
+  })
   const estadoNormalizado = String(estadoDestinoFlete).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
   const esDestinoFueraCarabobo = !!estadoDestinoFlete && estadoNormalizado !== 'carabobo'
   const tipoCalculoTransportista = config?.transp_tipo_calculo === 'fija' ? 'fija' : 'porcentaje'
@@ -2200,10 +2225,34 @@ function Step2Pago({
             ) : esDestinoFueraCarabobo ? (
               <span>fuera de Carabobo → comisión estimada <strong>${netoTransportistaPreview.toFixed(2)}</strong> ({tipoCalculoTransportista === 'fija' ? `tarifa fija $${tarifaTransportista.toFixed(2)}` : `${pctTransportista}% del flete`}).</span>
             ) : (
-              <span>Carabobo → el flete se procesa por nómina externa y no se liquida aquí.</span>
-            )}
+            <span>Carabobo → el flete se procesa por nómina externa y no se liquida aquí.</span>
+          )}
+        </div>
+      )}
+
+      {/* Estado del destino — solo respaldo cuando el cliente no tiene estado;
+          con dirección alternativa el estado se elige en su propio bloque. */}
+      {mostrarSelectorEstadoDestino && (
+        <div className="-mt-1 flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 min-w-0">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Estado del destino</label>
+            <CustomSelect
+              options={ESTADOS.map(e => ({ value: e, label: e }))}
+              value={estadoDestinoFlete}
+              onChange={val => {
+                setDireccionEnvioEstado(val)
+                setDireccionEnvioCiudad('')
+              }}
+              placeholder="Elegir estado..."
+              icon={MapPin}
+              searchable
+            />
+            <p className="mt-1 text-[10px] text-slate-400">
+              El cliente no tiene estado guardado: elige el estado del destino.
+            </p>
           </div>
-        )}
+        </div>
+      )}
       </div>
 
       {/* Modal crear transportista */}

@@ -57,8 +57,8 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
           {sugerencias.map(p => {
             const yaAgregado = idsAgregados.has(p.id)
             const sinStock = p.stock_actual != null && p.stock_actual <= 0
-            const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
-            const bloqueado = sinStock || sinPrecio
+            // El precio 0 es un precio válido ($0.00): no bloquea la selección.
+            const bloqueado = sinStock
             const comprometido = stockComprometido[p.id] || 0
             return (
               <button

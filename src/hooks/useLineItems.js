@@ -2,6 +2,8 @@
 // Hook compartido para gestión de líneas de carrito (items de cotización/venta)
 import { useState, useCallback, useRef } from 'react'
 import { showToast } from '../components/ui/Toast'
+import { precioVentaBase } from '../utils/precioVenta'
+import { mostrarAvisoSinPrecio } from '../utils/avisoSinPrecio'
 
 let _itemCounter = 0
 
@@ -29,9 +31,25 @@ export function useLineItems({ withDescuento = false, checkStock = false } = {})
 
   const agregarItem = useCallback((producto) => {
     const stock = Number(producto.stock_actual) || 0
-    const precioBase = Number(producto.precio_usd ?? producto.preciousd ?? 0)
     const origen = producto.origen ?? 'inventario'
     const esPrestamo = Boolean(producto.esPrestamo ?? producto.es_prestamo ?? false)
+    // Regla de venta (2026-10-26): no se vende en $0. Si el precio que viene es
+    // 0 se usa el primer precio visible > 0 (P2/P3); si no hay ninguno, no se
+    // agrega (los préstamos sí se dejan: no son venta).
+    let precioBase = Number(producto.precio_usd ?? producto.preciousd ?? 0)
+    if (!(precioBase > 0)) {
+      const alternativo = precioVentaBase(producto)
+      if (alternativo == null) {
+        if (!esPrestamo) {
+          // Aviso fuerte: sonido + toast para que se vea/oirá por qué no se agregó
+          mostrarAvisoSinPrecio(producto)
+          return
+        }
+        precioBase = 0
+      } else {
+        precioBase = alternativo
+      }
+    }
 
     setItems(prev => {
       console.debug('[LINE_ITEMS][ADD] functional update', {

@@ -22,6 +22,8 @@ import { compartirPorWhatsApp, generarMensaje } from '../../utils/whatsapp'
 import { round2, mulR } from '../../utils/dinero'
 import { calcTotales } from '../../utils/calcTotales'
 import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
+import { precioVentaBase } from '../../utils/precioVenta'
+import { mostrarAvisoSinPrecio } from '../../utils/avisoSinPrecio'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs, fmtTelefono } from '../../utils/format'
 import { showToast } from '../ui/Toast'
 import { calcComisionEstimada } from '../../utils/comisionUtils'
@@ -730,6 +732,14 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   // ── Agregar producto ─────────────────────────────────────────────────────
   function agregarProducto(p) {
     const isExterno = p.origen === 'externo'
+    // Regla de venta (2026-10-26): no se vende en $0 (los préstamos sí se
+    // dejan: no son venta). Si el P1 está en 0 pero hay P2/P3 con precio, se
+    // usa el primero vendible. Bloqueado = sonido de fallo + aviso.
+    const base = precioVentaBase(p)
+    if (base == null && !(p.esPrestamo ?? p.es_prestamo)) {
+      mostrarAvisoSinPrecio(p)
+      return
+    }
     const stock = isExterno ? Infinity : (Number(p.stock_actual) || 0)
     setItems(prev => {
       const idx = isExterno 
@@ -743,7 +753,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         return prev.map((it, i) => i === idx ? { ...it, cantidad: nuevaCantidad } : it)
       }
 
-      const precioBase = isExterno ? Number(p.precio_usd) : aplicarMarkup(Number(p.precio_usd))
+      const precioBase = base == null ? 0 : (isExterno ? base : aplicarMarkup(base))
 
       return [...prev, {
         _key:          `item-${++_itemCounter}`,
@@ -763,10 +773,17 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
   // Bulk-add desde escaneo de lista
   function agregarProductosBulk(listaItems) {
+    // Regla de venta (2026-10-26): los productos sin precio de venta no se agregan.
+    const sinPrecio = listaItems.filter(({ producto }) => precioVentaBase(producto) == null)
+    const validos = listaItems.filter(({ producto }) => precioVentaBase(producto) != null)
+    if (sinPrecio.length > 0) {
+      mostrarAvisoSinPrecio(sinPrecio.map(({ producto }) => producto))
+    }
+    if (validos.length === 0) return
     setItems(prev => {
       let updated = [...prev]
       let agregados = 0
-      for (const { producto, cantidad } of listaItems) {
+      for (const { producto, cantidad } of validos) {
         const stock = Number(producto.stock_actual) || 0
         const qty = cantidad  // sin cap — se permite superar el stock con advertencia
         const idx = updated.findIndex(it => it.productoId === producto.id)
@@ -774,7 +791,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
           const newQty = updated[idx].cantidad + qty
           updated = updated.map((it, i) => i === idx ? { ...it, cantidad: newQty } : it)
         } else {
-          const precioBase = aplicarMarkup(Number(producto.precio_usd))
+          const precioBase = aplicarMarkup(precioVentaBase(producto))
           updated.push({
             _key:          `item-${++_itemCounter}`,
             productoId:    producto.id,
@@ -1870,7 +1887,17 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                             total_usd: totalUsd,
                             costo_envio_usd: Number(costoEnvioUsd) || 0,
                             corte_usd: Number(corteUsd) || 0,
-                            cliente: { nombre: clienteSeleccionado?.nombre }
+                            // Datos completos del cliente: el modal de despacho necesita
+                            // cliente_id y el estado/ciudad de la ficha para la regla del
+                            // flete de chofer local (antes solo pasaba el nombre y el modal
+                            // de éxito bloqueaba con "indica el estado del destino").
+                            cliente_id: clienteId,
+                            cliente: {
+                              id: clienteSeleccionado?.id,
+                              nombre: clienteSeleccionado?.nombre,
+                              estado: clienteSeleccionado?.estado,
+                              ciudad: clienteSeleccionado?.ciudad,
+                            }
                           })
                         }
                       }}
@@ -1935,7 +1962,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
             total_usd: totalUsd,
             costo_envio_usd: Number(costoEnvioUsd) || 0,
             corte_usd: Number(corteUsd) || 0,
-            cliente: { nombre: clienteSeleccionado?.nombre }
+            cliente_id: clienteId,
+            cliente: {
+              id: clienteSeleccionado?.id,
+              nombre: clienteSeleccionado?.nombre,
+              estado: clienteSeleccionado?.estado,
+              ciudad: clienteSeleccionado?.ciudad,
+            }
           })
         }}
         onCancelar={() => setShowModalDespachar(false)}

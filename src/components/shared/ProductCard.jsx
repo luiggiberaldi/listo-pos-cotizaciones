@@ -4,6 +4,8 @@ import { Plus, Minus, Trash2 } from 'lucide-react'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
+import { precioVentaBase, sinPrecioVenta } from '../../utils/precioVenta'
+import { mostrarAvisoSinPrecio } from '../../utils/avisoSinPrecio'
 
 /**
  * @param {object} props
@@ -27,27 +29,33 @@ export default function ProductCard({
   onCantidadDirecta,
 }) {
   const { aplicarMarkup, esExterno, markupPct } = usePrecioVendedor()
-  const precioDisplay = esExterno ? aplicarMarkup(p.precio_usd) : Number(p.precio_usd) || 0
+  // Regla de venta (2026-10-26): el precio 0 es válido GUARDADO en inventario
+  // pero NO vendible: la tarjeta lo marca "Sin precio" y no deja agregarlo.
+  // Si el P1 está en 0 pero hay P2/P3 con precio, se muestra el primero vendible.
+  const precioBaseVenta = precioVentaBase(p)
+  const sinPrecio = sinPrecioVenta(p)
+  const precioDisplay = precioBaseVenta == null ? 0 : (esExterno ? aplicarMarkup(precioBaseVenta) : precioBaseVenta)
   const stock = Number(p.stock_actual) || 0
   const sinStock = stock <= 0
-  const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
-  const bloqueado = sinPrecio
   const tieneMultiprecios = precio2Visible(p) || precio3Visible(p)
 
   return (
     <div
       className={`relative bg-white rounded-xl border px-1.5 py-1.5 flex flex-col items-center text-center transition-all active:scale-95 ${
-        bloqueado
-          ? 'opacity-40 cursor-not-allowed border-slate-100'
-          : agregado
-            ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
-            : sinStock
-              ? 'border-red-300 bg-red-50/30 shadow-sm shadow-red-100/80'
-              : stock <= (p.stock_minimo || 5)
-                ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100/80'
-                : 'border-slate-200 hover:border-primary/50'
+        agregado
+          ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
+          : (sinStock || sinPrecio)
+            ? `border-red-300 bg-red-50/30 shadow-sm shadow-red-100/80${sinPrecio ? ' cursor-not-allowed' : ''}`
+            : stock <= (p.stock_minimo || 5)
+              ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100/80'
+              : 'border-slate-200 hover:border-primary/50'
       }`}
-      onClick={() => !agregado && !bloqueado && onAgregar?.(p)}
+      onClick={() => {
+        if (agregado) return
+        // Sin precio de venta: el clic avisa (sonido + aviso) en vez de quedar mudo
+        if (sinPrecio) { mostrarAvisoSinPrecio(p); return }
+        onAgregar?.(p)
+      }}
     >
       {agregado && (
         <div className="absolute top-0 left-0 right-0 h-1 rounded-t-xl bg-emerald-400" />
@@ -70,9 +78,12 @@ export default function ProductCard({
       </div>
 
       {/* Precio */}
-      <p className={`text-[11px] font-black ${agregado ? 'text-emerald-600' : 'text-slate-800'}`}>
+      <p className={`text-[11px] font-black ${agregado ? 'text-emerald-600' : sinPrecio ? 'text-red-400' : 'text-slate-800'}`}>
         {fmtUsd(precioDisplay)}
       </p>
+      {sinPrecio && (
+        <p className="text-[8px] font-bold text-red-600">Sin precio de venta</p>
+      )}
       {tieneMultiprecios && (
         <p className="text-[8px] font-bold text-primary/60">
           {[precio2Visible(p) && 'P2', precio3Visible(p) && 'P3'].filter(Boolean).length + 1} precios
@@ -84,11 +95,10 @@ export default function ProductCard({
 
       {/* Stock badge */}
       <p className={`text-[8px] font-medium mt-0.5 ${
-        sinPrecio ? 'text-orange-500' :
         sinStock ? 'text-red-500' :
         stock <= (p.stock_minimo || 5) ? 'text-amber-500' : 'text-emerald-500'
       }`}>
-        {sinPrecio ? 'Sin precio' : sinStock ? 'Agotado' : stock <= (p.stock_minimo || 5) ? `Stock bajo: ${stock}` : `${stock} disp.`}
+        {sinStock ? 'Agotado' : stock <= (p.stock_minimo || 5) ? `Stock bajo: ${stock}` : `${stock} disp.`}
       </p>
 
       {/* Alerta release 17: la cantidad en cesta puede exceder el stock (nunca se bloquea) */}

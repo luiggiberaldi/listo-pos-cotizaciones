@@ -898,15 +898,19 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
                               </div>
                             </td>
 
-                            {/* PRECIO */}
+                            {/* PRECIO — solo aplica a productos NUEVOS: el
+                                ingreso de lote nunca cambia precios de
+                                productos existentes (ver migración 278) */}
                             <td className="px-2 py-1.5">
                               <input
                                 type="number"
                                 step="0.01"
                                 min="0"
                                 value={fila.precioInput}
+                                disabled={esExistente}
+                                title={esExistente ? 'El ingreso de lote no modifica precios de productos existentes. El precio se fija al crear el producto; para cambiarlo, edítalo desde Inventario.' : undefined}
                                 onChange={e => handleFilaChange(fila.id, 'precioInput', parseFloat(e.target.value) || 0)}
-                                className="w-full px-2 py-1 text-xs font-black text-right bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                                className={`w-full px-2 py-1 text-xs font-black text-right border border-slate-200 rounded ${esExistente ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary'}`}
                               />
                             </td>
 

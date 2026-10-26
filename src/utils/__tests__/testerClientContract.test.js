@@ -22,4 +22,12 @@ describe('contrato del cliente determinista', () => {
     expect(testerSource).toContain('saldo_pendiente: 0')
     expect(testerSource).toContain(".eq('id', existingClient.id)")
   })
+
+  it('el fixture crea sus clientes CON estado y ciudad (todo cliente es obligatorio)', () => {
+    // Regla 2026-10-26: ningún cliente puede quedar sin estado/ciudad — ni siquiera
+    // el fixture de pruebas (era el único registro sin estado en producción y
+    // disparaba el antiguo selector de respaldo "Estado del destino").
+    expect(testerSource).toMatch(/estado:\s*'Carabobo'/)
+    expect(testerSource).toMatch(/ciudad:\s*'Valencia'/)
+  })
 })

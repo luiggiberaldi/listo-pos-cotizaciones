@@ -13,6 +13,8 @@ import { useClientes } from '../hooks/useClientes'
 import ClienteForm from '../components/clientes/ClienteForm'
 import { useInventario, useCategorias } from '../hooks/useInventario'
 import { precio2Visible, precio3Visible } from '../utils/preciosHabilitados'
+import { precioVentaBase } from '../utils/precioVenta'
+import { mostrarAvisoSinPrecio } from '../utils/avisoSinPrecio'
 import { useProductSearch } from '../hooks/useProductSearch'
 import { useLineItems } from '../hooks/useLineItems'
 import { useVentaRapida } from '../hooks/useVentaRapida'
@@ -20,6 +22,7 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { calcComisionEstimada } from '../utils/comisionUtils'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
+import useClienteFresco from '../hooks/useClienteFresco'
 import { useFormasPago } from '../hooks/useFormasPago'
 import { useSaldoFavorOrigen } from '../hooks/useCuentasCobrar'
 import CustomSelect from '../components/ui/CustomSelect'
@@ -31,6 +34,7 @@ import { MapPin, Building } from 'lucide-react'
 import { apiUrl } from '../services/apiBase'
 import { getOperatorSessionHeaders } from '../services/operatorSession'
 import { round2, mulR } from '../utils/dinero'
+import { reglaEstadoDestinoFlete } from '../utils/fleteDestino'
 import { calcTotales } from '../utils/calcTotales'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { buscarClientes } from '../utils/clienteSearch'
@@ -577,7 +581,7 @@ export default function VentaRapidaView() {
     if (d.corteUsd) setCorteUsd(d.corteUsd)
     if (d.notas) setNotas(d.notas)
     if (d.direccionEnvioActiva !== undefined) setDireccionEnvioActiva(!!d.direccionEnvioActiva)
-    else if (d.direccionEnvioEstado || d.direccionEnvioCiudad || d.direccionEnvioDireccion) setDireccionEnvioActiva(true)
+    else if (d.direccionEnvioCiudad || d.direccionEnvioDireccion) setDireccionEnvioActiva(true)
     if (d.direccionEnvioEstado) setDireccionEnvioEstado(d.direccionEnvioEstado)
     if (d.direccionEnvioCiudad) setDireccionEnvioCiudad(d.direccionEnvioCiudad)
     if (d.direccionEnvioDireccion) setDireccionEnvioDireccion(d.direccionEnvioDireccion)
@@ -725,11 +729,27 @@ export default function VentaRapidaView() {
   }, [productos])
   const totalItems = items.reduce((s, it) => s + it.cantidad, 0)
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
-  const estadoDestinoFlete = direccionEnvioActiva
-    ? direccionEnvioEstado
-    : (clienteSeleccionado?.estado || '')
-  const fleteLocalRequiereEstado = !!transportistaSeleccionado?.es_local && flete > 0
-  const destinoFleteValido = !fleteLocalRequiereEstado || !!estadoDestinoFlete
+  // Refresco de la ficha del cliente al abrir el paso de pago/envío: la lista
+  // puede traer una copia de hasta 5 minutos y el bloqueo del chofer local
+  // necesita el estado actual del cliente.
+  const clienteEnvioFresco = useClienteFresco(clienteId, step === 2)
+  const clienteEnvio = clienteEnvioFresco || clienteSeleccionado
+  // Regla del estado del destino (2026-10-25): el destino es el estado de la
+  // ficha del cliente; solo con "¿Enviar a otra dirección?" —cuyo bloque trae su
+  // propio selector— se elige otro estado. (2026-10-26: eliminado el selector de
+  // respaldo "Estado del destino"; ya ningún cliente real queda sin estado.)
+  const {
+    requiere: fleteLocalRequiereEstado,
+    estadoEnvioEfectivo,
+    estadoDestino: estadoDestinoFlete,
+    valido: destinoFleteValido,
+  } = reglaEstadoDestinoFlete({
+    esLocal: transportistaSeleccionado?.es_local,
+    fleteUsd: flete,
+    direccionEnvioActiva,
+    estadoEnvio: direccionEnvioEstado,
+    estadoCliente: clienteEnvio?.estado,
+  })
 
   // Validaciones
   const step1Valid = !!clienteId && items.length > 0
@@ -803,8 +823,16 @@ export default function VentaRapidaView() {
   }
 
   function agregarProducto(p) {
+    // Regla de venta (2026-10-26): no se vende en $0. Si el P1 está en 0 pero
+    // hay P2/P3 con precio, se usa el primero vendible. Bloqueado = sonido de
+    // fallo + aviso, y el producto NO queda en recientes.
+    const base = precioVentaBase(p)
+    if (base == null) {
+      mostrarAvisoSinPrecio(p)
+      return
+    }
     guardarProductoReciente(perfil?.id, p)
-    const precioBase = aplicarMarkup(Number(p.precio_usd || p.preciousd || 0))
+    const precioBase = aplicarMarkup(base)
 
     _agregarItem({
       ...p,
@@ -852,7 +880,7 @@ export default function VentaRapidaView() {
       tasaBcv: tasa,
       direccionEnvioDireccion: direccionEnvioActiva ? direccionEnvioDireccion : null,
       direccionEnvioCiudad: direccionEnvioActiva ? direccionEnvioCiudad : null,
-      direccionEnvioEstado: direccionEnvioActiva ? direccionEnvioEstado : null,
+      direccionEnvioEstado: estadoEnvioEfectivo || null,
     }, {
       onSuccess: (result) => {
         clearDraft(perfil?.id)
@@ -1032,7 +1060,7 @@ export default function VentaRapidaView() {
             config={config}
             clienteRef={clienteRef}
             clienteId={clienteId}
-            clienteSeleccionado={clienteSeleccionado}
+            clienteSeleccionado={clienteEnvio}
             clienteBusqueda={clienteBusqueda}
             setClienteBusqueda={setClienteBusqueda}
             clienteOpen={clienteOpen}
@@ -1113,7 +1141,7 @@ export default function VentaRapidaView() {
             tasa={tasa}
             esCod={esCod}
             setEsCod={handleToggleCod}
-            clienteSeleccionado={clienteSeleccionado}
+            clienteSeleccionado={clienteEnvio}
             esPrestamoPuro={esPrestamoPuro}
             direccionEnvioActiva={direccionEnvioActiva}
             setDireccionEnvioActiva={setDireccionEnvioActiva}
@@ -1136,7 +1164,7 @@ export default function VentaRapidaView() {
         {step === 2 && (
           <Step3Confirmar
             config={config}
-            clienteSeleccionado={clienteSeleccionado}
+            clienteSeleccionado={clienteEnvio}
             items={items}
             subtotal={subtotal}
             totalUsd={totalUsd}
@@ -2090,11 +2118,17 @@ function Step2Pago({
 
   const totalConFlete = totalParaPago + Math.max(0, Number(fleteUsd) || 0)
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
-  const estadoDestinoFlete = direccionEnvioActiva
-    ? direccionEnvioEstado
-    : (clienteSeleccionado?.estado || '')
-  const esChoferLocalConFlete = !!transportistaSeleccionado?.es_local && Number(fleteUsd) > 0
-  const destinoFleteValido = !esChoferLocalConFlete || !!estadoDestinoFlete
+  const {
+    requiere: esChoferLocalConFlete,
+    estadoDestino: estadoDestinoFlete,
+    valido: destinoFleteValido,
+  } = reglaEstadoDestinoFlete({
+    esLocal: transportistaSeleccionado?.es_local,
+    fleteUsd,
+    direccionEnvioActiva,
+    estadoEnvio: direccionEnvioEstado,
+    estadoCliente: clienteSeleccionado?.estado,
+  })
   const estadoNormalizado = String(estadoDestinoFlete).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
   const esDestinoFueraCarabobo = !!estadoDestinoFlete && estadoNormalizado !== 'carabobo'
   const tipoCalculoTransportista = config?.transp_tipo_calculo === 'fija' ? 'fija' : 'porcentaje'
@@ -2205,7 +2239,7 @@ function Step2Pago({
         <div className="-mt-1 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
           <span className="font-bold">Chofer local:</span>{' '}
           {!estadoDestinoFlete ? (
-            <span className="text-red-700 font-semibold">falta el estado de destino; si no hay dirección alternativa, completa el estado del cliente.</span>
+            <span className="text-red-700 font-semibold">el cliente no tiene estado guardado; complétalo en su ficha.</span>
           ) : esDestinoFueraCarabobo ? (
             <span>fuera de Carabobo → comisión estimada <strong>${netoTransportistaPreview.toFixed(2)}</strong> ({tipoCalculoTransportista === 'fija' ? `tarifa fija $${tarifaTransportista.toFixed(2)}` : `${pctTransportista}% del flete`}).</span>
           ) : (

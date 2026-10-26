@@ -26,12 +26,14 @@ import { useVendedores } from '../hooks/useClientes'
 import { useFormasPago } from '../hooks/useFormasPago'
 import { useSaldoFavorOrigen } from '../hooks/useCuentasCobrar'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
+import useClienteFresco from '../hooks/useClienteFresco'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../utils/format'
 import { rankEntities } from '../utils/entitySearch'
 import { showToast } from '../components/ui/Toast'
 import { round2 } from '../utils/dinero'
+import { reglaEstadoDestinoFlete } from '../utils/fleteDestino'
 import { notifyFacturacionClienteAjeno } from '../services/notificationService'
 import PageHeader from '../components/ui/PageHeader'
 import Pagination from '../components/ui/Pagination'
@@ -141,6 +143,11 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
 
+  // Refresco de la ficha del cliente al abrir el modal: la lista trae una copia
+  // de hasta 5 minutos y el bloqueo del chofer local necesita el estado actual.
+  const clienteEnvioFresco = useClienteFresco(cotizacion?.cliente_id || cotizacion?.cliente?.id, !!cotizacion)
+  const clienteEnvio = clienteEnvioFresco || cotizacion?.cliente
+
   const billingCliente = useMemo(() => {
     const targetId = clienteFacturaId || cotizacion?.cliente_id
     const found = targetId ? clientes.find(c => c.id === targetId) : null
@@ -172,11 +179,23 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const totalSinFlete = Number(cotizacion?.total_usd || 0) - Number(cotizacion?.costo_envio_usd || 0) - Number(cotizacion?.corte_usd || 0)
   const totalConFlete = totalSinFlete + Number(fleteUsd || 0) + Number(corteUsd || 0)
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
-  const estadoDestinoFlete = direccionEnvioActiva
-    ? direccionEnvioEstado
-    : (cotizacion?.cliente?.estado || '')
-  const fleteLocalRequiereEstado = !!transportistaSeleccionado?.es_local && Number(fleteUsd) > 0
-  const destinoFleteValido = !fleteLocalRequiereEstado || !!estadoDestinoFlete
+  // Regla del estado del destino (2026-10-25): el destino es el estado de la
+  // ficha del cliente (estado/ciudad son obligatorios al registrarlo); solo con
+  // "¿Enviar a otra dirección?" —cuyo bloque trae su propio selector— o como
+  // respaldo si el cliente no tiene estado se elige otro.
+  const {
+    requiere: fleteLocalRequiereEstado,
+    mostrarSelector: mostrarSelectorEstadoDestino,
+    estadoEnvioEfectivo,
+    estadoDestino: estadoDestinoFlete,
+    valido: destinoFleteValido,
+  } = reglaEstadoDestinoFlete({
+    esLocal: transportistaSeleccionado?.es_local,
+    fleteUsd,
+    direccionEnvioActiva,
+    estadoEnvio: direccionEnvioEstado,
+    estadoCliente: clienteEnvio?.estado,
+  })
 
   const { data: saldoFavorOrigen } = useSaldoFavorOrigen(billingCliente?.id)
 
@@ -492,10 +511,32 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                 {destinoFleteValido
                   ? String(estadoDestinoFlete).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() === 'carabobo'
                     ? 'Chofer local: este flete se procesa por nómina externa (Carabobo).'
-                    : 'Chofer local: el flete fuera de Carabobo genera comisión.'
-                  : 'Chofer local: indica el estado del destino o completa el estado del cliente.'}
-              </p>
-            )}
+                    : 'Chofer local: el flete fuera de Carabobo genera comisión.'                    : 'Chofer local: indica el estado del destino o completa el estado del cliente.'}
+                </p>
+              )}
+
+              {/* Estado del destino — solo respaldo cuando el cliente no tiene estado;
+                  con dirección alternativa el estado se elige en su propio bloque. */}
+              {mostrarSelectorEstadoDestino && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Estado del destino</p>
+                  <CustomSelect
+                    options={ESTADOS.map(e => ({ value: e, label: e }))}
+                    value={estadoDestinoFlete}
+                    onChange={val => {
+                      setDireccionEnvioEstado(val)
+                      setDireccionEnvioCiudad('')
+                    }}
+                    placeholder="Elegir estado..."
+                    icon={MapPin}
+                    searchable
+                    disabled={cargando}
+                  />
+                  <p className="text-[9px] text-slate-400">
+                    El cliente no tiene estado guardado: elige el estado del destino.
+                  </p>
+                </div>
+              )}
 
             {/* Formas de pago — chips con input integrado */}
             <div className="space-y-2">
@@ -925,7 +966,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   clienteFacturaId || null,
                   direccionEnvioActiva ? direccionEnvioDireccion : null,
                   direccionEnvioActiva ? direccionEnvioCiudad : null,
-                  direccionEnvioActiva ? direccionEnvioEstado : null
+                  estadoEnvioEfectivo || null
                 )
               }} disabled={
                 cargando ||

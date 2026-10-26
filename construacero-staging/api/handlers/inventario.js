@@ -384,8 +384,9 @@ RESPOnde ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
         nombre: p.nombre,
         unidad: p.unidad,
         precio_usd: Number(p.precio_usd),
-        precio_2: p.precio_2 ? Number(p.precio_2) : null,
-        precio_3: p.precio_3 ? Number(p.precio_3) : null,
+        // El precio 0 es un precio real ($0.00): no se convierte en null (se escondía).
+        precio_2: p.precio_2 != null ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 != null ? Number(p.precio_3) : null,
         stock_actual: Number(p.stock_actual),
         stock_minimo: Number(p.stock_minimo),
         imagen_url: p.imagen_url,
@@ -527,8 +528,9 @@ RESPOnde ÚNICAMENTE en JSON válido con este formato (sin markdown, sin explica
         nombre: p.nombre,
         unidad: p.unidad,
         precio_usd: Number(p.precio_usd),
-        precio_2: p.precio_2 ? Number(p.precio_2) : null,
-        precio_3: p.precio_3 ? Number(p.precio_3) : null,
+        // El precio 0 es un precio real ($0.00): no se convierte en null (se escondía).
+        precio_2: p.precio_2 != null ? Number(p.precio_2) : null,
+        precio_3: p.precio_3 != null ? Number(p.precio_3) : null,
         stock_actual: Number(p.stock_actual),
         stock_minimo: Number(p.stock_minimo),
         imagen_url: p.imagen_url,
@@ -1040,25 +1042,34 @@ export async function handleBatchIngest(request, env) {
   const idempotencyKey = requestedIdempotencyKey || crypto.randomUUID();
   if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
 
-  const rpcItems = productos.map((p) => ({
-    producto_id: p.isNuevo ? null : p.id,
-    is_nuevo: Boolean(p.isNuevo),
-    codigo: p.codigo || null,
-    nombre: p.nombre,
-    descripcion: p.descripcion || null,
-    categoria: p.categoria || null,
-    unidad: p.unidad || 'und',
-    cantidad: Number(p.cantidad),
-    costo_usd: Number(p.costo ?? p.costo_usd ?? 0),
-    precio_usd: Number(p.precio ?? p.precio_usd ?? 0),
-    precio_2: p.precio_2 ?? p.precio2 ?? null,
-    precio_3: p.precio_3 ?? p.precio3 ?? null,
-    precio1_porcentaje: p.precio1_porcentaje ?? null,
-    precio2_porcentaje: p.precio2_porcentaje ?? null,
-    precio3_porcentaje: p.precio3_porcentaje ?? null,
-    modo_existente: p.modoExistente || p.modo_existente || 'sumar',
-    actualizar_costo: Boolean(p.actualizarCosto ?? p.actualizar_costo),
-  }));
+  const rpcItems = productos.map((p) => {
+    const isNuevo = Boolean(p.isNuevo);
+    // Los precios de venta SOLO aplican a productos nuevos. Un ingreso de lote
+    // nunca debe pisar los precios ya guardados de un producto existente: la
+    // fila trae el precio pre-cargado al abrir la pantalla y pisarlo hacía que
+    // "el precio cambiado volviera al antiguo" (bug de persistencia de precios).
+    // La RPC (migración 278) tampoco escribe precios en existentes; aquí se
+    // deja el contrato explícito de punta a punta.
+    return {
+      producto_id: isNuevo ? null : p.id,
+      is_nuevo: isNuevo,
+      codigo: p.codigo || null,
+      nombre: p.nombre,
+      descripcion: p.descripcion || null,
+      categoria: p.categoria || null,
+      unidad: p.unidad || 'und',
+      cantidad: Number(p.cantidad),
+      costo_usd: Number(p.costo ?? p.costo_usd ?? 0),
+      precio_usd: isNuevo ? Number(p.precio ?? p.precio_usd ?? 0) : null,
+      precio_2: isNuevo ? (p.precio_2 ?? p.precio2 ?? null) : null,
+      precio_3: isNuevo ? (p.precio_3 ?? p.precio3 ?? null) : null,
+      precio1_porcentaje: isNuevo ? (p.precio1_porcentaje ?? null) : null,
+      precio2_porcentaje: isNuevo ? (p.precio2_porcentaje ?? null) : null,
+      precio3_porcentaje: isNuevo ? (p.precio3_porcentaje ?? null) : null,
+      modo_existente: p.modoExistente || p.modo_existente || 'sumar',
+      actualizar_costo: Boolean(p.actualizarCosto ?? p.actualizar_costo),
+    };
+  });
 
   // Replay guard before entering the RPC avoids a second response being
   // reported as a fresh batch when the network retries the same key.

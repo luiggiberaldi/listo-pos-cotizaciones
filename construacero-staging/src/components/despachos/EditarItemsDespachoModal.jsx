@@ -231,13 +231,15 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         setCargandoItems(true)
         setError(null)
         try {
-          const { data, error: fetchErr } = await (await import('../../services/supabase/client')).default
-            .from('notas_despacho_items')
-            .select('*')
-            .eq('despacho_id', despacho.id)
-            .order('orden')
-
-          if (fetchErr) throw fetchErr
+          // Cargar el consolidado (neto) del despacho: si hubo devoluciones o
+          // intercambios en la entrega, las filas crudas conservan el artículo
+          // viejo y la edición mostraría el artículo equivocado (bug DES-04243;
+          // misma raíz que DES-04161).
+          const { fetchDespachoConsolidado } = await import('../../services/despachoItemsService')
+          const { itemsConsolidados: data } = await fetchDespachoConsolidado(despacho.id, {
+            ...despacho,
+            tiene_devoluciones: true,
+          })
 
           const esPersonal = billingCliente?.tipo_cliente === 'personal'
           const descPct = config.descuento_personal_pct ?? 10.00
@@ -529,13 +531,11 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
             productosFiltrados.map(p => {
               const enCarrito = inCartSet.has(p.id)
               const stock = Number(p.stock_actual) || 0
-              const sinPrecio = !p.precio_usd || Number(p.precio_usd) <= 0
               return (
                 <div
                   key={p.id}
-                  onClick={() => !enCarrito && !sinPrecio && agregarItem(p)}
+                  onClick={() => !enCarrito && agregarItem(p)}
                   className={`group p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${enCarrito ? 'bg-indigo-50 border-indigo-200 opacity-60 cursor-default' :
-                      sinPrecio ? 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed' :
                       stock <= 0 ? 'bg-amber-50/60 border-amber-200 hover:border-amber-300 hover:shadow-md' :
                         'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md'
                     }`}

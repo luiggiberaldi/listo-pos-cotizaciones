@@ -907,7 +907,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       !label.includes('agregar transportista') &&
       !label.includes('marcar cod como pagado') &&
       !label.includes('devolución parcial') &&
-      !label.includes('observación')
+      !label.includes('observación') &&
+      !label.includes('métodos de pago')
   })
 
   // Resolver config del confirm modal

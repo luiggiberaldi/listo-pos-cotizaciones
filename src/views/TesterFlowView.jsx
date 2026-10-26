@@ -60,6 +60,10 @@ const TEST = {
     telefono: '0414-0000001',
     email: 'determinista@test.local',
     direccion: 'Calle Test #1, Determinista',
+    // Estado y ciudad son obligatorios para todo cliente (incluso el fixture):
+    // sin ellos el flete de chofer local no puede decidir nómina/comisión.
+    estado: 'Carabobo',
+    ciudad: 'Valencia',
   },
   cotizacion: {
     cantidad: 10,
