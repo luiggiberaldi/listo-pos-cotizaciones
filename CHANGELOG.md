@@ -6,6 +6,13 @@ Este archivo sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 
 ## [Unreleased]
 
+### Release 2026-10-26 — Flete de chofer local + precio 0 no vendible + arreglos de despachos
+
+- **Flete de chofer local (Fixed):** el estado del destino es el del cliente registrado (estado/ciudad obligatorios al crearlo); con «¿Enviar a otra dirección?» manda el estado de esa dirección. Se elimina el selector de respaldo «Estado del destino»: verificado que ningún cliente real queda sin estado (el único registro era el fixture de pruebas, corregido; y el fixture ahora crea sus clientes con estado/ciudad). Si algún cliente quedara sin estado, el despacho con chofer local se bloquea con aviso para completar su ficha.
+- **Precio 0 no vendible (Changed):** un producto sin precio de venta ya no se agrega al carrito (tarjeta, buscador, recientes, cotización y escaneo) y el bloqueo avisa con sonido de fallo + toast. El precio 0 sigue siendo válido para GUARDAR en inventario (contrato de las migraciones 279/280).
+- **Despachos (Fixed):** «Despachar» desde el modal de cotización enviada envía el cliente completo (id + estado/ciudad), la edición profunda retira devoluciones absorbidas, y los PDFs respaldan estado/ciudad/dirección con los del cliente.
+- **Validación:** Vitest 766/766, `vite build` OK, deploy `cdfda2c` (Vercel + Worker en verde) y smoke post-deploy 200 / 200 / 401. Rollback: Instant Rollback en Vercel + `wrangler rollback`; sin cambios de BD en este release.
+
 ### Release 19 — COD en pedidos de pago mixto + nota opcional (2026-10-21)
 
 - **Cobro COD en pedidos de pago mixto (BD):** `resumen_financiero_despacho` separa la parte COD cobrable de la parte a crédito en CxC, con motivos de revisión explícitos (`atribucion_ambigua`, `flag_sin_respaldo`) y aviso de `desborde_sin_marca_usd`. `registrar_pago_externo_cobro_idempotente` registra el cobro en una sola operación atómica e idempotente, con atribución explícita, hasta un centavo de exceso permitido y liquidación solo con deuda COD en cero.

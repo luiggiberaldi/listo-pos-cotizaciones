@@ -5207,3 +5207,67 @@ pase autorizado). Ninguna otra función, la app ni el Worker quedaron tocados;
 los `test-*` y suites del repo no cambian (no hay pruebas que apunten a la
 variante retirada). Cierra la opción «retirarla en un release futuro» de la
 sesión anterior.
+
+## SESIÓN 26/10/2026 (madrugada) — Release a producción: flete de chofer local + precio 0 no vendible + arreglos de despachos
+
+**En resumen:** despliegue a producción del trabajo probado de los últimos días,
+por encargo del usuario («Despliega el arreglo del chofer local a producción
+siguiendo el checklist de release»). El usuario eligió el alcance con pregunta
+estructurada: «Todo el trabajo probado» (un solo release; varios archivos
+compartían cambios de más de un arreglo y separarlos a mano era frágil). Commit
+`cdfda2c` (96 archivos, +6.853/−242); el árbol quedó sin el único archivo ajeno
+(una captura suya de agosto, no incluida en el commit).
+
+**Qué salió vivo:**
+- **Flete de chofer local (el arreglo pedido):** el destino es el estado del
+  CLIENTE registrado (estado/ciudad obligatorios al crearlo); con «¿Enviar a
+  otra dirección?» manda el estado de esa dirección. Se eliminó el selector de
+  respaldo «Estado del destino» de las 3 pantallas (Venta rápida, Despachar de
+  Cotizaciones, Editar despacho): de 1.140 clientes solo 1 no tenía estado y era
+  el fixture de pruebas «Cliente Determinista Test» (0 cotizaciones / 0
+  despachos), ya corregido (Carabobo/Valencia) — la consulta de verificación da
+  **0 clientes sin estado**. El fixture del tester ahora crea sus clientes CON
+  estado/ciudad (contrato `testerClientContract.test.js` lo exige) y si un
+  cliente quedara sin estado, el despacho con chofer local se bloquea avisando
+  «complétalo en su ficha».
+- **Precio 0 no vendible:** los productos sin precio de venta no se agregan al
+  carrito por ninguna puerta de venta (tarjeta, buscador, recientes, cotización,
+  escaneo) y el bloqueo avisa con sonido de fallo + toast rojo. El precio 0
+  sigue siendo válido GUARDADO en inventario (contrato de las migraciones
+  279/280); solo se bloquea venderlo.
+- **Despachos:** «Despachar» desde el modal de cotización enviada envía el
+  cliente completo (id + estado/ciudad), la edición profunda retira devoluciones
+  absorbidas, y los PDFs respaldan estado/ciudad/dirección con los del cliente.
+
+**Verificación (checklist `docs/operaciones/checklist-release.md`):**
+- Clasificación: Frontend + Worker, acompañando los SQL 279-282 ya aplicados en
+  BD en sesiones anteriores (con sus respaldos y rollbacks). Sin toggles nuevos:
+  los cambios de comportamiento fueron pedidos directamente por el usuario.
+- Vitest **766/766** en verde; `npm run build` OK (warning conocido de chunks);
+  `git diff --check` limpio.
+- `vercel.json` apunta al Worker primario (`luigistorelogistics.workers.dev`,
+  no camelAI); `wrangler` sin placeholders vacíos.
+- Deploy por el flujo oficial (nada manual): push a `main` → Vercel sirve el
+  bundle nuevo `index-2P6BGuj6.js` + GitHub Actions «Deploy Worker a
+  Cloudflare» en verde (57 s, run 40270205776).
+- Smoke post-deploy: `GET /` 200, `GET /api/ping` 200, `GET /api/clientes` sin
+  sesión → **401 «No autenticado»**. El paquete servido incluye el trozo
+  `fleteDestino-7eQ9JQ2a.js` con la regla final (0 apariciones de
+  `mostrarSelector`, `estadoDestino` presente): producción corre este commit.
+
+**No verificado / límites:** el login de un operador real sobre producción (último
+smoke del runbook) no se repitió en esta sesión; conviene que el usuario lo haga
+al usar el sistema. El E2E completo de staging (123/123) no se re-ejecutó aquí:
+los cambios del árbol de staging venían de sesiones anteriores con sus arneses
+en verde.
+
+**Rollback (si hiciera falta):** Vercel «Instant Rollback» al deployment anterior
+(bundle `index-BrZS5hTX.js`) y `npx wrangler rollback` para el Worker. Nada de
+BD que revertir en este release (los SQL 279-282 ya estaban aplicados antes).
+
+**Pendientes que deja:** (1) el error repetido `200.js / M_ID` de la consola del
+navegador — la investigación apunta a un trozo viejo servido por la caché del
+Service Worker (misma clase que INC-001, en el ROADMAP); (2) revisar si
+Despachos y Reportes están cerca del límite de 8 s de la lista de cotizaciones
+y protegerlos igual; (3) los workflows programados «Auditor de saldos» y
+«Staging E2E nocturno» venían fallando desde antes (runs del 25/10).
