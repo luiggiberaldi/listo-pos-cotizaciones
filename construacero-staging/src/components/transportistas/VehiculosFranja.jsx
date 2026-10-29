@@ -7,12 +7,13 @@
 //  - R4/R8: la baja usa eliminar_o_desactivar_vehiculo_atomico — sin viajes se
 //    borra; con historial se desactiva y los viajes pasados quedan intactos.
 //  - Nada de comisiones ni liquidaciones en esta pantalla (R7, Fase 4).
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Truck, Plus, Pencil, Ban, RefreshCw, Eye, EyeOff, User } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { useVehiculos, useCrearVehiculo, useActualizarVehiculo, useEliminarVehiculo } from '../../hooks/useVehiculos'
 import ConfirmModal from '../ui/ConfirmModal'
 import { showToast } from '../ui/Toast'
+import { nombreVehiculo } from '../../utils/vehiculoImpreso'
 
 const ROLES_GESTION = ['jefe', 'administracion', 'logistica', 'desarrollador']
 const ROLES_BAJA = ['jefe', 'administracion', 'desarrollador']
@@ -124,7 +125,8 @@ function VehiculoModalForm({ vehiculo = null, onClose }) {
   )
 }
 
-export default function VehiculosFranja() {
+// resaltarId: camión a enfocar al llegar desde "Vehículo fijo" de un chofer.
+export default function VehiculosFranja({ resaltarId = null }) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const rol = perfil?.rol
   const puedeGestionar = ROLES_GESTION.includes(rol)
@@ -135,6 +137,17 @@ export default function VehiculosFranja() {
   const [bajando, setBajando] = useState(null)
 
   const { data: vehiculos = [], isLoading, refetch } = useVehiculos({ incluirInactivos: true })
+
+  // Al llegar desde la ficha de un chofer, llevar la vista a su camión.
+  useEffect(() => {
+    if (!resaltarId || isLoading) return
+    const objetivo = vehiculos.find(v => v.id === resaltarId)
+    if (objetivo && objetivo.activo === false) setVerInactivos(true)
+    const t = setTimeout(() => {
+      document.getElementById(`vehiculo-${resaltarId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+    return () => clearTimeout(t)
+  }, [resaltarId, isLoading, vehiculos])
   const eliminar = useEliminarVehiculo()
   const actualizar = useActualizarVehiculo()
 
@@ -220,10 +233,10 @@ export default function VehiculosFranja() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {visibles.map(v => (
-            <div key={v.id} className={`rounded-xl border p-3 space-y-2 transition-colors ${v.activo !== false ? 'border-slate-200 bg-slate-50/60' : 'border-slate-200 bg-slate-100 opacity-75'}`}>
+            <div key={v.id} id={`vehiculo-${v.id}`} className={`rounded-xl border p-3 space-y-2 transition-all ${v.activo !== false ? 'border-slate-200 bg-slate-50/60' : 'border-slate-200 bg-slate-100 opacity-75'} ${resaltarId === v.id ? 'ring-2 ring-amber-400 border-amber-300' : ''}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-black text-slate-800 text-sm leading-tight truncate">{v.codigo} {v.nombre}</p>
+                  <p className="font-black text-slate-800 text-sm leading-tight truncate" title={nombreVehiculo(v)}>{nombreVehiculo(v)}</p>
                   <p className="text-[11px] text-slate-500 font-mono">{v.placa}</p>
                 </div>
                 <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${v.activo !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>

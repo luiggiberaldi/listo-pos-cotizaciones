@@ -13,6 +13,7 @@ import {
   construirCsvFlota, descargarCsv,
 } from '../../utils/flotaReporte'
 import Skeleton from '../ui/Skeleton'
+import { nombreVehiculo } from '../../utils/vehiculoImpreso'
 
 function fmt(n) {
   return num(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -116,7 +117,7 @@ export default function SeccionFlotaChoferes({ rango }) {
                       <tr key={v.vehiculo_id} className="border-t border-slate-100">
                         <td className="px-3 py-2">
                           <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                            {v.codigo} · {v.nombre}
+                            {nombreVehiculo(v)}
                             {v.activo === false && (
                               <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[9px] font-bold uppercase">Inactivo</span>
                             )}

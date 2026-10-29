@@ -8,6 +8,18 @@
 //   del chofer (si no, serían de otro camión).
 // - Viaje sin camión de la flota (externos o históricos) → datos de la ficha,
 //   como hasta ahora.
+/**
+ * Nombre visible de un camión: "código nombre", sin repetir el código cuando el
+ * nombre ya lo trae (p. ej. código "CAM-01" y nombre "CAM-01 NPR Blanco").
+ */
+export function nombreVehiculo(vehiculo) {
+  if (!vehiculo) return ''
+  const codigo = String(vehiculo.codigo || '').trim()
+  const nombre = String(vehiculo.nombre || '').trim()
+  if (codigo && nombre.toUpperCase().startsWith(codigo.toUpperCase())) return nombre
+  return [codigo, nombre].filter(Boolean).join(' ')
+}
+
 export function datosVehiculoImpreso(despacho) {
   const transportista = despacho?.transportista || null
   const vehiculo = despacho?.vehiculo_viaje || null
@@ -27,10 +39,7 @@ export function datosVehiculoImpreso(despacho) {
   const bateaFicha = String(transportista?.placa_batea || '').trim()
 
   return {
-    // Si el nombre ya empieza con el código (p. ej. "CAM-01 NPR"), no repetirlo.
-    vehiculo: vehiculo.codigo && String(vehiculo.nombre || '').startsWith(vehiculo.codigo)
-      ? vehiculo.nombre
-      : [vehiculo.codigo, vehiculo.nombre].filter(Boolean).join(' '),
+    vehiculo: nombreVehiculo(vehiculo),
     placa_chuto: vehiculo.placa || '',
     // Batea de la ficha solo si es el mismo camión y no repite la placa principal.
     placa_batea: esSuHabitual && bateaFicha && bateaFicha.toUpperCase() !== placaVeh ? bateaFicha : '',

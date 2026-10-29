@@ -13,7 +13,7 @@ import {
   textoViajes, totalesVehiculos, totalesChoferes, construirCsvFlota,
   textoDesgloseChoferes, textoDesgloseVehiculos,
 } from '../flotaReporte'
-import { datosVehiculoImpreso } from '../vehiculoImpreso'
+import { datosVehiculoImpreso, nombreVehiculo } from '../vehiculoImpreso'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const leer = (rel) => fs.readFileSync(path.join(projectRoot, rel), 'utf8')
@@ -158,5 +158,22 @@ describe('Documentos impresos con el camión del viaje (arreglo 11)', () => {
       expect(fuente).toContain('datosVehiculoImpreso(despacho)')
       expect(fuente).not.toContain('transportista?.placa_chuto')
     }
+  })
+})
+
+describe('Pantalla de Transportistas con pestañas', () => {
+  it('el nombre del camión no repite el código', () => {
+    expect(nombreVehiculo({ codigo: 'CAM-01', nombre: 'CAM-01 NPR Blanco' })).toBe('CAM-01 NPR Blanco')
+    expect(nombreVehiculo({ codigo: 'CAM-02', nombre: 'Cargo' })).toBe('CAM-02 Cargo')
+  })
+
+  it('separa choferes y vehículos en pestañas, recuerda la última y enlaza el camión fijo', () => {
+    const vista = leer('src/views/TransportistasView.jsx')
+    expect(vista).toContain('Choferes y transportistas')
+    expect(vista).toContain('Vehículos de la empresa')
+    expect(vista).toContain('localStorage.setItem(PESTANA_KEY')
+    expect(vista).toContain('onVerVehiculo={verVehiculo}')
+    // La ficha del chofer local ya no muestra el vehículo escrito a mano
+    expect(vista).toContain('!transportista.es_local && transportista.vehiculo')
   })
 })
