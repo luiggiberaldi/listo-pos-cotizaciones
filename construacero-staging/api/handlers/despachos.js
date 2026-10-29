@@ -136,6 +136,18 @@ async function validarDestinoFleteLocal({ env, headers, cuentaId, transportistaI
   return null
 }
 
+// Recalcula la comisión "238b" de un despacho tras una devolución parcial:
+// la RPC recomputa el despacho con sus líneas netas y preserva la política
+// no-CxC/exclusiones. (Defecto preexistente: este ayudante se usaba en
+// handleDevolucionParcialDespacho pero nunca se había definido.)
+export async function recalcularComision238b(despachoId, headers, env) {
+  return fetch(`${env.SUPABASE_URL}/rest/v1/rpc/recalcularcomisiondespacho_238b`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify({ p_despachoid: despachoId }),
+  })
+}
+
 async function obtenerVendedorComisionId(despacho, headers, env) {
   if (despacho.cliente_id) {
     const cliRes = await fetch(
@@ -1402,6 +1414,44 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
+    // ── Reingreso al devolver a pendiente o anular desde 'despachada' (release 17) ──
+    // Portado del árbol principal (api/handlers/despachos.js): desde el release 17
+    // el egreso ocurre al APROBAR, así que devolver a pendiente o anular un despacho
+    // aprobado debe reingresar la mercancía. +stock + Kardex 'ingreso' y cambio de
+    // estado en la MISMA transacción SQL (la RPC ya existe en staging desde el
+    // cutover del 2026-10-19). entregada→despachada no reingresa.
+    let reingresoDespachoAtomica = null
+    const reingresoCandidate = desp.estado === 'despachada' && ['pendiente', 'anulada'].includes(nuevoEstado)
+    if (reingresoCandidate) {
+      const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/revertir_despacho_inventario_atomica`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          p_despacho_id: despachoId,
+          p_nuevo_estado: nuevoEstado,
+          p_usuario_id: user.operator_id,
+          p_usuario_nombre: operador.nombre,
+          p_usuario_color: operador.color || null,
+        }),
+      })
+      const rpcText = await rpcRes.text()
+      let result = null
+      try { result = rpcText ? JSON.parse(rpcText) : null } catch { result = null }
+      if (!rpcRes.ok) {
+        const msgFalta = String(result?.message || rpcText || `HTTP ${rpcRes.status}`)
+        // Compatibilidad de rollout (igual que en el principal): sin la RPC del
+        // release 17 tampoco hubo egreso al aprobar, así que no hay que reingresar.
+        const faltaRelease17 = msgFalta.includes('Could not find the function') || msgFalta.includes('PGRST202')
+        if (!faltaRelease17) {
+          return jsonError(`No se pudo revertir el despacho con reingreso atómico: ${msgFalta}`, 400, request)
+        }
+        console.warn(`[RELEASE17-FALLBACK] revertir_despacho_inventario_atomica ausente; se omite el reingreso del despacho ${despachoId}.`)
+      } else if (!result?.ok) {
+        return jsonError('La RPC no confirmó el reingreso atómico', 500, request)
+      } else {
+        reingresoDespachoAtomica = result
+      }
+    }
+
     // 4. Actualizar estado
     const updateData = { estado: nuevoEstado };
     const ahora = new Date().toISOString();
@@ -1779,7 +1829,9 @@ export async function handleActualizarEstadoDespacho(request, env) {
       ok: true,
       nuevoEstado,
       idempotencyKey,
-      inventario_atomico: Boolean(entregaFinanzasAtomica || esReversionEntregaAtomica),
+      inventario_atomico: Boolean(entregaFinanzasAtomica || esReversionEntregaAtomica || reingresoDespachoAtomica),
+      reingreso_inventario: Boolean(reingresoDespachoAtomica),
+      reingreso_movimientos: reingresoDespachoAtomica?.movimientos ?? null,
       bloqueo_stock_aprobacion: aprobacionAtomica ? 'sql_atomic' : null,
       bloqueo_productos: aprobacionAtomica?.productos ?? null,
       stock_faltantes: aprobacionAtomica?.faltantes ?? null,
