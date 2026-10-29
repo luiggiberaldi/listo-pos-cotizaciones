@@ -30,7 +30,8 @@ export default function QuickQuoteFAB() {
   }, [location.pathname])
 
   // No mostrar en cotizaciones, venta rápida, ni en login
-  const hiddenPaths = ['/cotizaciones', '/venta-rapida', '/login']
+  // En Reportes el botón tapaba montos de las tablas en el celular.
+  const hiddenPaths = ['/cotizaciones', '/venta-rapida', '/login', '/reportes']
   if (hiddenPaths.some(p => location.pathname.startsWith(p))) return null
 
   function go(path) {

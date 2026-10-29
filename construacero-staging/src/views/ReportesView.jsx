@@ -23,6 +23,7 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import EmptyState from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
+import TarjetaMovil, { ListaMovil } from '../components/reportes/TarjetaMovil'
 import CustomSelect from '../components/ui/CustomSelect'
 import KpiCards from '../components/reportes/KpiCards'
 import TablaVendedores from '../components/reportes/TablaVendedores'
@@ -218,7 +219,7 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
                 <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm shrink-0" style={{ background: color }} />
                   <span className="font-semibold text-slate-700 truncate">{fp.formaPago}</span>
-                  <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold shrink-0">{fp.count}</span>
+                  <span className="text-[10px] sm:text-[10px] text-slate-400 font-bold shrink-0">{fp.count}</span>
                 </div>
                 <div className="flex flex-col items-end shrink-0">
                   <div className="flex items-center gap-1.5 sm:gap-2">
@@ -238,7 +239,7 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
               {Array.isArray(fp.pagos) && fp.pagos.length > 0 && (
                 <div className="pl-4 pt-1 space-y-0.5">
                   {fp.pagos.map((p, pIdx) => (
-                    <div key={pIdx} className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 font-medium bg-slate-50/50 hover:bg-slate-50 px-1.5 py-0.5 rounded border border-transparent hover:border-slate-100">
+                    <div key={pIdx} className="flex justify-between text-[10px] sm:text-[10px] text-slate-500 font-medium bg-slate-50/50 hover:bg-slate-50 px-1.5 py-0.5 rounded border border-transparent hover:border-slate-100">
                       <span className="truncate max-w-[200px] sm:max-w-[280px]">
                         {p.es_reembolso ? (
                           <span className="text-rose-600 font-bold">
@@ -309,7 +310,7 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
         {/* Desglose explicativo */}
         {kpis && (
           <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-1.5 text-[10px] sm:text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl">
-            <p className="font-extrabold text-slate-700 uppercase tracking-wider text-[8px] sm:text-[9px] mb-1">
+            <p className="font-extrabold text-slate-700 uppercase tracking-wider text-[10px] sm:text-[10px] mb-1">
               Desglose de la Diferencia (Recaudación vs Ventas Netas):
             </p>
             <div className="flex justify-between items-center">
@@ -436,7 +437,7 @@ function BarSection({ icon: Icon, iconColor, title, data, labelKey, countKey, co
                 <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm shrink-0" style={{ background: color }} />
                   <span className="font-semibold text-slate-700 truncate">{label}</span>
-                  <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold shrink-0">{d[countKey]} {countSuffix}</span>
+                  <span className="text-[10px] sm:text-[10px] text-slate-400 font-bold shrink-0">{d[countKey]} {countSuffix}</span>
                 </div>
                 <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   <span className="text-[10px] sm:text-xs text-slate-400">{pct.toFixed(0)}%</span>
@@ -851,12 +852,12 @@ function TabVentas({ configNeg }) {
                             {d.despacho_numero || '—'}
                           </span>
                           {d.es_prestamo_puro && (
-                            <span className="text-[8px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
+                            <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
                               Préstamo
                             </span>
                           )}
                           {d.es_prestamo_mixto && (
-                            <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
+                            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
                               Mixto
                             </span>
                           )}
@@ -870,7 +871,7 @@ function TabVentas({ configNeg }) {
                       <td className="px-3 py-2.5 font-bold text-slate-800 truncate max-w-[150px]">
                         {d.cliente_nombre || 'Sin cliente'}
                         {d.cliente_tipo_cliente === 'personal' && (
-                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
                             Personal
                           </span>
                         )}
@@ -891,7 +892,7 @@ function TabVentas({ configNeg }) {
                               const tasa = Number(d.tasa)
                               const montoBs = tasa > 0 ? Number(fp.monto) * tasa : null
                               return (
-                                <span key={idx} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border ${METODO_PAGOS_STYLES[fp.metodo] || METODO_PAGOS_STYLES['Sin especificar']}`}>
+                                <span key={idx} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black tracking-wide border ${METODO_PAGOS_STYLES[fp.metodo] || METODO_PAGOS_STYLES['Sin especificar']}`}>
                                   {fp.metodo}: ${Number(fp.monto).toLocaleString('es-VE', { maximumFractionDigits: 2 })}{fp.referencia ? ` (Ref: ${fp.referencia})` : ''}
                                   {['Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.metodo) && montoBs !== null && (
                                     <span className="opacity-80 font-bold ml-1">
@@ -972,7 +973,7 @@ function TabVentas({ configNeg }) {
                         <td className="px-3 py-2.5 font-bold text-slate-800 truncate max-w-[180px]">
                           {dev.cliente_nombre || 'Sin cliente'}
                           {dev.cliente_tipo_cliente === 'personal' && (
-                            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
+                            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
                               Personal
                             </span>
                           )}
@@ -987,7 +988,7 @@ function TabVentas({ configNeg }) {
                           {dev.creado_en ? new Date(dev.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'}
                         </td>
                         <td className="px-3 py-2.5">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border ${METODO_PAGOS_STYLES[dev.forma_pago_abono] || 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black tracking-wide border ${METODO_PAGOS_STYLES[dev.forma_pago_abono] || 'bg-slate-50 text-slate-600 border-slate-100'}`}>
                             {dev.forma_pago_abono || 'Sin especificar'}
                           </span>
                         </td>
@@ -1356,26 +1357,26 @@ function TabComisiones({ configNeg }) {
             </div>
 
             {/* Grupo de Acciones y Selector de Tasa Euro / USDT */}
-            <div className="flex flex-wrap items-center gap-2.5 ml-auto shrink-0 self-end">
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shrink-0 h-9">
+            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto sm:ml-auto sm:shrink-0 self-end">
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold h-9 flex-1 sm:flex-none min-w-0">
                 <button
                   type="button"
                   onClick={() => setTipoTasaComision('euro')}
-                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 sm:flex-none justify-center px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Calcular comisiones con tasa Euro Oficial BCV"
                 >
                   <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
-                  <span>Euro BCV:</span>
+                  <span className="hidden sm:inline">Euro BCV:</span>
                   <b>{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
                 </button>
                 <button
                   type="button"
                   onClick={() => setTipoTasaComision('usdt')}
-                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 sm:flex-none justify-center px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Calcular comisiones con tasa USDT (Binance P2P)"
                 >
                   <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
-                  <span>USDT:</span>
+                  <span className="hidden sm:inline">USDT:</span>
                   <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
                 </button>
               </div>
@@ -1545,12 +1546,12 @@ function TabComisiones({ configNeg }) {
                   </div>
                   {/* Comisión periodo (solo lectura) */}
                   <div className="flex flex-col items-start">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide mb-0.5">Comisión Periodo</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-0.5">Comisión Periodo</label>
                     <span className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">${comisionGen.toFixed(2)}</span>
                   </div>
                   {/* CxC input */}
                   <div className="flex flex-col items-start">
-                    <label className="text-[9px] font-black text-amber-600 uppercase tracking-wide mb-0.5">Comisión CxC ($)</label>
+                    <label className="text-[10px] font-black text-amber-600 uppercase tracking-wide mb-0.5">Comisión CxC ($)</label>
                     <input
                       type="number"
                       min="0"
@@ -1563,7 +1564,7 @@ function TabComisiones({ configNeg }) {
                   </div>
                   {/* Descuento Carro input */}
                   <div className="flex flex-col items-start">
-                    <label className="text-[9px] font-black text-red-600 uppercase tracking-wide mb-0.5">Descuento Carro ($)</label>
+                    <label className="text-[10px] font-black text-red-600 uppercase tracking-wide mb-0.5">Descuento Carro ($)</label>
                     <input
                       type="number"
                       min="0"
@@ -1576,12 +1577,12 @@ function TabComisiones({ configNeg }) {
                   </div>
                   {/* Total a pagar calculado */}
                   <div className="flex flex-col items-start ml-auto">
-                    <label className="text-[9px] font-black text-indigo-500 uppercase tracking-wide mb-0.5">Total a Pagar</label>
+                    <label className="text-[10px] font-black text-indigo-500 uppercase tracking-wide mb-0.5">Total a Pagar</label>
                     <span className="text-sm font-black text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1">${totalPagar.toFixed(2)}</span>
                   </div>
                   {tasa > 0 && (
                     <div className="flex flex-col items-start">
-                      <label className="text-[9px] font-black text-emerald-600 uppercase tracking-wide mb-0.5">Total en Bs ({tipoTasaLabel})</label>
+                      <label className="text-[10px] font-black text-emerald-600 uppercase tracking-wide mb-0.5">Total en Bs ({tipoTasaLabel})</label>
                       <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">Bs {(totalPagar * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   )}
@@ -1697,7 +1698,7 @@ function TabComisiones({ configNeg }) {
   <h4 className="font-bold text-slate-800 truncate group-hover:text-amber-600 transition-colors">{v.nombre}</h4>
   <div className="flex flex-col gap-0.5 mt-0.5">
     <span className="text-xs text-slate-500 font-medium">{v.cantidad} despachos únicos</span>
-    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5 w-fit">
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5 w-fit">
       💼 Externo (+{v.markup_pct}%)
     </span>
   </div>
@@ -1943,7 +1944,7 @@ function TabCredito() {
       className={`flex items-center gap-0.5 hover:text-slate-700 transition-colors ${sortBy === col ? 'text-slate-800 font-black' : 'text-slate-400 font-semibold'}`}
     >
       {label}
-      <span className="text-[9px] ml-0.5">{sortBy === col ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}</span>
+      <span className="text-[10px] ml-0.5">{sortBy === col ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}</span>
     </button>
   )
 
@@ -1983,7 +1984,7 @@ function TabCredito() {
                   <div className="flex items-center gap-1.5">
                     <div className="text-xs font-bold text-slate-800">{alerta.cliente_nombre}</div>
                     {alerta.metodo_pago === 'cod' && (
-                      <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase border border-blue-200 shrink-0">
+                      <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-1.5 py-0.5 rounded uppercase border border-blue-200 shrink-0">
                         COD
                       </span>
                     )}
@@ -2104,7 +2105,34 @@ function TabCredito() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Celular: una tarjeta por cliente con el saldo a la vista */}
+            <ListaMovil>
+              {clientesOrdenados.map(c => {
+                const saldo = Number(c.saldo_pendiente)
+                const dias = c.diasSinPago ?? 0
+                const riesgo = riesgoCliente(dias)
+                const esCod = c.cargosActivos && c.cargosActivos.some(car => car.metodo_pago === 'cod')
+                return (
+                  <TarjetaMovil
+                    key={c.id}
+                    titulo={c.nombre}
+                    insignia={esCod ? <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-1.5 py-0.5 rounded border border-blue-200">COD</span> : null}
+                    subtitulo={c.vendedor ? `Vendedor: ${c.vendedor.nombre}` : null}
+                    monto={fmtUsd(saldo)}
+                    montoEtiqueta="Saldo"
+                    montoClase={saldo > 0 ? 'text-red-600' : 'text-emerald-600'}
+                    detalles={[
+                      { label: 'Riesgo', valor: <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${riesgo.bg} ${riesgo.text}`}>{riesgo.label}</span> },
+                      { label: 'Antigüedad', valor: `${dias} días`, clase: dias > 60 ? 'text-red-600' : dias > 30 ? 'text-amber-600' : 'text-slate-700' },
+                      { label: 'Vence', valor: c.diasRestantes === null ? '—' : c.diasRestantes < 0 ? `Vencido (${Math.abs(c.diasRestantes)} d)` : c.diasRestantes === 0 ? 'Hoy' : `En ${c.diasRestantes} días`, clase: c.diasRestantes !== null && c.diasRestantes <= 0 ? 'text-red-600' : 'text-slate-700' },
+                      { label: 'Otorgado', valor: fmtUsd(c.monto_otorgado || 0) },
+                      (rango?.from || rango?.to) ? { label: 'Cobrado', valor: fmtUsd(c.monto_cobrado || 0), clase: 'text-emerald-600' } : null,
+                    ]}
+                  />
+                )
+              })}
+            </ListaMovil>
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -2138,7 +2166,7 @@ function TabCredito() {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <p className="font-bold text-slate-800 leading-tight">{c.nombre}</p>
                             {c.cargosActivos && c.cargosActivos.some(car => car.metodo_pago === 'cod') && (
-                              <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
+                              <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
                                 COD
                               </span>
                             )}
@@ -2249,7 +2277,29 @@ function TabCredito() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Celular: un abono por tarjeta */}
+              <ListaMovil>
+                {abonos.map(a => {
+                  const numDes = a.despacho?.numero
+                    ? `DES-${String(a.despacho.numero).padStart(5, '0')}`
+                    : (a.despacho?.cotizacion?.numero ? `COT-${String(a.despacho.cotizacion.numero).padStart(5, '0')}` : '—')
+                  return (
+                    <TarjetaMovil
+                      key={a.id}
+                      titulo={a.cliente?.nombre || 'Desconocido'}
+                      subtitulo={new Date(a.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      monto={`+${fmtUsd(a.monto_usd)}`}
+                      montoClase="text-emerald-600"
+                      detalles={[
+                        { label: 'Método', valor: formatMetodoPago(a.forma_pago_abono || a.metodo_pago) },
+                        { label: 'Despacho', valor: numDes },
+                        { label: 'Referencia', valor: `${a.referencia ? `Ref: ${a.referencia} · ` : ''}${a.descripcion || 'Sin descripción'}`, ancho: true, clase: 'text-slate-500 font-normal italic' },
+                      ]}
+                    />
+                  )
+                })}
+              </ListaMovil>
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -2315,7 +2365,24 @@ function TabCredito() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Celular: un proveedor por tarjeta */}
+          <ListaMovil>
+            {proveedoresOrdenados.map(p => (
+              <TarjetaMovil
+                key={p.id}
+                titulo={p.nombre}
+                subtitulo={[p.tipo_proveedor, p.ciudad ? `${p.ciudad}, ${p.estado}` : null].filter(Boolean).join(' · ')}
+                monto={fmtUsd(Number(p.saldo_pendiente))}
+                montoEtiqueta="Por pagar"
+                montoClase="text-purple-600"
+                detalles={[
+                  p.telefono ? { label: 'Teléfono', valor: p.telefono } : null,
+                  p.email ? { label: 'Correo', valor: p.email } : null,
+                ]}
+              />
+            ))}
+          </ListaMovil>
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -2564,7 +2631,25 @@ function TabArticulosExternos({ configNeg }) {
 
       {/* Tabla */}
       <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Celular: un artículo por tarjeta, con el total a la vista */}
+        <ListaMovil vacio={<p className="px-2 py-6 text-center text-slate-400 text-xs font-medium">No se encontraron artículos externos vendidos en el periodo seleccionado.</p>}>
+          {itemsFiltrados.map((item, idx) => (
+            <TarjetaMovil
+              key={idx}
+              titulo={item.articulo_nombre}
+              subtitulo={`${item.articulo_codigo || 'Sin código'} · Despacho #${item.despacho_numero} · ${new Date(item.fecha).toLocaleDateString('es-VE')}`}
+              monto={fmtUsd(item.total_usd)}
+              montoEtiqueta="Total"
+              detalles={[
+                { label: 'Cantidad', valor: Number(item.cantidad || 0) % 1 === 0 ? Number(item.cantidad || 0).toFixed(0) : Number(item.cantidad || 0).toFixed(2) },
+                { label: 'Precio unit.', valor: fmtUsd(item.precio_unit_usd) },
+                { label: 'Cliente', valor: item.cliente_nombre },
+                { label: 'Asesor', valor: item.asesor_nombre },
+              ]}
+            />
+          ))}
+        </ListaMovil>
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">

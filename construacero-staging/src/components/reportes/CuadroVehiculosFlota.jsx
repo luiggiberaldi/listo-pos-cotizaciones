@@ -12,6 +12,7 @@ import {
   num, totalesVehiculos, variacion, porcentaje, diasDelPeriodo, textoDestinos, MARCA_ESTIMADO,
 } from '../../utils/flotaReporte'
 import { nombreVehiculo } from '../../utils/vehiculoImpreso'
+import TarjetaMovil from './TarjetaMovil'
 
 function fmt(n) {
   return num(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -47,7 +48,27 @@ function TablaViajes({ viajes = [], isLoading, mostrarCamion = false }) {
   if (isLoading) return <p className="text-xs text-slate-400 py-2">Cargando viajes...</p>
   if (viajes.length === 0) return <p className="text-xs text-slate-400 py-2">Sin viajes en el período.</p>
   return (
-    <div className="overflow-x-auto">
+    <>
+    <div className="sm:hidden space-y-2">
+      {viajes.map(v => (
+        <TarjetaMovil
+          key={v.despacho_id}
+          titulo={`DES-${String(v.numero).padStart(5, '0')}${v.vehiculo_origen === 'backfill' ? ` ${MARCA_ESTIMADO}` : ''}`}
+          subtitulo={`${fechaCorta(v.fecha)} · ${v.cliente_nombre || '—'}`}
+          monto={`$${fmt(v.empresa_usd)}`}
+          montoEtiqueta="Empresa"
+          montoClase="text-emerald-700"
+          detalles={[
+            { label: 'Destino', valor: [v.ciudad, v.estado_destino].filter(Boolean).join(', ') || '—' },
+            { label: 'Chofer', valor: v.chofer_nombre || '—' },
+            mostrarCamion ? { label: 'Camión', valor: v.vehiculo_codigo || 'Sin camión' } : null,
+            { label: 'Flete', valor: `$${fmt(v.flete_usd)}` },
+            { label: 'Para el chofer', valor: `$${fmt(v.chofer_usd)}`, clase: 'text-amber-700' },
+          ]}
+        />
+      ))}
+    </div>
+    <div className="hidden sm:block overflow-x-auto">
       <table className="w-full text-xs">
         <thead className="text-slate-400 uppercase text-[10px]">
           <tr>
@@ -84,6 +105,7 @@ function TablaViajes({ viajes = [], isLoading, mostrarCamion = false }) {
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 
@@ -173,7 +195,40 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
         {porVehiculo.length === 0 ? (
           <div className="text-center py-8 text-slate-400 text-sm">No hay vehículos registrados todavía</div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Celular: un camión por tarjeta; al tocarla se abre su detalle */}
+          <div className="sm:hidden space-y-2 p-2">
+            {porVehiculo.map(v => {
+              const estaAbierto = abierto === v.vehiculo_id
+              const ant = anteriorPorId[v.vehiculo_id]
+              return (
+                <TarjetaMovil
+                  key={v.vehiculo_id}
+                  onClick={() => setAbierto(estaAbierto ? null : v.vehiculo_id)}
+                  abierto={estaAbierto}
+                  titulo={nombreVehiculo(v)}
+                  insignia={v.activo === false ? <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase">Inactivo</span> : null}
+                  subtitulo={`${v.placa}${v.placa_batea ? ` · batea ${v.placa_batea}` : ''}`}
+                  monto={`${num(v.total_viajes)} viaje${num(v.total_viajes) === 1 ? '' : 's'}`}
+                  montoEtiqueta={`${porcentaje(v.total_viajes, tot.viajes)}% del total`}
+                  detalles={[
+                    { label: 'Días trabajados', valor: `${num(v.dias_trabajados)}${diasPeriodo ? ` de ${diasPeriodo}` : ''}` },
+                    hayAnterior ? { label: 'Vs. anterior', valor: <Variacion actual={v.total_viajes} anterior={ant?.total_viajes} hayAnterior={hayAnterior} /> } : null,
+                    { label: 'Fletes', valor: `$${fmt(v.total_flete_usd)}` },
+                    { label: 'Para la empresa', valor: `$${fmt(v.empresa_usd)}`, clase: 'text-emerald-700' },
+                    { label: 'Último viaje', valor: v.ultimo_viaje_en ? `${fechaCorta(v.ultimo_viaje_en)} · ${v.ultimo_chofer_nombre || '—'}` : 'Sin viajes', ancho: true },
+                  ]}
+                >
+                  {estaAbierto ? <DetalleCamion vehiculo={v} desde={desde} hasta={hasta} rol={rol} /> : null}
+                </TarjetaMovil>
+              )
+            })}
+            <div className="px-2 pt-1 text-xs font-bold text-slate-700 flex justify-between">
+              <span>Total · {tot.viajes} viajes</span>
+              <span className="text-emerald-700">${fmt(totEmpresa)} empresa</span>
+            </div>
+          </div>
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-slate-500 text-xs uppercase">
                 <tr>
@@ -201,7 +256,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                             {estaAbierto ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
                             {nombreVehiculo(v)}
                             {v.activo === false && (
-                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[9px] font-bold uppercase">Inactivo</span>
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase">Inactivo</span>
                             )}
                           </div>
                           <div className="text-[10px] text-slate-500 pl-5">
@@ -250,6 +305,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
               </tfoot>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>

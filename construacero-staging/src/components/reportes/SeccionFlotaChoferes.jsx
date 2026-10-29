@@ -12,6 +12,7 @@ import {
 } from '../../utils/flotaReporte'
 import Skeleton from '../ui/Skeleton'
 import CuadroVehiculosFlota from './CuadroVehiculosFlota'
+import TarjetaMovil, { ListaMovil } from './TarjetaMovil'
 import { nombreVehiculo } from '../../utils/vehiculoImpreso'
 
 function fmt(n) {
@@ -85,7 +86,28 @@ export default function SeccionFlotaChoferes({ rango }) {
             {porChofer.length === 0 ? (
               <div className="text-center py-8 text-slate-400 text-sm">No hay choferes locales registrados</div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              {/* Celular: un chofer por tarjeta */}
+              <ListaMovil>
+                {porChofer.map(c => (
+                  <TarjetaMovil
+                    key={c.transportista_id}
+                    titulo={c.chofer_nombre}
+                    insignia={c.activo === false ? <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase">Inactivo</span> : null}
+                    subtitulo={c.vehiculo_habitual_nombre ? `Fijo: ${c.vehiculo_habitual_nombre} (${c.vehiculo_habitual_placa || 'S/P'})` : 'Rotativo'}
+                    monto={`${num(c.total_viajes)} viaje${num(c.total_viajes) === 1 ? '' : 's'}`}
+                    montoEtiqueta={`Carabobo ${num(c.viajes_en_carabobo)} · fuera ${num(c.viajes_fuera_carabobo)}`}
+                    detalles={[
+                      { label: 'Fletes', valor: `$${fmt(c.total_flete_usd)}` },
+                      { label: 'Mercancía', valor: `$${fmt(c.total_mercancia_usd)}` },
+                      { label: 'Para el chofer', valor: `$${fmt(c.comision_generada_usd)}`, clase: 'text-amber-700' },
+                      { label: 'Para la empresa', valor: `$${fmt(num(c.total_flete_usd) - num(c.comision_generada_usd))}`, clase: 'text-emerald-700' },
+                      (c.desglose_vehiculos || []).length ? { label: 'Vehículos usados', valor: c.desglose_vehiculos.map(d => `${d.vehiculo_nombre}: ${num(d.viajes)}`).join(' · '), ancho: true } : null,
+                    ]}
+                  />
+                ))}
+              </ListaMovil>
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-slate-500 text-xs uppercase">
                     <tr>
@@ -106,7 +128,7 @@ export default function SeccionFlotaChoferes({ rango }) {
                           <div className="font-semibold text-slate-800 flex items-center gap-1.5">
                             {c.chofer_nombre}
                             {c.activo === false && (
-                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[9px] font-bold uppercase">Inactivo</span>
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase">Inactivo</span>
                             )}
                           </div>
                           <div className="text-[10px] text-slate-500">
@@ -143,6 +165,7 @@ export default function SeccionFlotaChoferes({ rango }) {
                   </tfoot>
                 </table>
               </div>
+              </>
             )}
           </div>
 

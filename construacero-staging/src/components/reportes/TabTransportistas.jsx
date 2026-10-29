@@ -13,6 +13,7 @@ import BarraPeriodoReporte from './BarraPeriodoReporte'
 import { getDayRange } from '../../utils/dateHelpers'
 import SeccionFlotaChoferes from './SeccionFlotaChoferes'
 import Skeleton from '../ui/Skeleton'
+import TarjetaMovil, { ListaMovil } from './TarjetaMovil'
 
 function fmt(n) {
   const v = Number(n) || 0
@@ -119,7 +120,35 @@ export default function TabTransportistas() {
       ) : filas.length === 0 ? (
         <div className="text-center py-12 text-slate-400 text-sm">No hay transportistas locales en el sistema</div>
       ) : (
-        <div className="overflow-x-auto bg-white border border-slate-200 rounded-2xl">
+        <>
+        {/* Celular: un chofer por tarjeta, con lo que queda para la empresa a la vista */}
+        <div className="sm:hidden bg-white border border-slate-200 rounded-2xl">
+          <ListaMovil>
+            {filas.map(t => {
+              const r = repartoFlete(t)
+              return (
+                <TarjetaMovil
+                  key={t.id}
+                  titulo={t.nombre}
+                  insignia={t.activo === false ? <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase">Inactivo</span> : null}
+                  subtitulo={`${num(t.despachos)} despacho${num(t.despachos) === 1 ? '' : 's'}${Number(t.despachos_nomina) > 0 ? ` · ${t.despachos_nomina} en Carabobo (nómina)` : ''}`}
+                  monto={`$${fmt(r.empresa)}`}
+                  montoEtiqueta="Para la empresa"
+                  montoClase="text-emerald-700"
+                  detalles={[
+                    { label: 'Total fletes', valor: `$${fmt(r.total)}` },
+                    { label: 'Para el chofer', valor: `$${fmt(r.chofer)}`, clase: 'text-amber-700' },
+                  ]}
+                />
+              )
+            })}
+          </ListaMovil>
+          <div className="px-4 py-2 border-t border-slate-100 text-xs font-bold text-slate-700 flex justify-between">
+            <span>Total · {filas.reduce((n, t) => n + (Number(t.despachos) || 0), 0)} despachos</span>
+            <span className="text-emerald-700">${fmt(totales.empresa)} empresa</span>
+          </div>
+        </div>
+        <div className="hidden sm:block overflow-x-auto bg-white border border-slate-200 rounded-2xl">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
               <tr>
@@ -139,7 +168,7 @@ export default function TabTransportistas() {
                       <div className="font-semibold text-slate-800 flex items-center gap-1.5">
                         <span>{t.nombre}</span>
                         {t.activo === false && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[9px] font-bold uppercase">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase">
                             Inactivo
                           </span>
                         )}
@@ -176,6 +205,7 @@ export default function TabTransportistas() {
             </tfoot>
           </table>
         </div>
+        </>
       )}
 
       {/* Fase 4 del plan de flota: productividad por vehículo y por chofer local */}

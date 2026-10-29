@@ -92,12 +92,12 @@ export default function DateRangeSelector({ value, onChange }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide pb-0.5">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pb-0.5">
         <Calendar size={12} className="text-slate-400 shrink-0 sm:w-3.5 sm:h-3.5" />
         {PRESETS.map(p => (
           <button key={p.id}
             onClick={() => selectPreset(p)}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
               activePresetId === p.id && !showCustom
                 ? 'bg-primary text-white border-primary'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
@@ -111,7 +111,7 @@ export default function DateRangeSelector({ value, onChange }) {
             setShowCustom(true)
             setActivePresetId('')
           }}
-          className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
+          className={`px-2.5 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
             customActivo
               ? 'bg-primary text-white border-primary'
               : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
@@ -123,7 +123,7 @@ export default function DateRangeSelector({ value, onChange }) {
       {showCustom && (
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 mt-2 transition-all duration-300">
           <div className="flex flex-col flex-1 min-w-0">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Desde</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Desde</span>
             <input type="date" value={localFrom}
               max={localTo || undefined}
               onChange={e => setLocalFrom(e.target.value)}
@@ -131,7 +131,7 @@ export default function DateRangeSelector({ value, onChange }) {
           </div>
           <span className="hidden sm:inline text-[10px] text-slate-400 shrink-0 mb-2.5">→</span>
           <div className="flex flex-col flex-1 min-w-0">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Hasta</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Hasta</span>
             <input type="date" value={localTo}
               min={localFrom || undefined}
               onChange={e => setLocalTo(e.target.value)}
