@@ -240,8 +240,8 @@ export default function VehiculosFranja() {
                 <p className="flex items-start gap-1">
                   <User size={11} className="text-slate-400 shrink-0 mt-0.5" />
                   <span>
-                    {(v.choferes_asignados || []).length > 0
-                      ? <>Chofer: <span className="font-semibold text-slate-700">{v.choferes_asignados.map(c => c.nombre).join(', ')}</span></>
+                    {(v.choferes_asignados || []).filter(c => c.activo !== false).length > 0
+                      ? <>Chofer: <span className="font-semibold text-slate-700">{v.choferes_asignados.filter(c => c.activo !== false).map(c => c.nombre).join(', ')}</span></>
                       : <span className="text-slate-400">Sin chofer asignado</span>}
                   </span>
                 </p>

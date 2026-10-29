@@ -40,7 +40,8 @@ export default function SeccionFlotaChoferes({ rango }) {
   if (!puedeVerReporteFlota(perfil?.rol)) return null
 
   const porVehiculo = data?.porVehiculo ?? []
-  const porChofer = data?.porChofer ?? []
+  // Choferes dados de baja sin viajes en el período no aportan nada al cuadro.
+  const porChofer = (data?.porChofer ?? []).filter(c => c.activo !== false || num(c.total_viajes) > 0)
   const totV = totalesVehiculos(porVehiculo)
   const totC = totalesChoferes(porChofer)
   const hayEstimados = totV.estimados > 0 || porChofer.some(c => num(c.viajes_estimados) > 0)

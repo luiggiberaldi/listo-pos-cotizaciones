@@ -27,7 +27,10 @@ export function datosVehiculoImpreso(despacho) {
   const bateaFicha = String(transportista?.placa_batea || '').trim()
 
   return {
-    vehiculo: [vehiculo.codigo, vehiculo.nombre].filter(Boolean).join(' '),
+    // Si el nombre ya empieza con el código (p. ej. "CAM-01 NPR"), no repetirlo.
+    vehiculo: vehiculo.codigo && String(vehiculo.nombre || '').startsWith(vehiculo.codigo)
+      ? vehiculo.nombre
+      : [vehiculo.codigo, vehiculo.nombre].filter(Boolean).join(' '),
     placa_chuto: vehiculo.placa || '',
     // Batea de la ficha solo si es el mismo camión y no repite la placa principal.
     placa_batea: esSuHabitual && bateaFicha && bateaFicha.toUpperCase() !== placaVeh ? bateaFicha : '',

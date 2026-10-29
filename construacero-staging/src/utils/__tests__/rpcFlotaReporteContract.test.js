@@ -45,6 +45,21 @@ describe('RPC obtener_reporte_flota_y_choferes — métricas congeladas (R6/R7)'
   })
 })
 
+describe('Permisos de la tabla vehiculos (arreglo 284)', () => {
+  it('staging otorga CRUD al Worker y solo lectura al navegador', () => {
+    const m284 = leer('supabase/migrations/284_staging_flota_grants_vehiculos.sql')
+    expect(m284).toContain('GRANT SELECT, INSERT, UPDATE, DELETE ON public.vehiculos TO service_role')
+    expect(m284).toContain('GRANT SELECT ON public.vehiculos TO authenticated')
+    expect(m284).not.toMatch(/GRANT[^;]*(INSERT|UPDATE|DELETE)[^;]*TO authenticated/)
+  })
+
+  it('el paquete de producción ya trae los permisos (no repite el error de staging)', () => {
+    const apply = leer('../supabase/release/main/283_flota_vehiculos_locales_apply.sql')
+    expect(apply).toContain('GRANT SELECT, INSERT, UPDATE, DELETE ON public.vehiculos TO service_role')
+    expect(apply).toContain('GRANT SELECT ON public.vehiculos TO authenticated')
+  })
+})
+
 // Escenario del raíl R12: Juan y Pedro rotan entre CAM-01 y CAM-02.
 const porVehiculo = [
   {

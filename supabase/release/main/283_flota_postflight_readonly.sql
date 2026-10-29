@@ -6,6 +6,7 @@
 --   * columnas_nuevas = 4, funciones_283 = 4, trigger_despacho = 1
 --   * funciones_abiertas_a_navegador = 0   (solo service_role ejecuta; raíl R2)
 --   * escritura_directa_navegador = 0      (sin políticas INSERT/UPDATE/DELETE)
+--   * worker_puede_leer_y_escribir = true, navegador_puede_leer = true, navegador_puede_escribir_debe_ser_false = false
 --   * La huella del bloque 4 IGUAL a la del preflight (no se tocó dinero ni documentos).
 
 -- 1. Estructura
@@ -32,7 +33,12 @@ SELECT
     WHERE has_function_privilege('authenticated', f.sig, 'EXECUTE')
        OR has_function_privilege('anon', f.sig, 'EXECUTE')) AS funciones_abiertas_a_navegador,
   (SELECT count(*) FROM pg_policies
-    WHERE schemaname = 'public' AND tablename = 'vehiculos' AND cmd IN ('INSERT', 'UPDATE', 'DELETE')) AS escritura_directa_navegador;
+    WHERE schemaname = 'public' AND tablename = 'vehiculos' AND cmd IN ('INSERT', 'UPDATE', 'DELETE')) AS escritura_directa_navegador,
+  -- Esperado: true, true, false (sin esto /api/vehiculos/* falla con "permission denied")
+  (has_table_privilege('service_role', 'public.vehiculos', 'SELECT') AND has_table_privilege('service_role', 'public.vehiculos', 'INSERT')
+   AND has_table_privilege('service_role', 'public.vehiculos', 'UPDATE') AND has_table_privilege('service_role', 'public.vehiculos', 'DELETE')) AS worker_puede_leer_y_escribir,
+  has_table_privilege('authenticated', 'public.vehiculos', 'SELECT') AS navegador_puede_leer,
+  has_table_privilege('authenticated', 'public.vehiculos', 'INSERT') AS navegador_puede_escribir_debe_ser_false;
 
 -- 3. Resultado de la carga histórica
 SELECT

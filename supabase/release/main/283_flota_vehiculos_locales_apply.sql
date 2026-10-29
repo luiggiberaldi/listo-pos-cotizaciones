@@ -60,6 +60,11 @@ CREATE POLICY vehiculos_lectura ON public.vehiculos
   FOR SELECT TO authenticated
   USING (cuenta_id = auth.uid());
 
+-- Privilegios explícitos (este proyecto no los da por defecto a tablas nuevas;
+-- sin esto el Worker recibe "permission denied for table vehiculos"). Ver staging 284.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.vehiculos TO service_role;
+GRANT SELECT ON public.vehiculos TO authenticated;
+
 -- ============================================================================
 -- 2. VINCULACIONES (columnas nuevas, sin tocar datos existentes)
 -- ============================================================================
