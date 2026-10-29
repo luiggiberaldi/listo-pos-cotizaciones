@@ -24,6 +24,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
 import TarjetaMovil, { ListaMovil } from '../components/reportes/TarjetaMovil'
+import BarraPeriodoReporte from '../components/reportes/BarraPeriodoReporte'
 import CustomSelect from '../components/ui/CustomSelect'
 import KpiCards from '../components/reportes/KpiCards'
 import TablaVendedores from '../components/reportes/TablaVendedores'
@@ -143,7 +144,7 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = fals
             <Icon size={12} className="text-slate-600 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] sm:text-xs font-medium leading-tight truncate text-slate-500">{label}</p>
+            <p className="text-[11px] sm:text-xs font-medium leading-tight line-clamp-2 text-slate-500">{label}</p>
           </div>
         </div>
         <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-slate-900 relative z-10 truncate">{value}</p>
@@ -162,7 +163,7 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = fals
           <Icon size={12} className="text-white sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] sm:text-xs font-medium leading-tight truncate" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
+          <p className="text-[11px] sm:text-xs font-medium leading-tight line-clamp-2" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
         </div>
       </div>
       <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-white relative z-10 truncate">{value}</p>
@@ -684,126 +685,19 @@ function TabVentas({ configNeg }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-6">
-          <div className="w-full">
-            <div className="flex items-center gap-2 ml-1 mb-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo de ventas</label>
-              <span className="hidden sm:inline-flex text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
-                {rangoLabel}
-              </span>
-            </div>
-            <DateRangeSelector value={rango} onChange={setRango} />
-          </div>
-          
-          <div className="flex justify-end items-center gap-3 border-t border-slate-50 pt-4 relative">
-            
-            {/* BOTÓN IMPRIMIR PDF */}
-            <div className="relative">
-              <button
-                onClick={() => setShowPrintMenu(!showPrintMenu)}
-                disabled={exportando || !despachos.length}
-                className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
-              >
-                <Printer size={13} className="text-slate-500" />
-                {exportando ? 'Generando...' : 'Imprimir PDF'}
-                <ChevronDown size={13} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showPrintMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                    <button
-                      onClick={() => {
-                        setShowPrintMenu(false)
-                        exportarPDF('todos', 'imprimir')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
-                    >
-                      <FileText size={14} className="text-slate-400" />
-                      Imprimir PDF Completo
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowPrintMenu(false)
-                        exportarPDF('internos', 'imprimir')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                    >
-                      <UserCheck size={14} className="text-indigo-500" />
-                      Imprimir Solo Internos
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowPrintMenu(false)
-                        exportarPDF('externos', 'imprimir')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                    >
-                      <Globe size={14} className="text-amber-500" />
-                      Imprimir Solo Externos
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* BOTÓN DESCARGAR PDF */}
-            <div className="relative">
-              <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                disabled={exportando || !despachos.length}
-                className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40"
-                style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-              >
-                <Download size={13} />
-                {exportando ? 'Generando...' : 'Descargar PDF'}
-                <ChevronDown size={13} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showExportMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                    <button
-                      onClick={() => {
-                        setShowExportMenu(false)
-                        exportarPDF('todos', 'descargar')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
-                    >
-                      <FileText size={14} className="text-slate-400" />
-                      Descargar PDF Completo
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowExportMenu(false)
-                        exportarPDF('internos', 'descargar')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                    >
-                      <UserCheck size={14} className="text-indigo-500" />
-                      Descargar Solo Internos
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowExportMenu(false)
-                        exportarPDF('externos', 'descargar')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                    >
-                      <Globe size={14} className="text-amber-500" />
-                      Descargar Solo Externos
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-          </div>
-        </div>
-      </div>
+      <BarraPeriodoReporte
+        titulo="Periodo de ventas"
+        rango={rango}
+        onCambiarRango={setRango}
+        opciones={[
+          { id: 'todos', label: 'completo', icon: FileText },
+          { id: 'internos', label: 'solo internos', icon: UserCheck },
+          { id: 'externos', label: 'solo externos', icon: Globe },
+        ]}
+        onExportar={(opcion, accion) => exportarPDF(opcion, accion)}
+        exportando={exportando}
+        deshabilitado={!despachos.length}
+      />
 
       {despachos.length === 0 ? (
         <EmptyState icon={BarChart3} title="Sin ventas procesadas" description="No hay despachos aprobados o entregados en el periodo seleccionado." />
@@ -829,7 +723,29 @@ function TabVentas({ configNeg }) {
                 <h3 className="text-sm font-black text-slate-800">Últimos despachos procesados</h3>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            {/* Celular: un despacho por tarjeta, con el total a la vista */}
+            <ListaMovil>
+              {despachos.slice(0, 15).map((d, i) => (
+                <TarjetaMovil
+                  key={i}
+                  titulo={d.cliente_nombre || 'Sin cliente'}
+                  insignia={<span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${ESTADO_STYLES[d.estado] || 'bg-slate-100 text-slate-600'}`}>{d.estado === 'despachada' ? 'Aprobada' : d.estado === 'entregada' ? 'Entregada' : d.estado}</span>}
+                  subtitulo={`#${d.despacho_numero || '—'} · ${d.fecha ? new Date(d.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'} · ${d.asesor_nombre || 'Sin asesor'}${d.es_prestamo_puro ? ' · Préstamo' : d.es_prestamo_mixto ? ' · Mixto' : ''}`}
+                  monto={fmtUsd(d.venta_neta_usd)}
+                  montoEtiqueta={fmtBs(d.total_bs)}
+                  detalles={[
+                    {
+                      label: 'Forma de pago',
+                      ancho: true,
+                      valor: Array.isArray(d.forma_pago) && d.forma_pago.length > 0
+                        ? d.forma_pago.map(fp => `${fp.metodo}: $${Number(fp.monto).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`).join(' · ')
+                        : 'Pendiente',
+                    },
+                  ]}
+                />
+              ))}
+            </ListaMovil>
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="text-[10px] sm:text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -955,7 +871,24 @@ function TabVentas({ configNeg }) {
                   <h3 className="text-sm font-black text-slate-800">Devoluciones de Saldo a Favor (Reembolsos a Clientes)</h3>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              {/* Celular: una devolución por tarjeta */}
+              <ListaMovil>
+                {devoluciones.map((dev, i) => (
+                  <TarjetaMovil
+                    key={i}
+                    titulo={dev.cliente_nombre || 'Sin cliente'}
+                    subtitulo={`${dev.creado_en ? new Date(dev.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'} · ${dev.vendedor_nombre || '—'}`}
+                    monto={`-${fmtUsd(dev.monto_usd)}`}
+                    montoEtiqueta="Devuelto"
+                    montoClase="text-rose-600"
+                    detalles={[
+                      { label: 'Forma de pago', valor: dev.forma_pago_abono || 'Sin especificar' },
+                      { label: 'Referencia', valor: dev.referencia || dev.descripcion || '—' },
+                    ]}
+                  />
+                ))}
+              </ListaMovil>
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="text-[10px] sm:text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -1312,20 +1245,15 @@ function TabComisiones({ configNeg }) {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-3.5">
-          {/* Fila Superior: Periodo (con mucho espacio) */}
-          <div className="w-full">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Rango de Periodo</label>
-            <DateRangeSelector value={rango} onChange={setRango} />
-          </div>
-
-          {/* Fila Inferior: Otros Filtros y Acciones */}
-          <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between">
-            {/* Grupo de Filtros */}
-            <div className="flex flex-wrap items-end gap-3">
+      <BarraPeriodoReporte
+        titulo="Periodo de comisiones"
+        rango={rango}
+        onCambiarRango={setRango}
+        filtros={(
+<div className="flex flex-wrap items-end gap-3">
+<div className="flex flex-wrap items-end gap-3">
               {esAdmin && (
-                <div className="w-52">
+                <div className="w-full sm:w-52">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Vendedor</label>
                   <CustomSelect
                     options={[
@@ -1355,10 +1283,8 @@ function TabComisiones({ configNeg }) {
                 </div>
               </div>
             </div>
-
-            {/* Grupo de Acciones y Selector de Tasa Euro / USDT */}
-            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto sm:ml-auto sm:shrink-0 self-end">
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold h-9 flex-1 sm:flex-none min-w-0">
+<div className="flex w-full sm:w-auto sm:ml-auto self-end">
+<div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold h-9 flex-1 sm:flex-none min-w-0">
                 <button
                   type="button"
                   onClick={() => setTipoTasaComision('euro')}
@@ -1380,142 +1306,20 @@ function TabComisiones({ configNeg }) {
                   <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
                 </button>
               </div>
-
-              <div className="flex items-center gap-1.5 relative shrink-0">
-                {/* BOTÓN IMPRIMIR PDF */}
-                <div className="relative">
-                  {filtroVendedor ? (
-                    <button
-                      onClick={() => exportarPDF('todos', 'imprimir')}
-                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
-                    >
-                      <Printer size={12} className="text-slate-500" />
-                      <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setShowPrintMenu(!showPrintMenu)}
-                        disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
-                      >
-                        <Printer size={12} className="text-slate-500" />
-                        <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
-                        <ChevronDown size={12} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
-                      </button>
-
-                      {showPrintMenu && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
-                          <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-<button
-  onClick={() => {
-    setShowPrintMenu(false)
-    exportarPDF('todos', 'imprimir')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
->
-  <FileText size={13} className="text-slate-400" />
-  Imprimir PDF Completo
-</button>
-<button
-  onClick={() => {
-    setShowPrintMenu(false)
-    exportarPDF('internos', 'imprimir')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
->
-  <UserCheck size={13} className="text-indigo-500" />
-  Imprimir Solo Internos
-</button>
-<button
-  onClick={() => {
-    setShowPrintMenu(false)
-    exportarPDF('externos', 'imprimir')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
->
-  <Globe size={13} className="text-amber-500" />
-  Imprimir Solo Externos
-</button>
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* BOTÓN DESCARGAR PDF */}
-                <div className="relative">
-                  {filtroVendedor ? (
-                    <button
-                      onClick={() => exportarPDF('todos', 'descargar')}
-                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
-                      style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-                    >
-                      <Download size={12} />
-                      <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setShowExportMenu(!showExportMenu)}
-                        disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
-                        style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-                      >
-                        <Download size={12} />
-                        <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
-                        <ChevronDown size={12} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
-                      </button>
-
-                      {showExportMenu && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                          <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-<button
-  onClick={() => {
-    setShowExportMenu(false)
-    exportarPDF('todos', 'descargar')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
->
-  <FileText size={13} className="text-slate-400" />
-  Descargar PDF Completo
-</button>
-<button
-  onClick={() => {
-    setShowExportMenu(false)
-    exportarPDF('internos', 'descargar')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
->
-  <UserCheck size={13} className="text-indigo-500" />
-  Descargar Solo Internos
-</button>
-<button
-  onClick={() => {
-    setShowExportMenu(false)
-    exportarPDF('externos', 'descargar')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
->
-  <Globe size={13} className="text-amber-500" />
-  Descargar Solo Externos
-</button>
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+</div>
+</div>
+        )}
+        opciones={filtroVendedor
+          ? [{ id: 'todos', label: 'del vendedor', icon: FileText }]
+          : [
+            { id: 'todos', label: 'completo', icon: FileText },
+            { id: 'internos', label: 'solo internos', icon: UserCheck },
+            { id: 'externos', label: 'solo externos', icon: Globe },
+          ]}
+        onExportar={(opcion, accion) => exportarPDF(opcion, accion)}
+        exportando={exportando}
+        deshabilitado={comisiones.length === 0 || !tasaDisponible}
+      />
 
       {/* Panel de Ajustes Manuales para Reporte Resumido */}
       {formatoReporte === 'resumido' && !comisionesLoading && !isError && vendedoresAgrupados.length > 0 && (
@@ -1953,19 +1757,14 @@ function TabCredito() {
   return (
     <div className="space-y-4">
       {/* Selector de Rango de Fecha para Cobranza/Abonos */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-6">
-          <div className="w-full">
-            <div className="flex items-center gap-2 ml-1 mb-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo de Cobranza (Abonos)</label>
-              <span className="hidden sm:inline-flex text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
-                {rangoLabel}
-              </span>
-            </div>
-            <DateRangeSelector value={rango} onChange={setRango} />
-          </div>
-        </div>
-      </div>
+      <BarraPeriodoReporte
+        titulo="Periodo de cobranza (abonos)"
+        rango={rango}
+        onCambiarRango={setRango}
+        opciones={[{ id: 'detallado', label: 'cuentas por cobrar', icon: FileText }]}
+        onExportar={(opcion, accion) => exportarCxCPDF(opcion, accion)}
+        exportando={exportandoCxC}
+      />
 
       {/* Alertas de Vencimiento para Admin */}
       {esAdmin && alertasVencimiento?.length > 0 && (
@@ -2013,7 +1812,7 @@ function TabCredito() {
       )}
 
       {/* KPIs — 5 tarjetas */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 [&>*:last-child:nth-child(odd)]:col-span-2 md:[&>*:last-child:nth-child(odd)]:col-span-1">
         <KpiCard
           icon={DollarSign} label="Total por cobrar (CxC)"
           value={fmtUsd(totalCxC)}
@@ -2076,33 +1875,7 @@ function TabCredito() {
                 <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold">{clientesConDeuda.length}</span>
               </div>
 
-              <div className="flex items-center gap-2">
-                {/* BOTÓN IMPRIMIR */}
-                <button
-                  onClick={() => exportarCxCPDF('detallado', 'imprimir')}
-                  disabled={exportandoCxC}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-                  title="Imprimir Reporte CxC"
-                >
-                  <Printer size={13} className="text-slate-500" />
-                  <span className="hidden sm:inline">Imprimir</span>
-                </button>
-
-                {/* BOTÓN DESCARGAR */}
-                <button
-                  onClick={() => exportarCxCPDF('detallado', 'descargar')}
-                  disabled={exportandoCxC}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-                  title="Descargar Reporte CxC"
-                >
-                  {exportandoCxC ? (
-                    <Loader2 size={13} className="animate-spin text-white" />
-                  ) : (
-                    <Download size={13} className="text-white" />
-                  )}
-                  <span className="hidden sm:inline">{exportandoCxC ? 'Generando...' : 'Descargar'}</span>
-                </button>
-              </div>
+              {/* Imprimir/Descargar: en la barra de período de arriba */}
             </div>
 
             {/* Celular: una tarjeta por cliente con el saldo a la vista */}
@@ -2522,25 +2295,14 @@ function TabArticulosExternos({ configNeg }) {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-3.5">
-          {/* Fila Superior: Periodo (con mucho espacio) */}
-          <div className="w-full">
-            <div className="flex items-center gap-2 ml-1 mb-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo</label>
-              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
-                {rangoLabel}
-              </span>
-            </div>
-            <DateRangeSelector value={rango} onChange={setRango} />
-          </div>
-
-          {/* Fila Inferior: Otros Filtros y Acciones */}
-          <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between">
-            {/* Grupo de Filtros */}
-            <div className="flex flex-wrap items-end gap-3">
+      <BarraPeriodoReporte
+        titulo="Periodo"
+        rango={rango}
+        onCambiarRango={setRango}
+        filtros={(
+<div className="flex flex-wrap items-end gap-3">
               {/* Selector de Asesor */}
-              <div className="w-52">
+              <div className="w-full sm:w-52">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Asesor (Vendedor)</label>
                 <select
                   value={filtroAsesor}
@@ -2557,7 +2319,7 @@ function TabArticulosExternos({ configNeg }) {
               </div>
 
               {/* Búsqueda */}
-              <div className="w-60">
+              <div className="w-full sm:w-60">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Buscar</label>
                 <input
                   type="text"
@@ -2568,31 +2330,12 @@ function TabArticulosExternos({ configNeg }) {
                 />
               </div>
             </div>
-
-            {/* Grupo de Acciones */}
-            <div className="flex items-center gap-1.5 ml-auto shrink-0 self-end">
-              <button
-                onClick={() => exportarPDF('imprimir')}
-                disabled={exportando || !itemsFiltrados.length}
-                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
-              >
-                <Printer size={12} className="text-slate-500" />
-                <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
-              </button>
-
-              <button
-                onClick={() => exportarPDF('descargar')}
-                disabled={exportando || !itemsFiltrados.length}
-                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
-                style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-              >
-                <Download size={12} />
-                <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        )}
+        opciones={[{ id: 'todos', label: 'artículos externos', icon: FileText }]}
+        onExportar={(_opcion, accion) => exportarPDF(accion)}
+        exportando={exportando}
+        deshabilitado={!itemsFiltrados.length}
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -2751,14 +2494,14 @@ export default function ReportesView() {
       </div>
 
       {/* ── Tabs scrollable ────────────────────────────────────────────── */}
-      <div className="flex gap-1 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-hide">
+      <div className="flex flex-wrap gap-1.5 pb-0.5">
         {TABS.filter(t => !t.roles || t.roles.includes(perfil?.rol)).map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           return (
             <button key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${isActive
+              className={`flex items-center gap-1 sm:gap-1.5 px-3 py-2 min-h-[38px] sm:min-h-0 rounded-lg sm:rounded-xl text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${isActive
                   ? 'bg-primary text-white border-primary shadow-md'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                 }`}>

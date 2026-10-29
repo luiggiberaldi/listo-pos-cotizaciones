@@ -53,7 +53,7 @@ export default function KpiCards({ kpis }) {
   const hasDev = kpis.totalDevoluciones !== undefined
 
   return (
-    <div className={`grid grid-cols-2 md:grid-cols-3 ${hasDev ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3`}>
+    <div className={`grid grid-cols-2 md:grid-cols-3 ${hasDev ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 [&>*:last-child:nth-child(odd)]:col-span-2 md:[&>*:last-child:nth-child(odd)]:col-span-1`}>
       <KpiCard
         icon={DollarSign} label="Ventas Netas (Sin Flete)"
         value={fmtUsd(kpis.totalVentas)}

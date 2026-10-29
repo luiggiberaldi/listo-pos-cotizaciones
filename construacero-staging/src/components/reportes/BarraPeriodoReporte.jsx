@@ -13,6 +13,9 @@
 //   exportando    muestra "Generando..." y bloquea los botones
 //   deshabilitado bloquea los botones (p. ej. sin datos)
 //   acciones      nodos extra a la izquierda de los botones (p. ej. recargar)
+//   filtros       filtros propios de la pestaña (vendedor, formato, búsqueda...)
+//                 que van debajo de las fechas
+// Con una sola opción, los botones exportan directo (sin menú).
 import { useState } from 'react'
 import { Printer, Download, ChevronDown, FileText } from 'lucide-react'
 import DateRangeSelector from './DateRangeSelector'
@@ -30,26 +33,27 @@ function MenuExportar({ tipo, abierto, onAbrir, onCerrar, opciones, onElegir, ex
   const esImprimir = tipo === 'imprimir'
   const Icono = esImprimir ? Printer : Download
   const texto = esImprimir ? 'Imprimir PDF' : 'Descargar PDF'
+  const directo = opciones.length === 1
   return (
-    <div className="relative">
+    <div className="relative flex-1 sm:flex-none">
       <button
-        onClick={onAbrir}
+        onClick={directo ? () => onElegir(opciones[0].id, tipo) : onAbrir}
         disabled={exportando || deshabilitado}
         aria-haspopup="menu"
         aria-expanded={abierto}
         className={esImprimir
-          ? 'flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm'
-          : 'flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40'}
+          ? 'w-full sm:w-auto justify-center flex items-center gap-2 text-xs font-black px-4 sm:px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm'
+          : 'w-full sm:w-auto justify-center flex items-center gap-2 text-xs font-black px-4 sm:px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40'}
         style={esImprimir ? undefined : { background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
       >
         <Icono size={13} className={esImprimir ? 'text-slate-500' : undefined} />
-        <span className="hidden sm:inline">{exportando ? 'Generando...' : texto}</span>
-        <ChevronDown size={13} className={`transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
+        <span>{exportando ? 'Generando...' : texto}</span>
+        {!directo && <ChevronDown size={13} className={`transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />}
       </button>
-      {abierto && (
+      {abierto && !directo && (
         <>
           <div className="fixed inset-0 z-10" onClick={onCerrar} />
-          <div role="menu" className="absolute right-0 mt-2 w-64 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+          <div role="menu" className={`absolute ${esImprimir ? 'left-0 sm:left-auto sm:right-0' : 'right-0'} mt-2 w-64 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150`}>
             {opciones.map((op, i) => {
               const IconoOp = op.icon || FileText
               return (
@@ -83,6 +87,7 @@ export default function BarraPeriodoReporte({
   exportando = false,
   deshabilitado = false,
   acciones = null,
+  filtros = null,
 }) {
   const [menu, setMenu] = useState(null) // null | 'imprimir' | 'descargar'
   return (
@@ -98,8 +103,10 @@ export default function BarraPeriodoReporte({
           <DateRangeSelector value={rango} onChange={onCambiarRango} />
         </div>
 
+        {filtros && <div className="w-full -mt-2">{filtros}</div>}
+
         {opciones.length > 0 && (
-          <div className="flex justify-end items-center gap-3 border-t border-slate-50 pt-4 relative">
+          <div className="flex flex-wrap justify-end items-center gap-2 sm:gap-3 border-t border-slate-50 pt-4 relative">
             {acciones}
             <MenuExportar
               tipo="imprimir"

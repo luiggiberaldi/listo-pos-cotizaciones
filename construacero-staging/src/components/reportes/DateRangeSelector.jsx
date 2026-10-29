@@ -97,7 +97,7 @@ export default function DateRangeSelector({ value, onChange }) {
         {PRESETS.map(p => (
           <button key={p.id}
             onClick={() => selectPreset(p)}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
+            className={`px-3 py-1.5 min-h-[36px] sm:min-h-0 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
               activePresetId === p.id && !showCustom
                 ? 'bg-primary text-white border-primary'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'
@@ -111,7 +111,7 @@ export default function DateRangeSelector({ value, onChange }) {
             setShowCustom(true)
             setActivePresetId('')
           }}
-          className={`px-2.5 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
+          className={`px-3 py-1.5 min-h-[36px] sm:min-h-0 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
             customActivo
               ? 'bg-primary text-white border-primary'
               : 'bg-white text-slate-600 border-slate-200 hover:border-primary-focus'

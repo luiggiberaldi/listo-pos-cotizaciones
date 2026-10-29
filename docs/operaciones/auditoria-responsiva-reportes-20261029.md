@@ -85,3 +85,31 @@ para confirmar que su contenido no cambió.
 - **Ventas** no tenía ventas en el período, así que sus gráficos y tablas con datos no se vieron en el
   celular; se revisarán con datos en la fase 3.
 - Se usó el navegador de la app imitando un celular; conviene una prueba final en un teléfono real.
+
+---
+
+## Resultado — fases 1 a 4 aplicadas (2026-10-29)
+
+| Medida (celular 375 px) | Antes | Después |
+| :--- | :--- | :--- |
+| Pestañas cuya página se desliza de lado | 1 (Comisiones) | 0 |
+| Botones de PDF fuera de la pantalla | Comisiones | 0 (menús abiertos también caben) |
+| Tablas que esconden el monto | 7 (Crédito 3, Transportistas 3, Externos 1) + 2 de Ventas con datos | 0: todas son tarjetas con el monto a la vista |
+| Textos de 8–9 px | 29 | 0 |
+| Botones chicos (< 32 px) por pestaña | 14–17 | 1–3 |
+| Botón "+" tapando datos | Sí | Oculto en Reportes |
+
+**Qué cambió:**
+- Fase 1: tasas de Comisiones que se encogen, "+" oculto en Reportes, fechas en dos filas, letra mínima 10 px.
+- Fase 2: componente `TarjetaMovil` / `ListaMovil` (en celular cada fila es una tarjeta); aplicado a Crédito,
+  Artículos externos, Transportistas, flota y Ventas (despachos y devoluciones, vistos con datos de octubre).
+- Fase 3: las 5 pestañas usan `BarraPeriodoReporte` (período + filtros propios + "Imprimir PDF" /
+  "Descargar PDF"; con un solo tipo de PDF el botón exporta directo). Se quitaron los botones duplicados de
+  Crédito. Títulos de las tarjetas de totales en dos líneas y sin tarjetas sueltas (Crédito y Ventas). La sección
+  "Choferes locales" de Ventas pasó al mismo criterio del reporte de transportistas (sin liquidado/saldo).
+- Fase 4: barra superior en tableta sin la fecha en 4 líneas (fecha, EUR y USDT desde 1024 px), pestañas de
+  Reportes que se acomodan en dos filas, botones de fecha y pestañas de al menos 36–38 px en el celular.
+
+**Pendiente / límites:** en tableta (768 px) algunas tablas aún se pasan 20–100 px y se deslizan dentro de su
+recuadro (la página no); prueba final en un teléfono real; los PDF no se volvieron a generar uno por uno (las
+funciones que los crean no cambiaron, solo los botones que las llaman).
