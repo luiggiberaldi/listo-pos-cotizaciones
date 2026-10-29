@@ -11,6 +11,18 @@ export function num(v) {
   return Number.isFinite(n) ? n : 0
 }
 
+/**
+ * Reparto del flete de un chofer local (reporte de transportistas):
+ *  - chofer  = comisión guardada en cada viaje (fuera de Carabobo);
+ *  - empresa = total de fletes − parte del chofer (incluye los fletes dentro de
+ *    Carabobo, donde el chofer cobra por nómina y no por flete).
+ */
+export function repartoFlete(t = {}) {
+  const total = num(t.flete_total_usd)
+  const chofer = num(t.neto_total_usd)
+  return { total, chofer, empresa: Math.round((total - chofer) * 100) / 100 }
+}
+
 /** Texto de viajes con la marca ≈ cuando parte de ellos son estimados. */
 export function textoViajes(fila, marca = MARCA_ESTIMADO) {
   const total = num(fila?.total_viajes)

@@ -138,6 +138,8 @@ export default function TransportistaFormCompact({
             disabled={cargando}
           />
         </div>
+        {/* El chofer local usa los camiones de la empresa: sin datos de vehículo propio */}
+        {!esLocal && (<>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Vehículo</label>
           <input
@@ -198,6 +200,7 @@ export default function TransportistaFormCompact({
             disabled={cargando}
           />
         </div>
+        </>)}
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Cobertura (Zonas)</label>
           <input

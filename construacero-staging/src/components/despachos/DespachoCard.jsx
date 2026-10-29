@@ -1061,7 +1061,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           return (
             <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
               <span className="w-[11px] shrink-0" />
-              <span className="truncate">Camión: {camion.vehiculo}{camion.placa_chuto ? ` (${camion.placa_chuto})` : ''}</span>
+              <span className="truncate" title={[camion.vehiculo, camion.placa_chuto, camion.placa_batea && `batea ${camion.placa_batea}`].filter(Boolean).join(' · ')}>
+                Camión: {camion.vehiculo}{camion.placa_chuto ? ` (${camion.placa_chuto})` : ''}
+              </span>
             </div>
           )
         })()}

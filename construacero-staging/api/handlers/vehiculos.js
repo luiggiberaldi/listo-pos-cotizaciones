@@ -94,7 +94,7 @@ export async function handleListarVehiculos(request, env) {
 
   const vehRes = await fetch(
     `${env.SUPABASE_URL}/rest/v1/vehiculos?${cuenta.filter}&${activoFilter}order=codigo.asc` +
-    `&select=id,codigo,nombre,placa,capacidad_kg,color_batea,activo,creado_en`,
+    `&select=id,codigo,nombre,placa,placa_batea,modelo,capacidad_kg,color_batea,activo,creado_en`,
     { headers }
   )
   if (!vehRes.ok) {
@@ -134,7 +134,7 @@ export async function handleCrearVehiculo(request, env) {
 
   let body
   try { body = await request.json() } catch { return jsonError('Body inválido', 400, request) }
-  const { codigo, nombre, placa, capacidad_kg, color_batea } = body
+  const { codigo, nombre, placa, capacidad_kg, color_batea, modelo, placa_batea } = body
 
   const c = textoRequerido(codigo, 'codigo')
   if (c.error) return jsonError(c.error, 400, request)
@@ -173,6 +173,8 @@ export async function handleCrearVehiculo(request, env) {
       placa: placaNorm,
       capacidad_kg: capacidad,
       color_batea: color_batea ? String(color_batea).trim() : null,
+      modelo: modelo ? String(modelo).trim() : null,
+      placa_batea: placa_batea ? String(placa_batea).trim().toUpperCase() : null,
       activo: true,
     }),
   })
@@ -215,7 +217,7 @@ export async function handleActualizarVehiculo(request, env) {
   const { id } = body
   if (!id || !isValidUuid(id)) return jsonError('id inválido', 400, request)
 
-  const camposPermitidos = ['codigo', 'nombre', 'placa', 'capacidad_kg', 'color_batea', 'activo']
+  const camposPermitidos = ['codigo', 'nombre', 'placa', 'placa_batea', 'modelo', 'capacidad_kg', 'color_batea', 'activo']
   const updateData = Object.fromEntries(
     camposPermitidos.filter(campo => Object.prototype.hasOwnProperty.call(body, campo))
       .map(campo => [campo, body[campo]])
@@ -236,6 +238,13 @@ export async function handleActualizarVehiculo(request, env) {
     if (Array.isArray(dup) && dup.length > 0) {
       return jsonError(`Ya existe otro vehículo con la placa ${updateData.placa}`, 400, request)
     }
+  }
+  if (updateData.placa_batea !== undefined) {
+    const pb = String(updateData.placa_batea ?? '').trim().toUpperCase()
+    updateData.placa_batea = pb || null
+  }
+  if (updateData.modelo !== undefined) {
+    updateData.modelo = String(updateData.modelo ?? '').trim() || null
   }
   if (updateData.codigo !== undefined) {
     const c = textoRequerido(updateData.codigo, 'codigo')

@@ -124,7 +124,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
           cliente_id, cliente_factura_id, vendedor_id, transportista_id, vehiculo_id, vehiculo_origen,
           items_count:notas_despacho_items(count),
           transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, color_batea, vehiculo, placa_chuto, placa_batea, es_local, vehiculo_habitual_id),
-          vehiculo_viaje:vehiculos!notas_despacho_vehiculo_id_fkey(id, codigo, nombre, placa, color_batea, capacidad_kg),
+          vehiculo_viaje:vehiculos!notas_despacho_vehiculo_id_fkey(id, codigo, nombre, modelo, placa, placa_batea, color_batea, capacidad_kg),
           cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, estado, ciudad),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version),
           seguimiento:seguimiento_operativo(id, prioridad, fijada)

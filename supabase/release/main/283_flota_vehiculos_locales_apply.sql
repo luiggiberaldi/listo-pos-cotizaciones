@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS public.vehiculos (
   placa          TEXT NOT NULL,
   capacidad_kg   NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (capacidad_kg >= 0),
   color_batea    TEXT,
+  modelo         TEXT,   -- marca/modelo/año (staging 285)
+  placa_batea    TEXT,   -- placa del remolque; placa = chuto (staging 285)
   activo         BOOLEAN NOT NULL DEFAULT true,
   creado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
   actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now()

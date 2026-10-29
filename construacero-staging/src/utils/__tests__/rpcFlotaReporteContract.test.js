@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   textoViajes, totalesVehiculos, totalesChoferes, construirCsvFlota,
-  textoDesgloseChoferes, textoDesgloseVehiculos,
+  textoDesgloseChoferes, textoDesgloseVehiculos, repartoFlete,
 } from '../flotaReporte'
 import { datosVehiculoImpreso, nombreVehiculo } from '../vehiculoImpreso'
 
@@ -146,6 +146,14 @@ describe('Documentos impresos con el camión del viaje (arreglo 11)', () => {
     expect(d.color_batea).toBe('Azul')
   })
 
+  it('con modelo y placa de batea propios (285), imprime los datos del camión', () => {
+    const d = datosVehiculoImpreso({
+      transportista: chofer,
+      vehiculo_viaje: { id: 'v2', codigo: 'CAM-02', nombre: 'Cargo', modelo: 'Mack Granite 2020', placa: 'B34CD5E', placa_batea: 'ZZ111AA', color_batea: 'Roja' },
+    })
+    expect(d).toEqual({ vehiculo: 'CAM-02 Mack Granite 2020', placa_chuto: 'B34CD5E', placa_batea: 'ZZ111AA', color_batea: 'Roja' })
+  })
+
   it('sin camión de la flota (externos o históricos) imprime la ficha como antes', () => {
     const d = datosVehiculoImpreso({ transportista: chofer, vehiculo_viaje: null })
     expect(d.vehiculo).toBe('NPR viejo')
@@ -175,5 +183,22 @@ describe('Pantalla de Transportistas con pestañas', () => {
     expect(vista).toContain('onVerVehiculo={verVehiculo}')
     // La ficha del chofer local ya no muestra el vehículo escrito a mano
     expect(vista).toContain('!transportista.es_local && transportista.vehiculo')
+  })
+})
+
+describe('Reporte de transportistas: reparto del flete', () => {
+  it('chofer = su comisión, empresa = total de fletes menos esa comisión', () => {
+    // Chofer A de la prueba manual: $20 dentro de Carabobo (nómina) + $35 fuera (20% = $7)
+    expect(repartoFlete({ flete_total_usd: 55, neto_total_usd: 7 })).toEqual({ total: 55, chofer: 7, empresa: 48 })
+    expect(repartoFlete({})).toEqual({ total: 0, chofer: 0, empresa: 0 })
+  })
+
+  it('la pantalla y el PDF ya no muestran pagado ni saldo', () => {
+    const tab = leer('src/components/reportes/TabTransportistas.jsx')
+    const pdf = leer('src/services/pdf/transportistaResumenPDF.js')
+    for (const fuente of [tab, pdf]) {
+      expect(fuente).not.toMatch(/pagado_usd|saldo_usd/)
+      expect(fuente).toContain('repartoFlete')
+    }
   })
 })

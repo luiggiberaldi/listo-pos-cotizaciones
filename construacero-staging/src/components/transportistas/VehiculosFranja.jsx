@@ -24,6 +24,8 @@ function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
   const [placa, setPlaca] = useState(inicial?.placa ?? '')
   const [capacidadKg, setCapacidadKg] = useState(inicial?.capacidad_kg != null ? String(inicial.capacidad_kg) : '')
   const [colorBatea, setColorBatea] = useState(inicial?.color_batea ?? '')
+  const [modelo, setModelo] = useState(inicial?.modelo ?? '')
+  const [placaBatea, setPlacaBatea] = useState(inicial?.placa_batea ?? '')
   const [error, setError] = useState('')
 
   function submit(e) {
@@ -37,6 +39,8 @@ function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
       placa: placa.trim().toUpperCase(),
       capacidad_kg: capacidadKg === '' ? null : Number(capacidadKg),
       color_batea: colorBatea.trim() || null,
+      modelo: modelo.trim() || null,
+      placa_batea: placaBatea.trim().toUpperCase() || null,
     })
   }
 
@@ -56,16 +60,26 @@ function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
             placeholder="Ej: Camión 01" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Placa *</label>
+          <label className="text-sm font-medium text-slate-700">Placa chuto (principal) *</label>
           <input value={placa} onChange={e => { setPlaca(e.target.value.toUpperCase()); setError('') }}
             placeholder="Ej: A12BC3D" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Placa batea</label>
+          <input value={placaBatea} onChange={e => setPlacaBatea(e.target.value.toUpperCase())}
+            placeholder="Ej: XY456ZW" className={inputCls} disabled={cargando} />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Modelo</label>
+          <input value={modelo} onChange={e => setModelo(e.target.value)}
+            placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Capacidad (kg)</label>
           <input type="number" min="0" step="1" value={capacidadKg} onChange={e => setCapacidadKg(e.target.value)}
             placeholder="Ej: 12000" className={inputCls} disabled={cargando} />
         </div>
-        <div className="space-y-1.5 sm:col-span-2">
+        <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Color / tipo de batea</label>
           <input value={colorBatea} onChange={e => setColorBatea(e.target.value)}
             placeholder="Ej: Batea seca blanca" className={inputCls} disabled={cargando} />
@@ -189,12 +203,9 @@ export default function VehiculosFranja({ resaltarId = null }) {
           <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
             <Truck size={16} className="text-amber-600" />
           </div>
-          <div>
-            <h3 className="font-black text-slate-800 text-sm leading-tight">Vehículos de la Empresa</h3>
-            <p className="text-[11px] text-slate-400">
-              {isLoading ? 'Cargando...' : `${vehiculos.filter(v => v.activo !== false).length} activo(s) · ${vehiculos.length} en total`}
-            </p>
-          </div>
+          <p className="text-xs font-semibold text-slate-500">
+            {isLoading ? 'Cargando...' : `${vehiculos.filter(v => v.activo !== false).length} activo(s) · ${vehiculos.length} en total`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -237,13 +248,18 @@ export default function VehiculosFranja({ resaltarId = null }) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-black text-slate-800 text-sm leading-tight truncate" title={nombreVehiculo(v)}>{nombreVehiculo(v)}</p>
-                  <p className="text-[11px] text-slate-500 font-mono">{v.placa}</p>
+                  <p className="text-[11px] text-slate-500 font-mono truncate" title={[v.placa, v.placa_batea && `Batea ${v.placa_batea}`].filter(Boolean).join(' · ')}>
+                    {v.placa}{v.placa_batea ? ` · Batea ${v.placa_batea}` : ''}
+                  </p>
                 </div>
                 <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${v.activo !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
                   {v.activo !== false ? 'Activo' : 'Inactivo'}
                 </span>
               </div>
               <div className="space-y-1 text-[11px] text-slate-500">
+                {v.modelo && (
+                  <p><span className="text-slate-400 font-medium">Modelo:</span> {v.modelo}</p>
+                )}
                 {v.capacidad_kg != null && (
                   <p><span className="text-slate-400 font-medium">Capacidad:</span> {Number(v.capacidad_kg).toLocaleString('es-VE')} kg</p>
                 )}

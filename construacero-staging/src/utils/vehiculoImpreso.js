@@ -38,11 +38,16 @@ export function datosVehiculoImpreso(despacho) {
   const placaVeh = String(vehiculo.placa || '').trim().toUpperCase()
   const bateaFicha = String(transportista?.placa_batea || '').trim()
 
+  // La batea del camión (migración 285) manda; la de la ficha del chofer solo
+  // como respaldo para camiones sin batea cargada y si es su camión habitual.
+  const bateaRespaldo = esSuHabitual && bateaFicha && bateaFicha.toUpperCase() !== placaVeh ? bateaFicha : ''
+  const modelo = String(vehiculo.modelo || '').trim()
+
   return {
-    vehiculo: nombreVehiculo(vehiculo),
+    // Con modelo: "CAM-01 Mack Granite 2020"; sin modelo: el nombre del camión.
+    vehiculo: modelo ? [vehiculo.codigo, modelo].filter(Boolean).join(' ') : nombreVehiculo(vehiculo),
     placa_chuto: vehiculo.placa || '',
-    // Batea de la ficha solo si es el mismo camión y no repite la placa principal.
-    placa_batea: esSuHabitual && bateaFicha && bateaFicha.toUpperCase() !== placaVeh ? bateaFicha : '',
+    placa_batea: String(vehiculo.placa_batea || '').trim() || bateaRespaldo,
     color_batea: vehiculo.color_batea || (esSuHabitual ? transportista?.color_batea || '' : ''),
   }
 }

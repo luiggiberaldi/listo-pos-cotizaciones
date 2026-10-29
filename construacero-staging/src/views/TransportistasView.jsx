@@ -110,13 +110,16 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <input value={campos.telefono} onChange={e => cambiar('telefono', e.target.value)}
             placeholder="Ej: 0414-1234567" className={inputCls} disabled={cargando} inputMode="tel" />
         </div>
+        {/* Datos del vehículo propio: solo para transportistas externos. El chofer
+            local maneja camiones de la empresa (pestaña "Vehículos de la empresa"). */}
+        {!campos.es_local && (<>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Color *</label>
+          <label className="text-sm font-medium text-slate-700">Color</label>
           <input value={campos.color} onChange={e => cambiar('color', e.target.value)}
             placeholder="Ej: Rojo, Blanco" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Vehículo *</label>
+          <label className="text-sm font-medium text-slate-700">Vehículo</label>
           <input value={campos.vehiculo} onChange={e => cambiar('vehiculo', e.target.value)}
             placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
         </div>
@@ -135,16 +138,19 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <input value={campos.color_batea} onChange={e => cambiar('color_batea', e.target.value)}
             placeholder="Ej: Blanco, Amarillo" className={inputCls} disabled={cargando} />
         </div>
+        </>)}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Cobertura (Zonas)</label>
           <input value={campos.zona_cobertura} onChange={e => cambiar('zona_cobertura', e.target.value)}
             placeholder="Ej: Centro, Occidente, Caracas" className={inputCls} disabled={cargando} />
         </div>
+        {!campos.es_local && (
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Capacidad de Carga</label>
           <input value={campos.capacidad} onChange={e => cambiar('capacidad', e.target.value)}
             placeholder="Ej: 30 Toneladas, 350 Sacos" className={inputCls} disabled={cargando} />
         </div>
+        )}
         <div className="space-y-1.5 sm:col-span-2">
           <label className="text-sm font-medium text-slate-700">Notas / Observaciones</label>
           <input value={campos.notas} onChange={e => cambiar('notas', e.target.value)}
@@ -314,7 +320,7 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
             <span className="font-mono">{transportista.telefono}</span>
           </div>
         )}
-        {transportista.color && (
+        {!transportista.es_local && transportista.color && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <span className="font-medium text-slate-400">Color:</span>
             <span>{transportista.color}</span>

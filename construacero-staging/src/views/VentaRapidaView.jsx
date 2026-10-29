@@ -119,7 +119,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
       supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', data.vendedorId).single(),
       data.transportistaId ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color, color_batea, zona_cobertura, capacidad, vehiculo_habitual_id').eq('id', data.transportistaId).single() : Promise.resolve({ data: null }),
       // Camión real del viaje (plan de flota) para imprimirlo en la nota
-      supabase.from('notas_despacho').select('vehiculo_id, vehiculo_viaje:vehiculos!notas_despacho_vehiculo_id_fkey(id, codigo, nombre, placa, color_batea, capacidad_kg)').eq('id', despachoId).maybeSingle(),
+      supabase.from('notas_despacho').select('vehiculo_id, vehiculo_viaje:vehiculos!notas_despacho_vehiculo_id_fkey(id, codigo, nombre, modelo, placa, placa_batea, color_batea, capacidad_kg)').eq('id', despachoId).maybeSingle(),
     ])
     if (itemsRes.error) throw itemsRes.error
     const despachoObj = {

@@ -1,5 +1,5 @@
 // src/services/pdf/transportistaResumenPDF.js
-// PDF del reporte de transportistas locales — comisión externa y nómina Carabobo.
+// PDF del reporte de transportistas locales — total de fletes, parte del chofer y parte de la empresa.
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import { WATERMARK_LOGO } from './watermarkBase64'
@@ -8,6 +8,7 @@ import {
   C_PRIMARY, C_DARK, C_WHITE, C_ACCENT, C_GRAY, C_AMBER, C_EMERALD,
   fmtUsd, drawPremiumHeader,
 } from './pdfShared'
+import { repartoFlete } from '../../utils/flotaReporte'
 
 function checkPage(doc, y, needed = 30) {
   if (y + needed > PAGE_H - 25) {
@@ -28,7 +29,7 @@ function drawHeader(doc, logoData, config) {
     doc,
     logoData,
     config,
-    title: 'Liquidación de Comisiones Externas',
+    title: 'Fletes de Choferes Locales',
     subtitle: `Generado: ${new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
   })
 }
@@ -65,18 +66,18 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
   } catch (_) { /* la marca de agua/impresión es opcional */ }
 
   // KPIs agregados
-  const totFlete  = items.reduce((s, t) => s + (Number(t.flete_total_usd) || 0), 0)
-  const totNeto   = items.reduce((s, t) => s + (Number(t.neto_total_usd) || 0), 0)
-  const totPagado = items.reduce((s, t) => s + (Number(t.pagado_usd) || 0), 0)
-  const totSaldo  = items.reduce((s, t) => s + (Number(t.saldo_usd) || 0), 0)
-  const totNomina = items.reduce((s, t) => s + (Number(t.flete_nomina_usd) || 0), 0)
+  // Reparto: chofer = su comisión (fuera de Carabobo); empresa = fletes − chofer.
+  const totFlete   = items.reduce((s, t) => s + repartoFlete(t).total, 0)
+  const totChofer  = items.reduce((s, t) => s + repartoFlete(t).chofer, 0)
+  const totEmpresa = items.reduce((s, t) => s + repartoFlete(t).empresa, 0)
+  const totNomina  = items.reduce((s, t) => s + (Number(t.flete_nomina_usd) || 0), 0)
 
   const kpiBoxH = 14
-  const colsKpi = 4
+  const colsKpi = 3
   const colW = CONTENT_W / colsKpi
-  const labels = ['Flete total', 'Comisión externa', 'Liquidado', 'Saldo comisión']
-  const values = [fmtUsd(totFlete), fmtUsd(totNeto), fmtUsd(totPagado), fmtUsd(totSaldo)]
-  const colors = [C_PRIMARY, C_DARK, C_EMERALD, C_AMBER]
+  const labels = ['Total de fletes', 'Para los choferes', 'Para la empresa']
+  const values = [fmtUsd(totFlete), fmtUsd(totChofer), fmtUsd(totEmpresa)]
+  const colors = [C_PRIMARY, C_AMBER, C_EMERALD]
 
   doc.setFillColor(240, 242, 245)
   doc.roundedRect(MARGIN, y, CONTENT_W, kpiBoxH, 2, 2, 'F')
@@ -100,7 +101,7 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
   doc.setFont('helvetica', 'italic')
   doc.setFontSize(6.5)
   doc.setTextColor(...C_GRAY)
-  doc.text(`Flete en nómina externa de Carabobo (informativo): ${fmtUsd(totNomina)}`, MARGIN, y + 2)
+  doc.text(`Incluye fletes dentro de Carabobo (el chofer cobra por nómina, queda para la empresa): ${fmtUsd(totNomina)}`, MARGIN, y + 2)
   y += 7
 
   // Tabla
@@ -108,10 +109,9 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
     { label: 'CHOFER',            x: MARGIN,        w: 38 },
     { label: 'RIF',               x: MARGIN + 38,   w: 22 },
     { label: 'DESP.',             x: MARGIN + 60,   w: 14 },
-    { label: 'FLETE',             x: MARGIN + 74,   w: 28 },
-    { label: 'COM. EXT.',         x: MARGIN + 102,  w: 28 },
-    { label: 'LIQUIDADO',          x: MARGIN + 130,  w: 28 },
-    { label: 'SALDO COM.',         x: MARGIN + 158,  w: 30 },
+    { label: 'TOTAL FLETES',      x: MARGIN + 74,   w: 38 },
+    { label: 'PARA EL CHOFER',    x: MARGIN + 112,  w: 38 },
+    { label: 'PARA LA EMPRESA',   x: MARGIN + 150,  w: 38 },
   ]
 
   function drawTableHeaders(yPos) {
@@ -131,7 +131,7 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
   doc.setFont('helvetica', 'italic')
   doc.setFontSize(6)
   doc.setTextColor(...C_GRAY)
-  doc.text('Los fletes con destino en Carabobo corresponden a nómina externa y no forman parte de esta liquidación.', MARGIN, y + 2)
+  doc.text('Para el chofer = su comisión por fletes fuera de Carabobo. Para la empresa = total de fletes menos esa comisión.', MARGIN, y + 2)
   y += 5
 
   items.forEach((t, idx) => {
@@ -166,20 +166,18 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
     // Despachos
     doc.text(String(t.despachos || 0), tableCols[2].x + 1.5, y + 3)
 
-    // Flete total
-    doc.text(fmtUsd(t.flete_total_usd), tableCols[3].x + 1.5, y + 3)
+    const reparto = repartoFlete(t)
+    // Total de fletes
+    doc.text(fmtUsd(reparto.total), tableCols[3].x + 1.5, y + 3)
 
-    // Neto total
-    doc.text(fmtUsd(t.neto_total_usd), tableCols[4].x + 1.5, y + 3)
+    // Para el chofer (ámbar)
+    doc.setTextColor(...C_AMBER)
+    doc.text(fmtUsd(reparto.chofer), tableCols[4].x + 1.5, y + 3)
 
-    // Pagado (verde)
+    // Para la empresa (verde, negrita)
     doc.setTextColor(...C_EMERALD)
-    doc.text(fmtUsd(t.pagado_usd), tableCols[5].x + 1.5, y + 3)
-
-    // Saldo (ámbar, en negrita si > 0)
-    doc.setTextColor(...(t.saldo_usd > 0.001 ? C_AMBER : C_GRAY))
-    doc.setFont('helvetica', t.saldo_usd > 0.001 ? 'bold' : 'normal')
-    doc.text(fmtUsd(t.saldo_usd), tableCols[6].x + 1.5, y + 3)
+    doc.setFont('helvetica', 'bold')
+    doc.text(fmtUsd(reparto.empresa), tableCols[5].x + 1.5, y + 3)
     doc.setTextColor(...C_DARK)
     doc.setFont('helvetica', 'normal')
 
@@ -188,7 +186,7 @@ export async function generarTransportistaResumenPDF({ items = [], config = {}, 
 
   drawFooter(doc, config)
 
-  const filename = `Liquidacion_Transportistas_${new Date().toISOString().slice(0, 10)}`
+  const filename = `Fletes_Choferes_Locales_${new Date().toISOString().slice(0, 10)}`
 
   if (action === 'print') {
     doc.autoPrint()
