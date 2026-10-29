@@ -236,13 +236,19 @@ describe('Reporte detallado por camión (286)', () => {
   })
 })
 
-describe('Botón único "Reporte" (resumido / detallado)', () => {
-  it('la pestaña ofrece resumido y detallado, para descargar o imprimir', () => {
+describe('Barra común de Reportes en Transportistas (resumido / detallado)', () => {
+  it('usa la barra común de Reportes con Imprimir/Descargar PDF y las variantes resumido/detallado', () => {
     const tab = leer('src/components/reportes/TabTransportistas.jsx')
-    expect(tab).toContain("generarReporte(op.modo, 'download')")
-    expect(tab).toContain("generarReporte(op.modo, 'print')")
-    expect(tab).toContain("modo: 'resumido'")
-    expect(tab).toContain("modo: 'detallado'")
+    const barra = leer('src/components/reportes/BarraPeriodoReporte.jsx')
+    expect(tab).toContain('<BarraPeriodoReporte')
+    expect(tab).toContain('titulo="Periodo de despachos"')
+    expect(tab).toContain("id: 'resumido'")
+    expect(tab).toContain("id: 'detallado'")
+    expect(tab).toContain('onExportar={generarReporte}')
+    expect(barra).toContain("'Imprimir PDF'")
+    expect(barra).toContain("'Descargar PDF'")
+    // Arranca en "Hoy", como las demás pestañas
+    expect(tab).toContain('getDayRange(0)')
   })
 
   it('la sección de flota ya no tiene su propio PDF ni Excel', () => {

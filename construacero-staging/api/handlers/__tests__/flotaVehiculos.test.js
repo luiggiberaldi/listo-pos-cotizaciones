@@ -223,8 +223,8 @@ describe('GET /api/reportes/flota-choferes', () => {
     expect(res.status).toBe(200)
     const call = fetchCalls[0]
     expect(call.body.p_cuenta_id).toBe(ACCOUNT)
-    expect(call.body.p_fecha_inicio).toBe('2026-10-01T00:00:00')
-    expect(call.body.p_fecha_fin).toBe('2026-10-26T23:59:59.999')
+    expect(call.body.p_fecha_inicio).toBe('2026-10-01T00:00:00-04:00')
+    expect(call.body.p_fecha_fin).toBe('2026-10-26T23:59:59.999-04:00')
   })
 })
 

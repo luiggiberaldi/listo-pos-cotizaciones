@@ -7,6 +7,10 @@ import { json, jsonError, isValidUuid } from '../lib/utils.js'
 import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 
+// Los días del reporte son días de Venezuela (UTC-4, sin horario de verano):
+// sin esto, un despacho de las 11 p. m. caía en el día siguiente.
+const HORA_CARACAS = '-04:00'
+
 const ROLES_GESTION  = ['jefe', 'administracion', 'logistica', 'desarrollador']
 const ROLES_ELIMINAR = ['jefe', 'administracion', 'desarrollador']
 // El supervisor queda fuera del reporte de flota porque muestra comisiones
@@ -378,8 +382,8 @@ export async function handleReporteFlotaChoferes(request, env) {
     headers,
     body: JSON.stringify({
       p_cuenta_id: cuenta.cuentaId,
-      p_fecha_inicio: `${desde}T00:00:00`,
-      p_fecha_fin: `${hastaFinal}T23:59:59.999`,
+      p_fecha_inicio: `${desde}T00:00:00${HORA_CARACAS}`,
+      p_fecha_fin: `${hastaFinal}T23:59:59.999${HORA_CARACAS}`,
     }),
   })
   const texto = await res.text().catch(() => '')
@@ -419,8 +423,8 @@ export async function handleDetalleViajesFlota(request, env) {
     headers,
     body: JSON.stringify({
       p_cuenta_id: cuenta.cuentaId,
-      p_fecha_inicio: `${desde}T00:00:00`,
-      p_fecha_fin: `${hastaFinal}T23:59:59.999`,
+      p_fecha_inicio: `${desde}T00:00:00${HORA_CARACAS}`,
+      p_fecha_fin: `${hastaFinal}T23:59:59.999${HORA_CARACAS}`,
       p_vehiculo_id: vehiculoId,
       p_solo_sin_camion: soloSinCamion,
     }),

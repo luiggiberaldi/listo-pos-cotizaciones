@@ -6,6 +6,10 @@ import { json, jsonError, isValidUuid } from '../lib/utils.js'
 import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
 
+// Los días del reporte son días de Venezuela (UTC-4, sin horario de verano):
+// sin esto, un despacho de las 11 p. m. caía en el día siguiente.
+const HORA_CARACAS = '-04:00'
+
 const ROLES_REPORTE = ['administracion', 'desarrollador', 'logistica', 'jefe']
 const ROLES_PAGAR   = ['administracion', 'desarrollador']
 
@@ -107,8 +111,8 @@ export async function handleReporteTransportistas(request, env) {
   // Usar límite exclusivo al día siguiente evita perder registros con
   // milisegundos posteriores a 23:59:59 del día "hasta".
   const fechaFiltro = [
-    desde ? `&creado_en=gte.${desde}T00:00:00` : '',
-    hasta ? `&creado_en=lt.${fechaSiguiente(hasta)}T00:00:00` : '',
+    desde ? `&creado_en=gte.${desde}T00:00:00${HORA_CARACAS}` : '',
+    hasta ? `&creado_en=lt.${fechaSiguiente(hasta)}T00:00:00${HORA_CARACAS}` : '',
   ].join('')
 
   const dRes = await fetch(
