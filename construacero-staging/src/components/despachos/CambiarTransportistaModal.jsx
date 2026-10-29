@@ -6,6 +6,7 @@ import useClienteFresco from '../../hooks/useClienteFresco'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import CustomSelect from '../ui/CustomSelect'
+import VehiculoViajeSelect from '../vehiculos/VehiculoViajeSelect'
 import TransportistaFormCompact from '../transportistas/TransportistaFormCompact'
 import { Modal } from '../ui/Modal'
 import { showToast } from '../ui/Toast'
@@ -20,6 +21,12 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
 
   const [vista, setVista] = useState('seleccion') // 'seleccion' | 'editar' | 'nuevo'
   const [transportistaId, setTransportistaId] = useState('')
+  // Vehículo para este viaje (Fase 3 del plan de flota): solo choferes locales
+  const [vehiculoViajeId, setVehiculoViajeId] = useState('')
+  const [fijarVehiculoFijo, setFijarVehiculoFijo] = useState(false)
+  // Solo se envía el camión si el usuario lo cambió a mano: así editar el pago
+  // (u otro dato) nunca reescribe el camión que ya tiene guardado el viaje (R4).
+  const [vehiculoTocado, setVehiculoTocado] = useState(false)
   const [fleteUsd, setFleteUsd] = useState('')
   const [estadoDestino, setEstadoDestino] = useState('')
   const [ciudadDestino, setCiudadDestino] = useState('')
@@ -33,6 +40,9 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
   useEffect(() => {
     if (!despacho || !isOpen) return
     setTransportistaId(despacho.transportista_id || '')
+    setVehiculoViajeId(despacho.vehiculo_id || '')
+    setFijarVehiculoFijo(false)
+    setVehiculoTocado(false)
     setFleteUsd(despacho.flete_usd !== null && despacho.flete_usd !== undefined ? String(despacho.flete_usd) : '')
     setEstadoDestino(despacho.flete_estado_destino_snapshot || despacho.direccion_envio_estado || despacho.cliente?.estado || '')
     setCiudadDestino(despacho.direccion_envio_ciudad || despacho.cliente?.ciudad || '')
@@ -86,6 +96,8 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
         fleteUsd: fleteUsd !== '' ? Number(fleteUsd) : 0,
         direccionEnvioEstado: estadoDestino || null,
         direccionEnvioCiudad: ciudadDestino || null,
+        vehiculoId: (vehiculoTocado || fijarVehiculoFijo) ? (vehiculoViajeId || null) : undefined,
+        actualizarVehiculoHabitual: fijarVehiculoFijo,
       })
       onClose()
     } catch {
@@ -209,7 +221,11 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
                     <CustomSelect
                       value={transportistaId}
                       onChange={(val) => {
+                        const t = transportistas.find(x => x.id === val)
                         setTransportistaId(val)
+                        setVehiculoViajeId(t?.vehiculo_habitual_id || '')
+                        setFijarVehiculoFijo(false)
+                        setVehiculoTocado(false)
                       }}
                       showSubInTrigger={false}
                       options={transportistas.map(t => ({
@@ -294,6 +310,16 @@ export default function CambiarTransportistaModal({ isOpen, onClose, despacho })
                   </div>
                 )}
               </div>
+
+              {/* Vehículo para este viaje (solo choferes locales) — Fase 3 del plan de flota */}
+              <VehiculoViajeSelect
+                transportista={transportistaSel}
+                vehiculoId={vehiculoViajeId}
+                onChange={v => { setVehiculoViajeId(v); setVehiculoTocado(true) }}
+                fijar={fijarVehiculoFijo}
+                onChangeFijar={setFijarVehiculoFijo}
+                disabled={cargando}
+              />
 
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Flete ($ USD)</p>

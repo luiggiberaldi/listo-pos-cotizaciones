@@ -11,6 +11,7 @@ import {
 import useAuthStore from '../../store/useAuthStore'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import DateRangeSelector from './DateRangeSelector'
+import SeccionFlotaChoferes from './SeccionFlotaChoferes'
 import Skeleton from '../ui/Skeleton'
 import { Modal } from '../ui/Modal'
 
@@ -184,6 +185,9 @@ export default function TabTransportistas() {
           </table>
         </div>
       )}
+
+      {/* Fase 4 del plan de flota: productividad por vehículo y por chofer local */}
+      <SeccionFlotaChoferes rango={rango} />
 
       {pagoModal && (
         <PagarTransportistaModal

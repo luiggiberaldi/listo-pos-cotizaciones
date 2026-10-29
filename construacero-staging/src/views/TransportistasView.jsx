@@ -11,6 +11,8 @@ import {
   useActualizarTransportista,
   useDesactivarTransportista,
 } from '../hooks/useTransportistas'
+import { useVehiculos } from '../hooks/useVehiculos'
+import VehiculosFranja from '../components/transportistas/VehiculosFranja'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Skeleton     from '../components/ui/Skeleton'
 import EmptyState   from '../components/ui/EmptyState'
@@ -23,7 +25,9 @@ import { PREFIJOS_RIF, parsearRif as parsearRifTransp, formatearRif as formatear
 
 // ─── Formulario ───────────────────────────────────────────────────────────────
 function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
+  const { data: vehiculosFlota = [] } = useVehiculos()
   const { prefijo: rifPrefijoInit, numero: rifNumeroInit } = parsearRifTransp(inicial.rif)
+  const [vehiculoHabitualId, setVehiculoHabitualId] = useState(inicial.vehiculo_habitual_id ?? '')
   const [rifPrefijo, setRifPrefijo] = useState(rifPrefijoInit)
   const [campos, setCampos] = useState({
     nombre:          inicial.nombre          ?? '',
@@ -54,6 +58,8 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     onGuardar({
       ...campos,
       rif: formatearRifTransp(rifPrefijo, campos.rif),
+      // Vehículo habitual solo aplica a choferes locales (Fase 3 del plan de flota)
+      vehiculo_habitual_id: campos.es_local ? (vehiculoHabitualId || null) : null,
     })
   }
 
@@ -160,6 +166,23 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
         <p className="text-[11px] text-slate-400">
           El tipo de cálculo (% o tarifa fija) y el valor se configuran globalmente en Configuración → Transportistas.
         </p>
+        {campos.es_local && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Vehículo habitual asignado</label>
+            <select
+              value={vehiculoHabitualId}
+              onChange={e => setVehiculoHabitualId(e.target.value)}
+              disabled={cargando}
+              className={inputCls}
+            >
+              <option value="">Sin vehículo fijo / Rotativo</option>
+              {vehiculosFlota.filter(v => v.activo !== false).map(v => (
+                <option key={v.id} value={v.id}>{v.codigo} {v.nombre} ({v.placa})</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-400">Se autocompleta al crear viajes; cada viaje puede usar otro camión sin tocar esta ficha.</p>
+          </div>
+        )}
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
@@ -229,7 +252,7 @@ function TransportistaModal({ transportista = null, onClose }) {
 }
 
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
-function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar, onDesactivar }) {
+function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar, onDesactivar, vehiculoFijo = '' }) {
   const colors = colorTransportista(transportista.nombre)
 
   return (
@@ -264,6 +287,11 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
           <span className="inline-flex items-center gap-1 mt-1 ml-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold capitalize">
             {transportista.tipo_relacion}
           </span>
+        )}
+        {transportista.es_local && vehiculoFijo && (
+          <p className="mt-1.5 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-1.5 py-0.5 truncate">
+            Vehículo fijo: {vehiculoFijo}
+          </p>
         )}
       </div>
 
@@ -377,6 +405,12 @@ export default function TransportistasView() {
     useTransportistasCounts({ soloActivos: true })
   const desactivar = useDesactivarTransportista()
   const { data: config = {} } = useConfigNegocio()
+  // Flota para la etiqueta "Vehículo fijo" de cada chofer local (Fase 3)
+  const { data: vehiculosFlota = [] } = useVehiculos({ incluirInactivos: true })
+  const vehiculosPorId = useMemo(
+    () => Object.fromEntries(vehiculosFlota.map(v => [v.id, v])),
+    [vehiculosFlota]
+  )
   const [exportandoPDF, setExportandoPDF] = useState(false)
   const [imprimiendoPDF, setImprimiendoPDF] = useState(false)
 
@@ -506,6 +540,9 @@ export default function TransportistasView() {
         }
       />
 
+      {/* Franja de vehículos de la empresa (Fase 3 del plan de flota) */}
+      <VehiculosFranja />
+
       {/* Filtro por tipo: Todos / Locales / Generales */}
       {!isLoading && !isError && hayCatalogo && (
         <div className="flex flex-wrap items-center gap-2">
@@ -581,16 +618,22 @@ export default function TransportistasView() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-            {transportistasPaginados.map(t => (
-              <TransportistaCard
-                key={t.id}
-                transportista={t}
-                esSupervisor={esSupervisor}
-                puedeEditar={puedeCrear}
-                onEditar={abrirEditar}
-                onDesactivar={setDesactivandoTransp}
-              />
-            ))}
+            {transportistasPaginados.map(t => {
+              const vehiculoFijo = t.es_local && t.vehiculo_habitual_id
+                ? vehiculosPorId[t.vehiculo_habitual_id]
+                : null
+              return (
+                <TransportistaCard
+                  key={t.id}
+                  transportista={t}
+                  esSupervisor={esSupervisor}
+                  puedeEditar={puedeCrear}
+                  onEditar={abrirEditar}
+                  onDesactivar={setDesactivandoTransp}
+                  vehiculoFijo={vehiculoFijo ? `${vehiculoFijo.codigo} ${vehiculoFijo.nombre} (${vehiculoFijo.placa})` : ''}
+                />
+              )
+            })}
           </div>
 
           {totalPages > 1 && (

@@ -1,6 +1,7 @@
 import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
 import { verifyAuth, validateOperator, getOperatorRole, verifySupervisor } from '../lib/auth.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
+import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
 
 function errorReglaFlete(errorText, request, mensajeFallback) {
   const text = String(errorText || '')
@@ -588,12 +589,16 @@ export async function handleVentaRapida(request, env) {
     notas, notasCliente, items,
     descuentoGlobalPct, costoEnvioUsd, tasaBcv,
     direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado,
+    vehiculoId, actualizarVehiculoHabitual,
   } = body;
 
   if (!clienteId) return jsonError('Falta clienteId', 400, request);
   if (!items || !Array.isArray(items) || items.length === 0) return jsonError('Faltan items', 400, request);
   if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
     return jsonError('transportistaId inválido', 400, request)
+  }
+  if (vehiculoId !== undefined && vehiculoId !== null && vehiculoId !== '' && !isValidUuid(vehiculoId)) {
+    return jsonError('vehiculoId inválido', 400, request)
   }
   if (fleteUsd !== undefined && (!Number.isFinite(Number(fleteUsd)) || Number(fleteUsd) < 0)) {
     return jsonError('fleteUsd inválido', 400, request)
@@ -618,6 +623,12 @@ export async function handleVentaRapida(request, env) {
     request,
   })
   if (destinoError) return destinoError
+
+  // El camión del viaje debe ser de esta cuenta y estar activo (raíl R8).
+  const vehiculoValido = await validarVehiculoDeCuenta({
+    env, headers, cuentaId: operador.cuenta_id, vehiculoId: vehiculoId || null,
+  })
+  if (vehiculoValido.error) return jsonError(vehiculoValido.error, 400, request)
 
   // Validate items
   for (let i = 0; i < items.length; i++) {
@@ -693,6 +704,7 @@ export async function handleVentaRapida(request, env) {
       notas_cliente: notasCliente || null,
       notas_internas: notas || null,
       transportista_id: transportistaFinalId,
+      vehiculo_id: vehiculoId || null,
       enviada_en: new Date().toISOString(),
     };
     console.log('[VR] Creating cotización:', JSON.stringify(cotBody));
@@ -738,6 +750,8 @@ export async function handleVentaRapida(request, env) {
         cliente_id: clienteId,
         vendedor_id: user.operator_id,
         transportista_id: transportistaFinalId,
+        vehiculo_id: vehiculoId || null,
+        ...(vehiculoId ? { vehiculo_origen: 'manual' } : {}),
         estado: 'pendiente',
         total_usd: totalUsd,
         flete_usd: flete,
@@ -806,7 +820,17 @@ export async function handleVentaRapida(request, env) {
       console.error('[VR] Auditoría falló:', auditErr.message);
     }
 
-    return json({ id: despacho.id, numero: despacho.numero, cotizacionId: cot.id }, 200, request);
+    // Casilla "Dejar este vehículo como el nuevo camión fijo de este chofer".
+    // Se aplica DESPUÉS de crear la venta: si falla, la venta ya existe y solo se avisa.
+    let avisoVehiculo = null
+    if (actualizarVehiculoHabitual && transportistaFinalId && vehiculoId) {
+      const vinculo = await guardarVehiculoHabitual({
+        env, headers, cuentaId: operador.cuenta_id, transportistaId: transportistaFinalId, vehiculoId,
+      })
+      if (vinculo.error) avisoVehiculo = `No se pudo fijar el camión del chofer: ${vinculo.error}`
+    }
+
+    return json({ id: despacho.id, numero: despacho.numero, cotizacionId: cot.id, ...(avisoVehiculo ? { avisoVehiculo } : {}) }, 200, request);
   } catch (e) {
     console.error('[VR] Uncaught error:', e.message, e.stack);
     return jsonError(e.message || 'Error al crear venta rápida', 500, request);

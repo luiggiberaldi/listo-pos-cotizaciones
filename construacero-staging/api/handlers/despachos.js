@@ -5,6 +5,7 @@ import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 import { calcularDescuentoValido } from '../lib/descuentoUtils.js'
 import { calcularComisionConDescuentos, reconciliarComisionConDescuento } from '../lib/comisionUtils.js'
 import { tieneZonaHoraria } from '../lib/fechaEntrega.js'
+import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
 
 function resolverIdempotencyKey(request, body) {
   const fromBody = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : ''
@@ -224,9 +225,12 @@ export async function handleCrearDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, corteUsd, clienteFacturaId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado } = body;
+  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, corteUsd, clienteFacturaId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, vehiculoId, actualizarVehiculoHabitual } = body;
   if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
     return jsonError('transportistaId inválido', 400, request);
+  }
+  if (vehiculoId !== undefined && vehiculoId !== null && vehiculoId !== '' && !isValidUuid(vehiculoId)) {
+    return jsonError('vehiculoId inválido', 400, request);
   }
   if (fleteUsd !== undefined && (!Number.isFinite(Number(fleteUsd)) || Number(fleteUsd) < 0)) {
     return jsonError('fleteUsd inválido', 400, request);
@@ -275,6 +279,16 @@ export async function handleCrearDespacho(request, env) {
       request,
     })
     if (destinoError) return destinoError
+
+    // Vehículo del viaje: el elegido aquí, o el que el vendedor dejó en la
+    // cotización (si el chofer no cambió). Sin ninguno, el trigger pone el habitual.
+    const vehiculoViajeId = vehiculoId
+      || (transportistaFinalId && transportistaFinalId === cot.transportista_id ? cot.vehiculo_id : null)
+      || null
+    const vehiculoValido = await validarVehiculoDeCuenta({
+      env, headers, cuentaId: operador.cuenta_id, vehiculoId: vehiculoViajeId,
+    })
+    if (vehiculoValido.error) return jsonError(vehiculoValido.error, 400, request)
 
     // 3. Si está enviada, aceptarla automáticamente
     if (cot.estado === 'enviada') {
@@ -340,6 +354,8 @@ export async function handleCrearDespacho(request, env) {
         cliente_factura_id: (clienteFacturaId && isValidUuid(clienteFacturaId)) ? clienteFacturaId : null,
         vendedor_id: cot.vendedor_id,
         transportista_id: transportistaFinalId,
+        vehiculo_id: vehiculoViajeId,
+        ...(vehiculoViajeId ? { vehiculo_origen: 'manual' } : {}),
         estado: 'pendiente',
         total_usd: totalConFleteCorte,
         flete_usd: flete,
@@ -393,6 +409,17 @@ export async function handleCrearDespacho(request, env) {
       });
     }
 
+    // Casilla "Dejar este vehículo como el nuevo camión fijo de este chofer".
+    // Se aplica DESPUÉS de crear el despacho: si falla, el despacho ya existe y
+    // solo se avisa (no se deja la ficha del chofer cambiada por una venta fallida).
+    let avisoVehiculo = null
+    if (actualizarVehiculoHabitual && transportistaFinalId && vehiculoViajeId) {
+      const vinculo = await guardarVehiculoHabitual({
+        env, headers, cuentaId: operador.cuenta_id, transportistaId: transportistaFinalId, vehiculoId: vehiculoViajeId,
+      })
+      if (vinculo.error) avisoVehiculo = `No se pudo fijar el camión del chofer: ${vinculo.error}`
+    }
+
     // Auditoría (fire-and-forget)
     registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
@@ -405,7 +432,8 @@ export async function handleCrearDespacho(request, env) {
       id: despacho.id,
       numero: despacho.numero,
       numeroCotizacion: cot.numero,
-      clienteNombre: clienteNombre
+      clienteNombre: clienteNombre,
+      ...(avisoVehiculo ? { avisoVehiculo } : {}),
     }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al crear despacho', 500, request);
@@ -544,9 +572,12 @@ export async function handleEditarPagoDespacho(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, codSinAbono, soloPagoEntregado } = body;
+  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, codSinAbono, soloPagoEntregado, vehiculoId, actualizarVehiculoHabitual } = body;
   if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
     return jsonError('transportistaId inválido', 400, request);
+  }
+  if (vehiculoId !== undefined && vehiculoId !== null && vehiculoId !== '' && !isValidUuid(vehiculoId)) {
+    return jsonError('vehiculoId inválido', 400, request);
   }
   if (fleteUsd !== undefined && (!Number.isFinite(Number(fleteUsd)) || Number(fleteUsd) < 0)) {
     return jsonError('fleteUsd inválido', 400, request);
@@ -690,7 +721,7 @@ export async function handleEditarPagoDespacho(request, env) {
       corteUsd === undefined &&
       clienteId === undefined &&
       direccionEnvioDireccion === undefined &&
-      (transportistaId !== undefined || fleteUsd !== undefined || notas !== undefined || notasTitulo !== undefined);
+      (transportistaId !== undefined || vehiculoId !== undefined || fleteUsd !== undefined || notas !== undefined || notasTitulo !== undefined);
 
     if (!editandoSoloNotas && !editandoTransportista) {
       return jsonError('No se pueden editar despachos en estado entregado', 400, request);
@@ -702,7 +733,7 @@ export async function handleEditarPagoDespacho(request, env) {
     if (tieneCamposFinancierosRestringidos) {
       return jsonError('No se pueden editar datos financieros en un despacho aprobado', 400, request);
     }
-    if (transportistaId === undefined && fleteUsd === undefined && notas === undefined && notasTitulo === undefined) {
+    if (transportistaId === undefined && vehiculoId === undefined && fleteUsd === undefined && notas === undefined && notasTitulo === undefined) {
       return jsonError('No hay campos editables para este estado', 400, request);
     }
   }
@@ -716,6 +747,22 @@ export async function handleEditarPagoDespacho(request, env) {
   if (direccionEnvioCiudad !== undefined) campos.direccion_envio_ciudad = direccionEnvioCiudad || null;
   if (direccionEnvioEstado !== undefined) campos.direccion_envio_estado = direccionEnvioEstado || null;
   if (transportistaId !== undefined) campos.transportista_id = transportistaId || null;
+  // Vehículo del viaje (plan de flota). Solo se toca si el usuario lo cambió:
+  // - elegido a mano → se marca 'manual' (deja de mostrarse como estimado ≈);
+  // - vaciado, o cambio de chofer sin indicar camión → se limpia para que el
+  //   trigger ponga el camión habitual del nuevo chofer.
+  const cambiaChofer = transportistaId !== undefined && (transportistaId || null) !== (despacho.transportista_id || null);
+  if (vehiculoId !== undefined) {
+    if (vehiculoId) {
+      const vehiculoValido = await validarVehiculoDeCuenta({ env, headers: h, cuentaId: operador.cuenta_id, vehiculoId });
+      if (vehiculoValido.error) return jsonError(vehiculoValido.error, 400, request);
+    }
+    campos.vehiculo_id = vehiculoId || null;
+    campos.vehiculo_origen = vehiculoId ? 'manual' : null;
+  } else if (cambiaChofer) {
+    campos.vehiculo_id = null;
+    campos.vehiculo_origen = null;
+  }
   if (fleteUsd !== undefined || corteUsd !== undefined) {
     const nuevoFlete = fleteUsd !== undefined ? Number(fleteUsd) : Number(despacho.flete_usd || 0);
     const nuevoCorte = corteUsd !== undefined ? Number(corteUsd) : Number(despacho.corte_usd || 0);
@@ -757,6 +804,18 @@ export async function handleEditarPagoDespacho(request, env) {
   if (!upRes.ok) {
     const err = await upRes.text().catch(() => '')
     return errorReglaFlete(err, request, 'Error al actualizar despacho')
+  }
+
+  // Casilla "Dejar este vehículo como el nuevo camión fijo de este chofer":
+  // si no se marca, el cambio de vehículo aplica solo para este viaje.
+  const choferDelViaje = transportistaId !== undefined ? transportistaId : despacho.transportista_id;
+  if (actualizarVehiculoHabitual && choferDelViaje && vehiculoId) {
+    const vinculo = await guardarVehiculoHabitual({
+      env, headers: h, cuentaId: operador.cuenta_id, transportistaId: choferDelViaje, vehiculoId,
+    })
+    if (vinculo.error) {
+      return jsonError(`El despacho se guardó, pero no se pudo fijar el camión del chofer: ${vinculo.error}`, 400, request)
+    }
   }
 
   // Recalcular comision si ya existe (porque pudo cambiar el total o forma de pago)

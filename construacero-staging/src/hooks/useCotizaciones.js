@@ -220,7 +220,7 @@ export function useCotizacion(id) {
       const tabla = 'cotizaciones'
 
       // Columnas planas (sin FK joins — cliente y vendedor se buscan por separado)
-      const selectFields = 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, corte_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en'
+      const selectFields = 'id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, vehiculo_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, corte_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en'
 
       const [cotRes, itemsRes] = await Promise.all([
         supabase
@@ -311,6 +311,7 @@ export function useGuardarBorrador() {
       const headerData = {
         cliente_id:           campos.clienteId,
         transportista_id:     campos.transportistaId || null,
+        vehiculo_id:          campos.vehiculoId || null,
         vendedor_id:          campos.vendedorId || perfil.id,
         notas_cliente:        campos.notasCliente?.trim()  || null,
         notas_internas:       campos.notasInternas?.trim() || null,
