@@ -3,10 +3,12 @@
 // reparte entre el chofer (su comisión fuera de Carabobo) y la empresa (el resto).
 // Sin columnas de pagado/saldo: el pago al chofer no se gestiona aquí.
 import { useState, useMemo } from 'react'
-import { Truck, RefreshCw, FileText, DollarSign, Building2, User } from 'lucide-react'
+import { Truck, RefreshCw, FileText, DollarSign, Building2, User, ChevronDown, Download, Printer } from 'lucide-react'
 import { useReporteTransportistas } from '../../hooks/useTransportistas'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
-import { repartoFlete } from '../../utils/flotaReporte'
+import { repartoFlete, periodoAnterior, num } from '../../utils/flotaReporte'
+import { cargarReporteFlota, cargarDetalleViajesFlota } from '../../hooks/useVehiculos'
+import { showToast } from '../ui/Toast'
 import DateRangeSelector from './DateRangeSelector'
 import SeccionFlotaChoferes from './SeccionFlotaChoferes'
 import Skeleton from '../ui/Skeleton'
@@ -18,6 +20,15 @@ function fmt(n) {
 
 export default function TabTransportistas() {
   const [exportando, setExportando] = useState(false)
+  const [menuReporte, setMenuReporte] = useState(false)
+  const [menuHaciaDerecha, setMenuHaciaDerecha] = useState(false)
+  // El menú se abre hacia donde haya espacio: si el botón está cerca del borde
+  // izquierdo (pantallas angostas), hacia la derecha; si no, hacia la izquierda.
+  function abrirMenuReporte(boton) {
+    const r = boton.getBoundingClientRect()
+    setMenuHaciaDerecha(r.right - 256 < 80)
+    setMenuReporte(m => !m)
+  }
   const [rango, setRango] = useState({ from: null, to: null })
   const { data: items = [], isLoading, isError, refetch } = useReporteTransportistas({
     desde: rango.from || null,
@@ -34,13 +45,39 @@ export default function TabTransportistas() {
     return { total: acc.total + r.total, chofer: acc.chofer + r.chofer, empresa: acc.empresa + r.empresa }
   }, { total: 0, chofer: 0, empresa: 0 }), [filas])
 
-  async function exportarPDF() {
+  // Botón "Reporte": un solo PDF, resumido o detallado, para descargar o imprimir.
+  async function generarReporte(modo, action) {
+    setMenuReporte(false)
     setExportando(true)
     try {
-      const { generarTransportistaResumenPDF } = await import('../../services/pdf/transportistaResumenPDF')
-      await generarTransportistaResumenPDF({ items: filas, config: configNegocio ?? {}, action: 'download' })
+      const desde = rango.from || null
+      const hasta = rango.to || null
+      const anterior = periodoAnterior(desde, hasta)
+      const detallado = modo === 'detallado'
+      const [flota, flotaAnterior] = await Promise.all([
+        cargarReporteFlota({ desde, hasta }),
+        anterior ? cargarReporteFlota(anterior) : Promise.resolve(null),
+      ])
+      const [detalle, detalleSinCamion] = detallado
+        ? await Promise.all([
+          cargarDetalleViajesFlota({ desde, hasta }),
+          num(flota.sinCamion?.viajes) > 0 ? cargarDetalleViajesFlota({ desde, hasta, sinCamion: true }) : Promise.resolve([]),
+        ])
+        : [[], []]
+      const { generarFlotaChoferesPDF } = await import('../../services/pdf/flotaChoferesPDF')
+      await generarFlotaChoferesPDF({
+        modo, action, desde, hasta,
+        tablaChoferes: filas,
+        porVehiculo: flota.porVehiculo,
+        porChofer: flota.porChofer.filter(c => c.activo !== false || num(c.total_viajes) > 0),
+        sinCamion: flota.sinCamion,
+        anterior: flotaAnterior ? flotaAnterior.porVehiculo : null,
+        detalle, detalleSinCamion,
+        config: configNegocio ?? {},
+      })
     } catch (e) {
-      console.error('[TabTransportistas] exportarPDF error:', e)
+      console.error('[TabTransportistas] reporte PDF error:', e)
+      showToast.error('No se pudo generar el reporte')
     } finally {
       setExportando(false)
     }
@@ -65,11 +102,41 @@ export default function TabTransportistas() {
           <button onClick={() => refetch()} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" title="Recargar">
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
-          <button onClick={exportarPDF} disabled={exportando || isLoading || filas.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold">
-            <FileText size={12} />
-            {exportando ? 'Generando...' : 'PDF'}
-          </button>
+          <div className="relative">
+            <button onClick={(e) => abrirMenuReporte(e.currentTarget)} disabled={exportando || isLoading}
+              aria-haspopup="menu" aria-expanded={menuReporte}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold">
+              <FileText size={12} />
+              {exportando ? 'Generando...' : 'Reporte'}
+              <ChevronDown size={12} />
+            </button>
+            {menuReporte && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuReporte(false)} />
+                <div role="menu" className={`absolute ${menuHaciaDerecha ? 'left-0' : 'right-0'} mt-1 z-50 w-64 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5`}>
+                  {[
+                    { modo: 'resumido', titulo: 'Resumido', ayuda: 'Totales, fletes por chofer y por camión (1–2 páginas)' },
+                    { modo: 'detallado', titulo: 'Detallado', ayuda: 'Todo lo anterior + destinos, choferes y viaje por viaje' },
+                  ].map(op => (
+                    <div key={op.modo} className="px-2 py-1.5 rounded-lg">
+                      <p className="text-xs font-bold text-slate-700">{op.titulo}</p>
+                      <p className="text-[10px] text-slate-400 mb-1.5">{op.ayuda}</p>
+                      <div className="flex gap-1.5">
+                        <button role="menuitem" onClick={() => generarReporte(op.modo, 'download')}
+                          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[11px] font-semibold text-slate-700">
+                          <Download size={11} /> Descargar
+                        </button>
+                        <button role="menuitem" onClick={() => generarReporte(op.modo, 'print')}
+                          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[11px] font-semibold text-slate-700">
+                          <Printer size={11} /> Imprimir
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

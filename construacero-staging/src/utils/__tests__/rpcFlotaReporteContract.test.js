@@ -199,9 +199,9 @@ describe('Reporte de transportistas: reparto del flete', () => {
 
   it('la pantalla y el PDF ya no muestran pagado ni saldo', () => {
     const tab = leer('src/components/reportes/TabTransportistas.jsx')
-    const pdf = leer('src/services/pdf/transportistaResumenPDF.js')
+    const pdf = leer('src/services/pdf/flotaChoferesPDF.js')
     for (const fuente of [tab, pdf]) {
-      expect(fuente).not.toMatch(/pagado_usd|saldo_usd/)
+      expect(fuente).not.toMatch(/pagado_usd|saldo_usd|comision_pagada_usd|comision_pendiente_usd/)
       expect(fuente).toContain('repartoFlete')
     }
   })
@@ -233,5 +233,27 @@ describe('Reporte detallado por camión (286)', () => {
     expect(m).toContain('CREATE OR REPLACE FUNCTION public.obtener_detalle_viajes_flota(')
     expect(m).toContain('GRANT EXECUTE ON FUNCTION public.obtener_detalle_viajes_flota(UUID, TIMESTAMPTZ, TIMESTAMPTZ, UUID, BOOLEAN) TO service_role')
     expect(m).not.toMatch(/GRANT EXECUTE[^;]*TO (anon|authenticated)/)
+  })
+})
+
+describe('Botón único "Reporte" (resumido / detallado)', () => {
+  it('la pestaña ofrece resumido y detallado, para descargar o imprimir', () => {
+    const tab = leer('src/components/reportes/TabTransportistas.jsx')
+    expect(tab).toContain("generarReporte(op.modo, 'download')")
+    expect(tab).toContain("generarReporte(op.modo, 'print')")
+    expect(tab).toContain("modo: 'resumido'")
+    expect(tab).toContain("modo: 'detallado'")
+  })
+
+  it('la sección de flota ya no tiene su propio PDF ni Excel', () => {
+    const seccion = leer('src/components/reportes/SeccionFlotaChoferes.jsx')
+    expect(seccion).not.toMatch(/exportarPDF|exportarExcel|generarFlotaChoferesPDF/)
+  })
+
+  it('el resumido omite el detalle viaje por viaje y el Cuadro 2', () => {
+    const pdf = leer('src/services/pdf/flotaChoferesPDF.js')
+    expect(pdf).toContain("const detallado = modo === 'detallado'")
+    expect(pdf).toContain('if (detallado && detalle.length > 0)')
+    expect(pdf).toContain('if (detallado) y = tabla(doc, y,')
   })
 })

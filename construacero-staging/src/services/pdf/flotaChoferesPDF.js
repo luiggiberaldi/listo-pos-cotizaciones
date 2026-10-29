@@ -1,6 +1,9 @@
 // src/services/pdf/flotaChoferesPDF.js
-// PDF del reporte de flota (Fase 4 del plan): Cuadro 1 por vehículo y Cuadro 2
-// por chofer local. La fuente estándar del PDF no tiene el símbolo ≈, así que
+// PDF único del reporte de Transportistas (botón "Reporte"):
+//  - Resumido: fletes por chofer (total / chofer / empresa), resumen del período
+//    y Cuadro 1 por camión.
+//  - Detallado: lo anterior + destinos y choferes por camión, Cuadro 2 por chofer
+//    local y el detalle viaje por viaje (con los viajes sin camión). La fuente estándar del PDF no tiene el símbolo ≈, así que
 // los viajes estimados se marcan con "~" y se explica al pie (raíl R5).
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
@@ -9,7 +12,7 @@ import {
   C_PRIMARY, C_DARK, C_WHITE, C_GRAY,
   fmtUsd, drawPremiumHeader,
 } from './pdfShared'
-import { num, totalesVehiculos, totalesChoferes, variacion, porcentaje, diasDelPeriodo, textoDestinos } from '../../utils/flotaReporte'
+import { num, totalesVehiculos, totalesChoferes, variacion, porcentaje, diasDelPeriodo, textoDestinos, repartoFlete } from '../../utils/flotaReporte'
 import { nombreVehiculo } from '../../utils/vehiculoImpreso'
 
 const MARCA_PDF = '~'
@@ -98,15 +101,17 @@ function tabla(doc, y, titulo, cols, filas, totales) {
 export async function generarFlotaChoferesPDF({
   porVehiculo = [], porChofer = [], desde = null, hasta = null,
   sinCamion = null, anterior = null, detalle = [], detalleSinCamion = [],
+  tablaChoferes = [], modo = 'detallado',
   config = {}, action = 'download',
 }) {
+  const detallado = modo === 'detallado'
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = await cargarLogo(config.logo_url)
   let y = drawPremiumHeader({
     doc,
     logoData,
     config,
-    title: 'Reporte de Flota y Choferes Locales',
+    title: detallado ? 'Reporte de Transportistas · Detallado' : 'Reporte de Transportistas · Resumido',
     subtitle: `Período: ${desde || 'inicio'} a ${hasta || 'hoy'}`,
   })
 
@@ -115,6 +120,27 @@ export async function generarFlotaChoferesPDF({
   const totEmpresa = porVehiculo.reduce((s, v) => s + num(v.empresa_usd), 0)
   const dias = diasDelPeriodo(desde, hasta)
   const fecha = (iso) => (iso ? new Date(iso).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', timeZone: 'America/Caracas' }) : '—')
+
+  // Fletes por chofer local (misma tabla que la pantalla)
+  if (tablaChoferes.length > 0) {
+    const tot = tablaChoferes.reduce((acc, t) => {
+      const r = repartoFlete(t)
+      return { despachos: acc.despachos + num(t.despachos), total: acc.total + r.total, chofer: acc.chofer + r.chofer, empresa: acc.empresa + r.empresa }
+    }, { despachos: 0, total: 0, chofer: 0, empresa: 0 })
+    y = tabla(doc, y + 2, 'Fletes por chofer local', [
+      { label: 'CHOFER', w: 70 },
+      { label: 'DESPACHOS', w: 22, align: 'right' },
+      { label: 'TOTAL FLETES', w: 32, align: 'right' },
+      { label: 'PARA EL CHOFER', w: 32, align: 'right' },
+      { label: 'PARA LA EMPRESA', w: CONTENT_W - 156, align: 'right' },
+    ], tablaChoferes.map(t => {
+      const r = repartoFlete(t)
+      return [
+        `${t.nombre}${t.activo === false ? ' (inactivo)' : ''}${num(t.despachos_nomina) > 0 ? ` · ${num(t.despachos_nomina)} en Carabobo (nómina)` : ''}`,
+        String(num(t.despachos)), fmtUsd(r.total), fmtUsd(r.chofer), fmtUsd(r.empresa),
+      ]
+    }), ['TOTAL', String(tot.despachos), fmtUsd(tot.total), fmtUsd(tot.chofer), fmtUsd(tot.empresa)])
+  }
 
   // Resumen del período (con comparación si hay período anterior)
   const totAnt = Array.isArray(anterior) ? totalesVehiculos(anterior) : null
@@ -160,7 +186,7 @@ export async function generarFlotaChoferesPDF({
 
   // Cuadro 1 (b) · destinos y choferes por camión (solo camiones con viajes)
   const conViajes = porVehiculo.filter(v => num(v.total_viajes) > 0)
-  if (conViajes.length > 0) {
+  if (detallado && conViajes.length > 0) {
     y = tabla(doc, y, 'Destinos y choferes por camión', [
       { label: 'VEHÍCULO', w: 38 },
       { label: 'CBO/FUERA', w: 18, align: 'right' },
@@ -178,7 +204,7 @@ export async function generarFlotaChoferesPDF({
 
   // Cuadro 2 · por chofer local (reparto chofer / empresa, sin pagado)
   const totC = totalesChoferes(porChofer)
-  y = tabla(doc, y, 'Cuadro 2 · Productividad por chofer local', [
+  if (detallado) y = tabla(doc, y, 'Cuadro 2 · Productividad por chofer local', [
     { label: 'CHOFER', w: 34 },
     { label: 'VIAJES', w: 15, align: 'right' },
     { label: 'CBO/FUERA', w: 16, align: 'right' },
@@ -225,18 +251,29 @@ export async function generarFlotaChoferesPDF({
     fmtUsd(v.chofer_usd),
     fmtUsd(v.empresa_usd),
   ]
-  if (detalle.length > 0) {
+  if (detallado && detalle.length > 0) {
     y = tabla(doc, y, 'Detalle viaje por viaje (camiones de la empresa)', columnasViaje, detalle.map(filaViaje))
   }
-  if (detalleSinCamion.length > 0) {
+  if (detallado && detalleSinCamion.length > 0) {
     tabla(doc, y, 'Viajes de choferes locales sin camión registrado', columnasViaje, detalleSinCamion.map(filaViaje))
   }
 
   drawFooter(doc, config)
-  const nombre = `Flota_Choferes_${desde || 'inicio'}_${hasta || 'hoy'}.pdf`
+  const nombre = `Reporte_Transportistas_${detallado ? 'Detallado' : 'Resumido'}_${desde || 'inicio'}_${hasta || 'hoy'}.pdf`
   if (action === 'print') {
     doc.autoPrint()
-    window.open(doc.output('bloburl'), '_blank')
+    const blobUrl = doc.output('bloburl')
+    const iframe = document.createElement('iframe')
+    Object.assign(iframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0', opacity: '0' })
+    iframe.src = blobUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      try { iframe.contentWindow.focus(); iframe.contentWindow.print() } catch { window.open(blobUrl, '_blank') }
+      setTimeout(() => {
+        try { document.body.removeChild(iframe) } catch { /* ya no está */ }
+        try { URL.revokeObjectURL(blobUrl) } catch { /* sin efecto */ }
+      }, 60000)
+    }
   } else {
     doc.save(nombre)
   }

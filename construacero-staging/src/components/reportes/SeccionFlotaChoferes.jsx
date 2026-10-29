@@ -1,13 +1,11 @@
 // src/components/reportes/SeccionFlotaChoferes.jsx
 // Fase 4 del plan de flota: Cuadro 1 (productividad por vehículo) y Cuadro 2
 // (productividad y liquidación por chofer local), con marca ≈ para viajes
-// estimados (raíl R5) y exportación a PDF. Usa el mismo rango de fechas
+// estimados (raíl R5). El PDF sale del botón "Reporte" de la pestaña. Usa el mismo rango de fechas
 // que la pestaña de Transportistas.
-import { useState } from 'react'
-import { User, FileText, RefreshCw } from 'lucide-react'
+import { User, RefreshCw } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
-import { useConfigNegocio } from '../../hooks/useConfigNegocio'
-import { useReporteFlota, puedeVerReporteFlota, cargarDetalleViajesFlota } from '../../hooks/useVehiculos'
+import { useReporteFlota, puedeVerReporteFlota } from '../../hooks/useVehiculos'
 import {
   MARCA_ESTIMADO, num, textoViajes, totalesVehiculos, totalesChoferes,
   periodoAnterior,
@@ -33,14 +31,12 @@ function Viajes({ fila }) {
 
 export default function SeccionFlotaChoferes({ rango }) {
   const perfil = useAuthStore(s => s.perfil)
-  const { data: configNegocio } = useConfigNegocio()
   const desde = rango?.from || null
   const hasta = rango?.to || null
   const { data, isLoading, isError, refetch } = useReporteFlota({ desde, hasta, rol: perfil?.rol })
   // Mismo número de días justo antes, para las flechas ▲▼ de comparación.
   const anterior = periodoAnterior(desde, hasta)
   const { data: dataAnterior } = useReporteFlota({ desde: anterior?.desde, hasta: anterior?.hasta, rol: perfil?.rol, enabled: !!anterior })
-  const [exportando, setExportando] = useState(false)
 
   if (!puedeVerReporteFlota(perfil?.rol)) return null
 
@@ -50,35 +46,6 @@ export default function SeccionFlotaChoferes({ rango }) {
   const totV = totalesVehiculos(porVehiculo)
   const totC = totalesChoferes(porChofer)
   const hayEstimados = totV.estimados > 0 || porChofer.some(c => num(c.viajes_estimados) > 0)
-  const sufijoArchivo = `${desde || 'inicio'}_${hasta || 'hoy'}`
-
-  // Todo lo que exporta el PDF: cuadros, comparación y viaje por viaje.
-  async function datosExportacion() {
-    const [detalle, detalleSinCamion] = await Promise.all([
-      cargarDetalleViajesFlota({ desde, hasta }),
-      num(data?.sinCamion?.viajes) > 0 ? cargarDetalleViajesFlota({ desde, hasta, sinCamion: true }) : Promise.resolve([]),
-    ])
-    return {
-      porVehiculo, porChofer, desde, hasta,
-      sinCamion: data?.sinCamion ?? null,
-      anterior: anterior ? (dataAnterior?.porVehiculo ?? null) : null,
-      detalle, detalleSinCamion,
-    }
-  }
-
-  async function exportarPDF() {
-    setExportando(true)
-    try {
-      const { generarFlotaChoferesPDF } = await import('../../services/pdf/flotaChoferesPDF')
-      await generarFlotaChoferesPDF({ ...(await datosExportacion()), config: configNegocio ?? {}, action: 'download' })
-    } catch (e) {
-      console.error('[SeccionFlotaChoferes] exportarPDF error:', e)
-    } finally {
-      setExportando(false)
-    }
-  }
-
-
 
   return (
     <div className="space-y-4 pt-4 border-t border-slate-200">
@@ -87,10 +54,6 @@ export default function SeccionFlotaChoferes({ rango }) {
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => refetch()} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" title="Recargar">
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-          <button onClick={exportarPDF} disabled={exportando || isLoading || (porVehiculo.length === 0 && porChofer.length === 0)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold">
-            <FileText size={12} /> {exportando ? 'Generando...' : 'PDF'}
           </button>
         </div>
       </div>

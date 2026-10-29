@@ -130,3 +130,16 @@ export async function cargarDetalleViajesFlota({ desde = null, hasta = null, veh
   const data = await pedir(`/api/reportes/flota-viajes?${params}`)
   return Array.isArray(data.viajes) ? data.viajes : []
 }
+
+// Carga directa del reporte de flota (sin caché), para armar el PDF del botón "Reporte".
+export async function cargarReporteFlota({ desde = null, hasta = null } = {}) {
+  const params = new URLSearchParams()
+  if (desde) params.set('desde', desde)
+  if (hasta) params.set('hasta', hasta)
+  const data = await pedir(`/api/reportes/flota-choferes${params.toString() ? `?${params}` : ''}`)
+  return {
+    porVehiculo: Array.isArray(data.por_vehiculo) ? data.por_vehiculo : [],
+    porChofer: Array.isArray(data.por_chofer_local) ? data.por_chofer_local : [],
+    sinCamion: data.viajes_sin_camion || { viajes: 0, flete_usd: 0 },
+  }
+}
