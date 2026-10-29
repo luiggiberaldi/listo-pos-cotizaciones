@@ -90,7 +90,7 @@ export function puedeVerReporteFlota(rol) {
   return ROLES_REPORTE_FLOTA.includes(rol)
 }
 
-export function useReporteFlota({ desde = null, hasta = null, rol = null } = {}) {
+export function useReporteFlota({ desde = null, hasta = null, rol = null, enabled = true } = {}) {
   return useQuery({
     queryKey: [...KEY, 'reporte', desde, hasta],
     queryFn: async () => {
@@ -102,9 +102,31 @@ export function useReporteFlota({ desde = null, hasta = null, rol = null } = {})
       return {
         porVehiculo: Array.isArray(data.por_vehiculo) ? data.por_vehiculo : [],
         porChofer: Array.isArray(data.por_chofer_local) ? data.por_chofer_local : [],
+        sinCamion: data.viajes_sin_camion || { viajes: 0, flete_usd: 0 },
       }
     },
-    enabled: puedeVerReporteFlota(rol),
+    enabled: puedeVerReporteFlota(rol) && enabled,
     staleTime: 1000 * 60 * 2,
   })
+}
+
+// Detalle viaje por viaje (migración 286): de un camión, de todos, o solo los
+// viajes de choferes locales sin camión registrado.
+export function useDetalleViajesFlota({ desde = null, hasta = null, vehiculoId = null, sinCamion = false, rol = null, enabled = true } = {}) {
+  return useQuery({
+    queryKey: [...KEY, 'detalle', desde, hasta, vehiculoId, sinCamion],
+    queryFn: () => cargarDetalleViajesFlota({ desde, hasta, vehiculoId, sinCamion }),
+    enabled: puedeVerReporteFlota(rol) && enabled,
+    staleTime: 1000 * 60 * 2,
+  })
+}
+
+export async function cargarDetalleViajesFlota({ desde = null, hasta = null, vehiculoId = null, sinCamion = false } = {}) {
+  const params = new URLSearchParams()
+  if (desde) params.set('desde', desde)
+  if (hasta) params.set('hasta', hasta)
+  if (vehiculoId) params.set('vehiculo_id', vehiculoId)
+  if (sinCamion) params.set('sin_camion', 'true')
+  const data = await pedir(`/api/reportes/flota-viajes?${params}`)
+  return Array.isArray(data.viajes) ? data.viajes : []
 }

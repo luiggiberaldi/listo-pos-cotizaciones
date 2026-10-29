@@ -9,7 +9,8 @@ import {
   C_PRIMARY, C_DARK, C_WHITE, C_GRAY,
   fmtUsd, drawPremiumHeader,
 } from './pdfShared'
-import { num, totalesVehiculos, totalesChoferes } from '../../utils/flotaReporte'
+import { num, totalesVehiculos, totalesChoferes, variacion, porcentaje, diasDelPeriodo, textoDestinos } from '../../utils/flotaReporte'
+import { nombreVehiculo } from '../../utils/vehiculoImpreso'
 
 const MARCA_PDF = '~'
 
@@ -94,7 +95,11 @@ function tabla(doc, y, titulo, cols, filas, totales) {
   return y + 6
 }
 
-export async function generarFlotaChoferesPDF({ porVehiculo = [], porChofer = [], desde = null, hasta = null, config = {}, action = 'download' }) {
+export async function generarFlotaChoferesPDF({
+  porVehiculo = [], porChofer = [], desde = null, hasta = null,
+  sinCamion = null, anterior = null, detalle = [], detalleSinCamion = [],
+  config = {}, action = 'download',
+}) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
   const logoData = await cargarLogo(config.logo_url)
   let y = drawPremiumHeader({
@@ -106,40 +111,82 @@ export async function generarFlotaChoferesPDF({ porVehiculo = [], porChofer = []
   })
 
   const totV = totalesVehiculos(porVehiculo)
-  y = tabla(doc, y + 2, 'Cuadro 1 · Productividad por vehículo', [
-    { label: 'VEHÍCULO', w: 46 },
-    { label: 'PLACA', w: 20 },
-    { label: 'VIAJES', w: 18, align: 'right' },
-    { label: 'FLETES', w: 24, align: 'right' },
-    { label: 'MERCANCÍA', w: 26, align: 'right' },
-    { label: 'PROM./VIAJE', w: 20, align: 'right' },
-    { label: 'CHOFERES', w: CONTENT_W - 154 },
-  ], porVehiculo.map(v => [
-    `${v.codigo} ${v.nombre}${v.activo === false ? ' (inactivo)' : ''}`,
-    v.placa,
-    viajesPdf(v),
-    fmtUsd(v.total_flete_usd),
-    fmtUsd(v.total_mercancia_usd),
-    fmtUsd(v.promedio_flete_viaje_usd),
-    (v.desglose_choferes || []).map(d => `${d.chofer_nombre}: ${num(d.viajes)}`).join(' / ') || '—',
-  ]), [
-    'TOTAL', '',
-    viajesPdf({ total_viajes: totV.viajes, viajes_estimados: totV.estimados }),
-    fmtUsd(totV.flete), fmtUsd(totV.mercancia),
-    fmtUsd(totV.viajes > 0 ? totV.flete / totV.viajes : 0), '',
+  const totChoferes = porVehiculo.reduce((s, v) => s + num(v.comision_choferes_usd), 0)
+  const totEmpresa = porVehiculo.reduce((s, v) => s + num(v.empresa_usd), 0)
+  const dias = diasDelPeriodo(desde, hasta)
+  const fecha = (iso) => (iso ? new Date(iso).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', timeZone: 'America/Caracas' }) : '—')
+
+  // Resumen del período (con comparación si hay período anterior)
+  const totAnt = Array.isArray(anterior) ? totalesVehiculos(anterior) : null
+  const empresaAnt = Array.isArray(anterior) ? anterior.reduce((s, v) => s + num(v.empresa_usd), 0) : 0
+  const comp = (a, b) => (totAnt ? `  ${variacion(a, b).texto.replace('▲', '+').replace('▼', '-')} vs período anterior` : '')
+  y = tabla(doc, y + 2, 'Resumen del período', [
+    { label: 'CONCEPTO', w: 70 },
+    { label: 'VALOR', w: 40, align: 'right' },
+    { label: 'COMPARACIÓN', w: CONTENT_W - 110 },
+  ], [
+    ['Viajes de la flota', String(totV.viajes), comp(totV.viajes, totAnt?.viajes).trim()],
+    ['Fletes cobrados', fmtUsd(totV.flete), comp(totV.flete, totAnt?.flete).trim()],
+    ['Para los choferes', fmtUsd(totChoferes), ''],
+    ['Para la empresa', fmtUsd(totEmpresa), comp(totEmpresa, empresaAnt).trim()],
+    ['Viajes sin camión registrado', `${num(sinCamion?.viajes)} (${fmtUsd(sinCamion?.flete_usd)})`, num(sinCamion?.viajes) > 0 ? 'Ver lista al final' : ''],
   ])
 
+  // Cuadro 1 · por camión
+  y = tabla(doc, y, 'Cuadro 1 · Productividad por vehículo', [
+    { label: 'VEHÍCULO', w: 38 },
+    { label: 'PLACAS', w: 26 },
+    { label: 'VIAJES', w: 14, align: 'right' },
+    { label: '% TOTAL', w: 12, align: 'right' },
+    { label: dias ? `DÍAS/${dias}` : 'DÍAS', w: 14, align: 'right' },
+    { label: 'FLETES', w: 21, align: 'right' },
+    { label: 'CHOFERES', w: 20, align: 'right' },
+    { label: 'EMPRESA', w: 21, align: 'right' },
+    { label: 'ÚLTIMO VIAJE', w: CONTENT_W - 166 },
+  ], porVehiculo.map(v => [
+    `${nombreVehiculo(v)}${v.activo === false ? ' (inactivo)' : ''}`,
+    [v.placa, v.placa_batea].filter(Boolean).join(' / '),
+    viajesPdf(v),
+    `${porcentaje(v.total_viajes, totV.viajes)}%`,
+    String(num(v.dias_trabajados)),
+    fmtUsd(v.total_flete_usd),
+    fmtUsd(v.comision_choferes_usd),
+    fmtUsd(v.empresa_usd),
+    v.ultimo_viaje_en ? `${fecha(v.ultimo_viaje_en)} ${v.ultimo_chofer_nombre || ''}` : '—',
+  ]), [
+    'TOTAL', '', viajesPdf({ total_viajes: totV.viajes, viajes_estimados: totV.estimados }), '100%', '',
+    fmtUsd(totV.flete), fmtUsd(totChoferes), fmtUsd(totEmpresa), '',
+  ])
+
+  // Cuadro 1 (b) · destinos y choferes por camión (solo camiones con viajes)
+  const conViajes = porVehiculo.filter(v => num(v.total_viajes) > 0)
+  if (conViajes.length > 0) {
+    y = tabla(doc, y, 'Destinos y choferes por camión', [
+      { label: 'VEHÍCULO', w: 38 },
+      { label: 'CBO/FUERA', w: 18, align: 'right' },
+      { label: 'MERCANCÍA', w: 22, align: 'right' },
+      { label: 'DESTINOS FRECUENTES', w: 62 },
+      { label: 'CHOFERES', w: CONTENT_W - 140 },
+    ], conViajes.map(v => [
+      nombreVehiculo(v),
+      `${num(v.viajes_en_carabobo)}/${num(v.viajes_fuera_carabobo)}`,
+      fmtUsd(v.total_mercancia_usd),
+      textoDestinos(v.destinos_top) || '—',
+      (v.desglose_choferes || []).map(d => `${d.chofer_nombre}: ${num(d.viajes)}`).join(' / ') || '—',
+    ]))
+  }
+
+  // Cuadro 2 · por chofer local (reparto chofer / empresa, sin pagado)
   const totC = totalesChoferes(porChofer)
-  tabla(doc, y, 'Cuadro 2 · Productividad y liquidación por chofer local', [
+  y = tabla(doc, y, 'Cuadro 2 · Productividad por chofer local', [
     { label: 'CHOFER', w: 34 },
     { label: 'VIAJES', w: 15, align: 'right' },
     { label: 'CBO/FUERA', w: 16, align: 'right' },
-    { label: 'FLETES', w: 21, align: 'right' },
-    { label: 'MERCANCÍA', w: 23, align: 'right' },
-    { label: 'COM. GEN.', w: 20, align: 'right' },
-    { label: 'PAGADA', w: 19, align: 'right' },
-    { label: 'PENDIENTE', w: 20, align: 'right' },
-    { label: 'VEHÍCULOS', w: CONTENT_W - 168 },
+    { label: 'FLETES', w: 22, align: 'right' },
+    { label: 'MERCANCÍA', w: 22, align: 'right' },
+    { label: 'CHOFER', w: 22, align: 'right' },
+    { label: 'EMPRESA', w: 22, align: 'right' },
+    { label: 'VEHÍCULOS', w: CONTENT_W - 153 },
   ], porChofer.map(c => [
     `${c.chofer_nombre}${c.activo === false ? ' (inactivo)' : ''}`,
     viajesPdf(c),
@@ -147,14 +194,43 @@ export async function generarFlotaChoferesPDF({ porVehiculo = [], porChofer = []
     fmtUsd(c.total_flete_usd),
     fmtUsd(c.total_mercancia_usd),
     fmtUsd(c.comision_generada_usd),
-    fmtUsd(c.comision_pagada_usd),
-    fmtUsd(c.comision_pendiente_usd),
+    fmtUsd(num(c.total_flete_usd) - num(c.comision_generada_usd)),
     (c.desglose_vehiculos || []).map(d => `${d.vehiculo_nombre}: ${num(d.viajes)}`).join(' | ') || '—',
   ]), [
     'TOTAL', String(totC.viajes), `${totC.enCarabobo}/${totC.fueraCarabobo}`,
     fmtUsd(totC.flete), fmtUsd(totC.mercancia), fmtUsd(totC.comisionGenerada),
-    fmtUsd(totC.comisionPagada), fmtUsd(totC.comisionPendiente), '',
+    fmtUsd(totC.flete - totC.comisionGenerada), '',
   ])
+
+  // Detalle viaje por viaje
+  const columnasViaje = [
+    { label: 'FECHA', w: 15 },
+    { label: 'DESPACHO', w: 20 },
+    { label: 'CLIENTE', w: 36 },
+    { label: 'DESTINO', w: 33 },
+    { label: 'CHOFER', w: 26 },
+    { label: 'CAMIÓN', w: 16 },
+    { label: 'FLETE', w: 14, align: 'right' },
+    { label: 'CHOFER', w: 14, align: 'right' },
+    { label: 'EMPRESA', w: CONTENT_W - 174, align: 'right' },
+  ]
+  const filaViaje = (v) => [
+    fecha(v.fecha),
+    `DES-${String(v.numero).padStart(5, '0')}${v.vehiculo_origen === 'backfill' ? ` ${MARCA_PDF}` : ''}`,
+    v.cliente_nombre || '—',
+    [v.ciudad, v.estado_destino].filter(Boolean).join(', ') || '—',
+    v.chofer_nombre || '—',
+    v.vehiculo_codigo || 'Sin camión',
+    fmtUsd(v.flete_usd),
+    fmtUsd(v.chofer_usd),
+    fmtUsd(v.empresa_usd),
+  ]
+  if (detalle.length > 0) {
+    y = tabla(doc, y, 'Detalle viaje por viaje (camiones de la empresa)', columnasViaje, detalle.map(filaViaje))
+  }
+  if (detalleSinCamion.length > 0) {
+    tabla(doc, y, 'Viajes de choferes locales sin camión registrado', columnasViaje, detalleSinCamion.map(filaViaje))
+  }
 
   drawFooter(doc, config)
   const nombre = `Flota_Choferes_${desde || 'inicio'}_${hasta || 'hoy'}.pdf`

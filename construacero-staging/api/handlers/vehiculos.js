@@ -391,3 +391,43 @@ export async function handleReporteFlotaChoferes(request, env) {
 
   return json({ ok: true, desde, hasta: hastaFinal, ...resultado }, 200, request)
 }
+
+// ── GET /api/reportes/flota-viajes?desde&hasta&vehiculo_id=…|sin_camion=true ──
+// Detalle viaje por viaje del reporte de flota (para revisar cualquier número).
+export async function handleDetalleViajesFlota(request, env) {
+  const v = await validateOperator(request, env)
+  if (v.error) return v.error
+  const { operador, headers } = v
+  if (!ROLES_REPORTE.includes(operador.rol)) {
+    return jsonError('Acceso denegado: no tienes permiso para ver este reporte', 403, request)
+  }
+  const cuenta = requireCuenta(operador, request)
+  if (cuenta.error) return cuenta.error
+
+  const url = new URL(request.url)
+  const desde = url.searchParams.get('desde') || '2000-01-01'
+  const hastaFinal = url.searchParams.get('hasta') || new Date().toISOString().slice(0, 10)
+  if (!fechaValida(desde)) return jsonError('desde inválida (formato YYYY-MM-DD)', 400, request)
+  if (!fechaValida(hastaFinal)) return jsonError('hasta inválida (formato YYYY-MM-DD)', 400, request)
+  if (desde > hastaFinal) return jsonError('desde no puede ser mayor que hasta', 400, request)
+  const vehiculoId = url.searchParams.get('vehiculo_id') || null
+  if (vehiculoId && !isValidUuid(vehiculoId)) return jsonError('vehiculo_id inválido', 400, request)
+  const soloSinCamion = url.searchParams.get('sin_camion') === 'true'
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/obtener_detalle_viajes_flota`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      p_cuenta_id: cuenta.cuentaId,
+      p_fecha_inicio: `${desde}T00:00:00`,
+      p_fecha_fin: `${hastaFinal}T23:59:59.999`,
+      p_vehiculo_id: vehiculoId,
+      p_solo_sin_camion: soloSinCamion,
+    }),
+  })
+  const texto = await res.text().catch(() => '')
+  if (!res.ok) return jsonError(`No se pudo obtener el detalle de viajes: ${texto}`, 500, request)
+  let resultado = {}
+  try { resultado = texto ? JSON.parse(texto) : {} } catch { /* respuesta vacía */ }
+  return json({ ok: true, desde, hasta: hastaFinal, viajes: resultado.viajes || [] }, 200, request)
+}

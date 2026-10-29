@@ -41,7 +41,7 @@ import {
   handleActualizarTransaccionCxP
 } from './api/handlers/proveedores.js'
 import { handleReporteTransportistas, handleDetalleTransportista, handlePagarTransportista, handleRevertirPagoTransportista } from './api/handlers/transportistas.js'
-import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes } from './api/handlers/vehiculos.js'
+import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota } from './api/handlers/vehiculos.js'
 
 
 export default {
@@ -389,6 +389,10 @@ export default {
     // ── API: reporte gerencial de flota y choferes locales ────────────────────
     if (url.pathname === '/api/reportes/flota-choferes' && request.method === 'GET') {
       return handleReporteFlotaChoferes(request, env);
+    }
+
+    if (url.pathname === '/api/reportes/flota-viajes' && request.method === 'GET') {
+      return handleDetalleViajesFlota(request, env);
     }
 
     // ── API: obtener lista de comisiones (bypass RLS) ──────────────────────

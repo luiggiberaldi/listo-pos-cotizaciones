@@ -78,35 +78,94 @@ function decimal(v) {
  * Arma un CSV (separador ';', apto para Excel en español) con los dos cuadros.
  * Los viajes estimados llevan la marca ≈ y una nota al pie.
  */
-export function construirCsvFlota({ porVehiculo = [], porChofer = [], desde = '', hasta = '' }) {
+/**
+ * Arma un CSV (separador ';', apto para Excel en español) con:
+ *  - resumen del período (y del anterior, si se pasa);
+ *  - Cuadro 1 detallado por camión (migración 286);
+ *  - Cuadro 2 por chofer local (reparto chofer / empresa, sin pagado);
+ *  - viajes de choferes locales sin camión registrado;
+ *  - detalle viaje por viaje (si se pasa).
+ * Los viajes estimados llevan la marca ≈ y una nota al pie.
+ */
+export function construirCsvFlota({
+  porVehiculo = [], porChofer = [], desde = '', hasta = '',
+  sinCamion = null, detalle = [], detalleSinCamion = [], anterior = null,
+}) {
   const lineas = []
-  lineas.push(['Reporte de flota y choferes locales', `Desde ${desde || 'inicio'}`, `Hasta ${hasta || 'hoy'}`].map(celda).join(';'))
+  const fila = (valores) => lineas.push(valores.map(celda).join(';'))
+  const fecha = (iso) => (iso ? new Date(iso).toLocaleDateString('es-VE', { timeZone: 'America/Caracas' }) : '')
+  const tot = totalesVehiculos(porVehiculo)
+  const totEmpresa = porVehiculo.reduce((acc, v) => acc + num(v.empresa_usd), 0)
+  const totChoferes = porVehiculo.reduce((acc, v) => acc + num(v.comision_choferes_usd), 0)
+  const dias = diasDelPeriodo(desde, hasta)
+
+  fila(['Reporte de flota y choferes locales', `Desde ${desde || 'inicio'}`, `Hasta ${hasta || 'hoy'}`])
+  lineas.push('')
+  lineas.push('Resumen del periodo')
+  fila(['Concepto', 'Este periodo', ...(anterior ? ['Periodo anterior', 'Variacion'] : [])])
+  const totAnt = anterior ? totalesVehiculos(anterior) : null
+  const empresaAnt = anterior ? anterior.reduce((acc, v) => acc + num(v.empresa_usd), 0) : 0
+  fila(['Viajes de la flota', tot.viajes, ...(anterior ? [totAnt.viajes, variacion(tot.viajes, totAnt.viajes).texto] : [])])
+  fila(['Fletes cobrados USD', decimal(tot.flete), ...(anterior ? [decimal(totAnt.flete), variacion(tot.flete, totAnt.flete).texto] : [])])
+  fila(['Para los choferes USD', decimal(totChoferes)])
+  fila(['Para la empresa USD', decimal(totEmpresa), ...(anterior ? [decimal(empresaAnt), variacion(totEmpresa, empresaAnt).texto] : [])])
+  fila(['Viajes sin camion registrado', num(sinCamion?.viajes), 'Fletes USD', decimal(sinCamion?.flete_usd)])
+
   lineas.push('')
   lineas.push('Cuadro 1 - Productividad por vehiculo')
-  lineas.push(['Codigo', 'Vehiculo', 'Placa', 'Activo', 'Viajes', 'Viajes estimados (≈)', 'Fletes USD', 'Mercancia USD', 'Flete promedio por viaje USD', 'Choferes'].join(';'))
+  fila(['Codigo', 'Vehiculo', 'Modelo', 'Placa chuto', 'Placa batea', 'Activo', 'Viajes', '% del total',
+    dias ? `Dias trabajados (de ${dias})` : 'Dias trabajados', 'Viajes estimados (≈)',
+    'Fletes USD', 'Para choferes USD', 'Para la empresa USD', 'Mercancia USD', 'Flete promedio por viaje USD',
+    'En Carabobo', 'Fuera de Carabobo', 'Destinos frecuentes', 'Ultimo viaje', 'Chofer del ultimo viaje', 'Choferes'])
   for (const f of porVehiculo) {
-    lineas.push([
-      f.codigo, f.nombre, f.placa, f.activo === false ? 'No' : 'Si',
-      num(f.total_viajes), num(f.viajes_estimados),
-      decimal(f.total_flete_usd), decimal(f.total_mercancia_usd), decimal(f.promedio_flete_viaje_usd),
-      textoDesgloseChoferes(f.desglose_choferes),
-    ].map(celda).join(';'))
+    fila([
+      f.codigo, f.nombre, f.modelo || '', f.placa, f.placa_batea || '', f.activo === false ? 'No' : 'Si',
+      num(f.total_viajes), porcentaje(f.total_viajes, tot.viajes), num(f.dias_trabajados), num(f.viajes_estimados),
+      decimal(f.total_flete_usd), decimal(f.comision_choferes_usd), decimal(f.empresa_usd),
+      decimal(f.total_mercancia_usd), decimal(f.promedio_flete_viaje_usd),
+      num(f.viajes_en_carabobo), num(f.viajes_fuera_carabobo), textoDestinos(f.destinos_top),
+      fecha(f.ultimo_viaje_en), f.ultimo_chofer_nombre || '', textoDesgloseChoferes(f.desglose_choferes),
+    ])
   }
+  fila(['Total', '', '', '', '', '', tot.viajes, 100, '', tot.estimados, decimal(tot.flete), decimal(totChoferes), decimal(totEmpresa), decimal(tot.mercancia)])
+
   lineas.push('')
-  lineas.push('Cuadro 2 - Productividad y liquidacion por chofer local')
-  lineas.push(['Chofer', 'Activo', 'Vehiculo habitual', 'Viajes', 'En Carabobo', 'Fuera de Carabobo', 'Viajes estimados (≈)', 'Fletes USD', 'Mercancia USD', 'Comision generada USD', 'Comision pagada USD', 'Comision pendiente USD', 'Vehiculos usados'].join(';'))
+  lineas.push('Cuadro 2 - Productividad por chofer local')
+  fila(['Chofer', 'Activo', 'Vehiculo habitual', 'Viajes', 'En Carabobo', 'Fuera de Carabobo', 'Viajes estimados (≈)',
+    'Fletes USD', 'Mercancia USD', 'Para el chofer USD', 'Para la empresa USD', 'Vehiculos usados'])
   for (const c of porChofer) {
-    lineas.push([
+    fila([
       c.chofer_nombre, c.activo === false ? 'No' : 'Si',
       c.vehiculo_habitual_nombre ? `${c.vehiculo_habitual_nombre} (${c.vehiculo_habitual_placa || ''})` : 'Rotativo',
       num(c.total_viajes), num(c.viajes_en_carabobo), num(c.viajes_fuera_carabobo), num(c.viajes_estimados),
       decimal(c.total_flete_usd), decimal(c.total_mercancia_usd),
-      decimal(c.comision_generada_usd), decimal(c.comision_pagada_usd), decimal(c.comision_pendiente_usd),
+      decimal(c.comision_generada_usd), decimal(num(c.total_flete_usd) - num(c.comision_generada_usd)),
       textoDesgloseVehiculos(c.desglose_vehiculos),
-    ].map(celda).join(';'))
+    ])
   }
+
+  const filaViaje = (v) => fila([
+    fecha(v.fecha), `DES-${String(v.numero).padStart(5, '0')}${v.vehiculo_origen === 'backfill' ? ' ≈' : ''}`,
+    v.cliente_nombre || '', [v.ciudad, v.estado_destino].filter(Boolean).join(', '), v.chofer_nombre || '',
+    v.vehiculo_codigo || 'Sin camion', decimal(v.flete_usd), decimal(v.chofer_usd), decimal(v.empresa_usd), decimal(v.mercancia_usd),
+  ])
+  const encabezadoViajes = ['Fecha', 'Despacho', 'Cliente', 'Destino', 'Chofer', 'Camion', 'Flete USD', 'Chofer USD', 'Empresa USD', 'Mercancia USD']
+  if (detalle.length > 0) {
+    lineas.push('')
+    lineas.push('Detalle viaje por viaje (camiones de la empresa)')
+    fila(encabezadoViajes)
+    detalle.forEach(filaViaje)
+  }
+  if (detalleSinCamion.length > 0) {
+    lineas.push('')
+    lineas.push('Viajes de choferes locales sin camion registrado')
+    fila(encabezadoViajes)
+    detalleSinCamion.forEach(filaViaje)
+  }
+
   lineas.push('')
   lineas.push(celda('≈ = viajes viejos cuyo camion se estimo con la ficha del chofer (no es un dato registrado en el viaje).'))
+  lineas.push(celda('Para la empresa = fletes menos la comision del chofer (los fletes dentro de Carabobo quedan para la empresa; ahi el chofer cobra por nomina).'))
   // BOM para que Excel reconozca los acentos (UTF-8).
   return '\uFEFF' + lineas.join('\r\n')
 }
@@ -121,4 +180,53 @@ export function descargarCsv(nombreArchivo, contenido) {
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+// ── Ayudantes del reporte detallado por camión (migración 286) ───────────────
+
+function aFecha(iso) {
+  const [y, m, d] = String(iso).split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d))
+}
+
+function aIso(fecha) {
+  return fecha.toISOString().slice(0, 10)
+}
+
+/** Días calendario del rango (ambos incluidos); null si no hay rango completo. */
+export function diasDelPeriodo(desde, hasta) {
+  if (!desde || !hasta) return null
+  return Math.round((aFecha(hasta) - aFecha(desde)) / 86400000) + 1
+}
+
+/** Período inmediatamente anterior con la misma cantidad de días. */
+export function periodoAnterior(desde, hasta) {
+  const dias = diasDelPeriodo(desde, hasta)
+  if (!dias) return null
+  const fin = aFecha(desde)
+  fin.setUTCDate(fin.getUTCDate() - 1)
+  const inicio = new Date(fin)
+  inicio.setUTCDate(inicio.getUTCDate() - (dias - 1))
+  return { desde: aIso(inicio), hasta: aIso(fin) }
+}
+
+/** Variación contra el período anterior: { signo: 'sube'|'baja'|'igual'|'nuevo', texto }. */
+export function variacion(actual, anterior) {
+  const a = num(actual)
+  const b = num(anterior)
+  if (a === b) return { signo: 'igual', texto: '= igual' }
+  if (b === 0) return { signo: 'nuevo', texto: '▲ nuevo' }
+  const pct = Math.round(((a - b) / b) * 100)
+  return pct >= 0 ? { signo: 'sube', texto: `▲ ${pct}%` } : { signo: 'baja', texto: `▼ ${Math.abs(pct)}%` }
+}
+
+/** Porcentaje entero de parte sobre total (0 si total es 0). */
+export function porcentaje(parte, total) {
+  const t = num(total)
+  return t > 0 ? Math.round((num(parte) / t) * 100) : 0
+}
+
+/** "Valencia, Carabobo (5) · Maracay, Aragua (2)" */
+export function textoDestinos(destinos = []) {
+  return (destinos || []).map(d => `${d.destino} (${num(d.viajes)})`).join(' · ')
 }

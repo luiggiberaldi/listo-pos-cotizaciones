@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest'
 import {
   textoViajes, totalesVehiculos, totalesChoferes, construirCsvFlota,
   textoDesgloseChoferes, textoDesgloseVehiculos, repartoFlete,
+  periodoAnterior, diasDelPeriodo, variacion, porcentaje,
 } from '../flotaReporte'
 import { datosVehiculoImpreso, nombreVehiculo } from '../vehiculoImpreso'
 
@@ -120,8 +121,11 @@ describe('Reporte con dos choferes rotando camiones (R12)', () => {
     const csv = construirCsvFlota({ porVehiculo, porChofer, desde: '2026-10-01', hasta: '2026-10-31' })
     expect(csv.charCodeAt(0)).toBe(0xFEFF)
     expect(csv).toContain('Cuadro 1 - Productividad por vehiculo')
-    expect(csv).toContain('Cuadro 2 - Productividad y liquidacion por chofer local')
-    expect(csv).toContain('CAM-01;NPR;A12BC3D;Si;17;2;850,00;12000,00;50,00;Juan: 14 viajes / Pedro: 3 viajes')
+    expect(csv).toContain('Cuadro 2 - Productividad por chofer local')
+    // Codigo;Vehiculo;Modelo;Placa chuto;Placa batea;Activo;Viajes;% del total;Dias;Estimados;Fletes;...
+    expect(csv).toContain('CAM-01;NPR;;A12BC3D;;Si;17;81;0;2;850,00;')
+    expect(csv).toContain('Juan: 14 viajes / Pedro: 3 viajes')
+    expect(csv).not.toMatch(/pagada|pendiente/i)
     expect(csv).toContain('≈ = viajes viejos')
   })
 })
@@ -200,5 +204,34 @@ describe('Reporte de transportistas: reparto del flete', () => {
       expect(fuente).not.toMatch(/pagado_usd|saldo_usd/)
       expect(fuente).toContain('repartoFlete')
     }
+  })
+})
+
+describe('Reporte detallado por camión (286)', () => {
+  it('período anterior con la misma cantidad de días', () => {
+    expect(periodoAnterior('2026-10-26', '2026-10-29')).toEqual({ desde: '2026-10-22', hasta: '2026-10-25' })
+    expect(periodoAnterior('2026-10-01', '2026-10-31')).toEqual({ desde: '2026-08-31', hasta: '2026-09-30' })
+    expect(periodoAnterior(null, '2026-10-29')).toBeNull()
+    expect(diasDelPeriodo('2026-10-26', '2026-10-29')).toBe(4)
+  })
+
+  it('variación y porcentaje se leen fácil', () => {
+    expect(variacion(12, 10).texto).toBe('▲ 20%')
+    expect(variacion(5, 10).texto).toBe('▼ 50%')
+    expect(variacion(3, 0).texto).toBe('▲ nuevo')
+    expect(variacion(0, 0).texto).toBe('= igual')
+    expect(porcentaje(1, 2)).toBe(50)
+    expect(porcentaje(1, 0)).toBe(0)
+  })
+
+  it('la migración 286 mantiene las métricas congeladas y agrega el detalle', () => {
+    const m = leer('supabase/migrations/286_staging_flota_reporte_detallado.sql')
+    expect(m).toContain("nd.estado IN ('despachada', 'entregada')")
+    expect(m).toContain('SUM(nd.total_usd - nd.flete_usd - nd.corte_usd)')
+    expect(m).toContain('AS empresa_usd')
+    expect(m).toContain("COUNT(DISTINCT (nd.creado_en AT TIME ZONE 'America/Caracas')::date)")
+    expect(m).toContain('CREATE OR REPLACE FUNCTION public.obtener_detalle_viajes_flota(')
+    expect(m).toContain('GRANT EXECUTE ON FUNCTION public.obtener_detalle_viajes_flota(UUID, TIMESTAMPTZ, TIMESTAMPTZ, UUID, BOOLEAN) TO service_role')
+    expect(m).not.toMatch(/GRANT EXECUTE[^;]*TO (anon|authenticated)/)
   })
 })
