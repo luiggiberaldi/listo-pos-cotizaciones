@@ -123,7 +123,7 @@ describe('Reporte con dos choferes rotando camiones (R12)', () => {
     expect(csv).toContain('Cuadro 1 - Productividad por vehiculo')
     expect(csv).toContain('Cuadro 2 - Productividad por chofer local')
     // Codigo;Vehiculo;Modelo;Placa chuto;Placa batea;Activo;Viajes;% del total;Dias;Estimados;Fletes;...
-    expect(csv).toContain('NPR;;A12BC3D;;Si;17;81;0;2;850,00;')
+    expect(csv).toContain('NPR;A12BC3D;;Si;17;81;0;2;850,00;')
     expect(csv).toContain('Juan: 14 viajes / Pedro: 3 viajes')
     expect(csv).not.toMatch(/pagada|pendiente/i)
     expect(csv).toContain('≈ = viajes viejos')
@@ -150,12 +150,12 @@ describe('Documentos impresos con el camión del viaje (arreglo 11)', () => {
     expect(d.color_batea).toBe('Azul')
   })
 
-  it('con modelo y placa de batea propios (285), imprime los datos del camión', () => {
+  it('imprime un solo dato del camión (su modelo, campo nombre) y su batea propia (285)', () => {
     const d = datosVehiculoImpreso({
       transportista: chofer,
       vehiculo_viaje: { id: 'v2', codigo: 'CAM-02', nombre: 'Cargo', modelo: 'Mack Granite 2020', placa: 'B34CD5E', placa_batea: 'ZZ111AA', color_batea: 'Roja' },
     })
-    expect(d).toEqual({ vehiculo: 'Mack Granite 2020', placa_chuto: 'B34CD5E', placa_batea: 'ZZ111AA', color_batea: 'Roja' })
+    expect(d).toEqual({ vehiculo: 'Cargo', placa_chuto: 'B34CD5E', placa_batea: 'ZZ111AA', color_batea: 'Roja' })
   })
 
   it('sin camión de la flota (externos o históricos) imprime la ficha como antes', () => {

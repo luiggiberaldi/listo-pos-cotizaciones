@@ -169,7 +169,7 @@ export async function handleCrearVehiculo(request, env) {
   try { body = await request.json() } catch { return jsonError('Body inválido', 400, request) }
   const { nombre, placa, capacidad_kg, color_batea, modelo, placa_batea } = body
 
-  const n = textoRequerido(nombre, 'nombre')
+  const n = textoRequerido(nombre, 'El modelo')
   if (n.error) return jsonError(n.error, 400, request)
   // Al menos una placa: la del chuto (opcional desde 287) o la de la batea.
   const placaNorm = String(placa ?? '').trim().toUpperCase() || null
@@ -286,7 +286,7 @@ export async function handleActualizarVehiculo(request, env) {
     updateData.modelo = String(updateData.modelo ?? '').trim() || null
   }
   if (updateData.nombre !== undefined) {
-    const n = textoRequerido(updateData.nombre, 'nombre')
+    const n = textoRequerido(updateData.nombre, 'El modelo')
     if (n.error) return jsonError(n.error, 400, request)
     updateData.nombre = n.valor
   }

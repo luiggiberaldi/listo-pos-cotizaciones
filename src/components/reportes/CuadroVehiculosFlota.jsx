@@ -115,7 +115,6 @@ function DetalleCamion({ vehiculo, desde, hasta, rol }) {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 text-xs">
       <div className="space-y-1.5 text-slate-600">
         <p><span className="text-slate-400">Placas:</span> {placasVehiculo(vehiculo)}</p>
-        {vehiculo.modelo && <p><span className="text-slate-400">Modelo:</span> {vehiculo.modelo}</p>}
         <p><span className="text-slate-400">Mercancía movilizada:</span> ${fmt(vehiculo.total_mercancia_usd)}</p>
         <p><span className="text-slate-400">Flete promedio por viaje:</span> ${fmt(vehiculo.promedio_flete_viaje_usd)}</p>
         <p><span className="text-slate-400">Carabobo / fuera:</span> {num(vehiculo.viajes_en_carabobo)} / {num(vehiculo.viajes_fuera_carabobo)}</p>

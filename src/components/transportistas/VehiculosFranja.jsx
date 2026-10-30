@@ -20,24 +20,25 @@ const ROLES_GESTION = ['jefe', 'administracion', 'logistica', 'desarrollador']
 const ROLES_BAJA = ['jefe', 'administracion', 'desarrollador']
 
 function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
-  const [nombre, setNombre] = useState(inicial?.nombre ?? '')
+  // Un solo dato para identificar el camión: el modelo (se guarda en `nombre`).
+  // Camiones viejos con modelo aparte: se toma ese modelo como valor inicial.
+  const [nombre, setNombre] = useState(inicial?.modelo || inicial?.nombre || '')
   const [placa, setPlaca] = useState(inicial?.placa ?? '')
   const [capacidadKg, setCapacidadKg] = useState(inicial?.capacidad_kg != null ? String(inicial.capacidad_kg) : '')
   const [colorBatea, setColorBatea] = useState(inicial?.color_batea ?? '')
-  const [modelo, setModelo] = useState(inicial?.modelo ?? '')
   const [placaBatea, setPlacaBatea] = useState(inicial?.placa_batea ?? '')
   const [error, setError] = useState('')
 
   function submit(e) {
     e.preventDefault()
-    if (!nombre.trim()) { setError('El nombre es obligatorio'); return }
+    if (!nombre.trim()) { setError('El modelo es obligatorio'); return }
     if (!placa.trim() && !placaBatea.trim()) { setError('Indica al menos una placa: la del chuto o la de la batea'); return }
     onGuardar({
       nombre: nombre.trim(),
       placa: placa.trim().toUpperCase() || null,
       capacidad_kg: capacidadKg === '' ? null : Number(capacidadKg),
       color_batea: colorBatea.trim() || null,
-      modelo: modelo.trim() || null,
+      modelo: null, // el modelo vive en `nombre`; se limpia el campo aparte antiguo
       placa_batea: placaBatea.trim().toUpperCase() || null,
     })
   }
@@ -48,9 +49,9 @@ function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Nombre corto *</label>
+          <label className="text-sm font-medium text-slate-700">Modelo *</label>
           <input value={nombre} onChange={e => { setNombre(e.target.value); setError('') }}
-            placeholder="Ej: Camión 01" className={inputCls} disabled={cargando} />
+            placeholder="Ej: Ford F-350 2015" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Placa chuto</label>
@@ -65,11 +66,6 @@ function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
         <p className="sm:col-span-2 -mt-2 text-[11px] text-slate-400">
           Indica al menos una placa. Si el camión solo tiene placa de batea, deja el chuto vacío.
         </p>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Modelo</label>
-          <input value={modelo} onChange={e => setModelo(e.target.value)}
-            placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
-        </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Capacidad (kg)</label>
           <input type="number" min="0" step="1" value={capacidadKg} onChange={e => setCapacidadKg(e.target.value)}
@@ -186,12 +182,6 @@ function VehiculoCard({ vehiculo: v, resaltado, puedeGestionar, puedeBorrar, onE
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <span className="font-medium text-slate-400">Batea:</span>
             <span className="truncate">{v.color_batea}</span>
-          </div>
-        )}
-        {v.modelo && (
-          <div className="flex items-center gap-1.5 text-xs text-slate-500">
-            <Truck size={11} className="text-slate-400 shrink-0" />
-            <span className="truncate">{v.modelo}</span>
           </div>
         )}
         {capacidad > 0 && (

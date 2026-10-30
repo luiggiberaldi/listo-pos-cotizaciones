@@ -9,7 +9,7 @@
 // - Viaje sin camión de la flota (externos o históricos) → datos de la ficha,
 //   como hasta ahora.
 /**
- * Nombre visible de un camión: su nombre corto. El código (CAM-01…) es interno:
+ * Nombre visible de un camión: su modelo (campo `nombre`). El código (CAM-01…) es interno:
  * lo pone el servidor y no se muestra en pantallas ni PDF. Sin nombre, la placa.
  */
 export function nombreVehiculo(vehiculo) {
@@ -49,11 +49,10 @@ export function datosVehiculoImpreso(despacho) {
   // La batea del camión (migración 285) manda; la de la ficha del chofer solo
   // como respaldo para camiones sin batea cargada y si es su camión habitual.
   const bateaRespaldo = esSuHabitual && bateaFicha && bateaFicha.toUpperCase() !== placaVeh ? bateaFicha : ''
-  const modelo = String(vehiculo.modelo || '').trim()
 
   return {
-    // Con modelo: "Mack Granite 2020"; sin modelo: el nombre del camión (nunca el código interno).
-    vehiculo: modelo || nombreVehiculo(vehiculo),
+    // Un solo dato: el modelo del camión (campo `nombre`), igual que en pantallas y reportes.
+    vehiculo: nombreVehiculo(vehiculo),
     placa_chuto: vehiculo.placa || '',
     placa_batea: String(vehiculo.placa_batea || '').trim() || bateaRespaldo,
     color_batea: vehiculo.color_batea || (esSuHabitual ? transportista?.color_batea || '' : ''),
