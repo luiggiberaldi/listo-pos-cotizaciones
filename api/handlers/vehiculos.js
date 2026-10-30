@@ -39,6 +39,23 @@ function textoRequerido(valor, campo) {
   return { valor: t }
 }
 
+// Devuelve un mensaje si la placa del chuto o la de la batea ya la usa otro camión
+// de la cuenta (excluyendo `excluirId` al editar); null si no hay choque.
+async function placaRepetida(env, headers, filtroCuenta, { placa, placa_batea }, excluirId = null) {
+  const excluir = excluirId ? `&id=neq.${excluirId}` : ''
+  const revisar = [['placa', placa, 'del chuto'], ['placa_batea', placa_batea, 'de batea']]
+  for (const [columna, valor, texto] of revisar) {
+    if (!valor) continue
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/vehiculos?${filtroCuenta}&${columna}=eq.${encodeURIComponent(valor)}${excluir}&select=id&limit=1`,
+      { headers }
+    )
+    const filas = res.ok ? await res.json() : []
+    if (Array.isArray(filas) && filas.length > 0) return `Ya existe otro vehículo con la placa ${texto} ${valor}`
+  }
+  return null
+}
+
 /**
  * Comprueba que un vehículo elegido para un viaje sea de la cuenta y esté
  * activo (raíl R8). Devuelve { ok } o { error } con un mensaje para el usuario.
@@ -97,7 +114,7 @@ export async function handleListarVehiculos(request, env) {
   const activoFilter = incluirInactivos ? '' : 'activo=eq.true&'
 
   const vehRes = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/vehiculos?${cuenta.filter}&${activoFilter}order=codigo.asc` +
+    `${env.SUPABASE_URL}/rest/v1/vehiculos?${cuenta.filter}&${activoFilter}order=nombre.asc` +
     `&select=id,codigo,nombre,placa,placa_batea,modelo,capacidad_kg,color_batea,activo,creado_en`,
     { headers }
   )
@@ -125,6 +142,18 @@ export async function handleListarVehiculos(request, env) {
   return json({ ok: true, vehiculos: lista }, 200, request)
 }
 
+// Siguiente código interno de la cuenta: CAM-01, CAM-02… (sigue al mayor CAM-NN existente;
+// los creados por la carga histórica usan VEH-… y no interfieren).
+async function siguienteCodigoVehiculo(env, headers, filtroCuenta) {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/vehiculos?${filtroCuenta}&select=codigo`, { headers })
+  const filas = res.ok ? await res.json() : []
+  const mayor = (Array.isArray(filas) ? filas : []).reduce((max, f) => {
+    const m = /^CAM-(\d+)$/i.exec(String(f?.codigo || '').trim())
+    return m ? Math.max(max, Number(m[1])) : max
+  }, 0)
+  return `CAM-${String(mayor + 1).padStart(2, '0')}`
+}
+
 // ── POST /api/vehiculos/crear ─────────────────────────────────────────────────
 export async function handleCrearVehiculo(request, env) {
   const v = await validateOperator(request, env)
@@ -138,15 +167,16 @@ export async function handleCrearVehiculo(request, env) {
 
   let body
   try { body = await request.json() } catch { return jsonError('Body inválido', 400, request) }
-  const { codigo, nombre, placa, capacidad_kg, color_batea, modelo, placa_batea } = body
+  const { nombre, placa, capacidad_kg, color_batea, modelo, placa_batea } = body
 
-  const c = textoRequerido(codigo, 'codigo')
-  if (c.error) return jsonError(c.error, 400, request)
   const n = textoRequerido(nombre, 'nombre')
   if (n.error) return jsonError(n.error, 400, request)
-  const p = textoRequerido(placa, 'placa')
-  if (p.error) return jsonError(p.error, 400, request)
-  const placaNorm = p.valor.toUpperCase()
+  // Al menos una placa: la del chuto (opcional desde 287) o la de la batea.
+  const placaNorm = String(placa ?? '').trim().toUpperCase() || null
+  const bateaNorm = String(placa_batea ?? '').trim().toUpperCase() || null
+  if (!placaNorm && !bateaNorm) {
+    return jsonError('Indica al menos una placa: la del chuto o la de la batea', 400, request)
+  }
 
   let capacidad = 0
   if (capacidad_kg !== undefined && capacidad_kg !== null && capacidad_kg !== '') {
@@ -156,29 +186,26 @@ export async function handleCrearVehiculo(request, env) {
     }
   }
 
-  // Placa única por cuenta (el índice único también protege, pero aquí damos
-  // un mensaje amable en lugar del error crudo de la base de datos).
-  const dupRes = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/vehiculos?${cuenta.filter}&placa=eq.${encodeURIComponent(placaNorm)}&select=id&limit=1`,
-    { headers }
-  )
-  const dup = dupRes.ok ? await dupRes.json() : []
-  if (Array.isArray(dup) && dup.length > 0) {
-    return jsonError(`Ya existe un vehículo con la placa ${placaNorm}`, 400, request)
-  }
+  // Placas únicas por cuenta (el índice único también protege la del chuto, pero
+  // aquí damos un mensaje amable en lugar del error crudo de la base de datos).
+  const dupError = await placaRepetida(env, headers, cuenta.filter, { placa: placaNorm, placa_batea: bateaNorm })
+  if (dupError) return jsonError(dupError, 400, request)
+
+  // El código es interno (CAM-01, CAM-02…): lo pone el servidor, nadie lo escribe ni lo ve.
+  const codigo = await siguienteCodigoVehiculo(env, headers, cuenta.filter)
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/vehiculos`, {
     method: 'POST',
     headers: { ...headers, Prefer: 'return=representation' },
     body: JSON.stringify({
       cuenta_id: cuenta.cuentaId,
-      codigo: c.valor,
+      codigo,
       nombre: n.valor,
       placa: placaNorm,
       capacidad_kg: capacidad,
       color_batea: color_batea ? String(color_batea).trim() : null,
       modelo: modelo ? String(modelo).trim() : null,
-      placa_batea: placa_batea ? String(placa_batea).trim().toUpperCase() : null,
+      placa_batea: bateaNorm,
       activo: true,
     }),
   })
@@ -195,10 +222,10 @@ export async function handleCrearVehiculo(request, env) {
     usuarioRol: operador.rol,
     categoria: 'VEHICULO',
     accion: 'CREAR_VEHICULO',
-    descripcion: `Vehículo ${c.valor} (${placaNorm}) creado`,
+    descripcion: `Vehículo ${n.valor} (${placaNorm || bateaNorm}) creado`,
     entidadTipo: 'vehiculo',
     entidadId: vehiculo.id,
-    meta: { codigo: c.valor, placa: placaNorm, capacidad_kg: capacidad },
+    meta: { codigo, placa: placaNorm, capacidad_kg: capacidad },
     ip,
   }).catch(() => {})
 
@@ -221,7 +248,7 @@ export async function handleActualizarVehiculo(request, env) {
   const { id } = body
   if (!id || !isValidUuid(id)) return jsonError('id inválido', 400, request)
 
-  const camposPermitidos = ['codigo', 'nombre', 'placa', 'placa_batea', 'modelo', 'capacidad_kg', 'color_batea', 'activo']
+  const camposPermitidos = ['nombre', 'placa', 'placa_batea', 'modelo', 'capacidad_kg', 'color_batea', 'activo']
   const updateData = Object.fromEntries(
     camposPermitidos.filter(campo => Object.prototype.hasOwnProperty.call(body, campo))
       .map(campo => [campo, body[campo]])
@@ -231,29 +258,32 @@ export async function handleActualizarVehiculo(request, env) {
   }
 
   if (updateData.placa !== undefined) {
-    const p = textoRequerido(updateData.placa, 'placa')
-    if (p.error) return jsonError(p.error, 400, request)
-    updateData.placa = p.valor.toUpperCase()
-    const dupRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/vehiculos?${cuenta.filter}&placa=eq.${encodeURIComponent(updateData.placa)}&id=neq.${id}&select=id&limit=1`,
-      { headers }
-    )
-    const dup = dupRes.ok ? await dupRes.json() : []
-    if (Array.isArray(dup) && dup.length > 0) {
-      return jsonError(`Ya existe otro vehículo con la placa ${updateData.placa}`, 400, request)
-    }
+    updateData.placa = String(updateData.placa ?? '').trim().toUpperCase() || null
   }
   if (updateData.placa_batea !== undefined) {
-    const pb = String(updateData.placa_batea ?? '').trim().toUpperCase()
-    updateData.placa_batea = pb || null
+    updateData.placa_batea = String(updateData.placa_batea ?? '').trim().toUpperCase() || null
+  }
+  if (updateData.placa !== undefined || updateData.placa_batea !== undefined) {
+    // Estado final: lo que llega + lo que ya tenía el camión. Debe quedar al menos una placa.
+    const actRes = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/vehiculos?id=eq.${id}&cuenta_id=eq.${cuenta.cuentaId}&select=placa,placa_batea&limit=1`,
+      { headers }
+    )
+    const [actual] = actRes.ok ? await actRes.json() : []
+    if (!actual) return jsonError('Vehículo no encontrado', 404, request)
+    const placaFinal = updateData.placa !== undefined ? updateData.placa : actual.placa
+    const bateaFinal = updateData.placa_batea !== undefined ? updateData.placa_batea : actual.placa_batea
+    if (!placaFinal && !bateaFinal) {
+      return jsonError('El vehículo debe conservar al menos una placa: la del chuto o la de la batea', 400, request)
+    }
+    const dupError = await placaRepetida(env, headers, cuenta.filter, {
+      placa: updateData.placa !== undefined ? updateData.placa : null,
+      placa_batea: updateData.placa_batea !== undefined ? updateData.placa_batea : null,
+    }, id)
+    if (dupError) return jsonError(dupError, 400, request)
   }
   if (updateData.modelo !== undefined) {
     updateData.modelo = String(updateData.modelo ?? '').trim() || null
-  }
-  if (updateData.codigo !== undefined) {
-    const c = textoRequerido(updateData.codigo, 'codigo')
-    if (c.error) return jsonError(c.error, 400, request)
-    updateData.codigo = c.valor
   }
   if (updateData.nombre !== undefined) {
     const n = textoRequerido(updateData.nombre, 'nombre')
@@ -296,7 +326,7 @@ export async function handleActualizarVehiculo(request, env) {
     usuarioRol: operador.rol,
     categoria: 'VEHICULO',
     accion: 'ACTUALIZAR_VEHICULO',
-    descripcion: `Vehículo ${actualizado.codigo || id} actualizado`,
+    descripcion: `Vehículo ${actualizado.nombre || id} actualizado`,
     entidadTipo: 'vehiculo',
     entidadId: id,
     meta: { campos_modificados: Object.keys(updateData) },

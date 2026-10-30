@@ -1,7 +1,7 @@
 // src/views/TransportistasView.jsx
 // Gestión de transportistas — solo supervisores pueden crear/editar/desactivar
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale, FileText, Printer, Phone, Users } from 'lucide-react'
+import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale, FileText, Printer, Phone, Users, Star } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import {
@@ -13,13 +13,14 @@ import {
 } from '../hooks/useTransportistas'
 import { useVehiculos } from '../hooks/useVehiculos'
 import VehiculosFranja from '../components/transportistas/VehiculosFranja'
-import { nombreVehiculo } from '../utils/vehiculoImpreso'
+import { nombreVehiculo, placasVehiculo } from '../utils/vehiculoImpreso'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Skeleton     from '../components/ui/Skeleton'
 import EmptyState   from '../components/ui/EmptyState'
 import PageHeader  from '../components/ui/PageHeader'
-import { colorTransportista } from '../utils/transportistaColors'
+import { colorTransportista, COLORES_FLOTA_PROPIA } from '../utils/transportistaColors'
 import { rankEntities } from '../utils/entitySearch'
+import CustomSelect from '../components/ui/CustomSelect'
 
 import { PREFIJOS_RIF, parsearRif as parsearRifTransp, formatearRif as formatearRifTransp } from '../utils/rif'
 
@@ -176,17 +177,17 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
         {campos.es_local && (
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">Vehículo habitual asignado</label>
-            <select
+            <CustomSelect
               value={vehiculoHabitualId}
-              onChange={e => setVehiculoHabitualId(e.target.value)}
+              onChange={v => setVehiculoHabitualId(v || '')}
               disabled={cargando}
-              className={inputCls}
-            >
-              <option value="">Sin vehículo fijo / Rotativo</option>
-              {vehiculosFlota.filter(v => v.activo !== false).map(v => (
-                <option key={v.id} value={v.id}>{v.codigo} {v.nombre} ({v.placa})</option>
-              ))}
-            </select>
+              icon={Truck}
+              placeholder="Sin vehículo fijo / Rotativo"
+              options={[
+                { value: '', label: 'Sin vehículo fijo / Rotativo' },
+                ...vehiculosFlota.filter(v => v.activo !== false).map(v => ({ value: v.id, label: v.nombre, sub: placasVehiculo(v) })),
+              ]}
+            />
             <p className="text-[11px] text-slate-400">Se autocompleta al crear viajes; cada viaje puede usar otro camión sin tocar esta ficha.</p>
           </div>
         )}
@@ -260,10 +261,13 @@ function TransportistaModal({ transportista = null, onClose }) {
 
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
 function TransportistaCard({ transportista, esSupervisor, puedeEditar, puedeEliminar = esSupervisor, onEditar, onDesactivar, vehiculoFijo = null, onVerVehiculo }) {
-  const colors = colorTransportista(transportista.nombre)
+  // Flota propia: color fijo de la empresa + cinta e ícono con estrella para
+  // distinguirlos de los transportistas generales (que usan un color por nombre).
+  const esFlota = !!transportista.es_local
+  const colors = esFlota ? COLORES_FLOTA_PROPIA : colorTransportista(transportista.nombre)
 
   return (
-    <div className="bg-white rounded-2xl border overflow-hidden flex flex-col hover:shadow-lg transition-all duration-200"
+    <div className={`bg-white rounded-2xl overflow-hidden flex flex-col hover:shadow-lg transition-all duration-200 ${esFlota ? 'border-2' : 'border'}`}
       style={{ borderColor: colors.border, boxShadow: `0 1px 3px ${colors.shadow}` }}>
 
       {/* ── Strip superior con color ── */}
@@ -272,11 +276,21 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, puedeElim
         {/* Dot pattern */}
         <div className="absolute inset-0 opacity-10 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
-        {/* Ícono camión */}
+        {/* Ícono camión (flota propia: con estrella dorada) */}
         <div className="relative z-10 w-10 h-10 rounded-xl flex items-center justify-center"
           style={{ background: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.4)', backdropFilter: 'blur(4px)' }}>
           <Truck size={20} color="white" />
+          {esFlota && (
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center">
+              <Star size={8} className="text-white fill-white" />
+            </span>
+          )}
         </div>
+        {esFlota && (
+          <span className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full bg-white/90 text-[#1B365D] text-[9px] font-black uppercase tracking-wider shadow-sm">
+            Flota propia
+          </span>
+        )}
       </div>
 
       {/* ── Nombre + RIF ── */}
@@ -284,11 +298,6 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, puedeElim
         <p className="font-black text-slate-800 text-sm leading-tight truncate">{transportista.nombre}</p>
         {transportista.rif && (
           <p className="text-[11px] text-slate-400 font-mono mt-0.5">{transportista.rif}</p>
-        )}
-        {transportista.es_local && (
-          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wide">
-            Local
-          </span>
         )}
         {transportista.tipo_relacion && (
           <span className="inline-flex items-center gap-1 mt-1 ml-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold capitalize">
@@ -300,9 +309,17 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, puedeElim
             type="button"
             onClick={() => onVerVehiculo?.(vehiculoFijo.id)}
             title="Ver este camión en Vehículos de la empresa"
-            className="mt-1.5 w-full text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-1.5 py-0.5 truncate hover:bg-amber-100 hover:border-amber-200 transition-colors"
+            className="mt-2 w-full flex items-center gap-2 text-left bg-[#1B365D]/5 border border-[#B8860B]/30 rounded-xl px-2.5 py-1.5 hover:bg-[#B8860B]/10 hover:border-[#B8860B]/50 transition-colors"
           >
-            Vehículo fijo: {nombreVehiculo(vehiculoFijo)} ({vehiculoFijo.placa})
+            <span className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+              <Truck size={12} color="white" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[9px] font-bold uppercase tracking-wider text-[#B8860B]">Camión fijo</span>
+              <span className="block text-[11px] font-bold text-[#1B365D] truncate">
+                {nombreVehiculo(vehiculoFijo)} <span className="font-mono font-medium text-slate-500">· {placasVehiculo(vehiculoFijo)}</span>
+              </span>
+            </span>
           </button>
         )}
         {transportista.es_local && !vehiculoFijo && (
@@ -690,6 +707,7 @@ export default function TransportistasView() {
                   key={t.id}
                   transportista={t}
                   esSupervisor={esSupervisor}
+                  puedeEliminar={esSupervisor || perfil?.rol === 'logistica'}
                   puedeEditar={puedeCrear}
                   onEditar={abrirEditar}
                   onDesactivar={setDesactivandoTransp}
@@ -704,7 +722,6 @@ export default function TransportistasView() {
             <div className="flex items-center justify-center gap-4 pt-4">
               <button disabled={page === 1} onClick={() => { setPage(p => p - 1); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all">
                 <ChevronLeft size={20} />
-                  puedeEliminar={esSupervisor || perfil?.rol === 'logistica'}
               </button>
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-bold text-slate-400">Página</span>

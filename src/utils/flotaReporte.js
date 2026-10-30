@@ -113,13 +113,13 @@ export function construirCsvFlota({
 
   lineas.push('')
   lineas.push('Cuadro 1 - Productividad por vehiculo')
-  fila(['Codigo', 'Vehiculo', 'Modelo', 'Placa chuto', 'Placa batea', 'Activo', 'Viajes', '% del total',
+  fila(['Vehiculo', 'Modelo', 'Placa chuto', 'Placa batea', 'Activo', 'Viajes', '% del total',
     dias ? `Dias trabajados (de ${dias})` : 'Dias trabajados', 'Viajes estimados (≈)',
     'Fletes USD', 'Para choferes USD', 'Para la empresa USD', 'Mercancia USD', 'Flete promedio por viaje USD',
     'En Carabobo', 'Fuera de Carabobo', 'Destinos frecuentes', 'Ultimo viaje', 'Chofer del ultimo viaje', 'Choferes'])
   for (const f of porVehiculo) {
     fila([
-      f.codigo, f.nombre, f.modelo || '', f.placa, f.placa_batea || '', f.activo === false ? 'No' : 'Si',
+      f.nombre, f.modelo || '', f.placa, f.placa_batea || '', f.activo === false ? 'No' : 'Si',
       num(f.total_viajes), porcentaje(f.total_viajes, tot.viajes), num(f.dias_trabajados), num(f.viajes_estimados),
       decimal(f.total_flete_usd), decimal(f.comision_choferes_usd), decimal(f.empresa_usd),
       decimal(f.total_mercancia_usd), decimal(f.promedio_flete_viaje_usd),
@@ -147,7 +147,7 @@ export function construirCsvFlota({
   const filaViaje = (v) => fila([
     fecha(v.fecha), `DES-${String(v.numero).padStart(5, '0')}${v.vehiculo_origen === 'backfill' ? ' ≈' : ''}`,
     v.cliente_nombre || '', [v.ciudad, v.estado_destino].filter(Boolean).join(', '), v.chofer_nombre || '',
-    v.vehiculo_codigo || 'Sin camion', decimal(v.flete_usd), decimal(v.chofer_usd), decimal(v.empresa_usd), decimal(v.mercancia_usd),
+    v.vehiculo_nombre || 'Sin camion', decimal(v.flete_usd), decimal(v.chofer_usd), decimal(v.empresa_usd), decimal(v.mercancia_usd),
   ])
   const encabezadoViajes = ['Fecha', 'Despacho', 'Cliente', 'Destino', 'Chofer', 'Camion', 'Flete USD', 'Chofer USD', 'Empresa USD', 'Mercancia USD']
   if (detalle.length > 0) {

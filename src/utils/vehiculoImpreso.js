@@ -9,15 +9,23 @@
 // - Viaje sin camión de la flota (externos o históricos) → datos de la ficha,
 //   como hasta ahora.
 /**
- * Nombre visible de un camión: "código nombre", sin repetir el código cuando el
- * nombre ya lo trae (p. ej. código "CAM-01" y nombre "CAM-01 NPR Blanco").
+ * Nombre visible de un camión: su nombre corto. El código (CAM-01…) es interno:
+ * lo pone el servidor y no se muestra en pantallas ni PDF. Sin nombre, la placa.
  */
 export function nombreVehiculo(vehiculo) {
   if (!vehiculo) return ''
-  const codigo = String(vehiculo.codigo || '').trim()
-  const nombre = String(vehiculo.nombre || '').trim()
-  if (codigo && nombre.toUpperCase().startsWith(codigo.toUpperCase())) return nombre
-  return [codigo, nombre].filter(Boolean).join(' ')
+  return String(vehiculo.nombre || '').trim() || String(vehiculo.placa || vehiculo.placa_batea || '').trim()
+}
+
+/**
+ * Placas visibles de un camión. El chuto es opcional (migración 287): un camión
+ * con solo batea se muestra "batea 08C GBC", nunca un chuto vacío.
+ */
+export function placasVehiculo(vehiculo) {
+  if (!vehiculo) return ''
+  const chuto = String(vehiculo.placa || '').trim()
+  const batea = String(vehiculo.placa_batea || '').trim()
+  return [chuto, batea && batea !== chuto ? `batea ${batea}` : ''].filter(Boolean).join(' · ')
 }
 
 export function datosVehiculoImpreso(despacho) {
@@ -44,8 +52,8 @@ export function datosVehiculoImpreso(despacho) {
   const modelo = String(vehiculo.modelo || '').trim()
 
   return {
-    // Con modelo: "CAM-01 Mack Granite 2020"; sin modelo: el nombre del camión.
-    vehiculo: modelo ? [vehiculo.codigo, modelo].filter(Boolean).join(' ') : nombreVehiculo(vehiculo),
+    // Con modelo: "Mack Granite 2020"; sin modelo: el nombre del camión (nunca el código interno).
+    vehiculo: modelo || nombreVehiculo(vehiculo),
     placa_chuto: vehiculo.placa || '',
     placa_batea: String(vehiculo.placa_batea || '').trim() || bateaRespaldo,
     color_batea: vehiculo.color_batea || (esSuHabitual ? transportista?.color_batea || '' : ''),

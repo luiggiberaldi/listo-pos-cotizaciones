@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import { PREFIJOS_RIF, parsearRif, formatearRif } from '../../utils/rif'
 import { useVehiculos } from '../../hooks/useVehiculos'
+import { Truck } from 'lucide-react'
+import CustomSelect from '../ui/CustomSelect'
+import { placasVehiculo } from '../../utils/vehiculoImpreso'
 
 export default function TransportistaFormCompact({
   inicial = {},
@@ -244,17 +247,17 @@ export default function TransportistaFormCompact({
         {esLocal && (
           <div className="space-y-1">
             <label className="text-xs font-medium text-slate-600">Vehículo habitual asignado</label>
-            <select
+            <CustomSelect
               value={vehiculoHabitualId}
-              onChange={e => setVehiculoHabitualId(e.target.value)}
+              onChange={v => setVehiculoHabitualId(v || '')}
               disabled={cargando}
-              className={inputCls}
-            >
-              <option value="">Sin vehículo fijo / Rotativo</option>
-              {vehiculosFlota.filter(v => v.activo !== false).map(v => (
-                <option key={v.id} value={v.id}>{v.codigo} {v.nombre} ({v.placa})</option>
-              ))}
-            </select>
+              icon={Truck}
+              placeholder="Sin vehículo fijo / Rotativo"
+              options={[
+                { value: '', label: 'Sin vehículo fijo / Rotativo' },
+                ...vehiculosFlota.filter(v => v.activo !== false).map(v => ({ value: v.id, label: v.nombre, sub: placasVehiculo(v) })),
+              ]}
+            />
             <p className="text-[11px] text-slate-500 italic px-1">
               Se autocompleta al crear viajes; cada viaje puede usar otro camión sin tocar esta ficha.
             </p>

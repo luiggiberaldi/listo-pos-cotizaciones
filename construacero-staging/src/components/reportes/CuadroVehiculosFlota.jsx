@@ -11,7 +11,7 @@ import { useDetalleViajesFlota } from '../../hooks/useVehiculos'
 import {
   num, totalesVehiculos, variacion, porcentaje, diasDelPeriodo, textoDestinos, MARCA_ESTIMADO,
 } from '../../utils/flotaReporte'
-import { nombreVehiculo } from '../../utils/vehiculoImpreso'
+import { nombreVehiculo, placasVehiculo } from '../../utils/vehiculoImpreso'
 import TarjetaMovil from './TarjetaMovil'
 
 function fmt(n) {
@@ -61,7 +61,7 @@ function TablaViajes({ viajes = [], isLoading, mostrarCamion = false }) {
           detalles={[
             { label: 'Destino', valor: [v.ciudad, v.estado_destino].filter(Boolean).join(', ') || '—' },
             { label: 'Chofer', valor: v.chofer_nombre || '—' },
-            mostrarCamion ? { label: 'Camión', valor: v.vehiculo_codigo || 'Sin camión' } : null,
+            mostrarCamion ? { label: 'Camión', valor: v.vehiculo_nombre || 'Sin camión' } : null,
             { label: 'Flete', valor: `$${fmt(v.flete_usd)}` },
             { label: 'Para el chofer', valor: `$${fmt(v.chofer_usd)}`, clase: 'text-amber-700' },
           ]}
@@ -95,7 +95,7 @@ function TablaViajes({ viajes = [], isLoading, mostrarCamion = false }) {
               <td className="px-2 py-1 text-slate-700 truncate max-w-[10rem]" title={v.cliente_nombre || ''}>{v.cliente_nombre || '—'}</td>
               <td className="px-2 py-1 text-slate-500 truncate max-w-[10rem]">{[v.ciudad, v.estado_destino].filter(Boolean).join(', ') || '—'}</td>
               <td className="px-2 py-1 text-slate-600 truncate max-w-[8rem]">{v.chofer_nombre || '—'}</td>
-              {mostrarCamion && <td className="px-2 py-1 text-slate-500">{v.vehiculo_codigo || 'Sin camión'}</td>}
+              {mostrarCamion && <td className="px-2 py-1 text-slate-500">{v.vehiculo_nombre || 'Sin camión'}</td>}
               <td className="px-2 py-1 text-right text-slate-700">${fmt(v.flete_usd)}</td>
               <td className="px-2 py-1 text-right text-amber-700">${fmt(v.chofer_usd)}</td>
               <td className="px-2 py-1 text-right font-semibold text-emerald-700">${fmt(v.empresa_usd)}</td>
@@ -114,7 +114,7 @@ function DetalleCamion({ vehiculo, desde, hasta, rol }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 text-xs">
       <div className="space-y-1.5 text-slate-600">
-        <p><span className="text-slate-400">Placas:</span> {vehiculo.placa}{vehiculo.placa_batea ? ` · batea ${vehiculo.placa_batea}` : ''}</p>
+        <p><span className="text-slate-400">Placas:</span> {placasVehiculo(vehiculo)}</p>
         {vehiculo.modelo && <p><span className="text-slate-400">Modelo:</span> {vehiculo.modelo}</p>}
         <p><span className="text-slate-400">Mercancía movilizada:</span> ${fmt(vehiculo.total_mercancia_usd)}</p>
         <p><span className="text-slate-400">Flete promedio por viaje:</span> ${fmt(vehiculo.promedio_flete_viaje_usd)}</p>
@@ -208,7 +208,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                   abierto={estaAbierto}
                   titulo={nombreVehiculo(v)}
                   insignia={v.activo === false ? <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase">Inactivo</span> : null}
-                  subtitulo={`${v.placa}${v.placa_batea ? ` · batea ${v.placa_batea}` : ''}`}
+                  subtitulo={placasVehiculo(v)}
                   monto={`${num(v.total_viajes)} viaje${num(v.total_viajes) === 1 ? '' : 's'}`}
                   montoEtiqueta={`${porcentaje(v.total_viajes, tot.viajes)}% del total`}
                   detalles={[
@@ -260,7 +260,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                             )}
                           </div>
                           <div className="text-[10px] text-slate-500 pl-5">
-                            {v.placa}{v.placa_batea ? ` · batea ${v.placa_batea}` : ''}{num(v.capacidad_kg) > 0 ? ` · ${num(v.capacidad_kg).toLocaleString('es-VE')} kg` : ''}
+                            {placasVehiculo(v)}{num(v.capacidad_kg) > 0 ? ` · ${num(v.capacidad_kg).toLocaleString('es-VE')} kg` : ''}
                           </div>
                         </td>
                         <td className="text-right px-3 py-2 text-slate-700">

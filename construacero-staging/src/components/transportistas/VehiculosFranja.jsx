@@ -8,18 +8,18 @@
 //    borra; con historial se desactiva y los viajes pasados quedan intactos.
 //  - Nada de comisiones ni liquidaciones en esta pantalla (R7, Fase 4).
 import { useCallback, useEffect, useState } from 'react'
-import { Truck, Plus, Pencil, Ban, RefreshCw, Eye, EyeOff, User } from 'lucide-react'
+import { Truck, Plus, Pencil, Ban, RefreshCw, Eye, EyeOff, User, Scale } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import { useVehiculos, useCrearVehiculo, useActualizarVehiculo, useEliminarVehiculo } from '../../hooks/useVehiculos'
 import ConfirmModal from '../ui/ConfirmModal'
 import { showToast } from '../ui/Toast'
-import { nombreVehiculo } from '../../utils/vehiculoImpreso'
+import { nombreVehiculo, placasVehiculo } from '../../utils/vehiculoImpreso'
+import { COLORES_FLOTA_PROPIA } from '../../utils/transportistaColors'
 
 const ROLES_GESTION = ['jefe', 'administracion', 'logistica', 'desarrollador']
 const ROLES_BAJA = ['jefe', 'administracion', 'desarrollador']
 
 function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
-  const [codigo, setCodigo] = useState(inicial?.codigo ?? '')
   const [nombre, setNombre] = useState(inicial?.nombre ?? '')
   const [placa, setPlaca] = useState(inicial?.placa ?? '')
   const [capacidadKg, setCapacidadKg] = useState(inicial?.capacidad_kg != null ? String(inicial.capacidad_kg) : '')
@@ -30,13 +30,11 @@ function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
 
   function submit(e) {
     e.preventDefault()
-    if (!codigo.trim()) { setError('El código es obligatorio'); return }
     if (!nombre.trim()) { setError('El nombre es obligatorio'); return }
-    if (!placa.trim()) { setError('La placa es obligatoria'); return }
+    if (!placa.trim() && !placaBatea.trim()) { setError('Indica al menos una placa: la del chuto o la de la batea'); return }
     onGuardar({
-      codigo: codigo.trim(),
       nombre: nombre.trim(),
-      placa: placa.trim().toUpperCase(),
+      placa: placa.trim().toUpperCase() || null,
       capacidad_kg: capacidadKg === '' ? null : Number(capacidadKg),
       color_batea: colorBatea.trim() || null,
       modelo: modelo.trim() || null,
@@ -50,25 +48,23 @@ function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Código *</label>
-          <input value={codigo} onChange={e => { setCodigo(e.target.value.toUpperCase()); setError('') }}
-            placeholder="Ej: CAM-01" className={inputCls} disabled={cargando} />
-        </div>
-        <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Nombre corto *</label>
           <input value={nombre} onChange={e => { setNombre(e.target.value); setError('') }}
             placeholder="Ej: Camión 01" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Placa chuto (principal) *</label>
+          <label className="text-sm font-medium text-slate-700">Placa chuto</label>
           <input value={placa} onChange={e => { setPlaca(e.target.value.toUpperCase()); setError('') }}
             placeholder="Ej: A12BC3D" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Placa batea</label>
-          <input value={placaBatea} onChange={e => setPlacaBatea(e.target.value.toUpperCase())}
+          <input value={placaBatea} onChange={e => { setPlacaBatea(e.target.value.toUpperCase()); setError('') }}
             placeholder="Ej: XY456ZW" className={inputCls} disabled={cargando} />
         </div>
+        <p className="sm:col-span-2 -mt-2 text-[11px] text-slate-400">
+          Indica al menos una placa. Si el camión solo tiene placa de batea, deja el chuto vacío.
+        </p>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Modelo</label>
           <input value={modelo} onChange={e => setModelo(e.target.value)}
@@ -140,6 +136,110 @@ function VehiculoModalForm({ vehiculo = null, onClose }) {
 }
 
 // resaltarId: camión a enfocar al llegar desde "Vehículo fijo" de un chofer.
+// Ficha del camión con el mismo diseño que la ficha del chofer (TransportistaCard):
+// franja de color con ícono, nombre centrado, código interno como subtítulo
+// (único lugar donde se muestra), placas como etiquetas y acciones abajo.
+function VehiculoCard({ vehiculo: v, resaltado, puedeGestionar, puedeBorrar, onEditar, onBaja, onReactivar }) {
+  const activo = v.activo !== false
+  // Camiones de la empresa: mismo color fijo que los choferes de la flota propia.
+  const colors = COLORES_FLOTA_PROPIA
+  const choferes = (v.choferes_asignados || []).filter(c => c.activo !== false)
+  const capacidad = Number(v.capacidad_kg) || 0
+
+  return (
+    <div id={`vehiculo-${v.id}`}
+      className={`bg-white rounded-2xl border overflow-hidden flex flex-col hover:shadow-lg transition-all duration-200 ${activo ? '' : 'opacity-70 grayscale'} ${resaltado ? 'ring-2 ring-amber-400' : ''}`}
+      style={{ borderColor: colors.border, boxShadow: `0 1px 3px ${colors.shadow}` }}>
+
+      {/* ── Franja superior con color ── */}
+      <div className="relative h-20 shrink-0 flex flex-col items-center justify-center gap-1"
+        style={{ background: `linear-gradient(135deg, ${colors.gradientStart} 0%, ${colors.gradientEnd} 100%)` }}>
+        <div className="absolute inset-0 opacity-10 pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+        <div className="relative z-10 w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ background: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.4)', backdropFilter: 'blur(4px)' }}>
+          <Truck size={20} color="white" />
+        </div>
+        <span className={`absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${activo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+          {activo ? 'Activo' : 'Inactivo'}
+        </span>
+      </div>
+
+      {/* ── Nombre + código interno ── */}
+      <div className="px-4 pt-3 pb-1 text-center">
+        <p className="font-black text-slate-800 text-sm leading-tight truncate" title={nombreVehiculo(v)}>{nombreVehiculo(v)}</p>
+        {/* Código interno (lo pone el sistema): solo se muestra aquí, en la ficha del camión */}
+        {v.codigo && <p className="text-[11px] text-slate-400 font-mono mt-0.5">Código {v.codigo}</p>}
+      </div>
+
+      {/* ── Detalles ── */}
+      <div className="px-4 pb-3 mt-1 space-y-1.5 flex-1">
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
+          {v.placa && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Chuto: {v.placa}</span>}
+          {v.placa_batea && (
+            <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">
+              Batea: {v.placa_batea}{v.color_batea ? ` (${v.color_batea})` : ''}
+            </span>
+          )}
+        </div>
+        {!v.placa_batea && v.color_batea && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span className="font-medium text-slate-400">Batea:</span>
+            <span className="truncate">{v.color_batea}</span>
+          </div>
+        )}
+        {v.modelo && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Truck size={11} className="text-slate-400 shrink-0" />
+            <span className="truncate">{v.modelo}</span>
+          </div>
+        )}
+        {capacidad > 0 && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Scale size={11} className="text-slate-400 shrink-0" />
+            <span className="font-medium text-slate-400">Capacidad:</span>
+            <span>{capacidad.toLocaleString('es-VE')} kg</span>
+          </div>
+        )}
+        <div className="flex items-start gap-1.5 text-xs text-slate-500">
+          <User size={11} className="text-slate-400 shrink-0 mt-0.5" />
+          {choferes.length > 0
+            ? <span><span className="font-medium text-slate-400">Chofer:</span> <span className="font-semibold text-slate-700">{choferes.map(c => c.nombre).join(', ')}</span></span>
+            : <span className="text-slate-400">Sin chofer asignado</span>}
+        </div>
+      </div>
+
+      {/* ── Acciones ── */}
+      {puedeGestionar && (
+        <div className="border-t border-slate-100 px-3 py-2 flex items-center gap-1">
+          {activo ? (
+            <>
+              <button onClick={onEditar} title="Editar"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+                <Pencil size={13} />
+                Editar
+              </button>
+              {puedeBorrar && (
+                <button onClick={onBaja} title="Eliminar"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
+                  <Ban size={13} />
+                  Eliminar
+                </button>
+              )}
+            </>
+          ) : (
+            <button onClick={onReactivar} title="Reactivar"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+              <RefreshCw size={13} />
+              Reactivar
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function VehiculosFranja({ resaltarId = null }) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const rol = perfil?.rol
@@ -242,69 +342,18 @@ export default function VehiculosFranja({ resaltarId = null }) {
           {verInactivos ? 'No hay vehículos registrados.' : 'No hay vehículos activos. Usa "Ver inactivos" para revisar los dados de baja.'}
         </p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
           {visibles.map(v => (
-            <div key={v.id} id={`vehiculo-${v.id}`} className={`rounded-xl border p-3 space-y-2 transition-all ${v.activo !== false ? 'border-slate-200 bg-slate-50/60' : 'border-slate-200 bg-slate-100 opacity-75'} ${resaltarId === v.id ? 'ring-2 ring-amber-400 border-amber-300' : ''}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-black text-slate-800 text-sm leading-tight truncate" title={nombreVehiculo(v)}>{nombreVehiculo(v)}</p>
-                  <p className="text-[11px] text-slate-500 font-mono truncate" title={[v.placa, v.placa_batea && `Batea ${v.placa_batea}`].filter(Boolean).join(' · ')}>
-                    {v.placa}{v.placa_batea ? ` · Batea ${v.placa_batea}` : ''}
-                  </p>
-                </div>
-                <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${v.activo !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                  {v.activo !== false ? 'Activo' : 'Inactivo'}
-                </span>
-              </div>
-              <div className="space-y-1 text-[11px] text-slate-500">
-                {v.modelo && (
-                  <p><span className="text-slate-400 font-medium">Modelo:</span> {v.modelo}</p>
-                )}
-                {v.capacidad_kg != null && (
-                  <p><span className="text-slate-400 font-medium">Capacidad:</span> {Number(v.capacidad_kg).toLocaleString('es-VE')} kg</p>
-                )}
-                {v.color_batea && (
-                  <p><span className="text-slate-400 font-medium">Batea:</span> {v.color_batea}</p>
-                )}
-                <p className="flex items-start gap-1">
-                  <User size={11} className="text-slate-400 shrink-0 mt-0.5" />
-                  <span>
-                    {(v.choferes_asignados || []).filter(c => c.activo !== false).length > 0
-                      ? <>Chofer: <span className="font-semibold text-slate-700">{v.choferes_asignados.filter(c => c.activo !== false).map(c => c.nombre).join(', ')}</span></>
-                      : <span className="text-slate-400">Sin chofer asignado</span>}
-                  </span>
-                </p>
-              </div>
-              <div className="flex items-center gap-1 pt-1 border-t border-slate-100">
-                {puedeGestionar && (
-                  v.activo !== false ? (
-                    <>
-                      <button
-                        onClick={() => setModalVehiculo(v)}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-sky-600 hover:bg-sky-50 transition-colors"
-                      >
-                        <Pencil size={12} /> Editar
-                      </button>
-                      {puedeBorrar && (
-                        <button
-                          onClick={() => setBajando(v)}
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors ml-auto"
-                        >
-                          <Ban size={12} /> Eliminar
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => reactivar(v)}
-                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
-                    >
-                      <RefreshCw size={12} /> Reactivar
-                    </button>
-                  )
-                )}
-              </div>
-            </div>
+            <VehiculoCard
+              key={v.id}
+              vehiculo={v}
+              resaltado={resaltarId === v.id}
+              puedeGestionar={puedeGestionar}
+              puedeBorrar={puedeBorrar}
+              onEditar={() => setModalVehiculo(v)}
+              onBaja={() => setBajando(v)}
+              onReactivar={() => reactivar(v)}
+            />
           ))}
         </div>
       )}
@@ -323,7 +372,7 @@ export default function VehiculosFranja({ resaltarId = null }) {
         onClose={() => setBajando(null)}
         onConfirm={confirmarBaja}
         title="¿Dar de baja este vehículo?"
-        message={`"${bajando?.codigo} ${bajando?.nombre}" (${bajando?.placa}).\nSi no tiene viajes se elimina por completo; si tiene historial se marca como Inactivo y sus viajes pasados se conservan en los reportes.`}
+        message={`"${bajando?.nombre}" (${placasVehiculo(bajando)}).\nSi no tiene viajes se elimina por completo; si tiene historial se marca como Inactivo y sus viajes pasados se conservan en los reportes.`}
         confirmText="Sí, dar de baja"
         variant="danger"
       />

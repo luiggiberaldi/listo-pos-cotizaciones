@@ -37,7 +37,7 @@ export function useCrearVehiculo() {
       body: JSON.stringify(campos),
     }),
     onSuccess: (data) => {
-      showToast.success(`Vehículo ${data?.vehiculo?.codigo || ''} creado`)
+      showToast.success(`Vehículo ${data?.vehiculo?.nombre || ''} creado`)
       qc.invalidateQueries({ queryKey: KEY, exact: false })
     },
     onError: (e) => showToast.error(e.message || 'Error al crear vehículo'),
@@ -53,7 +53,7 @@ export function useActualizarVehiculo() {
       body: JSON.stringify({ id, ...campos }),
     }),
     onSuccess: (data) => {
-      showToast.success(`Vehículo ${data?.vehiculo?.codigo || ''} actualizado`)
+      showToast.success(`Vehículo ${data?.vehiculo?.nombre || ''} actualizado`)
       qc.invalidateQueries({ queryKey: KEY, exact: false })
     },
     onError: (e) => showToast.error(e.message || 'Error al actualizar vehículo'),

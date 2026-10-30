@@ -14,7 +14,7 @@ import {
   textoDesgloseChoferes, textoDesgloseVehiculos, repartoFlete,
   periodoAnterior, diasDelPeriodo, variacion, porcentaje,
 } from '../flotaReporte'
-import { datosVehiculoImpreso, nombreVehiculo } from '../vehiculoImpreso'
+import { datosVehiculoImpreso, nombreVehiculo, placasVehiculo } from '../vehiculoImpreso'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const leer = (rel) => fs.readFileSync(path.join(projectRoot, rel), 'utf8')
@@ -123,7 +123,7 @@ describe('Reporte con dos choferes rotando camiones (R12)', () => {
     expect(csv).toContain('Cuadro 1 - Productividad por vehiculo')
     expect(csv).toContain('Cuadro 2 - Productividad por chofer local')
     // Codigo;Vehiculo;Modelo;Placa chuto;Placa batea;Activo;Viajes;% del total;Dias;Estimados;Fletes;...
-    expect(csv).toContain('CAM-01;NPR;;A12BC3D;;Si;17;81;0;2;850,00;')
+    expect(csv).toContain('NPR;;A12BC3D;;Si;17;81;0;2;850,00;')
     expect(csv).toContain('Juan: 14 viajes / Pedro: 3 viajes')
     expect(csv).not.toMatch(/pagada|pendiente/i)
     expect(csv).toContain('≈ = viajes viejos')
@@ -138,7 +138,7 @@ describe('Documentos impresos con el camión del viaje (arreglo 11)', () => {
       transportista: chofer,
       vehiculo_viaje: { id: 'v2', codigo: 'CAM-02', nombre: 'Cargo', placa: 'B34CD5E', color_batea: 'Roja' },
     })
-    expect(d).toEqual({ vehiculo: 'CAM-02 Cargo', placa_chuto: 'B34CD5E', placa_batea: '', color_batea: 'Roja' })
+    expect(d).toEqual({ vehiculo: 'Cargo', placa_chuto: 'B34CD5E', placa_batea: '', color_batea: 'Roja' })
   })
 
   it('si salió en su camión habitual, conserva la batea y el color de la ficha', () => {
@@ -155,7 +155,7 @@ describe('Documentos impresos con el camión del viaje (arreglo 11)', () => {
       transportista: chofer,
       vehiculo_viaje: { id: 'v2', codigo: 'CAM-02', nombre: 'Cargo', modelo: 'Mack Granite 2020', placa: 'B34CD5E', placa_batea: 'ZZ111AA', color_batea: 'Roja' },
     })
-    expect(d).toEqual({ vehiculo: 'CAM-02 Mack Granite 2020', placa_chuto: 'B34CD5E', placa_batea: 'ZZ111AA', color_batea: 'Roja' })
+    expect(d).toEqual({ vehiculo: 'Mack Granite 2020', placa_chuto: 'B34CD5E', placa_batea: 'ZZ111AA', color_batea: 'Roja' })
   })
 
   it('sin camión de la flota (externos o históricos) imprime la ficha como antes', () => {
@@ -174,9 +174,30 @@ describe('Documentos impresos con el camión del viaje (arreglo 11)', () => {
 })
 
 describe('Pantalla de Transportistas con pestañas', () => {
-  it('el nombre del camión no repite el código', () => {
-    expect(nombreVehiculo({ codigo: 'CAM-01', nombre: 'CAM-01 NPR Blanco' })).toBe('CAM-01 NPR Blanco')
-    expect(nombreVehiculo({ codigo: 'CAM-02', nombre: 'Cargo' })).toBe('CAM-02 Cargo')
+  it('el código del camión es interno: el nombre visible no lo lleva (solo la ficha lo muestra)', () => {
+    expect(nombreVehiculo({ codigo: 'CAM-02', nombre: 'Cargo' })).toBe('Cargo')
+    expect(nombreVehiculo({ codigo: 'CAM-03', nombre: '', placa: 'A12BC3D' })).toBe('A12BC3D')
+    const franja = leer('src/components/transportistas/VehiculosFranja.jsx')
+    expect(franja).toContain('Código {v.codigo}')
+    expect(franja).not.toContain('Ej: CAM-01')
+    const servidor = leer('api/handlers/vehiculos.js')
+    expect(servidor).toContain('siguienteCodigoVehiculo')
+    expect(servidor).not.toMatch(/textoRequerido\(codigo/)
+  })
+
+  it('chuto opcional (287): al menos una placa y nunca un chuto vacío en pantalla', () => {
+    expect(placasVehiculo({ placa: 'A12BC3D', placa_batea: 'XY456ZW' })).toBe('A12BC3D · batea XY456ZW')
+    expect(placasVehiculo({ placa: null, placa_batea: '08C GBC' })).toBe('batea 08C GBC')
+    expect(placasVehiculo({ placa: '08C GBC', placa_batea: '08C GBC' })).toBe('08C GBC')
+    expect(nombreVehiculo({ nombre: '', placa: null, placa_batea: '434XLJ' })).toBe('434XLJ')
+    const servidor = leer('api/handlers/vehiculos.js')
+    expect(servidor).toContain('Indica al menos una placa: la del chuto o la de la batea')
+    expect(servidor).toContain('El vehículo debe conservar al menos una placa')
+  })
+
+  it('logística puede borrar transportistas (servidor y botón)', () => {
+    expect(leer('api/handlers/admin.js')).toMatch(/'administracion', 'logistica'\]/)
+    expect(leer('src/views/TransportistasView.jsx')).toContain("puedeEliminar={esSupervisor || perfil?.rol === 'logistica'}")
   })
 
   it('separa choferes y vehículos en pestañas, recuerda la última y enlaza el camión fijo', () => {

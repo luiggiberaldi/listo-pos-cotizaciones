@@ -246,7 +246,7 @@ export async function generarFlotaChoferesPDF({
     v.cliente_nombre || '—',
     [v.ciudad, v.estado_destino].filter(Boolean).join(', ') || '—',
     v.chofer_nombre || '—',
-    v.vehiculo_codigo || 'Sin camión',
+    v.vehiculo_nombre || 'Sin camión',
     fmtUsd(v.flete_usd),
     fmtUsd(v.chofer_usd),
     fmtUsd(v.empresa_usd),

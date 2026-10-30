@@ -112,7 +112,7 @@ describe('POST /api/vehiculos/crear', () => {
     ])
     const res = await handleCrearVehiculo(request('/api/vehiculos/crear', { codigo: 'CAM-05', nombre: 'Otro', placa: 'tst-001' }), ENV)
     expect(res.status).toBe(400)
-    expect(await res.text()).toContain('Ya existe un vehículo con la placa TST-001')
+    expect(await res.text()).toContain('Ya existe otro vehículo con la placa del chuto TST-001')
   })
 
   it('crea el vehículo con la placa normalizada y la cuenta del operador', async () => {

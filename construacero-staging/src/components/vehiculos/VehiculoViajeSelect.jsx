@@ -6,7 +6,7 @@
 // aplica SOLO a ese viaje y nunca toca la ficha del chofer (raíl R12).
 import CustomSelect from '../ui/CustomSelect'
 import { useVehiculos } from '../../hooks/useVehiculos'
-import { nombreVehiculo } from '../../utils/vehiculoImpreso'
+import { nombreVehiculo, placasVehiculo } from '../../utils/vehiculoImpreso'
 import { Truck } from 'lucide-react'
 
 export default function VehiculoViajeSelect({
@@ -35,7 +35,7 @@ export default function VehiculoViajeSelect({
           value: v.id,
           label: nombreVehiculo(v),
           selectedLabel: nombreVehiculo(v),
-          sub: [v.placa, v.capacidad_kg ? `${v.capacidad_kg} kg` : ''].filter(Boolean).join(' · ') || undefined,
+          sub: [placasVehiculo(v), Number(v.capacidad_kg) > 0 ? `${v.capacidad_kg} kg` : ''].filter(Boolean).join(' · ') || undefined,
         }))}
         placeholder="— Sin camión asignado —"
         clearable

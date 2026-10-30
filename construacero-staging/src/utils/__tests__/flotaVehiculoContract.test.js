@@ -109,7 +109,7 @@ describe('Fichas de choferes — vehículo habitual solo para locales', () => {
   })
 
   it('la tarjeta del chofer local muestra su etiqueta de vehículo fijo', () => {
-    expect(transportistasView).toContain('Vehículo fijo:')
+    expect(transportistasView).toContain('Camión fijo')
     expect(transportistasView).toContain('vehiculo_habitual_id')
   })
 })
