@@ -23,6 +23,8 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import EmptyState from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
 import DateRangeSelector from '../components/reportes/DateRangeSelector'
+import TarjetaMovil, { ListaMovil } from '../components/reportes/TarjetaMovil'
+import BarraPeriodoReporte from '../components/reportes/BarraPeriodoReporte'
 import CustomSelect from '../components/ui/CustomSelect'
 import KpiCards from '../components/reportes/KpiCards'
 import TablaVendedores from '../components/reportes/TablaVendedores'
@@ -102,14 +104,17 @@ function formatMetodoPago(val, fallback = '—') {
 
 
 // ─── Tabs Definition ──────────────────────────────────────────────────────
+// Logística solo ve Transportistas; administración no ve Transportistas.
+const ROLES_GERENCIA = ['administracion', 'desarrollador', 'jefe']
 const TABS = [
-  { id: 'comisiones', label: 'Comisiones', short: 'Comis.', icon: Percent },
-  { id: 'credito', label: 'Crédito', short: 'Créd.', icon: CreditCard },
-  { id: 'ventas', label: 'Ventas', short: 'Ventas', icon: BarChart3 },
+  { id: 'comisiones', label: 'Comisiones', short: 'Comis.', icon: Percent, roles: ROLES_GERENCIA },
+  { id: 'credito', label: 'Crédito', short: 'Créd.', icon: CreditCard, roles: ROLES_GERENCIA },
+  { id: 'ventas', label: 'Ventas', short: 'Ventas', icon: BarChart3, roles: ROLES_GERENCIA },
   { id: 'transportistas', label: 'Transportistas', short: 'Transp.', icon: Truck,
-    roles: ['administracion', 'desarrollador', 'logistica', 'jefe'] },
-  { id: 'externos', label: 'Artículos Externos', short: 'Extern.', icon: Globe },
+    roles: ['desarrollador', 'logistica', 'jefe'] },
+  { id: 'externos', label: 'Artículos Externos', short: 'Extern.', icon: Globe, roles: ROLES_GERENCIA },
 ]
+const tabsDelRol = rol => TABS.filter(t => !t.roles || t.roles.includes(rol))
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────
 function SkeletonReporte() {
@@ -142,7 +147,7 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = fals
             <Icon size={12} className="text-slate-600 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] sm:text-xs font-medium leading-tight truncate text-slate-500">{label}</p>
+            <p className="text-[11px] sm:text-xs font-medium leading-tight line-clamp-2 text-slate-500">{label}</p>
           </div>
         </div>
         <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-slate-900 relative z-10 truncate">{value}</p>
@@ -161,7 +166,7 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = fals
           <Icon size={12} className="text-white sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] sm:text-xs font-medium leading-tight truncate" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
+          <p className="text-[11px] sm:text-xs font-medium leading-tight line-clamp-2" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</p>
         </div>
       </div>
       <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-white relative z-10 truncate">{value}</p>
@@ -218,7 +223,7 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
                 <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm shrink-0" style={{ background: color }} />
                   <span className="font-semibold text-slate-700 truncate">{fp.formaPago}</span>
-                  <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold shrink-0">{fp.count}</span>
+                  <span className="text-[10px] sm:text-[10px] text-slate-400 font-bold shrink-0">{fp.count}</span>
                 </div>
                 <div className="flex flex-col items-end shrink-0">
                   <div className="flex items-center gap-1.5 sm:gap-2">
@@ -238,7 +243,7 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
               {Array.isArray(fp.pagos) && fp.pagos.length > 0 && (
                 <div className="pl-4 pt-1 space-y-0.5">
                   {fp.pagos.map((p, pIdx) => (
-                    <div key={pIdx} className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 font-medium bg-slate-50/50 hover:bg-slate-50 px-1.5 py-0.5 rounded border border-transparent hover:border-slate-100">
+                    <div key={pIdx} className="flex justify-between text-[10px] sm:text-[10px] text-slate-500 font-medium bg-slate-50/50 hover:bg-slate-50 px-1.5 py-0.5 rounded border border-transparent hover:border-slate-100">
                       <span className="truncate max-w-[200px] sm:max-w-[280px]">
                         {p.es_reembolso ? (
                           <span className="text-rose-600 font-bold">
@@ -309,7 +314,7 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
         {/* Desglose explicativo */}
         {kpis && (
           <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-1.5 text-[10px] sm:text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl">
-            <p className="font-extrabold text-slate-700 uppercase tracking-wider text-[8px] sm:text-[9px] mb-1">
+            <p className="font-extrabold text-slate-700 uppercase tracking-wider text-[10px] sm:text-[10px] mb-1">
               Desglose de la Diferencia (Recaudación vs Ventas Netas):
             </p>
             <div className="flex justify-between items-center">
@@ -436,7 +441,7 @@ function BarSection({ icon: Icon, iconColor, title, data, labelKey, countKey, co
                 <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm shrink-0" style={{ background: color }} />
                   <span className="font-semibold text-slate-700 truncate">{label}</span>
-                  <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold shrink-0">{d[countKey]} {countSuffix}</span>
+                  <span className="text-[10px] sm:text-[10px] text-slate-400 font-bold shrink-0">{d[countKey]} {countSuffix}</span>
                 </div>
                 <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   <span className="text-[10px] sm:text-xs text-slate-400">{pct.toFixed(0)}%</span>
@@ -683,126 +688,19 @@ function TabVentas({ configNeg }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-6">
-          <div className="w-full">
-            <div className="flex items-center gap-2 ml-1 mb-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo de ventas</label>
-              <span className="hidden sm:inline-flex text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
-                {rangoLabel}
-              </span>
-            </div>
-            <DateRangeSelector value={rango} onChange={setRango} />
-          </div>
-          
-          <div className="flex justify-end items-center gap-3 border-t border-slate-50 pt-4 relative">
-            
-            {/* BOTÓN IMPRIMIR PDF */}
-            <div className="relative">
-              <button
-                onClick={() => setShowPrintMenu(!showPrintMenu)}
-                disabled={exportando || !despachos.length}
-                className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
-              >
-                <Printer size={13} className="text-slate-500" />
-                {exportando ? 'Generando...' : 'Imprimir PDF'}
-                <ChevronDown size={13} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showPrintMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                    <button
-                      onClick={() => {
-                        setShowPrintMenu(false)
-                        exportarPDF('todos', 'imprimir')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
-                    >
-                      <FileText size={14} className="text-slate-400" />
-                      Imprimir PDF Completo
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowPrintMenu(false)
-                        exportarPDF('internos', 'imprimir')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                    >
-                      <UserCheck size={14} className="text-indigo-500" />
-                      Imprimir Solo Internos
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowPrintMenu(false)
-                        exportarPDF('externos', 'imprimir')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                    >
-                      <Globe size={14} className="text-amber-500" />
-                      Imprimir Solo Externos
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* BOTÓN DESCARGAR PDF */}
-            <div className="relative">
-              <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                disabled={exportando || !despachos.length}
-                className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40"
-                style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-              >
-                <Download size={13} />
-                {exportando ? 'Generando...' : 'Descargar PDF'}
-                <ChevronDown size={13} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showExportMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                    <button
-                      onClick={() => {
-                        setShowExportMenu(false)
-                        exportarPDF('todos', 'descargar')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
-                    >
-                      <FileText size={14} className="text-slate-400" />
-                      Descargar PDF Completo
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowExportMenu(false)
-                        exportarPDF('internos', 'descargar')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                    >
-                      <UserCheck size={14} className="text-indigo-500" />
-                      Descargar Solo Internos
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowExportMenu(false)
-                        exportarPDF('externos', 'descargar')
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors border-t border-slate-50"
-                    >
-                      <Globe size={14} className="text-amber-500" />
-                      Descargar Solo Externos
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-          </div>
-        </div>
-      </div>
+      <BarraPeriodoReporte
+        titulo="Periodo de ventas"
+        rango={rango}
+        onCambiarRango={setRango}
+        opciones={[
+          { id: 'todos', label: 'completo', icon: FileText },
+          { id: 'internos', label: 'solo internos', icon: UserCheck },
+          { id: 'externos', label: 'solo externos', icon: Globe },
+        ]}
+        onExportar={(opcion, accion) => exportarPDF(opcion, accion)}
+        exportando={exportando}
+        deshabilitado={!despachos.length}
+      />
 
       {despachos.length === 0 ? (
         <EmptyState icon={BarChart3} title="Sin ventas procesadas" description="No hay despachos aprobados o entregados en el periodo seleccionado." />
@@ -828,7 +726,29 @@ function TabVentas({ configNeg }) {
                 <h3 className="text-sm font-black text-slate-800">Últimos despachos procesados</h3>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            {/* Celular: un despacho por tarjeta, con el total a la vista */}
+            <ListaMovil>
+              {despachos.slice(0, 15).map((d, i) => (
+                <TarjetaMovil
+                  key={i}
+                  titulo={d.cliente_nombre || 'Sin cliente'}
+                  insignia={<span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${ESTADO_STYLES[d.estado] || 'bg-slate-100 text-slate-600'}`}>{d.estado === 'despachada' ? 'Aprobada' : d.estado === 'entregada' ? 'Entregada' : d.estado}</span>}
+                  subtitulo={`#${d.despacho_numero || '—'} · ${d.fecha ? new Date(d.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'} · ${d.asesor_nombre || 'Sin asesor'}${d.es_prestamo_puro ? ' · Préstamo' : d.es_prestamo_mixto ? ' · Mixto' : ''}`}
+                  monto={fmtUsd(d.venta_neta_usd)}
+                  montoEtiqueta={fmtBs(d.total_bs)}
+                  detalles={[
+                    {
+                      label: 'Forma de pago',
+                      ancho: true,
+                      valor: Array.isArray(d.forma_pago) && d.forma_pago.length > 0
+                        ? d.forma_pago.map(fp => `${fp.metodo}: $${Number(fp.monto).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`).join(' · ')
+                        : 'Pendiente',
+                    },
+                  ]}
+                />
+              ))}
+            </ListaMovil>
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="text-[10px] sm:text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -851,12 +771,12 @@ function TabVentas({ configNeg }) {
                             {d.despacho_numero || '—'}
                           </span>
                           {d.es_prestamo_puro && (
-                            <span className="text-[8px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
+                            <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
                               Préstamo
                             </span>
                           )}
                           {d.es_prestamo_mixto && (
-                            <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
+                            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-1 py-0.2 rounded uppercase tracking-wide leading-none">
                               Mixto
                             </span>
                           )}
@@ -870,7 +790,7 @@ function TabVentas({ configNeg }) {
                       <td className="px-3 py-2.5 font-bold text-slate-800 truncate max-w-[150px]">
                         {d.cliente_nombre || 'Sin cliente'}
                         {d.cliente_tipo_cliente === 'personal' && (
-                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
                             Personal
                           </span>
                         )}
@@ -891,7 +811,7 @@ function TabVentas({ configNeg }) {
                               const tasa = Number(d.tasa)
                               const montoBs = tasa > 0 ? Number(fp.monto) * tasa : null
                               return (
-                                <span key={idx} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border ${METODO_PAGOS_STYLES[fp.metodo] || METODO_PAGOS_STYLES['Sin especificar']}`}>
+                                <span key={idx} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black tracking-wide border ${METODO_PAGOS_STYLES[fp.metodo] || METODO_PAGOS_STYLES['Sin especificar']}`}>
                                   {fp.metodo}: ${Number(fp.monto).toLocaleString('es-VE', { maximumFractionDigits: 2 })}{fp.referencia ? ` (Ref: ${fp.referencia})` : ''}
                                   {['Transf. / Pago Móvil', 'Punto de Venta'].includes(fp.metodo) && montoBs !== null && (
                                     <span className="opacity-80 font-bold ml-1">
@@ -954,7 +874,24 @@ function TabVentas({ configNeg }) {
                   <h3 className="text-sm font-black text-slate-800">Devoluciones de Saldo a Favor (Reembolsos a Clientes)</h3>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              {/* Celular: una devolución por tarjeta */}
+              <ListaMovil>
+                {devoluciones.map((dev, i) => (
+                  <TarjetaMovil
+                    key={i}
+                    titulo={dev.cliente_nombre || 'Sin cliente'}
+                    subtitulo={`${dev.creado_en ? new Date(dev.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'} · ${dev.vendedor_nombre || '—'}`}
+                    monto={`-${fmtUsd(dev.monto_usd)}`}
+                    montoEtiqueta="Devuelto"
+                    montoClase="text-rose-600"
+                    detalles={[
+                      { label: 'Forma de pago', valor: dev.forma_pago_abono || 'Sin especificar' },
+                      { label: 'Referencia', valor: dev.referencia || dev.descripcion || '—' },
+                    ]}
+                  />
+                ))}
+              </ListaMovil>
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="text-[10px] sm:text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -972,7 +909,7 @@ function TabVentas({ configNeg }) {
                         <td className="px-3 py-2.5 font-bold text-slate-800 truncate max-w-[180px]">
                           {dev.cliente_nombre || 'Sin cliente'}
                           {dev.cliente_tipo_cliente === 'personal' && (
-                            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
+                            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 rounded">
                               Personal
                             </span>
                           )}
@@ -987,7 +924,7 @@ function TabVentas({ configNeg }) {
                           {dev.creado_en ? new Date(dev.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) : '—'}
                         </td>
                         <td className="px-3 py-2.5">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border ${METODO_PAGOS_STYLES[dev.forma_pago_abono] || 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black tracking-wide border ${METODO_PAGOS_STYLES[dev.forma_pago_abono] || 'bg-slate-50 text-slate-600 border-slate-100'}`}>
                             {dev.forma_pago_abono || 'Sin especificar'}
                           </span>
                         </td>
@@ -1311,20 +1248,15 @@ function TabComisiones({ configNeg }) {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-3.5">
-          {/* Fila Superior: Periodo (con mucho espacio) */}
-          <div className="w-full">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Rango de Periodo</label>
-            <DateRangeSelector value={rango} onChange={setRango} />
-          </div>
-
-          {/* Fila Inferior: Otros Filtros y Acciones */}
-          <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between">
-            {/* Grupo de Filtros */}
-            <div className="flex flex-wrap items-end gap-3">
+      <BarraPeriodoReporte
+        titulo="Periodo de comisiones"
+        rango={rango}
+        onCambiarRango={setRango}
+        filtros={(
+<div className="flex flex-wrap items-end gap-3">
+<div className="flex flex-wrap items-end gap-3">
               {esAdmin && (
-                <div className="w-52">
+                <div className="w-full sm:w-52">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Vendedor</label>
                   <CustomSelect
                     options={[
@@ -1354,167 +1286,43 @@ function TabComisiones({ configNeg }) {
                 </div>
               </div>
             </div>
-
-            {/* Grupo de Acciones y Selector de Tasa Euro / USDT */}
-            <div className="flex flex-wrap items-center gap-2.5 ml-auto shrink-0 self-end">
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shrink-0 h-9">
+<div className="flex w-full sm:w-auto sm:ml-auto self-end">
+<div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold h-9 flex-1 sm:flex-none min-w-0">
                 <button
                   type="button"
                   onClick={() => setTipoTasaComision('euro')}
-                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 sm:flex-none justify-center px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Calcular comisiones con tasa Euro Oficial BCV"
                 >
                   <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
-                  <span>Euro BCV:</span>
+                  <span className="hidden sm:inline">Euro BCV:</span>
                   <b>{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
                 </button>
                 <button
                   type="button"
                   onClick={() => setTipoTasaComision('usdt')}
-                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 sm:flex-none justify-center px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Calcular comisiones con tasa USDT (Binance P2P)"
                 >
                   <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
-                  <span>USDT:</span>
+                  <span className="hidden sm:inline">USDT:</span>
                   <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
                 </button>
               </div>
-
-              <div className="flex items-center gap-1.5 relative shrink-0">
-                {/* BOTÓN IMPRIMIR PDF */}
-                <div className="relative">
-                  {filtroVendedor ? (
-                    <button
-                      onClick={() => exportarPDF('todos', 'imprimir')}
-                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
-                    >
-                      <Printer size={12} className="text-slate-500" />
-                      <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setShowPrintMenu(!showPrintMenu)}
-                        disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
-                      >
-                        <Printer size={12} className="text-slate-500" />
-                        <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
-                        <ChevronDown size={12} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
-                      </button>
-
-                      {showPrintMenu && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
-                          <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-<button
-  onClick={() => {
-    setShowPrintMenu(false)
-    exportarPDF('todos', 'imprimir')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
->
-  <FileText size={13} className="text-slate-400" />
-  Imprimir PDF Completo
-</button>
-<button
-  onClick={() => {
-    setShowPrintMenu(false)
-    exportarPDF('internos', 'imprimir')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
->
-  <UserCheck size={13} className="text-indigo-500" />
-  Imprimir Solo Internos
-</button>
-<button
-  onClick={() => {
-    setShowPrintMenu(false)
-    exportarPDF('externos', 'imprimir')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
->
-  <Globe size={13} className="text-amber-500" />
-  Imprimir Solo Externos
-</button>
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* BOTÓN DESCARGAR PDF */}
-                <div className="relative">
-                  {filtroVendedor ? (
-                    <button
-                      onClick={() => exportarPDF('todos', 'descargar')}
-                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
-                      style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-                    >
-                      <Download size={12} />
-                      <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setShowExportMenu(!showExportMenu)}
-                        disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
-                        style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-                      >
-                        <Download size={12} />
-                        <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
-                        <ChevronDown size={12} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
-                      </button>
-
-                      {showExportMenu && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                          <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-<button
-  onClick={() => {
-    setShowExportMenu(false)
-    exportarPDF('todos', 'descargar')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
->
-  <FileText size={13} className="text-slate-400" />
-  Descargar PDF Completo
-</button>
-<button
-  onClick={() => {
-    setShowExportMenu(false)
-    exportarPDF('internos', 'descargar')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
->
-  <UserCheck size={13} className="text-indigo-500" />
-  Descargar Solo Internos
-</button>
-<button
-  onClick={() => {
-    setShowExportMenu(false)
-    exportarPDF('externos', 'descargar')
-  }}
-  className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors border-t border-slate-50"
->
-  <Globe size={13} className="text-amber-500" />
-  Descargar Solo Externos
-</button>
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+</div>
+</div>
+        )}
+        opciones={filtroVendedor
+          ? [{ id: 'todos', label: 'del vendedor', icon: FileText }]
+          : [
+            { id: 'todos', label: 'completo', icon: FileText },
+            { id: 'internos', label: 'solo internos', icon: UserCheck },
+            { id: 'externos', label: 'solo externos', icon: Globe },
+          ]}
+        onExportar={(opcion, accion) => exportarPDF(opcion, accion)}
+        exportando={exportando}
+        deshabilitado={comisiones.length === 0 || !tasaDisponible}
+      />
 
       {/* Panel de Ajustes Manuales para Reporte Resumido */}
       {formatoReporte === 'resumido' && !comisionesLoading && !isError && vendedoresAgrupados.length > 0 && (
@@ -1545,12 +1353,12 @@ function TabComisiones({ configNeg }) {
                   </div>
                   {/* Comisión periodo (solo lectura) */}
                   <div className="flex flex-col items-start">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide mb-0.5">Comisión Periodo</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-0.5">Comisión Periodo</label>
                     <span className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">${comisionGen.toFixed(2)}</span>
                   </div>
                   {/* CxC input */}
                   <div className="flex flex-col items-start">
-                    <label className="text-[9px] font-black text-amber-600 uppercase tracking-wide mb-0.5">Comisión CxC ($)</label>
+                    <label className="text-[10px] font-black text-amber-600 uppercase tracking-wide mb-0.5">Comisión CxC ($)</label>
                     <input
                       type="number"
                       min="0"
@@ -1563,7 +1371,7 @@ function TabComisiones({ configNeg }) {
                   </div>
                   {/* Descuento Carro input */}
                   <div className="flex flex-col items-start">
-                    <label className="text-[9px] font-black text-red-600 uppercase tracking-wide mb-0.5">Descuento Carro ($)</label>
+                    <label className="text-[10px] font-black text-red-600 uppercase tracking-wide mb-0.5">Descuento Carro ($)</label>
                     <input
                       type="number"
                       min="0"
@@ -1576,12 +1384,12 @@ function TabComisiones({ configNeg }) {
                   </div>
                   {/* Total a pagar calculado */}
                   <div className="flex flex-col items-start ml-auto">
-                    <label className="text-[9px] font-black text-indigo-500 uppercase tracking-wide mb-0.5">Total a Pagar</label>
+                    <label className="text-[10px] font-black text-indigo-500 uppercase tracking-wide mb-0.5">Total a Pagar</label>
                     <span className="text-sm font-black text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1">${totalPagar.toFixed(2)}</span>
                   </div>
                   {tasa > 0 && (
                     <div className="flex flex-col items-start">
-                      <label className="text-[9px] font-black text-emerald-600 uppercase tracking-wide mb-0.5">Total en Bs ({tipoTasaLabel})</label>
+                      <label className="text-[10px] font-black text-emerald-600 uppercase tracking-wide mb-0.5">Total en Bs ({tipoTasaLabel})</label>
                       <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">Bs {(totalPagar * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   )}
@@ -1697,7 +1505,7 @@ function TabComisiones({ configNeg }) {
   <h4 className="font-bold text-slate-800 truncate group-hover:text-amber-600 transition-colors">{v.nombre}</h4>
   <div className="flex flex-col gap-0.5 mt-0.5">
     <span className="text-xs text-slate-500 font-medium">{v.cantidad} despachos únicos</span>
-    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5 w-fit">
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1.5 py-0.5 w-fit">
       💼 Externo (+{v.markup_pct}%)
     </span>
   </div>
@@ -1943,7 +1751,7 @@ function TabCredito() {
       className={`flex items-center gap-0.5 hover:text-slate-700 transition-colors ${sortBy === col ? 'text-slate-800 font-black' : 'text-slate-400 font-semibold'}`}
     >
       {label}
-      <span className="text-[9px] ml-0.5">{sortBy === col ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}</span>
+      <span className="text-[10px] ml-0.5">{sortBy === col ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}</span>
     </button>
   )
 
@@ -1952,19 +1760,14 @@ function TabCredito() {
   return (
     <div className="space-y-4">
       {/* Selector de Rango de Fecha para Cobranza/Abonos */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-6">
-          <div className="w-full">
-            <div className="flex items-center gap-2 ml-1 mb-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo de Cobranza (Abonos)</label>
-              <span className="hidden sm:inline-flex text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
-                {rangoLabel}
-              </span>
-            </div>
-            <DateRangeSelector value={rango} onChange={setRango} />
-          </div>
-        </div>
-      </div>
+      <BarraPeriodoReporte
+        titulo="Periodo de cobranza (abonos)"
+        rango={rango}
+        onCambiarRango={setRango}
+        opciones={[{ id: 'detallado', label: 'cuentas por cobrar', icon: FileText }]}
+        onExportar={(opcion, accion) => exportarCxCPDF(opcion, accion)}
+        exportando={exportandoCxC}
+      />
 
       {/* Alertas de Vencimiento para Admin */}
       {esAdmin && alertasVencimiento?.length > 0 && (
@@ -1983,7 +1786,7 @@ function TabCredito() {
                   <div className="flex items-center gap-1.5">
                     <div className="text-xs font-bold text-slate-800">{alerta.cliente_nombre}</div>
                     {alerta.metodo_pago === 'cod' && (
-                      <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase border border-blue-200 shrink-0">
+                      <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-1.5 py-0.5 rounded uppercase border border-blue-200 shrink-0">
                         COD
                       </span>
                     )}
@@ -2012,7 +1815,7 @@ function TabCredito() {
       )}
 
       {/* KPIs — 5 tarjetas */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 [&>*:last-child:nth-child(odd)]:col-span-2 md:[&>*:last-child:nth-child(odd)]:col-span-1">
         <KpiCard
           icon={DollarSign} label="Total por cobrar (CxC)"
           value={fmtUsd(totalCxC)}
@@ -2075,36 +1878,37 @@ function TabCredito() {
                 <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold">{clientesConDeuda.length}</span>
               </div>
 
-              <div className="flex items-center gap-2">
-                {/* BOTÓN IMPRIMIR */}
-                <button
-                  onClick={() => exportarCxCPDF('detallado', 'imprimir')}
-                  disabled={exportandoCxC}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-                  title="Imprimir Reporte CxC"
-                >
-                  <Printer size={13} className="text-slate-500" />
-                  <span className="hidden sm:inline">Imprimir</span>
-                </button>
-
-                {/* BOTÓN DESCARGAR */}
-                <button
-                  onClick={() => exportarCxCPDF('detallado', 'descargar')}
-                  disabled={exportandoCxC}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold active:scale-[0.98] disabled:opacity-50 shadow-sm"
-                  title="Descargar Reporte CxC"
-                >
-                  {exportandoCxC ? (
-                    <Loader2 size={13} className="animate-spin text-white" />
-                  ) : (
-                    <Download size={13} className="text-white" />
-                  )}
-                  <span className="hidden sm:inline">{exportandoCxC ? 'Generando...' : 'Descargar'}</span>
-                </button>
-              </div>
+              {/* Imprimir/Descargar: en la barra de período de arriba */}
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Celular: una tarjeta por cliente con el saldo a la vista */}
+            <ListaMovil>
+              {clientesOrdenados.map(c => {
+                const saldo = Number(c.saldo_pendiente)
+                const dias = c.diasSinPago ?? 0
+                const riesgo = riesgoCliente(dias)
+                const esCod = c.cargosActivos && c.cargosActivos.some(car => car.metodo_pago === 'cod')
+                return (
+                  <TarjetaMovil
+                    key={c.id}
+                    titulo={c.nombre}
+                    insignia={esCod ? <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-1.5 py-0.5 rounded border border-blue-200">COD</span> : null}
+                    subtitulo={c.vendedor ? `Vendedor: ${c.vendedor.nombre}` : null}
+                    monto={fmtUsd(saldo)}
+                    montoEtiqueta="Saldo"
+                    montoClase={saldo > 0 ? 'text-red-600' : 'text-emerald-600'}
+                    detalles={[
+                      { label: 'Riesgo', valor: <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${riesgo.bg} ${riesgo.text}`}>{riesgo.label}</span> },
+                      { label: 'Antigüedad', valor: `${dias} días`, clase: dias > 60 ? 'text-red-600' : dias > 30 ? 'text-amber-600' : 'text-slate-700' },
+                      { label: 'Vence', valor: c.diasRestantes === null ? '—' : c.diasRestantes < 0 ? `Vencido (${Math.abs(c.diasRestantes)} d)` : c.diasRestantes === 0 ? 'Hoy' : `En ${c.diasRestantes} días`, clase: c.diasRestantes !== null && c.diasRestantes <= 0 ? 'text-red-600' : 'text-slate-700' },
+                      { label: 'Otorgado', valor: fmtUsd(c.monto_otorgado || 0) },
+                      (rango?.from || rango?.to) ? { label: 'Cobrado', valor: fmtUsd(c.monto_cobrado || 0), clase: 'text-emerald-600' } : null,
+                    ]}
+                  />
+                )
+              })}
+            </ListaMovil>
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -2138,7 +1942,7 @@ function TabCredito() {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <p className="font-bold text-slate-800 leading-tight">{c.nombre}</p>
                             {c.cargosActivos && c.cargosActivos.some(car => car.metodo_pago === 'cod') && (
-                              <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
+                              <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
                                 COD
                               </span>
                             )}
@@ -2249,7 +2053,29 @@ function TabCredito() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Celular: un abono por tarjeta */}
+              <ListaMovil>
+                {abonos.map(a => {
+                  const numDes = a.despacho?.numero
+                    ? `DES-${String(a.despacho.numero).padStart(5, '0')}`
+                    : (a.despacho?.cotizacion?.numero ? `COT-${String(a.despacho.cotizacion.numero).padStart(5, '0')}` : '—')
+                  return (
+                    <TarjetaMovil
+                      key={a.id}
+                      titulo={a.cliente?.nombre || 'Desconocido'}
+                      subtitulo={new Date(a.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      monto={`+${fmtUsd(a.monto_usd)}`}
+                      montoClase="text-emerald-600"
+                      detalles={[
+                        { label: 'Método', valor: formatMetodoPago(a.forma_pago_abono || a.metodo_pago) },
+                        { label: 'Despacho', valor: numDes },
+                        { label: 'Referencia', valor: `${a.referencia ? `Ref: ${a.referencia} · ` : ''}${a.descripcion || 'Sin descripción'}`, ancho: true, clase: 'text-slate-500 font-normal italic' },
+                      ]}
+                    />
+                  )
+                })}
+              </ListaMovil>
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -2315,7 +2141,24 @@ function TabCredito() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Celular: un proveedor por tarjeta */}
+          <ListaMovil>
+            {proveedoresOrdenados.map(p => (
+              <TarjetaMovil
+                key={p.id}
+                titulo={p.nombre}
+                subtitulo={[p.tipo_proveedor, p.ciudad ? `${p.ciudad}, ${p.estado}` : null].filter(Boolean).join(' · ')}
+                monto={fmtUsd(Number(p.saldo_pendiente))}
+                montoEtiqueta="Por pagar"
+                montoClase="text-purple-600"
+                detalles={[
+                  p.telefono ? { label: 'Teléfono', valor: p.telefono } : null,
+                  p.email ? { label: 'Correo', valor: p.email } : null,
+                ]}
+              />
+            ))}
+          </ListaMovil>
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-[10px] text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
@@ -2455,25 +2298,14 @@ function TabArticulosExternos({ configNeg }) {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-3.5">
-          {/* Fila Superior: Periodo (con mucho espacio) */}
-          <div className="w-full">
-            <div className="flex items-center gap-2 ml-1 mb-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Periodo</label>
-              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
-                {rangoLabel}
-              </span>
-            </div>
-            <DateRangeSelector value={rango} onChange={setRango} />
-          </div>
-
-          {/* Fila Inferior: Otros Filtros y Acciones */}
-          <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between">
-            {/* Grupo de Filtros */}
-            <div className="flex flex-wrap items-end gap-3">
+      <BarraPeriodoReporte
+        titulo="Periodo"
+        rango={rango}
+        onCambiarRango={setRango}
+        filtros={(
+<div className="flex flex-wrap items-end gap-3">
               {/* Selector de Asesor */}
-              <div className="w-52">
+              <div className="w-full sm:w-52">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Asesor (Vendedor)</label>
                 <select
                   value={filtroAsesor}
@@ -2490,7 +2322,7 @@ function TabArticulosExternos({ configNeg }) {
               </div>
 
               {/* Búsqueda */}
-              <div className="w-60">
+              <div className="w-full sm:w-60">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Buscar</label>
                 <input
                   type="text"
@@ -2501,31 +2333,12 @@ function TabArticulosExternos({ configNeg }) {
                 />
               </div>
             </div>
-
-            {/* Grupo de Acciones */}
-            <div className="flex items-center gap-1.5 ml-auto shrink-0 self-end">
-              <button
-                onClick={() => exportarPDF('imprimir')}
-                disabled={exportando || !itemsFiltrados.length}
-                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
-              >
-                <Printer size={12} className="text-slate-500" />
-                <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
-              </button>
-
-              <button
-                onClick={() => exportarPDF('descargar')}
-                disabled={exportando || !itemsFiltrados.length}
-                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
-                style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
-              >
-                <Download size={12} />
-                <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        )}
+        opciones={[{ id: 'todos', label: 'artículos externos', icon: FileText }]}
+        onExportar={(_opcion, accion) => exportarPDF(accion)}
+        exportando={exportando}
+        deshabilitado={!itemsFiltrados.length}
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -2564,7 +2377,25 @@ function TabArticulosExternos({ configNeg }) {
 
       {/* Tabla */}
       <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Celular: un artículo por tarjeta, con el total a la vista */}
+        <ListaMovil vacio={<p className="px-2 py-6 text-center text-slate-400 text-xs font-medium">No se encontraron artículos externos vendidos en el periodo seleccionado.</p>}>
+          {itemsFiltrados.map((item, idx) => (
+            <TarjetaMovil
+              key={idx}
+              titulo={item.articulo_nombre}
+              subtitulo={`${item.articulo_codigo || 'Sin código'} · Despacho #${item.despacho_numero} · ${new Date(item.fecha).toLocaleDateString('es-VE')}`}
+              monto={fmtUsd(item.total_usd)}
+              montoEtiqueta="Total"
+              detalles={[
+                { label: 'Cantidad', valor: Number(item.cantidad || 0) % 1 === 0 ? Number(item.cantidad || 0).toFixed(0) : Number(item.cantidad || 0).toFixed(2) },
+                { label: 'Precio unit.', valor: fmtUsd(item.precio_unit_usd) },
+                { label: 'Cliente', valor: item.cliente_nombre },
+                { label: 'Asesor', valor: item.asesor_nombre },
+              ]}
+            />
+          ))}
+        </ListaMovil>
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
@@ -2636,9 +2467,9 @@ function TabArticulosExternos({ configNeg }) {
 // MAIN VIEW
 // ═══════════════════════════════════════════════════════════════════════════
 export default function ReportesView() {
-  const [activeTab, setActiveTab] = useState('comisiones')
-  const { data: configNeg = {} } = useConfigNegocio()
   const perfil = useAuthStore(s => s.perfil)
+  const [activeTab, setActiveTab] = useState(() => tabsDelRol(perfil?.rol)[0]?.id ?? 'comisiones')
+  const { data: configNeg = {} } = useConfigNegocio()
 
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
@@ -2666,14 +2497,14 @@ export default function ReportesView() {
       </div>
 
       {/* ── Tabs scrollable ────────────────────────────────────────────── */}
-      <div className="flex gap-1 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-hide">
-        {TABS.filter(t => !t.roles || t.roles.includes(perfil?.rol)).map(tab => {
+      <div className="flex flex-wrap gap-1.5 pb-0.5">
+        {tabsDelRol(perfil?.rol).map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           return (
             <button key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${isActive
+              className={`flex items-center gap-1 sm:gap-1.5 px-3 py-2 min-h-[38px] sm:min-h-0 rounded-lg sm:rounded-xl text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${isActive
                   ? 'bg-primary text-white border-primary shadow-md'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                 }`}>

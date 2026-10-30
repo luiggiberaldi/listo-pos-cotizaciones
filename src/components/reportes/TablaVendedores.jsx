@@ -100,7 +100,7 @@ export default function TablaVendedores({ data = [] }) {
                 {/* Subtotal Internos */}
                 <tr className="bg-slate-50/30 font-bold text-slate-600 border-b border-slate-100 text-xs">
                   <td className="px-4 py-2"></td>
-                  <td className="px-4 py-2 uppercase text-[9px] font-black text-slate-400">Subtotal Internos</td>
+                  <td className="px-4 py-2 uppercase text-[10px] font-black text-slate-400">Subtotal Internos</td>
                   <td className="px-4 py-2 text-center text-slate-500 font-semibold">{subInternos.despachos}</td>
                   <td className="px-4 py-2 text-right text-slate-700 font-semibold">{fmtUsd(subInternos.totalUsd)}</td>
                   <td className="px-4 py-2 text-right text-slate-400">{fmtUsd(subInternos.ticketProm)}</td>
@@ -123,7 +123,7 @@ export default function TablaVendedores({ data = [] }) {
                 {/* Subtotal Externos */}
                 <tr className="bg-amber-50/10 font-bold text-amber-800 border-b border-amber-100 text-xs">
                   <td className="px-4 py-2"></td>
-                  <td className="px-4 py-2 uppercase text-[9px] font-black text-amber-600/70">Subtotal Externos</td>
+                  <td className="px-4 py-2 uppercase text-[10px] font-black text-amber-600/70">Subtotal Externos</td>
                   <td className="px-4 py-2 text-center text-amber-700 font-semibold">{subExternos.despachos}</td>
                   <td className="px-4 py-2 text-right text-amber-900 font-semibold">{fmtUsd(subExternos.totalUsd)}</td>
                   <td className="px-4 py-2 text-right text-amber-600/70">{fmtUsd(subExternos.ticketProm)}</td>
@@ -208,7 +208,7 @@ export default function TablaVendedores({ data = [] }) {
                       </div>
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-slate-700">{v.nombre}</span>
-                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1 py-0.2 w-fit">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] rounded px-1 py-0.2 w-fit">
                           💼 Externo (+{v.markup_pct}%)
                         </span>
                       </div>

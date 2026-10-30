@@ -8,6 +8,7 @@ import { useEditarDespacho, useEditarCodigosExternos } from '../../hooks/useDesp
 import CodigosExternosEditor, { esItemExterno, esCodigoAutomatico } from './CodigosExternosEditor'
 import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoActions'
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
+import { datosVehiculoImpreso } from '../../utils/vehiculoImpreso'
 import supabase from '../../services/supabase/client'
 import { fetchDespachoConsolidado } from '../../services/despachoItemsService'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
@@ -1054,14 +1055,27 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <span className="truncate">{despacho.transportista.nombre}</span>
           </div>
         )}
+        {despacho.transportista?.es_local && despacho.vehiculo_viaje && (() => {
+          // Camión real del viaje (plan de flota), no el de la ficha del chofer.
+          const camion = datosVehiculoImpreso(despacho)
+          return (
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+              <span className="w-[11px] shrink-0" />
+              <span className="truncate" title={[camion.vehiculo, camion.placa_chuto, camion.placa_batea && `batea ${camion.placa_batea}`].filter(Boolean).join(' · ')}>
+                Camión: {camion.vehiculo}{camion.placa_chuto ? ` (${camion.placa_chuto})` : ''}
+              </span>
+            </div>
+          )
+        })()}
         {despacho.transportista?.es_local && Number(despacho.flete_usd || 0) > 0 && (
           despacho.flete_regla_aplicada === 'nomina_carabobo' ? (
             <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
-              <span className="text-amber-600">Nómina externa · Carabobo</span>
+              {/* Chofer local dentro de Carabobo: su flete no genera comisión, se paga por nómina */}
+              <span className="text-amber-600">Flota propia · Carabobo — flete por nómina</span>
             </div>
           ) : despacho.flete_comisionable ? (
             <div className="flex items-center gap-1.5 text-[10px] text-amber-700 font-semibold">
-              <span>Comisión externa: {fmtUsd(despacho.flete_neto_transportista_usd || 0)}</span>
+              <span>Flota propia · comisión del chofer: {fmtUsd(despacho.flete_neto_transportista_usd || 0)}</span>
             </div>
           ) : despacho.flete_regla_aplicada === 'destino_no_identificado' ? (
             <div className="flex items-center gap-1.5 text-[10px] text-red-600 font-semibold">

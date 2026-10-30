@@ -133,13 +133,33 @@ export async function verifyPrivileged(operatorId, env, accountId = null) {
   return verifySupervisor(operatorId, env, accountId)
 }
 
+// Las RPC financieras exigen un usuario real del tenant como actor (FK): el
+// desarrollador virtual (0000…) no existe en usuarios. Respaldo ya descrito en
+// la provisión E2E: se usa como actor al operador privilegiado del tenant (el
+// mismo fallback que las RPCs de inventario aplican dentro de la base).
+async function resolveActorFallback(operador, env) {
+  if (operador.actor_id || operador.id !== SUPER_ADMIN_UUID) return operador
+  try {
+    const response = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?cuenta_id=eq.${operador.cuenta_id}&activo=eq.true&rol=in.(supervisor,administracion,jefe,desarrollador)&select=id&order=nombre.asc&limit=1`,
+      { headers: supaServiceHeaders(env) },
+    )
+    if (!response.ok) return operador
+    const rows = await response.json()
+    if (Array.isArray(rows) && rows.length === 1) return { ...operador, actor_id: rows[0].id }
+  } catch {
+    // Best-effort: sin respaldo, la RPC rechazará con USUARIO_FUERA_DE_TENANT.
+  }
+  return operador
+}
+
 export async function validateOperator(request, env, { requireSupervisor = false } = {}) {
   const user = await verifyAuth(request, env)
   if (!user?.id) return { error: jsonError('No autenticado', 401, request) }
   if (!user.operator_session_id || !user.operador) {
     return { error: jsonError('No hay una sesión de operador activa', 403, request) }
   }
-  const operador = user.operador
+  const operador = await resolveActorFallback(user.operador, env)
   if (operador.cuenta_id !== user.id ||
       (operador.id === SUPER_ADMIN_UUID && !user.operator_virtual_developer)) {
     return { error: jsonError('Operador no autorizado', 403, request) }

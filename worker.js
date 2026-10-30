@@ -43,6 +43,7 @@ import {
 } from './api/handlers/proveedores.js'
 import { handleCierreDiarioSync } from './api/handlers/finanzas-sync.js'
 import { handleDashboard } from './api/handlers/dashboard.js'
+import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota } from './api/handlers/vehiculos.js'
 
 export default {
   async fetch(request, env) {
@@ -381,6 +382,33 @@ export default {
       return handleDesactivarTransportista(request, env);
     }
 
+    // ── API: catálogo de vehículos de la flota propia ─────────────────────────
+    if (url.pathname === '/api/vehiculos/listar' && request.method === 'GET') {
+      return handleListarVehiculos(request, env);
+    }
+
+    if (url.pathname === '/api/vehiculos/crear' && request.method === 'POST') {
+      return handleCrearVehiculo(request, env);
+    }
+
+    if (url.pathname === '/api/vehiculos/actualizar' && request.method === 'POST') {
+      return handleActualizarVehiculo(request, env);
+    }
+
+    if (url.pathname === '/api/vehiculos/eliminar' && request.method === 'POST') {
+      return handleEliminarVehiculo(request, env);
+    }
+
+    // ── API: reporte gerencial de flota y choferes locales ────────────────────
+    if (url.pathname === '/api/reportes/flota-choferes' && request.method === 'GET') {
+      return handleReporteFlotaChoferes(request, env);
+    }
+
+    if (url.pathname === '/api/reportes/flota-viajes' && request.method === 'GET') {
+      return handleDetalleViajesFlota(request, env);
+    }
+
+    // ── API: obtener lista de comisiones (bypass RLS) ──────────────────────
     if (url.pathname === '/api/comisiones/lista' && request.method === 'GET') {
       return handleGetComisiones(request, env);
     }

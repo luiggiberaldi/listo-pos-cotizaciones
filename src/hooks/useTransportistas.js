@@ -142,6 +142,8 @@ export function useCrearTransportista() {
 
       // Invalidación muy diferida para entornos con alta latencia (Vercel)
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      // Las tarjetas de camiones muestran sus choferes asignados (plan de flota)
+      qc.invalidateQueries({ queryKey: ['vehiculos'], exact: false })
     },
   })
 }
@@ -175,6 +177,8 @@ export function useActualizarTransportista() {
 
       showToast.success('Transportista actualizado')
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      // Las tarjetas de camiones muestran sus choferes asignados (plan de flota)
+      qc.invalidateQueries({ queryKey: ['vehiculos'], exact: false })
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
     },
   })
@@ -186,7 +190,7 @@ const REPORTE_TRANSP_KEY = ['reporte-transportistas']
 
 export function useReporteTransportistas({ desde = null, hasta = null } = {}) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const puede = ['administracion', 'desarrollador', 'logistica', 'jefe'].includes(perfil?.rol)
+  const puede = ['desarrollador', 'logistica', 'jefe'].includes(perfil?.rol)
   return useQuery({
     // Incluir fechas en queryKey para invalidar correctamente al cambiar el rango
     queryKey: [...REPORTE_TRANSP_KEY, desde, hasta],
@@ -210,7 +214,7 @@ export function useReporteTransportistas({ desde = null, hasta = null } = {}) {
 
 export function useDetalleTransportista(transportistaId) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const puede = ['administracion', 'desarrollador', 'logistica', 'jefe'].includes(perfil?.rol)
+  const puede = ['desarrollador', 'logistica', 'jefe'].includes(perfil?.rol)
   return useQuery({
     queryKey: [...REPORTE_TRANSP_KEY, 'detalle', transportistaId],
     queryFn: async () => {
@@ -297,6 +301,8 @@ export function useDesactivarTransportista() {
 
       showToast.success('Transportista eliminado')
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      // Las tarjetas de camiones muestran sus choferes asignados (plan de flota)
+      qc.invalidateQueries({ queryKey: ['vehiculos'], exact: false })
     },
   })
 }

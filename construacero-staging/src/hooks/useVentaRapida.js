@@ -27,9 +27,12 @@ export function useVentaRapida() {
       formaPago, formaPagoCliente, referenciaPago,
       notas, notasCliente, items, costoEnvioUsd, tasaBcv,
       direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado,
+      vehiculoId = null, actualizarVehiculoHabitual = false,
     }) => {
       const payload = {
         clienteId, transportistaId: transportistaId || null,
+        vehiculoId: vehiculoId || null,
+        actualizarVehiculoHabitual: !!actualizarVehiculoHabitual,
         fleteUsd: Number(fleteUsd) || 0,
         corteUsd: Number(corteUsd) || 0,
         formaPago, formaPagoCliente: formaPagoCliente || null,
@@ -97,7 +100,8 @@ export function useVentaRapida() {
 
       return { ...result, clienteNombre, esClienteAjeno, clienteVendedorNombre }
     },
-    onSuccess: async ({ id, numero, clienteNombre, esClienteAjeno, clienteVendedorNombre, _queued }, variables) => {
+    onSuccess: async ({ id, numero, clienteNombre, esClienteAjeno, clienteVendedorNombre, _queued, avisoVehiculo }, variables) => {
+      if (avisoVehiculo) showToast.warning?.(avisoVehiculo)
       // ─── Caso offline: venta encolada (stock NO se descuenta localmente) ──
       if (_queued) {
         showToast(

@@ -1,5 +1,6 @@
 // src/services/pdf/despachoPDF.js
 // Genera PDF profesional de Nota de Entrega — formato Construacero Carabobo
+import { datosVehiculoImpreso } from '../../utils/vehiculoImpreso'
 import { jsPDF } from 'jspdf'
 import { LOGO_DESPACHO } from './logoDespachoBase64'
 import {
@@ -527,6 +528,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const hasFlete = flete > 0
   const hasDescuento = descuentoTotal > 0
   const transportista = despacho.transportista_id ? (despacho.transportista || null) : null
+  // Camión del viaje (plan de flota): no el de la ficha del chofer
+  const camionViaje = despacho.transportista_id ? datosVehiculoImpreso(despacho) : {}
   const refPago = despacho.referencia_pago || ''
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -665,10 +668,10 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     { label: 'COLOR',  val: (transportista?.color  || '').toUpperCase(), w: col4W },
   ]
   const choferRow2Fields = [
-    { label: 'VEHÍCULO',    val: (transportista?.vehiculo    || '').toUpperCase(), w: col4W },
-    { label: 'PLACA CHUTO', val: (transportista?.placa_chuto || '').toUpperCase(), w: col4W },
-    { label: 'PLACA BATEA', val: (transportista?.placa_batea || '').toUpperCase(), w: col4W },
-    { label: 'COLOR BATEA', val: (transportista?.color_batea || '').toUpperCase(), w: col4W },
+    { label: 'VEHÍCULO',    val: (camionViaje.vehiculo || '').toUpperCase(), w: col4W },
+    { label: 'PLACA CHUTO', val: (camionViaje.placa_chuto || '').toUpperCase(), w: col4W },
+    { label: 'PLACA BATEA', val: (camionViaje.placa_batea || '').toUpperCase(), w: col4W },
+    { label: 'COLOR BATEA', val: (camionViaje.color_batea || '').toUpperCase(), w: col4W },
   ]
 
   function drawChoferRow(fields, ry) {

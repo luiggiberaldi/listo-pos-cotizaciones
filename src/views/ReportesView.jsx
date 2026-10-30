@@ -104,14 +104,17 @@ function formatMetodoPago(val, fallback = '—') {
 
 
 // ─── Tabs Definition ──────────────────────────────────────────────────────
+// Logística solo ve Transportistas; administración no ve Transportistas.
+const ROLES_GERENCIA = ['administracion', 'desarrollador', 'jefe']
 const TABS = [
-  { id: 'comisiones', label: 'Comisiones', short: 'Comis.', icon: Percent },
-  { id: 'credito', label: 'Crédito', short: 'Créd.', icon: CreditCard },
-  { id: 'ventas', label: 'Ventas', short: 'Ventas', icon: BarChart3 },
+  { id: 'comisiones', label: 'Comisiones', short: 'Comis.', icon: Percent, roles: ROLES_GERENCIA },
+  { id: 'credito', label: 'Crédito', short: 'Créd.', icon: CreditCard, roles: ROLES_GERENCIA },
+  { id: 'ventas', label: 'Ventas', short: 'Ventas', icon: BarChart3, roles: ROLES_GERENCIA },
   { id: 'transportistas', label: 'Transportistas', short: 'Transp.', icon: Truck,
-    roles: ['administracion', 'desarrollador', 'logistica', 'jefe'] },
-  { id: 'externos', label: 'Artículos Externos', short: 'Extern.', icon: Globe },
+    roles: ['desarrollador', 'logistica', 'jefe'] },
+  { id: 'externos', label: 'Artículos Externos', short: 'Extern.', icon: Globe, roles: ROLES_GERENCIA },
 ]
+const tabsDelRol = rol => TABS.filter(t => !t.roles || t.roles.includes(rol))
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────
 function SkeletonReporte() {
@@ -2762,9 +2765,9 @@ function TabArticulosExternos({ configNeg }) {
 // MAIN VIEW
 // ═══════════════════════════════════════════════════════════════════════════
 export default function ReportesView() {
-  const [activeTab, setActiveTab] = useState('comisiones')
-  const { data: configNeg = {} } = useConfigNegocio()
   const perfil = useAuthStore(s => s.perfil)
+  const [activeTab, setActiveTab] = useState(() => tabsDelRol(perfil?.rol)[0]?.id ?? 'comisiones')
+  const { data: configNeg = {} } = useConfigNegocio()
 
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-5">
@@ -2793,7 +2796,7 @@ export default function ReportesView() {
 
       {/* ── Tabs scrollable ────────────────────────────────────────────── */}
       <div className="flex gap-1 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-hide">
-        {TABS.filter(t => !t.roles || t.roles.includes(perfil?.rol)).map(tab => {
+        {tabsDelRol(perfil?.rol).map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           return (

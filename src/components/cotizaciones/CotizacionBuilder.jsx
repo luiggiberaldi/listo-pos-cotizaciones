@@ -13,7 +13,8 @@ import {
 } from 'lucide-react'
 import { useClientes, useVendedores } from '../../hooks/useClientes'
 import { useInventario } from '../../hooks/useInventario'
-import { useTransportistas, useCrearTransportista }   from '../../hooks/useTransportistas'
+import { useTransportistas, useCrearTransportista, useActualizarTransportista }   from '../../hooks/useTransportistas'
+import VehiculoViajeSelect from '../vehiculos/VehiculoViajeSelect'
 import { useGuardarBorrador, useEnviarCotizacion } from '../../hooks/useCotizaciones'
 import { useTasaCambio }       from '../../hooks/useTasaCambio'
 import { useConfigNegocio }    from '../../hooks/useConfigNegocio'
@@ -489,6 +490,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const { data: config = {} }  = useConfigNegocio()
   const guardarBorrador  = useGuardarBorrador()
   const enviarCotizacion = useEnviarCotizacion()
+  const actualizarTransp = useActualizarTransportista()
   const tasaHook         = useTasaCambio()
   const { data: inventarioParaPrecios } = useInventario({ pageSize: 1000 })
 
@@ -503,6 +505,21 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [transportistaId,    setTransportistaId]    = useState(cotizacionExistente?.transportista_id ?? '')
   const [notasCliente,       setNotasCliente]       = useState(cotizacionExistente?.notas_cliente ?? '')
   const [notasInternas,      setNotasInternas]      = useState(cotizacionExistente?.notas_internas ?? '')
+  // Vehículo para este viaje (Fase 3 del plan de flota): solo choferes locales
+  const [vehiculoViajeId,    setVehiculoViajeId]    = useState(cotizacionExistente?.vehiculo_id ?? '')
+  const [fijarVehiculoFijo,  setFijarVehiculoFijo]  = useState(false)
+  const transportistaSel = transportistas.find(t => t.id === transportistaId) || null
+
+  // Casilla "Dejar este vehículo como el nuevo camión fijo" (Fase 3): solo al
+  // marcarla se toca la ficha del chofer; sin ella, el camión es de este viaje.
+  async function aplicarVehiculoFijo() {
+    if (!fijarVehiculoFijo || !transportistaId || !vehiculoViajeId) return
+    try {
+      await actualizarTransp.mutateAsync({ id: transportistaId, campos: { vehiculo_habitual_id: vehiculoViajeId } })
+    } catch {
+      // useActualizarTransportista ya mostró el error; no bloquea el guardado
+    }
+  }
   const [monedaPDF,          setMonedaPDFRaw]       = useState(() => {
     const businessId = useAuthStore.getState().perfil?.cuenta_id
     const key = `construacero_moneda_pdf${businessId ? `-${businessId}` : ''}`
@@ -877,7 +894,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
       const payload = {
         cotizacionId,
-        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd, canal_venta: esVendedorExterno ? 'externo' : 'interno' },
+        campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, vehiculoId: vehiculoViajeId || null, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd, canal_venta: esVendedorExterno ? 'externo' : 'interno' },
         items: itemsConDescuento,
       }
       console.log('payload cotizacion (builder-guardar)', payload)
@@ -886,6 +903,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       const extractedId = res?.localId || res?.id
       setCotizacionId(extractedId)
       clearDraft(perfil?.id)
+      await aplicarVehiculoFijo()
       onGuardado?.()
     } catch (e) {
       setErrorGeneral(e.message ?? 'Error al guardar')
@@ -916,7 +934,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       if (!currentId) {
         const payload = {
           cotizacionId: null,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, vehiculoId: vehiculoViajeId || null, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
           items: itemsConDescuento,
         }
         console.log('payload cotizacion (builder-enviar-nuevo)', payload)
@@ -928,11 +946,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       } else {
         const res = await guardarBorrador.mutateAsync({
           cotizacionId: currentId,
-          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
+          campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, vehiculoId: vehiculoViajeId || null, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
           items: itemsConDescuento,
         })
         if (res?._queued) isOfflineId = true
       }
+
+      await aplicarVehiculoFijo()
 
       // Si se guardó como borrador local (offline), NO intentamos enviar
       // Solo simulamos que fue enviada para que el usuario avance y no se quede colgado
@@ -1494,6 +1514,15 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                 {/* Servicios Extras */}
                 <div className="space-y-3">
                   <SectionH3 icon={Truck}>Servicios Adicionales (USD)</SectionH3>
+                  {/* Vehículo para este viaje (solo choferes locales) — Fase 3 del plan de flota */}
+                  <VehiculoViajeSelect
+                    transportista={transportistaSel}
+                    vehiculoId={vehiculoViajeId}
+                    onChange={setVehiculoViajeId}
+                    fijar={fijarVehiculoFijo}
+                    onChangeFijar={setFijarVehiculoFijo}
+                    disabled={cargando}
+                  />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Flete / Envío</label>

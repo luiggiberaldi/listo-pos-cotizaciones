@@ -1,7 +1,7 @@
 // src/views/TransportistasView.jsx
 // Gestión de transportistas — solo supervisores pueden crear/editar/desactivar
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale, FileText, Printer, Phone } from 'lucide-react'
+import { Truck, Plus, Pencil, Ban, RefreshCw, ChevronLeft, ChevronRight, MapPin, Scale, FileText, Printer, Phone, Users, Star } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import {
@@ -11,19 +11,25 @@ import {
   useActualizarTransportista,
   useDesactivarTransportista,
 } from '../hooks/useTransportistas'
+import { useVehiculos } from '../hooks/useVehiculos'
+import VehiculosFranja from '../components/transportistas/VehiculosFranja'
+import { nombreVehiculo, placasVehiculo } from '../utils/vehiculoImpreso'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Skeleton     from '../components/ui/Skeleton'
 import EmptyState   from '../components/ui/EmptyState'
 import PageHeader  from '../components/ui/PageHeader'
-import { colorTransportista } from '../utils/transportistaColors'
+import { colorTransportista, COLORES_FLOTA_PROPIA } from '../utils/transportistaColors'
 import { rankEntities } from '../utils/entitySearch'
+import CustomSelect from '../components/ui/CustomSelect'
 
 import { PREFIJOS_RIF, parsearRif as parsearRifTransp, formatearRif as formatearRifTransp } from '../utils/rif'
 
 
 // ─── Formulario ───────────────────────────────────────────────────────────────
 function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
+  const { data: vehiculosFlota = [] } = useVehiculos()
   const { prefijo: rifPrefijoInit, numero: rifNumeroInit } = parsearRifTransp(inicial.rif)
+  const [vehiculoHabitualId, setVehiculoHabitualId] = useState(inicial.vehiculo_habitual_id ?? '')
   const [rifPrefijo, setRifPrefijo] = useState(rifPrefijoInit)
   const [campos, setCampos] = useState({
     nombre:          inicial.nombre          ?? '',
@@ -54,6 +60,8 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
     onGuardar({
       ...campos,
       rif: formatearRifTransp(rifPrefijo, campos.rif),
+      // Vehículo habitual solo aplica a choferes locales (Fase 3 del plan de flota)
+      vehiculo_habitual_id: campos.es_local ? (vehiculoHabitualId || null) : null,
     })
   }
 
@@ -103,13 +111,16 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <input value={campos.telefono} onChange={e => cambiar('telefono', e.target.value)}
             placeholder="Ej: 0414-1234567" className={inputCls} disabled={cargando} inputMode="tel" />
         </div>
+        {/* Datos del vehículo propio: solo para transportistas externos. El chofer
+            local maneja camiones de la empresa (pestaña "Vehículos de la empresa"). */}
+        {!campos.es_local && (<>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Color *</label>
+          <label className="text-sm font-medium text-slate-700">Color</label>
           <input value={campos.color} onChange={e => cambiar('color', e.target.value)}
             placeholder="Ej: Rojo, Blanco" className={inputCls} disabled={cargando} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Vehículo *</label>
+          <label className="text-sm font-medium text-slate-700">Vehículo</label>
           <input value={campos.vehiculo} onChange={e => cambiar('vehiculo', e.target.value)}
             placeholder="Ej: Mack Granite 2020" className={inputCls} disabled={cargando} />
         </div>
@@ -128,16 +139,19 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
           <input value={campos.color_batea} onChange={e => cambiar('color_batea', e.target.value)}
             placeholder="Ej: Blanco, Amarillo" className={inputCls} disabled={cargando} />
         </div>
+        </>)}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Cobertura (Zonas)</label>
           <input value={campos.zona_cobertura} onChange={e => cambiar('zona_cobertura', e.target.value)}
             placeholder="Ej: Centro, Occidente, Caracas" className={inputCls} disabled={cargando} />
         </div>
+        {!campos.es_local && (
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700">Capacidad de Carga</label>
           <input value={campos.capacidad} onChange={e => cambiar('capacidad', e.target.value)}
             placeholder="Ej: 30 Toneladas, 350 Sacos" className={inputCls} disabled={cargando} />
         </div>
+        )}
         <div className="space-y-1.5 sm:col-span-2">
           <label className="text-sm font-medium text-slate-700">Notas / Observaciones</label>
           <input value={campos.notas} onChange={e => cambiar('notas', e.target.value)}
@@ -160,6 +174,23 @@ function TransportistaForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
         <p className="text-[11px] text-slate-400">
           El tipo de cálculo (% o tarifa fija) y el valor se configuran globalmente en Configuración → Transportistas.
         </p>
+        {campos.es_local && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Vehículo habitual asignado</label>
+            <CustomSelect
+              value={vehiculoHabitualId}
+              onChange={v => setVehiculoHabitualId(v || '')}
+              disabled={cargando}
+              icon={Truck}
+              placeholder="Sin vehículo fijo / Rotativo"
+              options={[
+                { value: '', label: 'Sin vehículo fijo / Rotativo' },
+                ...vehiculosFlota.filter(v => v.activo !== false).map(v => ({ value: v.id, label: v.nombre, sub: placasVehiculo(v) })),
+              ]}
+            />
+            <p className="text-[11px] text-slate-400">Se autocompleta al crear viajes; cada viaje puede usar otro camión sin tocar esta ficha.</p>
+          </div>
+        )}
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
@@ -229,11 +260,14 @@ function TransportistaModal({ transportista = null, onClose }) {
 }
 
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
-function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar, onDesactivar }) {
-  const colors = colorTransportista(transportista.nombre)
+function TransportistaCard({ transportista, esSupervisor, puedeEditar, puedeEliminar = esSupervisor, onEditar, onDesactivar, vehiculoFijo = null, onVerVehiculo }) {
+  // Flota propia: color fijo de la empresa + cinta e ícono con estrella para
+  // distinguirlos de los transportistas generales (que usan un color por nombre).
+  const esFlota = !!transportista.es_local
+  const colors = esFlota ? COLORES_FLOTA_PROPIA : colorTransportista(transportista.nombre)
 
   return (
-    <div className="bg-white rounded-2xl border overflow-hidden flex flex-col hover:shadow-lg transition-all duration-200"
+    <div className={`bg-white rounded-2xl overflow-hidden flex flex-col hover:shadow-lg transition-all duration-200 ${esFlota ? 'border-2' : 'border'}`}
       style={{ borderColor: colors.border, boxShadow: `0 1px 3px ${colors.shadow}` }}>
 
       {/* ── Strip superior con color ── */}
@@ -242,11 +276,21 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
         {/* Dot pattern */}
         <div className="absolute inset-0 opacity-10 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
-        {/* Ícono camión */}
+        {/* Ícono camión (flota propia: con estrella dorada) */}
         <div className="relative z-10 w-10 h-10 rounded-xl flex items-center justify-center"
           style={{ background: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.4)', backdropFilter: 'blur(4px)' }}>
           <Truck size={20} color="white" />
+          {esFlota && (
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center">
+              <Star size={8} className="text-white fill-white" />
+            </span>
+          )}
         </div>
+        {esFlota && (
+          <span className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full bg-white/90 text-[#1B365D] text-[9px] font-black uppercase tracking-wider shadow-sm">
+            Flota propia
+          </span>
+        )}
       </div>
 
       {/* ── Nombre + RIF ── */}
@@ -255,15 +299,33 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
         {transportista.rif && (
           <p className="text-[11px] text-slate-400 font-mono mt-0.5">{transportista.rif}</p>
         )}
-        {transportista.es_local && (
-          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wide">
-            Local
-          </span>
-        )}
         {transportista.tipo_relacion && (
           <span className="inline-flex items-center gap-1 mt-1 ml-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold capitalize">
             {transportista.tipo_relacion}
           </span>
+        )}
+        {transportista.es_local && vehiculoFijo && (
+          <button
+            type="button"
+            onClick={() => onVerVehiculo?.(vehiculoFijo.id)}
+            title="Ver este camión en Vehículos de la empresa"
+            className="mt-2 w-full flex items-center gap-2 text-left bg-[#1B365D]/5 border border-[#B8860B]/30 rounded-xl px-2.5 py-1.5 hover:bg-[#B8860B]/10 hover:border-[#B8860B]/50 transition-colors"
+          >
+            <span className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
+              <Truck size={12} color="white" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[9px] font-bold uppercase tracking-wider text-[#B8860B]">Camión fijo</span>
+              <span className="block text-[11px] font-bold text-[#1B365D] truncate">
+                {nombreVehiculo(vehiculoFijo)} <span className="font-mono font-medium text-slate-500">· {placasVehiculo(vehiculoFijo)}</span>
+              </span>
+            </span>
+          </button>
+        )}
+        {transportista.es_local && !vehiculoFijo && (
+          <p className="mt-1.5 text-[10px] font-medium text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-1.5 py-0.5 truncate">
+            Sin vehículo fijo (rotativo)
+          </p>
         )}
       </div>
 
@@ -275,19 +337,19 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
             <span className="font-mono">{transportista.telefono}</span>
           </div>
         )}
-        {transportista.color && (
+        {!transportista.es_local && transportista.color && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <span className="font-medium text-slate-400">Color:</span>
             <span>{transportista.color}</span>
           </div>
         )}
-        {transportista.vehiculo && (
+        {!transportista.es_local && transportista.vehiculo && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <Truck size={11} className="text-slate-400 shrink-0" />
             <span>{transportista.vehiculo}</span>
           </div>
         )}
-        {(transportista.placa_chuto || transportista.placa_batea) && (
+        {!transportista.es_local && (transportista.placa_chuto || transportista.placa_batea) && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
             {transportista.placa_chuto && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">Chuto: {transportista.placa_chuto}</span>}
             {transportista.placa_batea && (
@@ -304,7 +366,7 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
             <span className="truncate">{transportista.zona_cobertura}</span>
           </div>
         )}
-        {transportista.capacidad && (
+        {!transportista.es_local && transportista.capacidad && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <Scale size={11} className="text-slate-400 shrink-0" />
             <span className="font-medium text-slate-400">Capacidad:</span>
@@ -321,7 +383,7 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
             <Pencil size={13} />
             Editar
           </button>
-          {esSupervisor && (
+          {puedeEliminar && (
             <button onClick={() => onDesactivar(transportista)} title="Desactivar"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
               <Ban size={13} />
@@ -356,6 +418,8 @@ function SkeletonTransportistas() {
   )
 }
 
+const PESTANA_KEY = 'construacero_transportistas_pestana'
+
 export default function TransportistasView() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
@@ -366,6 +430,20 @@ export default function TransportistasView() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [filtroTipo, setFiltroTipo] = useState('todos')
+  // Pestañas: "Choferes y transportistas" / "Vehículos de la empresa" (se recuerda la última)
+  const [pestana, setPestanaRaw] = useState(() => {
+    try { return localStorage.getItem(PESTANA_KEY) === 'vehiculos' ? 'vehiculos' : 'choferes' } catch { return 'choferes' }
+  })
+  const [vehiculoResaltado, setVehiculoResaltado] = useState(null)
+  function setPestana(valor) {
+    setPestanaRaw(valor)
+    if (valor !== 'vehiculos') setVehiculoResaltado(null)
+    try { localStorage.setItem(PESTANA_KEY, valor) } catch { /* almacenamiento no disponible */ }
+  }
+  function verVehiculo(id) {
+    setVehiculoResaltado(id)
+    setPestana('vehiculos')
+  }
   const PAGE_SIZE = 12
   const [desactivandoTransp,    setDesactivandoTransp]    = useState(null)
 
@@ -377,6 +455,13 @@ export default function TransportistasView() {
     useTransportistasCounts({ soloActivos: true })
   const desactivar = useDesactivarTransportista()
   const { data: config = {} } = useConfigNegocio()
+  // Flota para la etiqueta "Vehículo fijo" de cada chofer local (Fase 3)
+  const { data: vehiculosFlota = [] } = useVehiculos({ incluirInactivos: true })
+  const vehiculosActivos = vehiculosFlota.filter(v => v.activo !== false).length
+  const vehiculosPorId = useMemo(
+    () => Object.fromEntries(vehiculosFlota.map(v => [v.id, v])),
+    [vehiculosFlota]
+  )
   const [exportandoPDF, setExportandoPDF] = useState(false)
   const [imprimiendoPDF, setImprimiendoPDF] = useState(false)
 
@@ -446,8 +531,10 @@ export default function TransportistasView() {
       <PageHeader
         icon={Truck}
         title="Transportistas"
-        subtitle={isLoading ? 'Cargando...' : `${totalCount} visible${totalCount !== 1 ? 's' : ''}`}
-        action={
+        subtitle={pestana === 'vehiculos'
+          ? `${vehiculosActivos} vehículo${vehiculosActivos !== 1 ? 's' : ''} activo${vehiculosActivos !== 1 ? 's' : ''}`
+          : isLoading ? 'Cargando...' : `${totalCount} visible${totalCount !== 1 ? 's' : ''}`}
+        action={pestana !== 'choferes' ? null : (
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {/* Buscador optimizado */}
             <div className="relative group">
@@ -503,8 +590,38 @@ export default function TransportistasView() {
               )}
             </div>
           </div>
-        }
+        )}
       />
+
+      {/* Pestañas (plan de flota): personas y camiones por separado */}
+      <div className="flex items-center gap-1 border-b border-slate-200" role="tablist">
+        {[
+          { id: 'choferes',  label: 'Choferes y transportistas', icon: Users, count: transportistasCounts.todos },
+          { id: 'vehiculos', label: 'Vehículos de la empresa',   icon: Truck, count: vehiculosActivos },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={pestana === tab.id}
+            onClick={() => setPestana(tab.id)}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 -mb-px border-b-2 text-sm font-bold transition-colors ${
+              pestana === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <tab.icon size={15} />
+            <span>{tab.label}</span>
+            <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${pestana === tab.id ? 'bg-primary/10' : 'bg-slate-100 text-slate-500'}`}>
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {pestana === 'vehiculos' ? (
+        <VehiculosFranja resaltarId={vehiculoResaltado} />
+      ) : (<>
 
       {/* Filtro por tipo: Todos / Locales / Generales */}
       {!isLoading && !isError && hayCatalogo && (
@@ -581,16 +698,24 @@ export default function TransportistasView() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-            {transportistasPaginados.map(t => (
-              <TransportistaCard
-                key={t.id}
-                transportista={t}
-                esSupervisor={esSupervisor}
-                puedeEditar={puedeCrear}
-                onEditar={abrirEditar}
-                onDesactivar={setDesactivandoTransp}
-              />
-            ))}
+            {transportistasPaginados.map(t => {
+              const vehiculoFijo = t.es_local && t.vehiculo_habitual_id
+                ? vehiculosPorId[t.vehiculo_habitual_id]
+                : null
+              return (
+                <TransportistaCard
+                  key={t.id}
+                  transportista={t}
+                  esSupervisor={esSupervisor}
+                  puedeEliminar={esSupervisor || perfil?.rol === 'logistica'}
+                  puedeEditar={puedeCrear}
+                  onEditar={abrirEditar}
+                  onDesactivar={setDesactivandoTransp}
+                  vehiculoFijo={vehiculoFijo || null}
+                  onVerVehiculo={verVehiculo}
+                />
+              )
+            })}
           </div>
 
           {totalPages > 1 && (
@@ -611,6 +736,7 @@ export default function TransportistasView() {
           )}
         </>
       )}
+      </>)}
 
       {/* Modal crear/editar */}
       {modalAbierto && (

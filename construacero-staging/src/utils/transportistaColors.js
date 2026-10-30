@@ -26,3 +26,14 @@ export function colorTransportista(nombre = '') {
   }
 }
 
+
+// Flota propia (choferes locales y camiones de la empresa): un solo color fijo con
+// los colores de la marca (azul marino → dorado). Ningún transportista general lo usa,
+// porque los generales toman un tono único por nombre en una sola gama.
+export const COLORES_FLOTA_PROPIA = {
+  solid: '#1B365D',
+  gradientStart: '#1B365D',
+  gradientEnd: '#B8860B',
+  border: 'rgba(184, 134, 11, 0.45)',
+  shadow: 'rgba(184, 134, 11, 0.18)',
+}

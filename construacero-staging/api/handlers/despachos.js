@@ -5,6 +5,7 @@ import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 import { calcularDescuentoValido } from '../lib/descuentoUtils.js'
 import { calcularComisionConDescuentos, reconciliarComisionConDescuento } from '../lib/comisionUtils.js'
 import { tieneZonaHoraria } from '../lib/fechaEntrega.js'
+import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
 
 function resolverIdempotencyKey(request, body) {
   const fromBody = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : ''
@@ -135,6 +136,18 @@ async function validarDestinoFleteLocal({ env, headers, cuentaId, transportistaI
   return null
 }
 
+// Recalcula la comisión "238b" de un despacho tras una devolución parcial:
+// la RPC recomputa el despacho con sus líneas netas y preserva la política
+// no-CxC/exclusiones. (Defecto preexistente: este ayudante se usaba en
+// handleDevolucionParcialDespacho pero nunca se había definido.)
+export async function recalcularComision238b(despachoId, headers, env) {
+  return fetch(`${env.SUPABASE_URL}/rest/v1/rpc/recalcularcomisiondespacho_238b`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify({ p_despachoid: despachoId }),
+  })
+}
+
 async function obtenerVendedorComisionId(despacho, headers, env) {
   if (despacho.cliente_id) {
     const cliRes = await fetch(
@@ -224,9 +237,12 @@ export async function handleCrearDespacho(request, env) {
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
-  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, corteUsd, clienteFacturaId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado } = body;
+  const { cotizacionId, notas, formaPago, transportistaId, fleteUsd, corteUsd, clienteFacturaId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, vehiculoId, actualizarVehiculoHabitual } = body;
   if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
     return jsonError('transportistaId inválido', 400, request);
+  }
+  if (vehiculoId !== undefined && vehiculoId !== null && vehiculoId !== '' && !isValidUuid(vehiculoId)) {
+    return jsonError('vehiculoId inválido', 400, request);
   }
   if (fleteUsd !== undefined && (!Number.isFinite(Number(fleteUsd)) || Number(fleteUsd) < 0)) {
     return jsonError('fleteUsd inválido', 400, request);
@@ -275,6 +291,16 @@ export async function handleCrearDespacho(request, env) {
       request,
     })
     if (destinoError) return destinoError
+
+    // Vehículo del viaje: el elegido aquí, o el que el vendedor dejó en la
+    // cotización (si el chofer no cambió). Sin ninguno, el trigger pone el habitual.
+    const vehiculoViajeId = vehiculoId
+      || (transportistaFinalId && transportistaFinalId === cot.transportista_id ? cot.vehiculo_id : null)
+      || null
+    const vehiculoValido = await validarVehiculoDeCuenta({
+      env, headers, cuentaId: operador.cuenta_id, vehiculoId: vehiculoViajeId,
+    })
+    if (vehiculoValido.error) return jsonError(vehiculoValido.error, 400, request)
 
     // 3. Si está enviada, aceptarla automáticamente
     if (cot.estado === 'enviada') {
@@ -340,6 +366,8 @@ export async function handleCrearDespacho(request, env) {
         cliente_factura_id: (clienteFacturaId && isValidUuid(clienteFacturaId)) ? clienteFacturaId : null,
         vendedor_id: cot.vendedor_id,
         transportista_id: transportistaFinalId,
+        vehiculo_id: vehiculoViajeId,
+        ...(vehiculoViajeId ? { vehiculo_origen: 'manual' } : {}),
         estado: 'pendiente',
         total_usd: totalConFleteCorte,
         flete_usd: flete,
@@ -393,6 +421,17 @@ export async function handleCrearDespacho(request, env) {
       });
     }
 
+    // Casilla "Dejar este vehículo como el nuevo camión fijo de este chofer".
+    // Se aplica DESPUÉS de crear el despacho: si falla, el despacho ya existe y
+    // solo se avisa (no se deja la ficha del chofer cambiada por una venta fallida).
+    let avisoVehiculo = null
+    if (actualizarVehiculoHabitual && transportistaFinalId && vehiculoViajeId) {
+      const vinculo = await guardarVehiculoHabitual({
+        env, headers, cuentaId: operador.cuenta_id, transportistaId: transportistaFinalId, vehiculoId: vehiculoViajeId,
+      })
+      if (vinculo.error) avisoVehiculo = `No se pudo fijar el camión del chofer: ${vinculo.error}`
+    }
+
     // Auditoría (fire-and-forget)
     registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
@@ -405,7 +444,8 @@ export async function handleCrearDespacho(request, env) {
       id: despacho.id,
       numero: despacho.numero,
       numeroCotizacion: cot.numero,
-      clienteNombre: clienteNombre
+      clienteNombre: clienteNombre,
+      ...(avisoVehiculo ? { avisoVehiculo } : {}),
     }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al crear despacho', 500, request);
@@ -544,9 +584,12 @@ export async function handleEditarPagoDespacho(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, codSinAbono, soloPagoEntregado } = body;
+  const { despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, codSinAbono, soloPagoEntregado, vehiculoId, actualizarVehiculoHabitual } = body;
   if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
     return jsonError('transportistaId inválido', 400, request);
+  }
+  if (vehiculoId !== undefined && vehiculoId !== null && vehiculoId !== '' && !isValidUuid(vehiculoId)) {
+    return jsonError('vehiculoId inválido', 400, request);
   }
   if (fleteUsd !== undefined && (!Number.isFinite(Number(fleteUsd)) || Number(fleteUsd) < 0)) {
     return jsonError('fleteUsd inválido', 400, request);
@@ -690,7 +733,7 @@ export async function handleEditarPagoDespacho(request, env) {
       corteUsd === undefined &&
       clienteId === undefined &&
       direccionEnvioDireccion === undefined &&
-      (transportistaId !== undefined || fleteUsd !== undefined || notas !== undefined || notasTitulo !== undefined);
+      (transportistaId !== undefined || vehiculoId !== undefined || fleteUsd !== undefined || notas !== undefined || notasTitulo !== undefined);
 
     if (!editandoSoloNotas && !editandoTransportista) {
       return jsonError('No se pueden editar despachos en estado entregado', 400, request);
@@ -702,7 +745,7 @@ export async function handleEditarPagoDespacho(request, env) {
     if (tieneCamposFinancierosRestringidos) {
       return jsonError('No se pueden editar datos financieros en un despacho aprobado', 400, request);
     }
-    if (transportistaId === undefined && fleteUsd === undefined && notas === undefined && notasTitulo === undefined) {
+    if (transportistaId === undefined && vehiculoId === undefined && fleteUsd === undefined && notas === undefined && notasTitulo === undefined) {
       return jsonError('No hay campos editables para este estado', 400, request);
     }
   }
@@ -716,6 +759,22 @@ export async function handleEditarPagoDespacho(request, env) {
   if (direccionEnvioCiudad !== undefined) campos.direccion_envio_ciudad = direccionEnvioCiudad || null;
   if (direccionEnvioEstado !== undefined) campos.direccion_envio_estado = direccionEnvioEstado || null;
   if (transportistaId !== undefined) campos.transportista_id = transportistaId || null;
+  // Vehículo del viaje (plan de flota). Solo se toca si el usuario lo cambió:
+  // - elegido a mano → se marca 'manual' (deja de mostrarse como estimado ≈);
+  // - vaciado, o cambio de chofer sin indicar camión → se limpia para que el
+  //   trigger ponga el camión habitual del nuevo chofer.
+  const cambiaChofer = transportistaId !== undefined && (transportistaId || null) !== (despacho.transportista_id || null);
+  if (vehiculoId !== undefined) {
+    if (vehiculoId) {
+      const vehiculoValido = await validarVehiculoDeCuenta({ env, headers: h, cuentaId: operador.cuenta_id, vehiculoId });
+      if (vehiculoValido.error) return jsonError(vehiculoValido.error, 400, request);
+    }
+    campos.vehiculo_id = vehiculoId || null;
+    campos.vehiculo_origen = vehiculoId ? 'manual' : null;
+  } else if (cambiaChofer) {
+    campos.vehiculo_id = null;
+    campos.vehiculo_origen = null;
+  }
   if (fleteUsd !== undefined || corteUsd !== undefined) {
     const nuevoFlete = fleteUsd !== undefined ? Number(fleteUsd) : Number(despacho.flete_usd || 0);
     const nuevoCorte = corteUsd !== undefined ? Number(corteUsd) : Number(despacho.corte_usd || 0);
@@ -757,6 +816,18 @@ export async function handleEditarPagoDespacho(request, env) {
   if (!upRes.ok) {
     const err = await upRes.text().catch(() => '')
     return errorReglaFlete(err, request, 'Error al actualizar despacho')
+  }
+
+  // Casilla "Dejar este vehículo como el nuevo camión fijo de este chofer":
+  // si no se marca, el cambio de vehículo aplica solo para este viaje.
+  const choferDelViaje = transportistaId !== undefined ? transportistaId : despacho.transportista_id;
+  if (actualizarVehiculoHabitual && choferDelViaje && vehiculoId) {
+    const vinculo = await guardarVehiculoHabitual({
+      env, headers: h, cuentaId: operador.cuenta_id, transportistaId: choferDelViaje, vehiculoId,
+    })
+    if (vinculo.error) {
+      return jsonError(`El despacho se guardó, pero no se pudo fijar el camión del chofer: ${vinculo.error}`, 400, request)
+    }
   }
 
   // Recalcular comision si ya existe (porque pudo cambiar el total o forma de pago)
@@ -1343,6 +1414,44 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
+    // ── Reingreso al devolver a pendiente o anular desde 'despachada' (release 17) ──
+    // Portado del árbol principal (api/handlers/despachos.js): desde el release 17
+    // el egreso ocurre al APROBAR, así que devolver a pendiente o anular un despacho
+    // aprobado debe reingresar la mercancía. +stock + Kardex 'ingreso' y cambio de
+    // estado en la MISMA transacción SQL (la RPC ya existe en staging desde el
+    // cutover del 2026-10-19). entregada→despachada no reingresa.
+    let reingresoDespachoAtomica = null
+    const reingresoCandidate = desp.estado === 'despachada' && ['pendiente', 'anulada'].includes(nuevoEstado)
+    if (reingresoCandidate) {
+      const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/revertir_despacho_inventario_atomica`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          p_despacho_id: despachoId,
+          p_nuevo_estado: nuevoEstado,
+          p_usuario_id: user.operator_id,
+          p_usuario_nombre: operador.nombre,
+          p_usuario_color: operador.color || null,
+        }),
+      })
+      const rpcText = await rpcRes.text()
+      let result = null
+      try { result = rpcText ? JSON.parse(rpcText) : null } catch { result = null }
+      if (!rpcRes.ok) {
+        const msgFalta = String(result?.message || rpcText || `HTTP ${rpcRes.status}`)
+        // Compatibilidad de rollout (igual que en el principal): sin la RPC del
+        // release 17 tampoco hubo egreso al aprobar, así que no hay que reingresar.
+        const faltaRelease17 = msgFalta.includes('Could not find the function') || msgFalta.includes('PGRST202')
+        if (!faltaRelease17) {
+          return jsonError(`No se pudo revertir el despacho con reingreso atómico: ${msgFalta}`, 400, request)
+        }
+        console.warn(`[RELEASE17-FALLBACK] revertir_despacho_inventario_atomica ausente; se omite el reingreso del despacho ${despachoId}.`)
+      } else if (!result?.ok) {
+        return jsonError('La RPC no confirmó el reingreso atómico', 500, request)
+      } else {
+        reingresoDespachoAtomica = result
+      }
+    }
+
     // 4. Actualizar estado
     const updateData = { estado: nuevoEstado };
     const ahora = new Date().toISOString();
@@ -1720,7 +1829,9 @@ export async function handleActualizarEstadoDespacho(request, env) {
       ok: true,
       nuevoEstado,
       idempotencyKey,
-      inventario_atomico: Boolean(entregaFinanzasAtomica || esReversionEntregaAtomica),
+      inventario_atomico: Boolean(entregaFinanzasAtomica || esReversionEntregaAtomica || reingresoDespachoAtomica),
+      reingreso_inventario: Boolean(reingresoDespachoAtomica),
+      reingreso_movimientos: reingresoDespachoAtomica?.movimientos ?? null,
       bloqueo_stock_aprobacion: aprobacionAtomica ? 'sql_atomic' : null,
       bloqueo_productos: aprobacionAtomica?.productos ?? null,
       stock_faltantes: aprobacionAtomica?.faltantes ?? null,

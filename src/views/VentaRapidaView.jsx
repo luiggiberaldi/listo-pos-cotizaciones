@@ -22,6 +22,7 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { calcComisionEstimada } from '../utils/comisionUtils'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
+import VehiculoViajeSelect from '../components/vehiculos/VehiculoViajeSelect'
 import useClienteFresco from '../hooks/useClienteFresco'
 import { useFormasPago } from '../hooks/useFormasPago'
 import { useSaldoFavorOrigen } from '../hooks/useCuentasCobrar'
@@ -107,7 +108,7 @@ function ModalVentaExitosa({ data, onClose, config }) {
     const importFn = pdfType === 'orden'
       ? import('../services/pdf/ordenDespachoPDF')
       : import('../services/pdf/despachoPDF')
-    const [pdfModule, itemsRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
+    const [pdfModule, itemsRes, clienteData, vendedorRes, transportistaRes, vehiculoViajeRes] = await Promise.all([
       importFn,
       supabase.from('notas_despacho_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('despacho_id', despachoId).order('orden'),
       fetch(apiUrl('/api/clientes/lookup'), {
@@ -120,7 +121,9 @@ function ModalVentaExitosa({ data, onClose, config }) {
         body: JSON.stringify({ ids: [data.clienteId].filter(Boolean) }),
       }).then(r => r.ok ? r.json() : []),
       supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', data.vendedorId).single(),
-      data.transportistaId ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color, color_batea, zona_cobertura, capacidad').eq('id', data.transportistaId).single() : Promise.resolve({ data: null }),
+      data.transportistaId ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color, color_batea, zona_cobertura, capacidad, vehiculo_habitual_id').eq('id', data.transportistaId).single() : Promise.resolve({ data: null }),
+      // Camión real del viaje (plan de flota) para imprimirlo en la nota
+      supabase.from('notas_despacho').select('vehiculo_id, vehiculo_viaje:vehiculos!notas_despacho_vehiculo_id_fkey(id, codigo, nombre, modelo, placa, placa_batea, color_batea, capacidad_kg)').eq('id', despachoId).maybeSingle(),
     ])
     if (itemsRes.error) throw itemsRes.error
     const despachoObj = {
@@ -133,6 +136,8 @@ function ModalVentaExitosa({ data, onClose, config }) {
       cliente: clienteData?.[0] || null,
       vendedor: vendedorRes.data || null,
       transportista: transportistaRes.data || null,
+      vehiculo_id: vehiculoViajeRes?.data?.vehiculo_id || null,
+      vehiculo_viaje: vehiculoViajeRes?.data?.vehiculo_viaje || null,
     }
     const generarFn = pdfType === 'orden' ? pdfModule.generarOrdenDespachoPDF : pdfModule.generarDespachoPDF
 
@@ -519,6 +524,12 @@ export default function VentaRapidaView() {
   const [referenciaPago, setReferenciaPago] = useState('')
   const [transportistaId, setTransportistaId] = useState('')
   const [fleteUsd, setFleteUsd] = useState('')
+  // Vehículo para este viaje (Fase 3 del plan de flota): solo choferes locales
+  const [vehiculoViajeId, setVehiculoViajeId] = useState('')
+  const [fijarVehiculoFijo, setFijarVehiculoFijo] = useState(false)
+  // Si el camión no se tocó, el servidor deja que la base ponga el habitual
+  // (marcado como automático, no como elección manual).
+  const [vehiculoTocado, setVehiculoTocado] = useState(false)
   const [corteUsd, setCorteUsd] = useState('')
   const [notas, setNotas] = useState('')
   const [esCod, setEsCod] = useState(false)
@@ -854,6 +865,8 @@ export default function VentaRapidaView() {
       clienteId,
       clienteNombre: clienteSeleccionado?.nombre,
       transportistaId: transportistaId || null,
+      vehiculoId: (vehiculoTocado || fijarVehiculoFijo) ? (vehiculoViajeId || null) : null,
+      actualizarVehiculoHabitual: fijarVehiculoFijo,
       fleteUsd: flete,
       corteUsd: corte,
       formaPago: fpJson,
@@ -1132,6 +1145,11 @@ export default function VentaRapidaView() {
             transportistas={transportistas}
             transportistaId={transportistaId}
             setTransportistaId={setTransportistaId}
+            vehiculoViajeId={vehiculoViajeId}
+            setVehiculoViajeId={setVehiculoViajeId}
+            fijarVehiculoFijo={fijarVehiculoFijo}
+            setFijarVehiculoFijo={setFijarVehiculoFijo}
+            setVehiculoTocado={setVehiculoTocado}
             fleteUsd={fleteUsd}
             setFleteUsd={setFleteUsd}
             corteUsd={corteUsd}
@@ -2091,6 +2109,7 @@ function Step2Pago({
   totalParaPago, comisionEstimada, items = [],
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
+  vehiculoViajeId, setVehiculoViajeId, fijarVehiculoFijo, setFijarVehiculoFijo, setVehiculoTocado,
   fleteUsd, setFleteUsd, corteUsd, setCorteUsd, notas, setNotas,
   tasa, esCod, setEsCod,
   clienteSeleccionado,
@@ -2206,7 +2225,7 @@ function Step2Pago({
             <div className="flex-1 min-w-0">
               <CustomSelect 
                 value={transportistaId} 
-                onChange={v => { setTransportistaId(v); if (!v) setFleteUsd(''); }} 
+                onChange={v => { const t = transportistas.find(x => x.id === v); setTransportistaId(v); setVehiculoViajeId(t?.vehiculo_habitual_id || ''); setFijarVehiculoFijo(false); setVehiculoTocado(false); if (!v) setFleteUsd(''); }} 
                 placeholder="— Sin transportista —" 
                 clearable 
                 icon={Truck}
@@ -2235,6 +2254,7 @@ function Step2Pago({
         )}
       </div>
 
+      {/* Aviso del chofer local: fila propia debajo de transportista + flete */}
       {esChoferLocalConFlete && (
         <div className="-mt-1 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
           <span className="font-bold">Chofer local:</span>{' '}
@@ -2247,6 +2267,15 @@ function Step2Pago({
           )}
         </div>
       )}
+
+      {/* Vehículo para este viaje (solo choferes locales) — Fase 3 del plan de flota */}
+      <VehiculoViajeSelect
+        transportista={transportistas.find(t => t.id === transportistaId)}
+        vehiculoId={vehiculoViajeId}
+        onChange={v => { setVehiculoViajeId(v); setVehiculoTocado(true) }}
+        fijar={fijarVehiculoFijo}
+        onChangeFijar={setFijarVehiculoFijo}
+      />
 
       {/* Modal crear transportista */}
       {showNuevoTransp && (

@@ -191,6 +191,21 @@ function RutaSupervisorOAdmin() {
   return <Outlet />
 }
 
+// ─── Ruta de Reportes: administración, jefe, desarrollador y logística ────────
+// Logística entra solo para la pestaña Transportistas (ReportesView filtra el resto).
+function RutaReportes() {
+  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
+  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
+
+  if (!initialized) return <PantallaCarga />
+  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
+  if (!perfil) return <Navigate to="/login" replace />
+  if (!['administracion', 'desarrollador', 'jefe', 'logistica'].includes(perfil.rol)) return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 // ─── Ruta exclusiva de administración (y desarrollador) —————————————————─
 function RutaSoloAdmin() {
   const hasUser = useAuthStore(useCallback(s => !!s.user, []))
@@ -219,20 +234,6 @@ function RutaDesarrollador() {
   return <Outlet />
 }
 
-// ─── Ruta que excluye un rol específico ──────────────────────────────────────
-// Logistica NO puede ver transportistas
-function RutaExcluyeAdmin() {
-  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
-  const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const initialized = useAuthStore(useCallback(s => s.initialized, []))
-  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
-
-  if (!initialized) return <PantallaCarga />
-  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
-  if (!perfil) return <Navigate to="/login" replace />
-  if (perfil.rol !== 'desarrollador' && perfil.rol !== 'jefe' && perfil.rol === 'logistica') return <Navigate to="/" replace />
-  return <Outlet />
-}
 
 // ─── Ruta exclusiva de vendedores ─────────────────────────────────────────────
 function RutaSoloVendedor() {
@@ -310,16 +311,18 @@ function AppRoutes() {
               <Route path="/tutorial"      element={<TutorialView />} />
             </Route>
 
-            {/* Transportistas: excluye admin y logistica */}
-            <Route element={<RutaExcluyeAdmin />}>
-              <Route path="/transportistas" element={<TransportistasView />} />
-            </Route>
+            {/* Transportistas: todos los roles (logística incluida: crea choferes y camiones) */}
+            <Route path="/transportistas" element={<TransportistasView />} />
 
             {/* Reportes y Personal: solo administracion, jefe y desarrollador */}
             <Route element={<RutaSoloAdmin />}>
               <Route path="/personal"      element={<PersonalView />} />
-              <Route path="/reportes"      element={<ReportesView />} />
               <Route path="/proveedores"   element={<ProveedoresView />} />
+            </Route>
+
+            {/* Reportes: logística solo ve la pestaña Transportistas */}
+            <Route element={<RutaReportes />}>
+              <Route path="/reportes"      element={<ReportesView />} />
             </Route>
 
             {/* Configuración: supervisor y administracion */}

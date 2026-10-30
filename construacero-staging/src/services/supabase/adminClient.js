@@ -5,7 +5,9 @@ import { apiUrl, getAuthHeaders } from '../apiBase'
 
 async function adminFetch(path, method = 'POST', body = null) {
   const headers = await getAuthHeaders()
-  if (!headers.Authorization || headers.Authorization === 'Bearer undefined') throw new Error('No autenticado')
+  // getAuthHeaders devuelve las cabeceras en minúsculas (Headers → Object.fromEntries).
+  const auth = headers.Authorization || headers.authorization
+  if (!auth || auth === 'Bearer undefined') throw new Error('No autenticado')
 
   const res = await fetch(apiUrl(`/api/admin/${path}`), {
     method,

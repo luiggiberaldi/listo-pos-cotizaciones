@@ -121,9 +121,10 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
           direccion_envio_estado, direccion_envio_ciudad, direccion_envio_direccion, notas, notas_titulo, forma_pago,
           referencia_pago, forma_pago_cliente,
           creado_en, actualizado_en, despachada_en, entregada_en, aprobado_por_nombre,
-          cliente_id, cliente_factura_id, vendedor_id, transportista_id,
+          cliente_id, cliente_factura_id, vendedor_id, transportista_id, vehiculo_id, vehiculo_origen,
           items_count:notas_despacho_items(count),
-          transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, color_batea, vehiculo, placa_chuto, placa_batea, es_local),
+          transportista:transportistas!notas_despacho_transportista_id_fkey(id, nombre, rif, telefono, color, color_batea, vehiculo, placa_chuto, placa_batea, es_local, vehiculo_habitual_id),
+          vehiculo_viaje:vehiculos!notas_despacho_vehiculo_id_fkey(id, codigo, nombre, modelo, placa, placa_batea, color_batea, capacidad_kg),
           cliente:clientes!notas_despacho_cliente_id_fkey(id, nombre, estado, ciudad),
           cotizacion:cotizaciones!notas_despacho_cotizacion_id_fkey(id, numero, version),
           seguimiento:seguimiento_operativo(id, prioridad, fijada)
@@ -333,11 +334,11 @@ export function useCrearDespacho() {
   const usuarioNombre = perfil?.nombre ?? 'usuario'
 
   return useMutation({
-    mutationFn: async ({ cotizacionId, notas = null, formaPago = null, transportistaId = null, fleteUsd = 0, corteUsd = 0, referenciaPago = null, formaPagoCliente = null, clienteFacturaId = null, direccionEnvioDireccion = null, direccionEnvioCiudad = null, direccionEnvioEstado = null, numeroCotizacion, clienteNombre }) => {
+    mutationFn: async ({ cotizacionId, notas = null, formaPago = null, transportistaId = null, fleteUsd = 0, corteUsd = 0, referenciaPago = null, formaPagoCliente = null, clienteFacturaId = null, direccionEnvioDireccion = null, direccionEnvioCiudad = null, direccionEnvioEstado = null, vehiculoId = null, actualizarVehiculoHabitual = false, numeroCotizacion, clienteNombre }) => {
       const res = await authFetch('/api/despachos/crear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cotizacionId, notas: notas || null, formaPago: formaPago || null, transportistaId: transportistaId || null, fleteUsd: Number(fleteUsd) || 0, corteUsd: Number(corteUsd) || 0, referenciaPago: referenciaPago || null, formaPagoCliente: formaPagoCliente || null, clienteFacturaId: clienteFacturaId || null, direccionEnvioDireccion: direccionEnvioDireccion || null, direccionEnvioCiudad: direccionEnvioCiudad || null, direccionEnvioEstado: direccionEnvioEstado || null }),
+        body: JSON.stringify({ cotizacionId, notas: notas || null, formaPago: formaPago || null, transportistaId: transportistaId || null, fleteUsd: Number(fleteUsd) || 0, corteUsd: Number(corteUsd) || 0, referenciaPago: referenciaPago || null, formaPagoCliente: formaPagoCliente || null, clienteFacturaId: clienteFacturaId || null, direccionEnvioDireccion: direccionEnvioDireccion || null, direccionEnvioCiudad: direccionEnvioCiudad || null, direccionEnvioEstado: direccionEnvioEstado || null, vehiculoId: vehiculoId || null, actualizarVehiculoHabitual: !!actualizarVehiculoHabitual }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al crear despacho')
@@ -353,6 +354,7 @@ export function useCrearDespacho() {
     onSuccess: async (data, variables) => {
       const id = data?.id
       if (!id) return
+      if (data?.avisoVehiculo) showToast.warning?.(data.avisoVehiculo)
 
       const numCot = data?.numeroCotizacion || variables?.numeroCotizacion
       const cliNom = data?.clienteNombre || variables?.clienteNombre
@@ -500,11 +502,11 @@ export function useEditarDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, soloPagoEntregado }) => {
+    mutationFn: async ({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, soloPagoEntregado, vehiculoId, actualizarVehiculoHabitual = false }) => {
       const res = await authFetch('/api/despachos/editar-pago', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, soloPagoEntregado }),
+        body: JSON.stringify({ despachoId, formaPago, formaPagoCliente, referenciaPago, transportistaId, fleteUsd, corteUsd, notas, notasTitulo, clienteId, direccionEnvioDireccion, direccionEnvioCiudad, direccionEnvioEstado, soloPagoEntregado, vehiculoId, actualizarVehiculoHabitual: !!actualizarVehiculoHabitual }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al editar despacho')

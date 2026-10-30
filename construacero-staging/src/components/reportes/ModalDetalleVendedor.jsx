@@ -342,7 +342,7 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
                         <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right text-[11px] text-slate-500 font-semibold">{tasa > 0 ? `Bs ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—'}</td>
                         <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-right font-black text-indigo-600 bg-indigo-50/20">{fmtBs(comBs)}</td>
                         <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-center">
-                          <span className="text-[9px] font-semibold text-slate-400">generada</span>
+                          <span className="text-[10px] font-semibold text-slate-400">generada</span>
                         </td>
                       </tr>
                     )

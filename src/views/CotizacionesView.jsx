@@ -9,6 +9,7 @@ import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useCotizaciones, useBuscarCotizaciones, useAnularCotizacion, useActualizarEstado, useReabrirCotizacion, useReciclarCotizacion } from '../hooks/useCotizaciones'
 import { useCrearDespacho, useActualizarEstadoDespacho } from '../hooks/useDespachos'
+import VehiculoViajeSelect from '../components/vehiculos/VehiculoViajeSelect'
 import { useCotizacion } from '../hooks/useCotizaciones'
 import { useClientes } from '../hooks/useClientes'
 import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
@@ -126,6 +127,12 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   const [corteUsd, setCorteUsd] = useState('')
   const [referenciaPago, setReferenciaPago] = useState('')
   const [showTransportistaMenu, setShowTransportistaMenu] = useState(false)
+  // Vehículo para este viaje (Fase 3 del plan de flota): solo choferes locales
+  const [vehiculoViajeId, setVehiculoViajeId] = useState('')
+  const [fijarVehiculoFijo, setFijarVehiculoFijo] = useState(false)
+  // Solo se envía el camión si el usuario lo cambió a mano: así editar el pago
+  // (u otro dato) nunca reescribe el camión que ya tiene guardado el viaje (R4).
+  const [vehiculoTocado, setVehiculoTocado] = useState(false)
   const [stockMap, setStockMap] = useState({})
   const [notas, setNotas] = useState('')
   const [showNotas, setShowNotas] = useState(false)
@@ -472,7 +479,14 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   <CustomSelect
                     value={transportistaId}
                     onChange={(v) => {
+                      const t = transportistas.find(x => x.id === v)
                       setTransportistaId(v)
+                      // Mismo chofer de la cotización → su camión elegido; si no, el habitual.
+                      setVehiculoViajeId(
+                        (v && v === detalle?.transportista_id && detalle?.vehiculo_id) || t?.vehiculo_habitual_id || ''
+                      )
+                      setFijarVehiculoFijo(false)
+                      setVehiculoTocado(false)
                       if (!v) setFleteUsd('')
                     }}
                     placeholder="Sin transportista"
@@ -503,6 +517,14 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   <Plus size={13} className="text-emerald-600" />
                 </button>
               </div>
+              <VehiculoViajeSelect
+                transportista={transportistaSeleccionado}
+                vehiculoId={vehiculoViajeId}
+                onChange={v => { setVehiculoViajeId(v); setVehiculoTocado(true) }}
+                fijar={fijarVehiculoFijo}
+                onChangeFijar={setFijarVehiculoFijo}
+                disabled={cargando}
+              />
               {fleteLocalRequiereEstado && (
                 <p className={`text-[10px] ${destinoFleteValido ? 'text-amber-700' : 'text-red-600 font-semibold'}`}>
                   {destinoFleteValido
@@ -944,7 +966,9 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   clienteFacturaId || null,
                   direccionEnvioActiva ? direccionEnvioDireccion : null,
                   direccionEnvioActiva ? direccionEnvioCiudad : null,
-                  estadoEnvioEfectivo || null
+                  estadoEnvioEfectivo || null,
+                  (vehiculoTocado || fijarVehiculoFijo) ? (vehiculoViajeId || null) : null,
+                  fijarVehiculoFijo
                 )
               }} disabled={
                 cargando ||
@@ -1139,7 +1163,7 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
     setCotizacionAAnular(null)
   }
 
-  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, corteUsd = 0, referenciaPago = '', formaPagoCliente = '', notas = '', clienteFacturaId = null, dirEnvio = null, ciudadEnvio = null, estadoEnvio = null) {
+  async function confirmarDespachar(formaPago = '', transportistaId = null, fleteUsd = 0, corteUsd = 0, referenciaPago = '', formaPagoCliente = '', notas = '', clienteFacturaId = null, dirEnvio = null, ciudadEnvio = null, estadoEnvio = null, vehiculoId = null, actualizarVehiculoHabitual = false) {
     if (!cotizacionADespachar) return
     try {
       await crearDespacho.mutateAsync({
@@ -1148,6 +1172,8 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         clienteNombre: cotizacionADespachar.cliente?.nombre,
         formaPago: formaPago || null,
         transportistaId: transportistaId || null,
+        vehiculoId: vehiculoId || null,
+        actualizarVehiculoHabitual: !!actualizarVehiculoHabitual,
         fleteUsd: fleteUsd || 0,
         corteUsd: corteUsd || 0,
         referenciaPago: referenciaPago || null,

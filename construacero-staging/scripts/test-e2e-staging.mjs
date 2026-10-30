@@ -14,6 +14,10 @@ export const STAGING_PROJECT_REF = 'spupqgkdsgohxxfoxydl'
 export const STAGING_FRONTEND_ORIGIN = 'http://localhost:5174'
 export const STAGING_WORKER_ORIGIN = 'http://127.0.0.1:8789'
 export const SUPER_ADMIN_UUID = '00000000-0000-0000-0000-000000000000'
+// PIN del fixture de jefe split (ensureSplitUser); permite abrir su sesión real.
+const SPLIT_JEFE_PIN = '482160'
+// PIN de 4 dígitos para "actuar como" los vendedores de prueba (rol vendedor).
+const OPERATOR_TEST_PIN = '1357'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const stagingRoot = path.resolve(here, '..')
@@ -179,17 +183,17 @@ const STEPS = [
   ['create_despacho', '15. Crear despacho (Cta por cobrar)'],
   ['assert_despacho', '16. Assert: despacho estado=pendiente, total=$260.00'],
   ['assert_stock_post', '17. Assert: stock_actual=100 (pendiente no descuenta)'],
-  ['assert_kardex_egreso', '18. Assert: sin egreso Kardex antes de entrega'],
+  ['assert_kardex_egreso', '18. Assert: sin egreso Kardex antes de aprobar'],
   ['assert_stock_comprometido_post', '19. Assert: despacho pendiente no compromete stock'],
   ['assert_cxc_cargo', '20. Assert: CxC aún no se crea en pendiente'],
   ['apply_descuento', '21. Aplicar descuento $2/u al artículo (10u → -$20)'],
   ['assert_descuento', '22. Assert: descuento_total=$20, CxC aún pendiente'],
   ['mark_dispatched', '23. Marcar despachada'],
-  ['assert_dispatched', '24. Assert: estado=despachada, despachada_en≠null'],
+  ['assert_dispatched', '24. Assert: aprobado egresa 10u del inventario (Release 17)'],
   ['assert_stock_comprometido_aprobado', '25. Assert: aprobado compromete 10u y crea CxC=$240'],
   ['mark_delivered', '26. Marcar entregada'],
   ['assert_delivered', '27. Assert: estado=entregada, entregada_en≠null'],
-  ['replay_delivery', '27.1. Replay de entrega: no duplica stock, Kardex, CxC ni comisión'],
+  ['replay_delivery', '27.1. Replay de entrega: idempotente; entrega sin Kardex (egreso al aprobar)'],
   ['assert_stock_comprometido_entregado', '28. Assert: entrega libera comprometido'],
   ['register_partial_return', '29. Devolución parcial por API: 1u neta $23'],
   ['assert_partial_return', '29.1. Assert: devolución atómica restaura stock, Kardex y CxC'],
@@ -201,8 +205,8 @@ const STEPS = [
   ['change_delivery_date', '31. Corregir fecha efectiva sin tocar correlativo ni finanzas'],
   ['assert_delivery_date_change', '32. Assert: fecha ajustada e historial financiero inmutables'],
   ['assert_delivery_date_idempotent', '33. Assert: replay idempotente no duplica ni cambia la fecha'],
-  ['pay_commission', '34. Liberar CxC y pagar comisión'],
-  ['assert_commission_paid', '31. Assert: comisión estado=pagada'],
+  ['pay_commission', '34. Comisión 100% CxC: $0 y el pago manual se rechaza (modelo 238b)'],
+  ['assert_commission_paid', '34.1. Assert: comisión intacta (generada, sin pago)'],
   ['register_payment', '32. Registrar abono CxC ($100)'],
   ['assert_cxc_abono', '33. Assert: saldo tras abono CxC $100 coherente con cargos/cobros'],
   ['assert_report_ventas', '34. Assert: reporte ventas refleja devoluciones con intercambio'],
@@ -234,15 +238,15 @@ const STEPS = [
   ['assert_vr_cotizacion', '52. Assert: cotización aceptada, total=$175'],
   ['assert_vr_despacho', '53. Assert: despacho pendiente, pago=Efectivo $'],
   ['deliver_vr_for_reversal', '53.1. Entregar despacho aislado para probar reversión financiera'],
-  ['assert_vr_delivered', '53.2. Assert: reversión aislada descontó stock y creó comisión'],
+  ['assert_vr_delivered', '53.2. Assert: egreso VR al aprobar (5u); entrega sin Kardex, comisión creada'],
   ['revert_vr_delivery', '53.3. Revertir entrega aislada con rollback financiero'],
-  ['assert_vr_reverted', '53.4. Assert: reversión restauró stock y eliminó finanzas'],
+  ['assert_vr_reverted', '53.4. Assert: reversión de entrega SIN reingreso (Release 17) y finanzas eliminadas'],
   ['replay_vr_reversal', '53.5. Replay de reversión no duplica el rollback'],
-  ['assert_vr_reversal_replay', '53.6. Assert: replay mantiene stock, Kardex y finanzas'],
+  ['assert_vr_reversal_replay', '53.6. Assert: replay no reingresa ni recrea finanzas'],
   ['assert_transportista_report', '54. Assert: transportista local aparece en reporte'],
-  ['assert_stock_post_vr', '55. Assert: stock=110 después de reversión'],
+  ['assert_stock_post_vr', '55. Assert: stock=105 después de reversión (sin reingreso)'],
   ['anular_despacho', '56. Anular despacho de venta rápida'],
-  ['assert_despacho_anulado', '57. Assert: estado=anulada, stock permanece=110'],
+  ['assert_despacho_anulado', '57. Assert: estado=anulada, stock=110 (reingreso al volver a pendiente)'],
   ['reciclar_despacho', '58. Reciclar despacho → nueva cotización'],
   ['assert_despacho_reciclado', '59. Assert: cotización borrador con items'],
   ['reasignar_cliente', '60. Reasignar cliente a otro vendedor'],
@@ -271,8 +275,8 @@ const STEPS = [
   ['split_assert_t5', '29.15.1 Assert T5: 1 fila del dueño'],
   ['split_t6_devolucion', '29.16. Split T6: devolución escala ambas filas'],
   ['split_assert_t6', '29.17. Split T6: factor aplicado a las 2 filas'],
-  ['split_t7_pago_fila', '29.18. Split T7: pagar fila del designado no toca la del dueño'],
-  ['split_assert_t7', '29.19. Split T7: estados independientes'],
+  ['split_t7_pago_fila', '29.18. Split T7: el pago manual de la fila del designado se rechaza (modelo 238b)'],
+  ['split_assert_t7', '29.19. Split T7: ambas filas intactas (generadas, sin pago)'],
   ['split_t8_cxc', '29.20. Split T8: CxC → ambas filas excluidas 238b'],
   ['split_assert_t8', '29.21. Split T8: comisión 0 + excluida proporcional'],
   ['split_t9_designado_dueno', '29.22. Split T9: designado = dueño del cliente → 1 fila con % normal'],
@@ -287,8 +291,29 @@ const STEPS = [
 class StagingE2ERunner {
   constructor(config) {
     this.config = config
+    this.operatorToken = null
+    this.rlsToken = null
+    this.sessions = new Map()
+    // Mismo patrón que el frontend: las lecturas directas a /rest/v1/ necesitan
+    // la sesión de operador — current_operator_context() (migración 241) la
+    // resuelve desde la cabecera X-Operator-Session, no desde el JWT. Las
+    // lecturas usan la sesión del jefe fixture (el desarrollador virtual no
+    // tiene política de visibilidad propia en las tablas).
     this.supabase = createClient(config.supabaseUrl, config.anonKey, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: {
+        fetch: async (url, options = {}) => {
+          const rawUrl = url instanceof Request ? url.url : String(url)
+          const headers = new Headers(
+            options.headers === undefined ? (url instanceof Request ? url.headers : undefined) : options.headers,
+          )
+          const sessionToken = this.rlsToken || this.operatorToken
+          if (new URL(rawUrl).pathname.startsWith('/rest/v1/') && sessionToken) {
+            headers.set('X-Operator-Session', sessionToken)
+          }
+          return fetch(url, { ...options, headers })
+        },
+      },
     })
     this.data = {}
     this.lines = []
@@ -296,6 +321,7 @@ class StagingE2ERunner {
     this.logFile = null
     this.user = null
     this.operator = { id: SUPER_ADMIN_UUID, nombre: 'Desarrollador', rol: 'desarrollador' }
+    this.operatorToken = null
     this.salesperson = null
   }
 
@@ -316,17 +342,40 @@ class StagingE2ERunner {
     console.log(line)
   }
 
-  // v3: las designaciones las autoriza el rol jefe — el E2E actúa como jefe
-  // usando el header X-Operator-Id (verifyAuth resuelve el rol desde usuarios).
+  // v3: las designaciones las autoriza el rol jefe — el E2E abre una sesión real
+  // del jefe (switch-operator con el PIN del fixture). Desde el diseño de sesión
+  // por token (2026-10-21) la cabecera X-Operator-Id exige su propia sesión.
   async apiAsJefe(pathname, method = 'GET', body = null) {
     if (!this.data?.splitJefeId) throw new Error('apiAsJefe: no hay jefe fixture')
-    return this.api(pathname, method, body, this.data.splitJefeId)
+    return this.api(pathname, method, body, this.data.splitJefeId, this.rlsToken)
   }
 
-  async api(pathname, method = 'GET', body = null, operatorId = null) {
+  // sessionToken === false → petición sin sesión de operador (endpoints de
+  // autenticación); undefined → la sesión activa del desarrollador virtual.
+  // "Actuar como" un operador exige una sesión suya (el diseño 241 rechaza
+  // X-Operator-Id que no coincida con la sesión). Los fixtures llegan sin PIN,
+  // así que se les instala uno conocido la primera vez.
+  async operatorTokenFor(operatorId) {
+    if (!operatorId || operatorId === SUPER_ADMIN_UUID) return this.operatorToken
+    if (this.data?.splitJefeId === operatorId) return this.rlsToken
+    if (this.sessions.has(operatorId)) return this.sessions.get(operatorId)
+    await this.api(`/api/admin/users/${operatorId}`, 'PUT', { pin: OPERATOR_TEST_PIN })
+    const opened = await this.api('/api/auth/switch-operator', 'POST',
+      { operator_id: operatorId, pin: OPERATOR_TEST_PIN }, null, false)
+    const token = opened?.operatorSession?.token
+    if (!token) throw new Error(`No se pudo abrir sesión para el operador ${id8(operatorId)}`)
+    this.sessions.set(operatorId, token)
+    return token
+  }
+
+  async api(pathname, method = 'GET', body = null, operatorId = null, sessionToken = undefined) {
     const session = (await this.supabase.auth.getSession()).data.session
     if (!session?.access_token) throw new Error('No hay sesión de staging')
     const headers = { Authorization: `Bearer ${session.access_token}`, Accept: 'application/json' }
+    const operatorToken = sessionToken !== undefined
+      ? sessionToken
+      : (operatorId ? await this.operatorTokenFor(operatorId) : this.operatorToken)
+    if (operatorToken) headers['X-Operator-Session'] = operatorToken
     if (operatorId) headers['X-Operator-Id'] = operatorId
     if (body !== null) {
       headers['Content-Type'] = 'application/json'
@@ -361,23 +410,47 @@ class StagingE2ERunner {
     this.log(`Sesión E2E creada para ${this.user.email}; tenant=${id8(this.user.id)}`)
 
     if (this.config.superCode) {
-      await this.api('/api/auth/super-admin', 'POST', { code: this.config.superCode })
-      const refreshed = await this.supabase.auth.refreshSession()
-      if (refreshed.error) throw new Error(`No se pudo refrescar metadata del operador: ${refreshed.error.message}`)
+      // Sin cabecera de sesión todavía: crear la primera no revoca nada.
+      const response = await this.api('/api/auth/super-admin', 'POST', { code: this.config.superCode })
+      const operatorSession = response?.operatorSession
+      if (response?.operator?.id !== SUPER_ADMIN_UUID || !operatorSession?.token) {
+        throw new Error(`La sesión de staging no activó el desarrollador virtual: ${response?.operator?.id || 'sin operador'}`)
+      }
+      this.operatorToken = operatorSession.token
+      this.operator = { id: response.operator.id, nombre: response.operator.nombre, rol: response.operator.rol }
     } else {
       const operatorId = this.config.STAGING_E2E_OPERATOR_ID
-      await this.api('/api/auth/switch-operator', 'POST', { operator_id: operatorId, pin: this.config.STAGING_E2E_PIN })
+      const response = await this.api('/api/auth/switch-operator', 'POST', { operator_id: operatorId, pin: this.config.STAGING_E2E_PIN })
+      const token = response?.operatorSession?.token
+      if (!token) throw new Error('switch-operator no devolvió sesión de operador')
+      this.operatorToken = token
       this.operator = { id: operatorId, nombre: 'Operador E2E', rol: 'desarrollador' }
     }
 
+    // Renovar el JWT para que no expire durante la batería larga.
+    const refreshed = await this.supabase.auth.refreshSession()
+    if (refreshed.error) throw new Error(`No se pudo refrescar el JWT del operador: ${refreshed.error.message}`)
+
+    // La identidad del operador vive en la sesión por token (X-Operator-Session),
+    // no en app_metadata (diseño de la migración 241: la sesión manda).
     const { data: authUser, error: authError } = await this.supabase.auth.getUser()
     if (authError) throw new Error(`No se pudo verificar el usuario E2E: ${authError.message}`)
-    const operatorId = authUser.user?.app_metadata?.operator_id
-    if (this.config.superCode && operatorId !== SUPER_ADMIN_UUID) {
-      throw new Error(`La sesión de staging no activó el desarrollador virtual: ${operatorId || 'sin operador'}`)
-    }
     this.user = authUser.user
     this.log(`Operador activo: ${this.operator.nombre} (${this.operator.rol})`, 'OK')
+    await this.ensureRlsPersona()
+  }
+
+  // Las lecturas directas a tablas usan la sesión del jefe fixture: el
+  // desarrollador virtual opera el Worker (llave de servicio) pero el diseño
+  // RLS 241 no le da visibilidad directa de filas.
+  async ensureRlsPersona() {
+    this.data.splitJefeId = await this.ensureSplitUser('Jefe E2E Staging', 'jefe', SPLIT_JEFE_PIN)
+    const opened = await this.api('/api/auth/switch-operator', 'POST',
+      { operator_id: this.data.splitJefeId, pin: SPLIT_JEFE_PIN }, null, false)
+    const token = opened?.operatorSession?.token
+    if (!token) throw new Error('No se pudo abrir la sesión de lectura (jefe fixture)')
+    this.rlsToken = token
+    this.log(`Sesión de lectura RLS: Jefe E2E Staging (${id8(this.data.splitJefeId)})`, 'OK')
   }
 
   async resolveCommissionSeller() {
@@ -539,22 +612,24 @@ class StagingE2ERunner {
   }
 
   async ensureSplitUser(nombre, rol, pin) {
-    const rows = await this.db(
-      this.supabase.from('usuarios').select('id,nombre,rol').eq('cuenta_id', this.user.id).eq('nombre', nombre).limit(1),
-      `buscar usuario split ${nombre}`
-    )
-    if (rows?.length) return rows[0].id
+    // Búsqueda vía Worker (llave de servicio): la visibilidad directa depende
+    // de la sesión de lectura, que aún no existe cuando se arranca.
+    const list = async () => (await this.api('/api/auth/operators', 'GET'))?.operators || []
+    const existing = (await list()).find(o => o.nombre === nombre && o.rol === rol)
+    if (existing) {
+      // Reinstalar el PIN: un fixture viejo puede traerlo en un formato
+      // anterior y el switch lo rechazaría como "PIN incorrecto".
+      await this.api(`/api/admin/users/${existing.id}`, 'PUT', { nombre, rol, pin })
+      return existing.id
+    }
     // El rol jefe es el único que puede designar; el E2E opera como él vía
-    // X-Operator-Id. Los usuarios live en public.usuarios (sin auth.users),
-    // así que se crean vía el endpoint admin del Worker.
+    // una sesión real (switch-operator con su PIN). Los usuarios live en
+    // public.usuarios (sin auth.users), así que se crean vía el endpoint
+    // admin del Worker.
     const created = await this.api('/api/admin/users', 'POST', { nombre, rol, pin, color: rol === 'jefe' ? '#059669' : '#7C3AED' })
-    const createdRows = await this.db(
-      this.supabase.from('usuarios').select('id').eq('cuenta_id', this.user.id).eq('nombre', nombre).limit(1),
-      `leer usuario split ${nombre}`
-    )
-    if (!createdRows?.length) throw new Error(`No se pudo crear el usuario split ${nombre} (rol ${rol})`)
-    this.log(`Usuario split creado: ${nombre} (${rol}) ${id8(createdRows[0].id)}`, 'OK')
-    return createdRows[0].id
+    if (!created?.id) throw new Error(`No se pudo crear el usuario split ${nombre} (rol ${rol})`)
+    this.log(`Usuario split creado: ${nombre} (${rol}) ${id8(created.id)}`, 'OK')
+    return created.id
   }
 
   async splitSetup() {
@@ -583,7 +658,9 @@ class StagingE2ERunner {
       this.log(`SKIP split: ${d.splitSkip}`, 'WARN')
       return
     }
-    d.splitJefeId = await this.ensureSplitUser('Jefe E2E Staging', 'jefe', '482160')
+    // Reinstalar el PIN del jefe fixture invalida su sesión de operador; se
+    // reabre la sesión de lectura/escritura RLS (ensureRlsPersona fija splitJefeId).
+    await this.ensureRlsPersona()
     d.splitTodayDow = fechaCaracas().dow
     const cfg = await this.db(
       this.supabase.from('configuracion_negocio').select('comision_split_activo,comision_split_pct_vendedor,comision_split_pct_dueno,comision_split_dias').eq('cuenta_id', this.user.id).limit(1).maybeSingle(),
@@ -628,6 +705,23 @@ class StagingE2ERunner {
 
   async cleanupFixtures() {
     const d = this.data
+    // Si la corrida se cortó a mitad del split, su configuración (split activo
+    // HOY) quedaría puesta y contaminaría la siguiente corrida (una venta normal
+    // generaría 2 comisiones). Restaurarla siempre, también en la limpieza de emergencia.
+    if (d.splitCfgOriginal && !d.splitCfgRestaurada) {
+      try {
+        await this.splitSetConfig({
+          comision_split_activo: d.splitCfgOriginal.comision_split_activo ?? true,
+          comision_split_pct_vendedor: d.splitCfgOriginal.comision_split_pct_vendedor ?? 0.5,
+          comision_split_pct_dueno: d.splitCfgOriginal.comision_split_pct_dueno ?? 1.5,
+          comision_split_dias: d.splitCfgOriginal.comision_split_dias ?? '6',
+        })
+        d.splitCfgRestaurada = true
+        this.log('Config split restaurada en limpieza ✓', 'OK')
+      } catch (e) {
+        this.log(`No se pudo restaurar la config split: ${e.message}`, 'FAIL')
+      }
+    }
     if (Array.isArray(d.splitCotizacionIds) && d.splitCotizacionIds.length) {
       for (const cotId of [...new Set(d.splitCotizacionIds)]) await this.cleanCotizacion(cotId, `split ${id8(cotId)}`)
     }
@@ -650,11 +744,8 @@ class StagingE2ERunner {
       if (delU.error) this.log(`Detalle limpieza designado: ${delU.error.message}`, 'WARN')
       d.splitDesignadoId = null
     }
-    if (d.splitJefeId) {
-      const delJ = await this.supabase.from('usuarios').delete().eq('id', d.splitJefeId).eq('cuenta_id', this.user.id)
-      if (delJ.error) this.log(`Detalle limpieza jefe: ${delJ.error.message}`, 'WARN')
-      d.splitJefeId = null
-    }
+    // El jefe fixture NO se elimina: es la persona de lectura RLS del Tester y
+    // se reutiliza entre corridas (igual que los vendedores de la provisión).
     const cotizaciones = [d.cotizacionDesdeDespachoId, d.ventaRapidaCotizacionId, d.cotizacionVersionId, d.cotizacionRecicladaId, d.cotizacion2Id, d.cotizacionId]
     const unique = [...new Set(cotizaciones.filter(Boolean))]
     for (const cotId of unique) await this.cleanCotizacion(cotId, `cotización ${id8(cotId)}`)
@@ -984,13 +1075,23 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
   f.create_despacho = async () => { const r = await this.api('/api/despachos/crear', 'POST', { cotizacionId: d.cotizacionId, formaPago: 'Cta por cobrar', transportistaId: null, fleteUsd: 10 }, this.salesperson.id); d.despachoId = r.id; d.despachoNumero = r.numero }
   f.assert_despacho = async () => { const row = await dbSingle('notas_despacho', 'estado,total_usd,forma_pago,cotizacion_id,cliente_id', d.despachoId); assert(row.estado === 'pendiente' && Number(row.total_usd) === 260 && row.forma_pago === 'Cta por cobrar' && row.cotizacion_id === d.cotizacionId && row.cliente_id === d.clienteId, 'despacho pendiente $260', row, 'despacho') }
   f.assert_stock_post = () => assertStock(100, 'stock pendiente')
-  f.assert_kardex_egreso = async () => { const rows = await this.db(this.supabase.from('inventario_movimientos').select('tipo').eq('producto_id', d.productoId), 'kardex pendiente'); assert(!(rows || []).some(row => row.tipo === 'egreso'), 0, rows, 'sin egreso pendiente') }
+  f.assert_kardex_egreso = async () => { const rows = await this.db(this.supabase.from('inventario_movimientos').select('tipo').eq('producto_id', d.productoId), 'kardex pendiente'); assert(!(rows || []).some(row => row.tipo === 'egreso'), 0, rows, 'sin egreso antes de aprobar') }
   f.assert_stock_comprometido_post = async () => { const n = await this.stockCommitted(); assert(n === 0, 0, n, 'comprometido pendiente') }
   f.assert_cxc_cargo = async () => { const rows = await this.db(this.supabase.from('cuentas_por_cobrar').select('id').eq('despacho_id', d.despachoId).eq('tipo', 'cargo'), 'CxC pendiente'); assert(!rows?.length, 0, rows?.length, 'CxC pendiente') }
   f.apply_descuento = async () => { const item = await this.db(this.supabase.from('cotizacion_items').select('id').eq('cotizacion_id', d.cotizacionId).single(), 'item descuento'); d.cotizacionItemId = item.id; d.descuentoTotal = 20; await this.api('/api/despachos/descuentos', 'POST', { despachoId: d.despachoId, descuentos: [{ cotizacionItemId: item.id, tipo: 'monto_unitario', valor: 2 }] }) }
   f.assert_descuento = async () => { const row = await dbSingle('notas_despacho', 'descuento_total_usd', d.despachoId); assert(Number(row.descuento_total_usd) === 20, 20, row.descuento_total_usd, 'descuento total'); const rows = await this.api(`/api/despachos/${d.despachoId}/descuentos`); assert(rows?.length === 1 && rows[0].cotizacion_item_id === d.cotizacionItemId && Number(rows[0].monto_usd) === 20, 'descuento persistido', rows, 'descuento') }
   f.mark_dispatched = async () => { await this.api('/api/despachos/estado', 'POST', { despachoId: d.despachoId, nuevoEstado: 'despachada' }) }
-  f.assert_dispatched = async () => { const row = await dbSingle('notas_despacho', 'estado,despachada_en', d.despachoId); assert(row.estado === 'despachada' && !!row.despachada_en, 'despachada', row, 'despacho aprobado') }
+  f.assert_dispatched = async () => {
+    const row = await dbSingle('notas_despacho', 'estado,despachada_en,egreso_lote_id', d.despachoId)
+    assert(row.estado === 'despachada' && !!row.despachada_en, 'despachada', row, 'despacho aprobado')
+    // Release 17: el egreso de inventario nace al APROBAR (no al entregar),
+    // ligado al despacho por egreso_lote_id (el movimiento no lleva idempotency_key).
+    assert(!!row.egreso_lote_id, 'egreso_lote_id', row.egreso_lote_id, 'egreso al aprobar')
+    d.egresoLoteId = row.egreso_lote_id
+    await assertStock(90, 'stock aprobado (egreso al aprobar: 100 −10)')
+    const movements = await this.db(this.supabase.from('inventario_movimientos').select('tipo,cantidad,motivo_tipo').eq('lote_id', d.egresoLoteId), 'Kardex egreso al aprobar')
+    assert(movements?.length === 1 && movements[0].tipo === 'egreso' && Number(movements[0].cantidad) === 10 && movements[0].motivo_tipo === 'venta', 1, movements, 'un egreso al aprobar')
+  }
   f.assert_stock_comprometido_aprobado = async () => { const n = await this.stockCommitted(); assert(n === 10, 10, n, 'comprometido aprobado'); const cxc = await this.db(this.supabase.from('cuentas_por_cobrar').select('monto_usd').eq('despacho_id', d.despachoId).eq('tipo', 'cargo'), 'CxC aprobado'); assert(cxc?.length === 1 && Number(cxc[0].monto_usd) === 240, '$240', cxc, 'CxC neto'); const client = await dbSingle('clientes', 'saldo_pendiente', d.clienteId); assert(Number(client.saldo_pendiente) === 240, 240, client.saldo_pendiente, 'saldo aprobado') }
   f.mark_delivered = async () => {
     // La prueba de fecha efectiva necesita una ventana cronológica real entre
@@ -1007,9 +1108,13 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     const replay = await this.api('/api/despachos/estado', 'POST', d.deliveryPayload)
     assert(replay?.ok === true && replay?.idempotent === true && replay?.nuevoEstado === 'entregada', 'replay entrega idempotente', replay, 'replay entrega')
     const movements = await this.db(this.supabase.from('inventario_movimientos').select('id').eq('producto_id', d.productoId).eq('idempotency_key', d.deliveryKey), 'movimientos replay entrega')
+    const egreso = await this.db(this.supabase.from('inventario_movimientos').select('id').eq('lote_id', d.egresoLoteId), 'Kardex egreso post-replay')
     const cxc = await this.db(this.supabase.from('cuentas_por_cobrar').select('id').eq('despacho_id', d.despachoId), 'CxC replay entrega')
     const commissions = await this.db(this.supabase.from('comisiones').select('id').eq('despachoid', d.despachoId), 'comisión replay entrega')
-    assert(movements?.length === 1, 1, movements?.length, 'sin Kardex duplicado por replay de entrega')
+    // Release 17: la entrega NO mueve inventario (el egreso nació al aprobar),
+    // así que no debe aparecer ni un movimiento propio ni duplicar el egreso.
+    assert(movements?.length === 0, 0, movements?.length, 'entrega sin Kardex propio (egreso al aprobar)')
+    assert(egreso?.length === 1, 1, egreso?.length, 'sin Kardex egreso duplicado por replay de entrega')
     assert(cxc?.length === 1, 1, cxc?.length, 'sin CxC duplicada por replay de entrega')
     assert(commissions?.length === 1, 1, commissions?.length, 'sin comisión duplicada por replay de entrega')
   }
@@ -1130,6 +1235,12 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     d.saldoTrasDevoluciones = saldoEsperado
     const client = await dbSingle('clientes', 'saldo_pendiente', d.clienteId)
     assert(Number(client.saldo_pendiente) === saldoEsperado, saldoEsperado, client.saldo_pendiente, 'saldo cliente: diferencia no cobrada queda como deuda')
+    // El recálculo 238b tras cada devolución reemplaza la fila de comisión
+    // (recalcularcomisiondespacho_238b: DELETE + recrear, salvo filas pagadas).
+    // El id capturado antes queda viejo; se re-resuelve por el despacho.
+    const comRows = await this.db(this.supabase.from('comisiones').select('id').eq('despachoid', d.despachoId), 're-resolver comisión')
+    assert(comRows?.length === 1, 1, comRows?.length, 'una comisión vigente tras recálculo')
+    d.comisionId = comRows[0].id
   }
   f.assert_commission = async () => {
     const cfg = await this.db(this.supabase.from('configuracion_negocio').select('comision_pct_cabilla,comision_pct_otros,comision_categoria_cabilla').eq('cuenta_id', this.user.id).limit(1).maybeSingle(), 'config comisión')
@@ -1142,18 +1253,22 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     const field = cabilla ? 'comisioncabilla' : 'comisionotros'
     // Política 238b (fecha_despacho_no_cxc): el despacho es 100% "Cta por cobrar",
     // así que ANTES de conciliar cobros la comisión es $0 y el 100% queda excluido
-    // en comision_cxc_excluida (se libera al cobrar el crédito). La base 238b son
-    // las líneas brutas actuales: 10×25 − 25 devuelto + 25 intercambio = 250.
-    const baseBruto = round2(TEST.cotizacion.cantidad * TEST.producto.precio_usd - d.exchangePrecioUnit + d.exchangePrecioUnit)
-    const expectedExcluida = round2(baseBruto * pct / 100)
+    // en comision_cxc_excluida (se libera al cobrar el crédito).
+    // Base = contrato R4 / Release 14 (comisionNetaPorBucket en scripts/lib/
+    // invariantes.mjs): mercancía NETA por bucket = líneas brutas − devuelto +
+    // intercambio. Aquí: 10×25 = 250 bruto − $23 devuelto neto + $25 intercambio = 252.
+    const baseNeta = round2(TEST.cotizacion.cantidad * TEST.producto.precio_usd - d.devueltoReal + d.intercambioReal)
+    const expectedExcluida = round2(baseNeta * pct / 100)
     const evidencia = commission.calculo_evidencia || {}
     const split = evidencia.payment_split || {}
     assert(commission.calculo_version === '238b' && commission.fuente_calculo === 'stored_net_238b', '238b/stored_net_238b', { version: commission.calculo_version, fuente: commission.fuente_calculo }, 'versión de cálculo 238b')
     assert(Number(commission.totalcomision) === 0 && Number(commission[field]) === 0, 0, commission, 'comisión $0 antes de cobrar (100% CxC)')
     assert(Number(commission.comision_liberada) === 0 && Number(commission.comision_retenida) === 0, { liberada: 0, retenida: 0 }, commission, 'sin liberada/retenida pre-conciliación')
-    assert(round2(Number(commission.comision_cxc_excluida)) === expectedExcluida, expectedExcluida, commission.comision_cxc_excluida, `comisión excluida CxC = base bruto $${baseBruto} × ${pct}%`)
+    assert(round2(Number(commission.comision_cxc_excluida)) === expectedExcluida, expectedExcluida, commission.comision_cxc_excluida, `comisión excluida CxC = base neta R4 $${baseNeta} × ${pct}%`)
     assert(round2(Number(split.fraction)) === 0 && (split.methods || []).every(m => m.metodo === 'Cta por cobrar'), { fraction: split.fraction, methods: split.methods }, evidencia, 'payment_split 100% CxC')
-    assert(commission.estado === 'pendiente', 'pendiente', commission.estado, 'estado comisión')
+    // Estado al crear: 'generada' (motor 238b v4; misma expectativa que las
+    // pruebas split). La liberación a 'pendiente' ocurre al cobrar/liberar CxC.
+    assert(commission.estado === 'generada', 'generada', commission.estado, 'estado comisión')
     assert(commission.vendedorid === this.salesperson.id, this.salesperson.id, commission.vendedorid, 'vendedor de la comisión')
     this.log(`Comisión 238b pre-cobro: total=$0; excluida CxC=$${expectedExcluida}; estado=${commission.estado}`, 'OK')
   }
@@ -1215,17 +1330,31 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     const despacho = await dbSingle('notas_despacho', 'numero,entregada_en_ajustada', d.despachoId)
     assert(new Date(despacho.entregada_en_ajustada).getTime() === new Date(d.dateChange.nuevaFechaEntrega).getTime(), d.dateChange.nuevaFechaEntrega, despacho.entregada_en_ajustada, 'fecha no reemplazada por replay')
   }
+  // Modelo 238b (el de producción, plan 2026-08-22-quitar-pago-comisiones): la
+  // porción CxC no genera comisión y ya no existe el pago manual de comisiones
+  // (producción no tiene /api/comisiones/pagar). Una venta 100% CxC deja su
+  // comisión en $0 'generada', con el monto no generado en comision_cxc_excluida.
+  // El endpoint legado que aún vive en staging debe rechazarla sin tocarla.
   f.pay_commission = async () => {
-    const commission = await dbSingle('comisiones', 'estado,comision_liberada,comision_retenida,totalcomision', d.comisionId)
-    const contract = commissionStateContract(commission)
-    if (contract.requiresManualRelease) {
-      await this.api('/api/comisiones/liberar-cxc', 'POST', { comisionId: d.comisionId })
-      const released = await dbSingle('comisiones', 'estado,comision_liberada,comision_retenida,totalcomision', d.comisionId)
-      assert(released.estado === 'pendiente' && Number(released.comision_liberada) === Number(released.totalcomision) && Number(released.comision_retenida) === 0, 'comisión liberada', released, 'liberación CxC')
+    const antes = await dbSingle('comisiones', 'estado,totalcomision,comision_cxc_excluida,montopagado,pagadaen', d.comisionId)
+    assert(antes.estado === 'generada' && round2(Number(antes.totalcomision)) === 0 && Number(antes.comision_cxc_excluida) > 0,
+      'generada/$0/excluida>0', antes, 'comisión 100% CxC antes del intento de pago')
+    let rechazo = null
+    try {
+      await this.api('/api/comisiones/pagar', 'POST', { comisionId: d.comisionId })
+    } catch (e) {
+      rechazo = e
     }
-    await this.api('/api/comisiones/pagar', 'POST', { comisionId: d.comisionId })
+    assert(!!rechazo, 'pago rechazado', 'pago aceptado', 'una comisión 100% CxC no se puede pagar')
+    d.comisionAntesDePago = antes
   }
-  f.assert_commission_paid = async () => { const row = await dbSingle('comisiones', 'estado,pagadaen', d.comisionId); assert(row.estado === 'pagada' && !!row.pagadaen, 'pagada', row, 'comisión pagada') }
+  f.assert_commission_paid = async () => {
+    const row = await dbSingle('comisiones', 'estado,totalcomision,comision_cxc_excluida,montopagado,pagadaen', d.comisionId)
+    const antes = d.comisionAntesDePago
+    assert(row.estado === 'generada' && !row.pagadaen && round2(Number(row.montopagado || 0)) === 0, 'generada sin pago', row, 'comisión sin pago')
+    assert(round2(Number(row.totalcomision)) === round2(Number(antes.totalcomision)) && round2(Number(row.comision_cxc_excluida)) === round2(Number(antes.comision_cxc_excluida)),
+      antes, row, 'comisión intacta tras el intento de pago')
+  }
   f.register_payment = async () => { d.montoAbono = 100; await this.api('/api/cxc/abono', 'POST', { clienteId: d.clienteId, monto: 100, formaPago: 'Transf. / Pago Móvil', referencia: 'TEST-DET-001', descripcion: 'Abono test determinista' }) }
   f.assert_cxc_abono = async () => { const client = await dbSingle('clientes', 'saldo_pendiente', d.clienteId); const esperado = round2(d.saldoTrasDevoluciones - d.montoAbono); assert(round2(Number(client.saldo_pendiente)) === esperado, esperado, client.saldo_pendiente, 'saldo tras abono CxC'); const rows = await this.db(this.supabase.from('cuentas_por_cobrar').select('monto_usd').eq('cliente_id', d.clienteId).eq('tipo', 'abono'), 'abono CxC'); assert((rows || []).some(row => Number(row.monto_usd) === 100), 100, rows, 'abono') }
   f.assert_report_ventas = async () => { const row = await dbSingle('notas_despacho', 'total_usd,estado,forma_pago', d.despachoId); assert(row.estado === 'entregada' && Number(row.total_usd) === d.totalTrasDevoluciones && row.forma_pago === 'Cta por cobrar', row, 'despacho en ventas') }
@@ -1398,12 +1527,16 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     await this.api('/api/despachos/estado', 'POST', { despachoId: d.ventaRapidaDespachoId, nuevoEstado: 'entregada', idempotencyKey: d.vrDeliveryKey })
   }
   f.assert_vr_delivered = async () => {
-    const row = await dbSingle('notas_despacho', 'estado', d.ventaRapidaDespachoId)
+    const row = await dbSingle('notas_despacho', 'estado,egreso_lote_id', d.ventaRapidaDespachoId)
     assert(row.estado === 'entregada', 'entregada', row, 'VR entregada para reversión')
-    await assertStock(105, 'stock VR entregada')
+    // Release 17: el egreso (5u) nació al aprobar; la entrega ya no mueve inventario.
+    await assertStock(105, 'stock VR entregada (egreso al aprobar)')
+    assert(!!row.egreso_lote_id, 'egreso_lote_id', row.egreso_lote_id, 'egreso VR al aprobar')
+    const egreso = await this.db(this.supabase.from('inventario_movimientos').select('tipo,cantidad').eq('lote_id', row.egreso_lote_id), 'Kardex egreso VR')
+    assert(egreso?.length === 1 && egreso[0].tipo === 'egreso' && Number(egreso[0].cantidad) === 5, 1, egreso, 'un egreso VR al aprobar')
     const movements = await this.db(this.supabase.from('inventario_movimientos').select('id').eq('producto_id', d.productoId).eq('idempotency_key', d.vrDeliveryKey), 'Kardex VR entrega')
+    assert(movements?.length === 0, 0, movements?.length, 'entrega VR sin Kardex (egreso al aprobar)')
     const commissions = await this.db(this.supabase.from('comisiones').select('id').eq('despachoid', d.ventaRapidaDespachoId), 'comisión VR entrega')
-    assert(movements?.length === 1, 1, movements?.length, 'Kardex VR entrega')
     assert(commissions?.length === 1, 1, commissions?.length, 'comisión VR entrega')
   }
   f.revert_vr_delivery = async () => {
@@ -1413,10 +1546,12 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
   f.assert_vr_reverted = async () => {
     const row = await dbSingle('notas_despacho', 'estado', d.ventaRapidaDespachoId)
     assert(row.estado === 'despachada', 'despachada', row, 'VR revertida')
-    await assertStock(110, 'stock VR restaurado')
+    // Release 17: revertir la entrega a 'despachada' NO reingresa — la
+    // mercancía sigue fuera; el egreso ocurrió al aprobar.
+    await assertStock(105, 'stock VR sin reingreso al revertir entrega')
     const movements = await this.db(this.supabase.from('inventario_movimientos').select('id').eq('producto_id', d.productoId).eq('idempotency_key', d.vrReverseKey), 'Kardex reversión VR')
     const commissions = await this.db(this.supabase.from('comisiones').select('id').eq('despachoid', d.ventaRapidaDespachoId), 'comisión reversión VR')
-    assert(movements?.length === 1, 1, movements?.length, 'un Kardex de reversión VR')
+    assert(movements?.length === 0, 0, movements?.length, 'reversión de entrega sin Kardex (sin reingreso)')
     assert(commissions?.length === 0, 0, commissions?.length, 'comisión revertida VR')
   }
   f.replay_vr_reversal = async () => {
@@ -1424,14 +1559,14 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     assert(replay?.ok === true && replay?.idempotent === true && replay?.nuevoEstado === 'despachada', 'replay reversión idempotente', replay, 'replay reversión VR')
   }
   f.assert_vr_reversal_replay = async () => {
-    await assertStock(110, 'stock sin doble reversión VR')
+    await assertStock(105, 'stock sin doble reversión VR (sin reingreso)')
     const movements = await this.db(this.supabase.from('inventario_movimientos').select('id').eq('producto_id', d.productoId).eq('idempotency_key', d.vrReverseKey), 'Kardex replay reversión VR')
     const commissions = await this.db(this.supabase.from('comisiones').select('id').eq('despachoid', d.ventaRapidaDespachoId), 'comisión replay reversión VR')
-    assert(movements?.length === 1, 1, movements?.length, 'sin Kardex duplicado por replay de reversión')
+    assert(movements?.length === 0, 0, movements?.length, 'sin Kardex por reversión de entrega (sin reingreso)')
     assert(commissions?.length === 0, 0, commissions?.length, 'sin comisión recreada por replay de reversión')
   }
   f.assert_transportista_report = async () => { const result = await this.api('/api/transportistas/reporte'); const row = (result.items || []).find(item => item.id === d.transportistaTestId); assert(!!row, row, 'transportista reporte'); assert(row.es_local === true && Number(row.despachos) >= 1 && Number(row.despachos_comisionables) >= 1 && Number(row.flete_total_usd) >= 50 && Number(row.saldo_usd) >= d.transportistaNeto - 0.01 && Number(row.flete_nomina_usd || 0) === 0, row, 'reporte transportista externo') }
-  f.assert_stock_post_vr = () => assertStock(110, 'stock VR después de reversión')
+  f.assert_stock_post_vr = () => assertStock(105, 'stock VR después de reversión (sin reingreso)')
   f.anular_despacho = async () => {
     await this.api('/api/despachos/estado', 'POST', {
       despachoId: d.ventaRapidaDespachoId,
@@ -1446,7 +1581,7 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
       idempotencyKey: globalThis.crypto?.randomUUID?.() || '00000000-0000-4000-8000-000000000057',
     })
   }
-  f.assert_despacho_anulado = async () => { const row = await dbSingle('notas_despacho', 'estado', d.ventaRapidaDespachoId); assert(row.estado === 'anulada', 'anulada', row.estado, 'VR anulada'); await assertStock(110, 'stock tras anular VR') }
+  f.assert_despacho_anulado = async () => { const row = await dbSingle('notas_despacho', 'estado', d.ventaRapidaDespachoId); assert(row.estado === 'anulada', 'anulada', row.estado, 'VR anulada'); await assertStock(110, 'stock tras anular VR (reingreso al volver a pendiente)') }
   f.reciclar_despacho = async () => { const result = await this.api('/api/despachos/reciclar', 'POST', { despachoId: d.ventaRapidaDespachoId }); d.cotizacionDesdeDespachoId = result.id }
   f.assert_despacho_reciclado = async () => { const row = await dbSingle('cotizaciones', 'estado,cliente_id', d.cotizacionDesdeDespachoId); assert(row.estado === 'borrador' && row.cliente_id === d.clienteId, row, 'cotización desde despacho'); const items = await this.db(this.supabase.from('cotizacion_items').select('id').eq('cotizacion_id', d.cotizacionDesdeDespachoId), 'items desde despacho'); assert(items?.length > 0, items, 'items desde despacho') }
   f.reasignar_cliente = async () => { const sellers = await this.db(this.supabase.from('usuarios').select('id').eq('rol', 'vendedor').eq('activo', true).limit(10), 'buscar vendedor alterno'); const alternate = (sellers || []).find(row => row.id !== this.salesperson.id); if (!alternate) { this.log('SKIP: no hay vendedor alterno en staging', 'WARN'); return } d.otroVendedorId = alternate.id; await this.api('/api/clientes/reasignar', 'POST', { clienteId: d.clienteId, nuevoVendedorId: alternate.id, motivo: TEST.reasignacion.motivo }) }
@@ -1625,23 +1760,41 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
       const factor = 0.75
       const expOwner = round2(round2(100 * d.splitPctD / 100) * factor)
       const expDesig = round2(round2(100 * d.splitPctV / 100) * factor)
-      const owner = rows.find(r => r.id === d.splitT1OwnerId)
-      const designated = rows.find(r => r.id === d.splitT1DesignadoId)
+      // La devolución recalcula la comisión (238b) y las filas pueden renacer con
+      // otro id: se re-resuelven por beneficiario y se actualizan los ids.
+      const owner = rows.find(r => r.vendedorid === d.splitDuenoId)
+      const designated = rows.find(r => r.vendedorid === d.splitDesignadoId)
+      assert(!!owner && !!designated, 'filas dueño y designado', rows.map(r => r.vendedorid), 'T6 beneficiarios tras devolución')
+      d.splitT1OwnerId = owner.id
+      d.splitT1DesignadoId = designated.id
       assert(Number(owner.totalcomision) === expOwner, expOwner, owner.totalcomision, 'T6 dueño escalada')
       assert(Number(designated.totalcomision) === expDesig, expDesig, designated.totalcomision, 'T6 designado escalada')
-      assert(owner.estado === 'pendiente' && designated.estado === 'pendiente', 'pendiente', rows.map(r => r.estado), 'T6 estado tras devolución')
+      assert(owner.estado === 'generada' && designated.estado === 'generada', 'generada', rows.map(r => r.estado), 'T6 estado tras devolución')
   }
+  // Modelo 238b: no existe pago manual de comisiones (producción no tiene
+  // /api/comisiones/pagar). El endpoint legado de staging debe rechazar la fila
+  // 'generada' del designado y ninguna de las dos filas debe cambiar.
   f.split_t7_pago_fila = async () => {
       if (d.splitSkip) return
-      await this.api('/api/comisiones/pagar', 'POST', { comisionId: d.splitT1DesignadoId })
+      const antes = await this.db(this.supabase.from('comisiones').select('id,estado,totalcomision,montopagado').eq('despachoid', d.splitT1.despachoId), 'comisiones T7 antes')
+      d.splitT7Antes = antes
+      let rechazo = null
+      try {
+        await this.api('/api/comisiones/pagar', 'POST', { comisionId: d.splitT1DesignadoId })
+      } catch (e) {
+        rechazo = e
+      }
+      assert(!!rechazo, 'pago rechazado', 'pago aceptado', 'T7 la fila del designado no se paga manualmente')
   }
   f.split_assert_t7 = async () => {
       if (d.splitSkip) return
-      const rows = await this.db(this.supabase.from('comisiones').select('id,estado,montopagado').eq('despachoid', d.splitT1.despachoId), 'comisiones T7')
-      const designated = rows.find(r => r.id === d.splitT1DesignadoId)
-      const owner = rows.find(r => r.id === d.splitT1OwnerId)
-      assert(designated.estado === 'pagada' && Number(designated.montopagado) > 0, 'pagada', designated, 'T7 fila designado pagada')
-      assert(owner.estado !== 'pagada' && Number(owner.montopagado || 0) === 0, 'intacta', owner, 'T7 fila dueño intacta')
+      const rows = await this.db(this.supabase.from('comisiones').select('id,estado,totalcomision,montopagado').eq('despachoid', d.splitT1.despachoId), 'comisiones T7')
+      assert(rows?.length === 2, 2, rows?.length, 'T7 siguen 2 filas')
+      for (const r of rows) {
+        const previa = (d.splitT7Antes || []).find(a => a.id === r.id)
+        assert(r.estado === 'generada' && round2(Number(r.montopagado || 0)) === 0, 'generada sin pago', r, 'T7 fila sin pago')
+        assert(!!previa && Number(previa.totalcomision) === Number(r.totalcomision), previa, r, 'T7 fila intacta')
+      }
   }
   f.split_t8_cxc = async () => { if (d.splitSkip) return; d.splitT8 = await this.runSplitSale({ cantidad: 2, formaPago: 'Cta por cobrar', clienteId: d.splitClienteAjenoId }) }
   f.split_assert_t8 = async () => {
@@ -1700,6 +1853,7 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
         comision_split_pct_dueno: d.splitCfgOriginal.comision_split_pct_dueno ?? 1.5,
         comision_split_dias: d.splitCfgOriginal.comision_split_dias ?? '6',
       })
+      d.splitCfgRestaurada = true
       this.log('Config split restaurada ✓', 'OK')
   }
   for (const step of STEPS) await this.runStep(step, f[step.id])
