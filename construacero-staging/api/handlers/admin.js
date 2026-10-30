@@ -1465,8 +1465,8 @@ export async function handleDesactivarTransportista(request, env) {
   const { operador, error } = await validateOperator(request, env)
   if (error) return error;
 
-  // Solo supervisores, jefes, desarrolladores y administración pueden desactivar
-  if (!['supervisor', 'jefe', 'desarrollador', 'administracion'].includes(operador.rol)) {
+  // Supervisores, jefes, desarrolladores, administración y logística pueden desactivar
+  if (!['supervisor', 'jefe', 'desarrollador', 'administracion', 'logistica'].includes(operador.rol)) {
     return jsonError('Acceso denegado: no tienes permiso para desactivar transportistas', 403, request);
   }
 

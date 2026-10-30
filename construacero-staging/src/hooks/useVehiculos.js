@@ -84,7 +84,7 @@ export function useEliminarVehiculo() {
 // ─── Reporte gerencial de flota y choferes locales (Fase 4 del plan) ─────────
 // Mismos roles que el reporte de transportistas (raíl R13: el supervisor no ve
 // comisiones). Devuelve { por_vehiculo, por_chofer_local }.
-const ROLES_REPORTE_FLOTA = ['jefe', 'administracion', 'logistica', 'desarrollador']
+const ROLES_REPORTE_FLOTA = ['jefe', 'logistica', 'desarrollador']
 
 export function puedeVerReporteFlota(rol) {
   return ROLES_REPORTE_FLOTA.includes(rol)

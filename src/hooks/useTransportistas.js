@@ -190,7 +190,7 @@ const REPORTE_TRANSP_KEY = ['reporte-transportistas']
 
 export function useReporteTransportistas({ desde = null, hasta = null } = {}) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const puede = ['administracion', 'desarrollador', 'logistica', 'jefe'].includes(perfil?.rol)
+  const puede = ['desarrollador', 'logistica', 'jefe'].includes(perfil?.rol)
   return useQuery({
     // Incluir fechas en queryKey para invalidar correctamente al cambiar el rango
     queryKey: [...REPORTE_TRANSP_KEY, desde, hasta],
@@ -214,7 +214,7 @@ export function useReporteTransportistas({ desde = null, hasta = null } = {}) {
 
 export function useDetalleTransportista(transportistaId) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const puede = ['administracion', 'desarrollador', 'logistica', 'jefe'].includes(perfil?.rol)
+  const puede = ['desarrollador', 'logistica', 'jefe'].includes(perfil?.rol)
   return useQuery({
     queryKey: [...REPORTE_TRANSP_KEY, 'detalle', transportistaId],
     queryFn: async () => {

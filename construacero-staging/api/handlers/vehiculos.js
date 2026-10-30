@@ -15,7 +15,7 @@ const ROLES_GESTION  = ['jefe', 'administracion', 'logistica', 'desarrollador']
 const ROLES_ELIMINAR = ['jefe', 'administracion', 'desarrollador']
 // El supervisor queda fuera del reporte de flota porque muestra comisiones
 // (raíl R13: los montos que se pagan a choferes solo los ven admin/dev/logística/jefe).
-const ROLES_REPORTE  = ['jefe', 'administracion', 'logistica', 'desarrollador']
+const ROLES_REPORTE  = ['jefe', 'logistica', 'desarrollador']
 
 function fechaValida(fecha) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) return false

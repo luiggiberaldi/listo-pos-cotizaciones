@@ -259,7 +259,7 @@ function TransportistaModal({ transportista = null, onClose }) {
 }
 
 // ─── Tarjeta ──────────────────────────────────────────────────────────────────
-function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar, onDesactivar, vehiculoFijo = null, onVerVehiculo }) {
+function TransportistaCard({ transportista, esSupervisor, puedeEditar, puedeEliminar = esSupervisor, onEditar, onDesactivar, vehiculoFijo = null, onVerVehiculo }) {
   const colors = colorTransportista(transportista.nombre)
 
   return (
@@ -366,7 +366,7 @@ function TransportistaCard({ transportista, esSupervisor, puedeEditar, onEditar,
             <Pencil size={13} />
             Editar
           </button>
-          {esSupervisor && (
+          {puedeEliminar && (
             <button onClick={() => onDesactivar(transportista)} title="Desactivar"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors ml-auto">
               <Ban size={13} />
@@ -704,6 +704,7 @@ export default function TransportistasView() {
             <div className="flex items-center justify-center gap-4 pt-4">
               <button disabled={page === 1} onClick={() => { setPage(p => p - 1); const main = document.querySelector('main'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all">
                 <ChevronLeft size={20} />
+                  puedeEliminar={esSupervisor || perfil?.rol === 'logistica'}
               </button>
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-bold text-slate-400">Página</span>

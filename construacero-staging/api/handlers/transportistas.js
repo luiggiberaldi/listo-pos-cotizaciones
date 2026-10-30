@@ -10,7 +10,8 @@ import { registrarAuditoria } from '../lib/audit.js'
 // sin esto, un despacho de las 11 p. m. caía en el día siguiente.
 const HORA_CARACAS = '-04:00'
 
-const ROLES_REPORTE = ['administracion', 'desarrollador', 'logistica', 'jefe']
+// Reporte de transportistas: logística sí, administración no (pedido del dueño 2026-10-30).
+const ROLES_REPORTE = ['desarrollador', 'logistica', 'jefe']
 const ROLES_PAGAR   = ['administracion', 'desarrollador']
 
 /** Redondea a 4 decimales (misma precisión que NUMERIC(12,4)). */

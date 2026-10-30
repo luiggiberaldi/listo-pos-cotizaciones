@@ -81,7 +81,7 @@ const NAV_TODOS = [
   { path: '/clientes',       label: 'Clientes',       icono: Users,          excludeRoles: ['logistica'] },
   { path: '/personal',       label: 'Personal',       icono: Briefcase,      onlyRoles: ['administracion', 'jefe', 'desarrollador'] },
   { path: '/inventario',     label: 'Inventario',     icono: Package,        excludeRoles: ['logistica'] },
-  { path: '/transportistas', label: 'Transportistas', icono: Truck,          excludeRoles: ['logistica'] },
+  { path: '/transportistas', label: 'Transportistas', icono: Truck },
   { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign,     excludeRoles: ['logistica', 'administracion'] },
   { path: '/tutorial',       label: 'Tutorial',       icono: HelpCircle, onlyRoles: ['vendedor', 'vendedor_sin_comision'] },
 ]
@@ -608,12 +608,13 @@ export default function AppLayout() {
             .map(({ path, label, labelByRole, icono: Icono }) => (
             <NavItem key={path} path={path} label={labelByRole?.[perfil?.rol] || label} Icono={Icono} onClick={cerrarMenu} collapsed={collapsed} />
           ))}
-          {esPrivilegiado && (
+          {/* Logística entra al bloque solo por Reportes (sus filtros le ocultan el resto) */}
+          {(esPrivilegiado || perfil?.rol === 'logistica') && (
             <>
               {!collapsed && (
                 <div className="pt-2 pb-1 px-3">
                   <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(184,134,11,0.7)' }}>
-                    Administración
+                    {perfil?.rol === 'logistica' ? 'Reportes' : 'Administración'}
                   </p>
                 </div>
               )}
