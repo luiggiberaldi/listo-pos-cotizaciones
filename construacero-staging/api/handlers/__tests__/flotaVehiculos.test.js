@@ -184,8 +184,21 @@ describe('POST /api/vehiculos/eliminar', () => {
     expect(call.body).toEqual({ p_cuenta_id: ACCOUNT, p_vehiculo_id: VEHICLE })
   })
 
-  it('un logístico no puede dar de baja vehículos', async () => {
+  it('logística puede dar de baja vehículos (pedido del dueño 2026-10-30)', async () => {
     setAuth()
+    installFetch([
+      {
+        match: '/rest/v1/rpc/eliminar_o_desactivar_vehiculo_atomico',
+        method: 'POST',
+        response: { ok: true, accion: 'eliminado', viajes_historicos: 0, choferes_desvinculados: 0 },
+      },
+    ])
+    const res = await handleEliminarVehiculo(request('/api/vehiculos/eliminar', { id: VEHICLE }), ENV)
+    expect(res.status).toBe(200)
+  })
+
+  it('un vendedor no puede dar de baja vehículos', async () => {
+    setAuth({ ...gestor, rol: 'vendedor' })
     installFetch([])
     const res = await handleEliminarVehiculo(request('/api/vehiculos/eliminar', { id: VEHICLE }), ENV)
     expect(res.status).toBe(403)

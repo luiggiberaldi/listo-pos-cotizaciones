@@ -3,7 +3,7 @@
 // camión, alta, edición, baja inteligente y "Ver inactivos".
 // Reglas respetadas:
 //  - R13: crear/editar (jefe, administracion, logistica, desarrollador);
-//    dar de baja solo (jefe, administracion, desarrollador).
+//    dar de baja también (logística incluida desde 2026-10-30).
 //  - R4/R8: la baja usa eliminar_o_desactivar_vehiculo_atomico — sin viajes se
 //    borra; con historial se desactiva y los viajes pasados quedan intactos.
 //  - Nada de comisiones ni liquidaciones en esta pantalla (R7, Fase 4).
@@ -17,7 +17,7 @@ import { nombreVehiculo, placasVehiculo } from '../../utils/vehiculoImpreso'
 import { COLORES_FLOTA_PROPIA } from '../../utils/transportistaColors'
 
 const ROLES_GESTION = ['jefe', 'administracion', 'logistica', 'desarrollador']
-const ROLES_BAJA = ['jefe', 'administracion', 'desarrollador']
+const ROLES_BAJA = ['jefe', 'administracion', 'logistica', 'desarrollador']
 
 function VehiculoForm({ inicial = {}, onGuardar, onCancelar, cargando }) {
   // Un solo dato para identificar el camión: el modelo (se guarda en `nombre`).

@@ -97,8 +97,9 @@ describe('Franja de vehículos — baja con la semántica de la Fase 1', () => {
   })
 
   it('las altas y bajas pasan por los permisos de R13', () => {
-    expect(vehiculosFranja).toContain("'jefe', 'administracion', 'logistica', 'desarrollador'")
-    expect(vehiculosFranja).toContain("'jefe', 'administracion', 'desarrollador'")
+    // Altas y bajas: jefe, administración, logística y desarrollador (logística da de baja desde 2026-10-30).
+    expect(vehiculosFranja).toContain("const ROLES_GESTION = ['jefe', 'administracion', 'logistica', 'desarrollador']")
+    expect(vehiculosFranja).toContain("const ROLES_BAJA = ['jefe', 'administracion', 'logistica', 'desarrollador']")
   })
 })
 

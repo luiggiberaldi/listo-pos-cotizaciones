@@ -12,7 +12,7 @@ import { registrarAuditoria } from '../lib/audit.js'
 const HORA_CARACAS = '-04:00'
 
 const ROLES_GESTION  = ['jefe', 'administracion', 'logistica', 'desarrollador']
-const ROLES_ELIMINAR = ['jefe', 'administracion', 'desarrollador']
+const ROLES_ELIMINAR = ['jefe', 'administracion', 'logistica', 'desarrollador']
 // El supervisor queda fuera del reporte de flota porque muestra comisiones
 // (raíl R13: los montos que se pagan a choferes solo los ven admin/dev/logística/jefe).
 const ROLES_REPORTE  = ['jefe', 'logistica', 'desarrollador']
