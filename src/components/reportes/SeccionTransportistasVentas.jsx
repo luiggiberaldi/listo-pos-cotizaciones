@@ -1,8 +1,12 @@
 // src/components/reportes/SeccionTransportistasVentas.jsx
-// Resumen de fletes, comisión externa y nómina local para el período de ventas seleccionado.
-// Se usa dentro de TabVentas para mostrar el impacto del costo de transporte en el período.
+// Resumen de fletes de choferes locales para el período de ventas seleccionado:
+// total de fletes, parte del chofer (su comisión fuera de Carabobo) y parte de
+// la empresa (el resto). Mismo criterio que la pestaña Transportistas: sin
+// pagado/saldo. Se usa dentro de TabVentas.
 import { Truck } from 'lucide-react'
 import { useReporteTransportistas } from '../../hooks/useTransportistas'
+import { repartoFlete } from '../../utils/flotaReporte'
+import TarjetaMovil, { ListaMovil } from './TarjetaMovil'
 
 function fmt(n) {
   return (Number(n) || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -17,11 +21,10 @@ export default function SeccionTransportistasVentas({ desde, hasta }) {
   if (isLoading) return null
   if (conMovimiento.length === 0) return null
 
-  const totFlete  = conMovimiento.reduce((s, t) => s + (t.flete_total_usd || 0), 0)
-  const totNeto   = conMovimiento.reduce((s, t) => s + (t.neto_total_usd  || 0), 0)
-  const totPagado = conMovimiento.reduce((s, t) => s + (t.pagado_usd      || 0), 0)
-  const totSaldo  = conMovimiento.reduce((s, t) => s + (t.saldo_usd       || 0), 0)
-  const totNomina = conMovimiento.reduce((s, t) => s + (t.flete_nomina_usd || 0), 0)
+  const tot = conMovimiento.reduce((acc, t) => {
+    const r = repartoFlete(t)
+    return { total: acc.total + r.total, chofer: acc.chofer + r.chofer, empresa: acc.empresa + r.empresa, despachos: acc.despachos + (Number(t.despachos) || 0) }
+  }, { total: 0, chofer: 0, empresa: 0, despachos: 0 })
 
   return (
     <div className="space-y-3 pt-4 border-t border-slate-100">
@@ -33,70 +36,85 @@ export default function SeccionTransportistasVentas({ desde, hasta }) {
         <div>
           <h3 className="text-sm font-bold text-slate-700">Choferes locales</h3>
           <p className="text-[10px] text-slate-400">
-            Comisión solo por fletes fuera de Carabobo; Carabobo se procesa por nómina
-            {(desde || hasta) ? ` seleccionado` : ''}
+            El chofer cobra comisión solo por fletes fuera de Carabobo; en Carabobo cobra por nómina y el flete queda para la empresa
           </p>
         </div>
       </div>
 
       {/* KPIs compactos */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {[
-          { label: 'Flete cobrado',          value: `$${fmt(totFlete)}`,  cls: 'text-slate-800' },
-          { label: 'Comisión externa',       value: `$${fmt(totNeto)}`,   cls: 'text-amber-600' },
-          { label: 'Comisión liquidada',     value: `$${fmt(totPagado)}`, cls: 'text-green-600' },
-          { label: 'Saldo comisión externa', value: `$${fmt(totSaldo)}`,  cls: totSaldo > 0.001 ? 'text-red-500' : 'text-green-600' },
+          { label: 'Total de fletes', value: `$${fmt(tot.total)}`, cls: 'text-slate-800' },
+          { label: 'Para los choferes', value: `$${fmt(tot.chofer)}`, cls: 'text-amber-700' },
+          { label: 'Para la empresa', value: `$${fmt(tot.empresa)}`, cls: 'text-emerald-700' },
         ].map(k => (
-          <div key={k.label} className="bg-white border border-slate-200 rounded-xl p-2.5">
-            <div className="text-[10px] text-slate-500 font-medium truncate">{k.label}</div>
+          <div key={k.label} className="bg-white border border-slate-200 rounded-xl p-2.5 min-w-0">
+            <div className="text-[10px] text-slate-500 font-medium leading-tight">{k.label}</div>
             <div className={`text-sm font-black mt-0.5 ${k.cls}`}>{k.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Tabla desglose */}
-      <div className="overflow-x-auto bg-white border border-slate-200 rounded-xl">
+      {/* Celular: un chofer por tarjeta */}
+      <div className="sm:hidden bg-white border border-slate-200 rounded-xl">
+        <ListaMovil>
+          {conMovimiento.map(t => {
+            const r = repartoFlete(t)
+            return (
+              <TarjetaMovil
+                key={t.id}
+                titulo={t.nombre}
+                subtitulo={`${t.despachos} despacho${t.despachos === 1 ? '' : 's'}${t.despachos_nomina > 0 ? ` · ${t.despachos_nomina} en Carabobo (nómina)` : ''}`}
+                monto={`$${fmt(r.empresa)}`}
+                montoEtiqueta="Para la empresa"
+                montoClase="text-emerald-700"
+                detalles={[
+                  { label: 'Total fletes', valor: `$${fmt(r.total)}` },
+                  { label: 'Para el chofer', valor: `$${fmt(r.chofer)}`, clase: 'text-amber-700' },
+                ]}
+              />
+            )
+          })}
+        </ListaMovil>
+      </div>
+
+      {/* Tableta y computadora: tabla */}
+      <div className="hidden sm:block overflow-x-auto bg-white border border-slate-200 rounded-xl">
         <table className="w-full text-xs">
           <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase tracking-wide">
             <tr>
               <th className="text-left px-3 py-2 font-semibold">Chofer</th>
               <th className="text-right px-3 py-2 font-semibold">Despachos</th>
-              <th className="text-right px-3 py-2 font-semibold">Flete</th>
-              <th className="text-right px-3 py-2 font-semibold">Comisión externa</th>
-              <th className="text-right px-3 py-2 font-semibold">Liquidado</th>
-              <th className="text-right px-3 py-2 font-semibold">Saldo comisión</th>
-              <th className="text-right px-3 py-2 font-semibold">Nómina Carabobo</th>
+              <th className="text-right px-3 py-2 font-semibold">Total fletes</th>
+              <th className="text-right px-3 py-2 font-semibold">Para el chofer</th>
+              <th className="text-right px-3 py-2 font-semibold">Para la empresa</th>
             </tr>
           </thead>
           <tbody>
-            {conMovimiento.map(t => (
-              <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
-                <td className="px-3 py-2 font-semibold text-slate-700">{t.nombre}</td>
-                <td className="text-right px-3 py-2 text-slate-500">{t.despachos}</td>
-                <td className="text-right px-3 py-2 text-slate-600">${fmt(t.flete_total_usd)}</td>
-                <td className="text-right px-3 py-2 font-bold text-amber-600">${fmt(t.neto_total_usd)}</td>
-                <td className="text-right px-3 py-2 text-green-600">${fmt(t.pagado_usd)}</td>
-                <td className={`text-right px-3 py-2 font-black ${t.saldo_usd > 0.001 ? 'text-red-500' : 'text-slate-400'}`}>
-                  {t.saldo_usd > 0.001 ? `$${fmt(t.saldo_usd)}` : '—'}
-                </td>
-                <td className="text-right px-3 py-2 text-slate-500">
-                  {t.despachos_nomina > 0 ? `${t.despachos_nomina} · $${fmt(t.flete_nomina_usd)}` : '—'}
-                </td>
-              </tr>
-            ))}
+            {conMovimiento.map(t => {
+              const r = repartoFlete(t)
+              return (
+                <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                  <td className="px-3 py-2">
+                    <div className="font-semibold text-slate-700">{t.nombre}</div>
+                    {t.despachos_nomina > 0 && (
+                      <div className="text-[10px] text-slate-400">{t.despachos_nomina} en Carabobo (${fmt(t.flete_nomina_usd)}): cobra por nómina</div>
+                    )}
+                  </td>
+                  <td className="text-right px-3 py-2 text-slate-500">{t.despachos}</td>
+                  <td className="text-right px-3 py-2 text-slate-700 font-semibold">${fmt(r.total)}</td>
+                  <td className="text-right px-3 py-2 text-amber-700">${fmt(r.chofer)}</td>
+                  <td className="text-right px-3 py-2 font-black text-emerald-700">${fmt(r.empresa)}</td>
+                </tr>
+              )
+            })}
             {/* Totales */}
             <tr className="border-t-2 border-slate-200 bg-slate-50">
               <td className="px-3 py-2 font-black text-slate-700">Total</td>
-              <td className="text-right px-3 py-2 font-bold text-slate-600">
-                {conMovimiento.reduce((s, t) => s + t.despachos, 0)}
-              </td>
-              <td className="text-right px-3 py-2 font-bold text-slate-700">${fmt(totFlete)}</td>
-              <td className="text-right px-3 py-2 font-black text-amber-700">${fmt(totNeto)}</td>
-              <td className="text-right px-3 py-2 font-bold text-green-700">${fmt(totPagado)}</td>
-              <td className={`text-right px-3 py-2 font-black ${totSaldo > 0.001 ? 'text-red-600' : 'text-slate-400'}`}>
-                {totSaldo > 0.001 ? `$${fmt(totSaldo)}` : '—'}
-              </td>
-              <td className="text-right px-3 py-2 font-bold text-slate-500">${fmt(totNomina)}</td>
+              <td className="text-right px-3 py-2 font-bold text-slate-600">{tot.despachos}</td>
+              <td className="text-right px-3 py-2 font-bold text-slate-700">${fmt(tot.total)}</td>
+              <td className="text-right px-3 py-2 font-bold text-amber-700">${fmt(tot.chofer)}</td>
+              <td className="text-right px-3 py-2 font-black text-emerald-700">${fmt(tot.empresa)}</td>
             </tr>
           </tbody>
         </table>

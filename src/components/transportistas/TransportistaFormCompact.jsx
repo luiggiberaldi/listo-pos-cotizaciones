@@ -2,6 +2,7 @@
 // Formulario compacto reutilizable para crear y editar transportista
 import { useState, useEffect } from 'react'
 import { PREFIJOS_RIF, parsearRif, formatearRif } from '../../utils/rif'
+import { useVehiculos } from '../../hooks/useVehiculos'
 
 export default function TransportistaFormCompact({
   inicial = {},
@@ -23,8 +24,10 @@ export default function TransportistaFormCompact({
   const [zonaCobertura, setZonaCobertura] = useState(inicial?.zona_cobertura ?? '')
   const [capacidad, setCapacidad] = useState(inicial?.capacidad ?? '')
   const [esLocal, setEsLocal] = useState(!!inicial?.es_local)
+  const [vehiculoHabitualId, setVehiculoHabitualId] = useState(inicial?.vehiculo_habitual_id ?? '')
   const [notas, setNotas] = useState(inicial?.notas ?? '')
   const [error, setError] = useState('')
+  const { data: vehiculosFlota = [] } = useVehiculos()
 
   // Sincronizar si cambia inicial (por ejemplo al seleccionar otro transportista)
   useEffect(() => {
@@ -42,6 +45,7 @@ export default function TransportistaFormCompact({
       setZonaCobertura(inicial.zona_cobertura ?? '')
       setCapacidad(inicial.capacidad ?? '')
       setEsLocal(!!inicial.es_local)
+      setVehiculoHabitualId(inicial.vehiculo_habitual_id ?? '')
       setNotas(inicial.notas ?? '')
     }
   }, [inicial])
@@ -61,6 +65,8 @@ export default function TransportistaFormCompact({
       zona_cobertura: zonaCobertura.trim(),
       capacidad: capacidad.trim(),
       es_local: esLocal,
+      // Vehículo habitual solo aplica a choferes locales (Fase 3 del plan de flota)
+      vehiculo_habitual_id: esLocal ? (vehiculoHabitualId || null) : null,
       notas: notas.trim(),
     })
   }
@@ -132,6 +138,8 @@ export default function TransportistaFormCompact({
             disabled={cargando}
           />
         </div>
+        {/* El chofer local usa los camiones de la empresa: sin datos de vehículo propio */}
+        {!esLocal && (<>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Vehículo</label>
           <input
@@ -192,6 +200,7 @@ export default function TransportistaFormCompact({
             disabled={cargando}
           />
         </div>
+        </>)}
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Cobertura (Zonas)</label>
           <input
@@ -232,6 +241,25 @@ export default function TransportistaFormCompact({
             ? 'En Carabobo se procesa por nómina externa; fuera de Carabobo genera comisión.'
             : 'Transportista General: flete directo estándar, sin comisión de nómina local.'}
         </p>
+        {esLocal && (
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-600">Vehículo habitual asignado</label>
+            <select
+              value={vehiculoHabitualId}
+              onChange={e => setVehiculoHabitualId(e.target.value)}
+              disabled={cargando}
+              className={inputCls}
+            >
+              <option value="">Sin vehículo fijo / Rotativo</option>
+              {vehiculosFlota.filter(v => v.activo !== false).map(v => (
+                <option key={v.id} value={v.id}>{v.codigo} {v.nombre} ({v.placa})</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-500 italic px-1">
+              Se autocompleta al crear viajes; cada viaje puede usar otro camión sin tocar esta ficha.
+            </p>
+          </div>
+        )}
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}

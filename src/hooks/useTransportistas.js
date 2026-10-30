@@ -142,6 +142,8 @@ export function useCrearTransportista() {
 
       // Invalidación muy diferida para entornos con alta latencia (Vercel)
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      // Las tarjetas de camiones muestran sus choferes asignados (plan de flota)
+      qc.invalidateQueries({ queryKey: ['vehiculos'], exact: false })
     },
   })
 }
@@ -175,6 +177,8 @@ export function useActualizarTransportista() {
 
       showToast.success('Transportista actualizado')
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      // Las tarjetas de camiones muestran sus choferes asignados (plan de flota)
+      qc.invalidateQueries({ queryKey: ['vehiculos'], exact: false })
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
     },
   })
@@ -297,6 +301,8 @@ export function useDesactivarTransportista() {
 
       showToast.success('Transportista eliminado')
       qc.invalidateQueries({ queryKey: KEY, exact: false })
+      // Las tarjetas de camiones muestran sus choferes asignados (plan de flota)
+      qc.invalidateQueries({ queryKey: ['vehiculos'], exact: false })
     },
   })
 }

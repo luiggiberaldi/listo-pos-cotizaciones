@@ -1444,6 +1444,28 @@ async function supaInsert(env, table, data) {
 
 // ── Gestión de Transportistas (Admin) ─────────────────────────────────────────
 
+// Valida que el vehículo habitual exista, pertenezca a la cuenta y esté activo
+// (plan de flota: solo aplica a transportistas locales).
+async function validarVehiculoHabitual(env, cuentaId, vehiculoId, request) {
+  if (vehiculoId === undefined || vehiculoId === null || vehiculoId === '') return { valor: null };
+  if (!isValidUuid(vehiculoId)) return { error: jsonError('vehiculo_habitual_id inválido', 400, request) };
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/vehiculos?id=eq.${vehiculoId}&cuenta_id=eq.${cuentaId}&select=id,activo&limit=1`,
+    {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+  if (!res.ok) return { error: jsonError('No se pudo validar el vehículo habitual', 500, request) };
+  const [vehiculo] = await res.json();
+  if (!vehiculo) return { error: jsonError('El vehículo habitual no existe en esta cuenta', 400, request) };
+  if (!vehiculo.activo) return { error: jsonError('El vehículo habitual está inactivo; elige otro o márcalo como Rotativo', 400, request) };
+  return { valor: vehiculoId };
+}
+
 export async function handleCrearTransportista(request, env) {
   const { user, operador, error } = await validateOperator(request, env);
   if (error) return error;
@@ -1458,7 +1480,7 @@ export async function handleCrearTransportista(request, env) {
     nombre, rif, telefono, zona_cobertura, tarifa_base, notas,
     color, vehiculo, placa_chuto, placa_batea, capacidad, color_batea,
     es_local, tipo_relacion, empleado_id, fecha_inicio_relacion,
-    fecha_fin_relacion, emite_comprobante,
+    fecha_fin_relacion, emite_comprobante, vehiculo_habitual_id,
   } = body;
   if (!nombre) return jsonError('Nombre es requerido', 400, request);
 
@@ -1469,6 +1491,11 @@ export async function handleCrearTransportista(request, env) {
   if (empleado_id !== undefined && empleado_id !== null && !isValidUuid(empleado_id)) {
     return jsonError('empleado_id inválido', 400, request);
   }
+  if (vehiculo_habitual_id && !es_local) {
+    return jsonError('vehiculo_habitual_id solo aplica a transportistas locales', 400, request);
+  }
+  const vehHabitual = await validarVehiculoHabitual(env, operador.cuenta_id, vehiculo_habitual_id, request);
+  if (vehHabitual.error) return vehHabitual.error;
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/transportistas`, {
     method: 'POST',
@@ -1489,7 +1516,8 @@ export async function handleCrearTransportista(request, env) {
       emite_comprobante: !!emite_comprobante,
       cuenta_id: operador.cuenta_id,
       creado_por: operador.id,
-      activo: true
+      activo: true,
+      vehiculo_habitual_id: vehHabitual.valor,
     }),
   });
 
@@ -1540,6 +1568,7 @@ export async function handleActualizarTransportista(request, env) {
     'nombre', 'rif', 'telefono', 'zona_cobertura', 'tarifa_base', 'notas', 'color',
     'vehiculo', 'placa_chuto', 'placa_batea', 'capacidad', 'color_batea', 'es_local',
     'tipo_relacion', 'empleado_id', 'fecha_inicio_relacion', 'fecha_fin_relacion', 'emite_comprobante',
+    'vehiculo_habitual_id',
   ];
   const updateData = Object.fromEntries(
     camposPermitidos.filter(campo => Object.prototype.hasOwnProperty.call(body, campo))
@@ -1550,6 +1579,14 @@ export async function handleActualizarTransportista(request, env) {
   }
   if (updateData.empleado_id !== undefined && updateData.empleado_id !== null && !isValidUuid(updateData.empleado_id)) {
     return jsonError('empleado_id inválido', 400, request);
+  }
+  if (Object.prototype.hasOwnProperty.call(updateData, 'vehiculo_habitual_id')) {
+    if (updateData.vehiculo_habitual_id && body.es_local === false) {
+      return jsonError('vehiculo_habitual_id solo aplica a transportistas locales', 400, request);
+    }
+    const vehHabitual = await validarVehiculoHabitual(env, operador.cuenta_id, updateData.vehiculo_habitual_id, request);
+    if (vehHabitual.error) return vehHabitual.error;
+    updateData.vehiculo_habitual_id = vehHabitual.valor;
   }
   if (Object.keys(updateData).length === 0) return jsonError('No hay campos permitidos para actualizar', 400, request);
 
@@ -1607,21 +1644,31 @@ export async function handleDesactivarTransportista(request, env) {
   if (!id || !isValidUuid(id)) return jsonError('id inválido', 400, request);
   if (!operador.cuenta_id) return jsonError('Cuenta del operador no disponible', 403, request);
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/transportistas?id=eq.${id}&cuenta_id=eq.${operador.cuenta_id}`, {
-    method: 'PATCH',
+  // Baja protegida (plan de flota): la RPC bloquea si tiene fletes pendientes
+  // de liquidar, desactiva si tiene historial y solo borra si no tiene ningún
+  // viaje/cotización/pago asociado.
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/eliminar_o_desactivar_transportista_atomico`, {
+    method: 'POST',
     headers: {
       apikey: env.SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
       'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
     },
-    body: JSON.stringify({ activo: false }),
+    body: JSON.stringify({ p_cuenta_id: operador.cuenta_id, p_transportista_id: id }),
   });
 
+  const texto = await res.text().catch(() => '');
   if (!res.ok) {
-    const err = await res.text();
-    return jsonError(`Error al desactivar: ${err}`, 500, request);
+    if (texto.includes('TIENE_FLETES_PENDIENTES')) {
+      return jsonError('No puedes desactivar a este chofer todavía porque tiene fletes pendientes por liquidar', 409, request);
+    }
+    if (texto.includes('TRANSPORTISTA_NO_ENCONTRADO')) {
+      return jsonError('Transportista no encontrado en esta cuenta', 404, request);
+    }
+    return jsonError(`Error al desactivar: ${texto}`, 500, request);
   }
+  let resultado = {};
+  try { resultado = texto ? JSON.parse(texto) : {} } catch { /* respuesta vacía */ }
 
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
   registrarAuditoria(env, {
@@ -1633,13 +1680,15 @@ export async function handleDesactivarTransportista(request, env) {
     usuarioNombre: operador.nombre,
     usuarioRol: operador.rol,
     categoria: 'TRANSPORTISTA',
-    accion: 'DESACTIVAR_TRANSPORTISTA',
-    descripcion: `Transportista ${id} desactivado`,
+    accion: 'ELIMINAR_O_DESACTIVAR_TRANSPORTISTA',
+    descripcion: resultado.accion === 'eliminado_fisico'
+      ? `Transportista ${id} eliminado (sin historial)`
+      : `Transportista ${id} desactivado (${resultado.viajes_historicos ?? '?'} viajes en el historial)`,
     entidadTipo: 'transportista',
     entidadId: id,
-    meta: { activo: false },
+    meta: { activo: false, ...resultado },
     ip,
   }).catch(() => {});
 
-  return json({ ok: true }, 200, request);
+  return json({ ok: true, ...resultado }, 200, request);
 }

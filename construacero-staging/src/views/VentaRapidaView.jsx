@@ -2236,8 +2236,11 @@ function Step2Pago({
               placeholder="0.00" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none" />
           </div>
         )}
-        {esChoferLocalConFlete && (
-          <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+      </div>
+
+      {/* Aviso del chofer local: fila propia debajo de transportista + flete */}
+      {esChoferLocalConFlete && (
+          <div className="-mt-1 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
             <span className="font-bold">Chofer local:</span>{' '}
             {!estadoDestinoFlete ? (
               <span className="text-red-700 font-semibold">falta el estado de destino; completa una dirección o el estado del cliente.</span>
@@ -2272,7 +2275,6 @@ function Step2Pago({
           </div>
         </div>
       )}
-      </div>
 
       {/* Vehículo para este viaje (solo choferes locales) — Fase 3 del plan de flota */}
       <VehiculoViajeSelect
