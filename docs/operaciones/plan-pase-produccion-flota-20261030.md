@@ -34,6 +34,15 @@
 - ✅ **283b aplicada (autorizada por el dueño, 2026-10-30).** Verificado después: el Worker
   escribe, el navegador solo lee, el visitante sin sesión no tiene acceso; los 4 camiones intactos
   y el servidor de producción responde (ping 200). Políticas iguales a staging.
+- ✅ **Corrección de datos de la carga histórica (autorizada por el dueño).** La carga tomaba la
+  placa de batea como chuto cuando el chuto estaba vacío y no copiaba la placa de batea. Se
+  corrigieron 3 camiones con candados (solo si seguían exactamente igual): placas de batea en su
+  campo y una batea que se había perdido. Viajes de cada camión sin cambios.
+- ✅ **287 aplicada (chuto opcional, al menos una placa)** y los 2 camiones que solo tenían placa
+  de batea quedaron sin chuto repetido. Verificado: los 4 camiones coinciden con las fichas viejas.
+  Reversa: `supabase/release/main/287_flota_placa_chuto_opcional_rollback_review.sql`.
+- ⚠️ Dos fichas de chofer local son la misma persona (misma cédula y placa); comparten el camión
+  correcto. Pendiente: desactivar la ficha repetida.
 - ⏳ Falta: unir el PR (paso 4) para publicar la web y el Worker con el código de flota.
 
 ## Qué entra en este pase
