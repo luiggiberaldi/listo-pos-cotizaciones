@@ -5,6 +5,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import { getOperatorSession, subscribeOperatorSession } from './services/operatorSession.js'
 import './index.css'
 import './modo-accesible.css'
 
@@ -56,7 +57,12 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
       await registration.update()
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload()
+        // Una versión nueva ya tomó el control. La sesión del PIN vive solo en memoria:
+        // si recargamos con un operador adentro lo sacamos al login. Se aplica al cerrar sesión.
+        if (!getOperatorSession()) { window.location.reload(); return }
+        const dejar = subscribeOperatorSession(() => {
+          if (!getOperatorSession()) { dejar(); window.location.reload() }
+        })
       }, { once: true })
     } catch (err) {
       console.error('Error registrando el Service Worker', err)
