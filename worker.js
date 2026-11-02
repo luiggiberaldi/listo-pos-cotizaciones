@@ -45,8 +45,13 @@ import { handleCierreDiarioSync } from './api/handlers/finanzas-sync.js'
 import { handleDashboard } from './api/handlers/dashboard.js'
 import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota } from './api/handlers/vehiculos.js'
 
+// Permite que los avisos push se envíen DESPUÉS de responder (no hacen esperar al usuario).
+function conWaitUntil(env, ctx) {
+  return ctx && typeof ctx.waitUntil === 'function' ? { ...env, waitUntil: p => ctx.waitUntil(p) } : env;
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     // ── CORS preflight para requests cross-origin ────
@@ -170,7 +175,7 @@ export default {
 
     // ── API: crear nota de despacho (bypass RLS) ────────────────────────────
     if (url.pathname === '/api/despachos/crear' && request.method === 'POST') {
-      return handleCrearDespacho(request, env);
+      return handleCrearDespacho(request, conWaitUntil(env, ctx));
     }
 
     // ── API: parsear texto de WhatsApp → materiales ─────────────────────────
@@ -221,12 +226,12 @@ export default {
 
     // ── API: venta rápida (cotización + despacho atómico) ──────────────────
     if (url.pathname === '/api/ventas-rapidas/crear' && request.method === 'POST') {
-      return handleVentaRapida(request, env);
+      return handleVentaRapida(request, conWaitUntil(env, ctx));
     }
 
     // ── API: actualizar estado de despacho (bypass RLS) ─────────────────────
     if (url.pathname === '/api/despachos/estado' && request.method === 'POST') {
-      return handleActualizarEstadoDespacho(request, env);
+      return handleActualizarEstadoDespacho(request, conWaitUntil(env, ctx));
     }
 
     // ── API: editar items de un despacho (administracion) ───────────────────

@@ -55,3 +55,36 @@ Las **alertas dentro de la app** (campana, sonido, ícono) funcionan mientras la
 - Enviar una notificación real a un dispositivo (necesita un teléfono con la app instalada y permiso de notificaciones).
 - Confirmar que las variables VAPID están cargadas en el Worker de producción (los secretos no son visibles desde aquí).
 - Reproducir el hallazgo 5 en staging.
+
+## Avance — Fase 1 (publicada 2026-11-02) y Fase 2
+
+**Fase 1 (PR #10, en producción):** suscripciones y envíos por operador (PIN), destinos solo en servicios push reales, roles/destino/enlace validados, aviso a todos solo para dirección, resumen de entregas en `system_logs` (categoría `PUSH`).
+
+**Fase 2 (este cambio):** los avisos de despachos salen **desde el servidor** al terminar la operación, ya no desde el navegador de quien actuó:
+
+| Evento | Quién recibe |
+|---|---|
+| Despacho creado / venta rápida creada | supervisor, administración, jefe |
+| Despacho en ruta | vendedor, logística |
+| Despacho entregado | vendedor |
+| Despacho cancelado | todos los roles |
+
+- El aviso se envía **después** de responder al usuario (`waitUntil`), así que no hace más lento el guardado. Nunca se avisa a quien hizo la acción. Si el estado no cambia (reintento), no se repite el aviso.
+- Los datos (número de cotización, cliente, cobro a destino) se leen de la base de datos, no del navegador.
+- Corrige una consecuencia de la Fase 1: "Despacho cancelado" iba a todos y ahora la Fase 1 lo habría bloqueado para vendedores/logística; el servidor ya lo envía bien.
+- **Siguen desde el navegador** (porque esas operaciones se guardan directo en la base, sin pasar por el servidor): cotización enviada con cliente ajeno, cotización anulada, cotización aceptada y venta rápida con cliente ajeno. Pasarlas al servidor requeriría un trigger en la base de datos (cambio mayor, para después).
+- Pruebas: 7 nuevas del ayudante; suites completas pasan (API 315, staging 128, frontend 519). Probado contra la base real de staging con operadores reales: el vendedor crea → avisa al supervisor/jefe y no a sí mismo; el supervisor entrega → avisa a vendedores; despacho inexistente → no avisa; limpieza hecha.
+- **No probado:** entrega real a un teléfono (ver pendientes de la Fase 1).
+
+## Hallazgo crítico al probar (2026-11-02): el cifrado de los avisos estaba mal
+
+Al intentar la "prueba real" se construyó un receptor de referencia (validado contra la librería estándar `web-push` en los dos formatos) y se le envió un aviso con nuestro código. **No pudo descifrarlo**: el formato antiguo `aesgcm` estaba implementado sin el contexto que exige el estándar. Un navegador real descarta ese aviso, o sea que **las notificaciones push nunca pudieron mostrarse en un dispositivo**, aunque el servidor dijera "enviado". La firma VAPID sí era correcta.
+
+**Corrección (incluida en el PR de la Fase 2):** `api/lib/webpush.js` ahora usa el cifrado estándar RFC 8291 (`aes128gcm`), compatible con Chrome, Firefox, Edge y Safari/iPhone. Nuevo `VAPID_SUBJECT` opcional para poner un correo de contacto real (por defecto sigue `mailto:admin@listpos.com`; conviene configurar uno real en el Worker).
+
+**Verificación:**
+- Prueba permanente `api/lib/__tests__/webpushCifrado.test.js`: el receptor descifra el aviso y la firma VAPID es válida.
+- Cadena completa contra la base real de staging con un receptor local: despacho → servidor lee datos → envía → el "dispositivo" descifra `{"title":"🚚 Orden de Despacho Creada","body":"Despacho para cotización #03254 — …","url":"/despachos"}`; el registro queda en `system_logs`. Limpieza hecha.
+- Suites completas: API 317, staging 130, frontend 519.
+
+**Sigue sin probarse:** la entrega por Google/Apple/Mozilla con un teléfono real. El Chrome automatizado no puede suscribirse a push (Google rechaza el registro), por eso se usó el receptor de referencia.
