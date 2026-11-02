@@ -88,3 +88,11 @@ Al intentar la "prueba real" se construyó un receptor de referencia (validado c
 - Suites completas: API 317, staging 130, frontend 519.
 
 **Sigue sin probarse:** la entrega por Google/Apple/Mozilla con un teléfono real. El Chrome automatizado no puede suscribirse a push (Google rechaza el registro), por eso se usó el receptor de referencia.
+
+## Fase 4 — permisos de `push_subscriptions` (migración 289)
+
+- Solo el Worker usa la tabla (comprobado en el código); ninguna pantalla la toca. Antes, `anon` y `authenticated` tenían todos los permisos de tabla y solo las reglas de fila (RLS) los frenaban.
+- La 289 quita esos permisos (`REVOKE ALL … FROM PUBLIC, anon, authenticated`) y deja `service_role`. No toca datos. Reversa: `289_cerrar_permisos_push_rollback_review.sql`.
+- **Staging (2026-11-02):** aplicada y verificada: el navegador (`anon`) recibe 401 "permission denied"; el Worker sigue enviando (aviso descifrado por el receptor de referencia); RLS y 2 políticas intactas; la fila existente sin cambios.
+- **Producción:** pendiente de autorización del dueño. Orden: guardar el estado de permisos → aplicar 289 → verificar → probar un envío.
+- Hallazgo aparte: en producción 25 de 42 tablas tienen el mismo patrón (permisos amplios para `anon`, protegidas solo por RLS). Requiere un plan propio (revisar qué tablas lee realmente el navegador).
