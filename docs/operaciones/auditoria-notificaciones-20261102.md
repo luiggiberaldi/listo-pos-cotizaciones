@@ -75,3 +75,16 @@ Las **alertas dentro de la app** (campana, sonido, ícono) funcionan mientras la
 - **Siguen desde el navegador** (porque esas operaciones se guardan directo en la base, sin pasar por el servidor): cotización enviada con cliente ajeno, cotización anulada, cotización aceptada y venta rápida con cliente ajeno. Pasarlas al servidor requeriría un trigger en la base de datos (cambio mayor, para después).
 - Pruebas: 7 nuevas del ayudante; suites completas pasan (API 315, staging 128, frontend 519). Probado contra la base real de staging con operadores reales: el vendedor crea → avisa al supervisor/jefe y no a sí mismo; el supervisor entrega → avisa a vendedores; despacho inexistente → no avisa; limpieza hecha.
 - **No probado:** entrega real a un teléfono (ver pendientes de la Fase 1).
+
+## Hallazgo crítico al probar (2026-11-02): el cifrado de los avisos estaba mal
+
+Al intentar la "prueba real" se construyó un receptor de referencia (validado contra la librería estándar `web-push` en los dos formatos) y se le envió un aviso con nuestro código. **No pudo descifrarlo**: el formato antiguo `aesgcm` estaba implementado sin el contexto que exige el estándar. Un navegador real descarta ese aviso, o sea que **las notificaciones push nunca pudieron mostrarse en un dispositivo**, aunque el servidor dijera "enviado". La firma VAPID sí era correcta.
+
+**Corrección (incluida en el PR de la Fase 2):** `api/lib/webpush.js` ahora usa el cifrado estándar RFC 8291 (`aes128gcm`), compatible con Chrome, Firefox, Edge y Safari/iPhone. Nuevo `VAPID_SUBJECT` opcional para poner un correo de contacto real (por defecto sigue `mailto:admin@listpos.com`; conviene configurar uno real en el Worker).
+
+**Verificación:**
+- Prueba permanente `api/lib/__tests__/webpushCifrado.test.js`: el receptor descifra el aviso y la firma VAPID es válida.
+- Cadena completa contra la base real de staging con un receptor local: despacho → servidor lee datos → envía → el "dispositivo" descifra `{"title":"🚚 Orden de Despacho Creada","body":"Despacho para cotización #03254 — …","url":"/despachos"}`; el registro queda en `system_logs`. Limpieza hecha.
+- Suites completas: API 317, staging 130, frontend 519.
+
+**Sigue sin probarse:** la entrega por Google/Apple/Mozilla con un teléfono real. El Chrome automatizado no puede suscribirse a push (Google rechaza el registro), por eso se usó el receptor de referencia.
