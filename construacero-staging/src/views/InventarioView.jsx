@@ -584,6 +584,7 @@ export default function InventarioView() {
         onClose={() => setShowBatchPrice(false)}
         cuentaId={user?.id}
         categorias={categoriasBatch}
+        productos={todosProductos}
         onSuccess={() => refetch()}
       />
 
