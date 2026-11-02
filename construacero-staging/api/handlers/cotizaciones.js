@@ -1,5 +1,6 @@
 import { json, jsonError, corsHeaders, isValidUuid } from '../lib/utils.js'
 import { verifyAuth, validateOperator, getOperatorRole, verifySupervisor } from '../lib/auth.js'
+import { avisarDespacho } from '../lib/notificarPush.js';
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
 
@@ -829,6 +830,8 @@ export async function handleVentaRapida(request, env) {
       })
       if (vinculo.error) avisoVehiculo = `No se pudo fijar el camión del chofer: ${vinculo.error}`
     }
+
+    await avisarDespacho(env, { tipo: 'venta_rapida', despachoId: despacho.id, actor: operador });
 
     return json({ id: despacho.id, numero: despacho.numero, cotizacionId: cot.id, ...(avisoVehiculo ? { avisoVehiculo } : {}) }, 200, request);
   } catch (e) {

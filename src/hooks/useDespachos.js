@@ -10,7 +10,6 @@ import { authFetch } from '../services/authFetch'
 import { broadcastEntidad } from '../services/supabase/realtimeBus'
 import { notifyDespachoCreado, notifyStockBajo, notifyDespachoEnRuta, notifyDespachoEntregado, notifyDespachoCancelado } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
-import { sendPushNotification } from './usePushNotifications'
 
 export const DESPACHOS_KEY = ['despachos']
 
@@ -353,13 +352,6 @@ export function useCrearDespacho() {
       broadcastEntidad(['despachos', 'inventario', 'comisiones', 'cotizaciones', 'cuentas'])
       showToast('Nota de despacho creada', 'success')
       notifyDespachoCreado(displayNum, displayCliente, usuarioNombre, rol, perfil?.id, esCod)
-      sendPushNotification({
-        title: `🚚 Orden de Despacho Creada${esCod ? ' [COD]' : ''}`,
-        message: `Despacho para cotización #${displayNum} — ${displayCliente}${esCod ? ' (Cobro a Destino)' : ''}`,
-        tag: `despacho-${displayNum}`,
-        url: '/despachos',
-        targetRole: 'supervisor,administracion,jefe',
-      })
     },
   })
 }
@@ -427,30 +419,10 @@ export function useActualizarEstadoDespacho() {
 
       if (nuevoEstado === 'despachada') {
         notifyDespachoEnRuta(num, cliente, usuarioNombre, rol, perfil?.id, vendedorId)
-        sendPushNotification({
-          title: '🚚 Despacho en Ruta',
-          message: `Despacho #${num} — ${cliente} despachado por ${usuarioNombre}`,
-          tag: `despacho-ruta-${num}`,
-          url: '/despachos',
-          targetRole: 'vendedor,logistica',
-        })
       } else if (nuevoEstado === 'entregada') {
         notifyDespachoEntregado(num, cliente, usuarioNombre, rol, perfil?.id, vendedorId)
-        sendPushNotification({
-          title: '✅ Despacho Entregado',
-          message: `Despacho #${num} — ${cliente} entregado (marcado por ${usuarioNombre})`,
-          tag: `despacho-entregado-${num}`,
-          url: '/despachos',
-          targetRole: 'vendedor',
-        })
       } else if (nuevoEstado === 'anulada') {
         notifyDespachoCancelado(num, cliente, usuarioNombre, rol, perfil?.id)
-        sendPushNotification({
-          title: '❌ Despacho Cancelado',
-          message: `Despacho #${num} — ${cliente} cancelado por ${usuarioNombre}`,
-          tag: `despacho-cancelado-${num}`,
-          url: '/despachos',
-        })
       }
     },
     onSettled: () => {

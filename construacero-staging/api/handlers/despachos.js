@@ -1,5 +1,6 @@
 import { json, jsonError, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { validateOperator, SUPER_ADMIN_UUID } from '../lib/auth.js'
+import { avisarDespacho } from '../lib/notificarPush.js';
 import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 import { calcularDescuentoValido } from '../lib/descuentoUtils.js'
@@ -439,6 +440,9 @@ export async function handleCrearDespacho(request, env) {
       entidadTipo: 'nota_despacho', entidadId: despacho.id,
       meta: { cotizacion_id: cotizacionId, total_usd: cot.total_usd }, ip,
     }).catch(() => {});
+
+    // Aviso push desde el servidor (no depende del navegador de quien creó el despacho)
+    await avisarDespacho(env, { tipo: 'creado', despachoId: despacho.id, actor: operador });
 
     return json({
       id: despacho.id,
@@ -1824,6 +1828,10 @@ export async function handleActualizarEstadoDespacho(request, env) {
         ...(aprobacionAtomica?.faltantes?.length ? { stock_faltantes: aprobacionAtomica.faltantes } : {}),
       }, ip,
     });
+
+    if (['despachada', 'entregada', 'anulada'].includes(nuevoEstado) && desp.estado !== nuevoEstado) {
+      await avisarDespacho(env, { tipo: nuevoEstado, despachoId, actor: operador });
+    }
 
     return json({
       ok: true,

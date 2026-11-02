@@ -133,13 +133,6 @@ export function useVentaRapida() {
       showToast(`Venta rápida #${numero ?? '—'} creada`, 'success')
       const displayNum = String(numero || '').padStart(5, '0')
       notifyDespachoCreado(displayNum, clienteNombre || 'cliente', perfil?.nombre || 'vendedor', rol, perfil?.id, esCod)
-      sendPushNotification({
-        title: `Venta Rápida Creada${esCod ? ' [COD]' : ''}`,
-        message: `Despacho #${numero ?? '—'} — ${clienteNombre ?? 'cliente'}${esCod ? ' (Cobro a Destino)' : ''}`,
-        tag: `venta-rapida-${numero}`,
-        url: '/despachos',
-        targetRole: 'supervisor,administracion,jefe',
-      })
       if (esClienteAjeno) {
         const vendedorNombre = perfil?.nombre || 'vendedor'
         notifyClienteAjeno({ tipo: 'venta_rapida', numero: String(numero).padStart(5, '0'), vendedorNombre, clienteNombre, vendedorDueño: clienteVendedorNombre || 'otro vendedor', currentRole: rol })
