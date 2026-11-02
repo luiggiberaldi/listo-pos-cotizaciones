@@ -2,6 +2,7 @@
 import supabase from './supabase/client'
 import { apiUrl } from './apiBase'
 import { refreshSessionSingleFlight } from './sessionManager'
+import { registrarLlamada } from '../utils/medirRendimiento'
 import { requireOperatorSession, assertOperatorSession, guardOperatorResponse } from './operatorSession'
 
 const DEFAULT_TIMEOUT = 15000
@@ -25,7 +26,9 @@ export async function authFetch(path, options = {}) {
       headers.set('Authorization', `Bearer ${token}`)
       headers.set('X-Operator-Id', operatorSession.operatorId)
       headers.set('X-Operator-Session', operatorSession.token)
+      const inicio = performance.now()
       const response = await fetch(apiUrl(path), { ...fetchOpts, headers, signal: controller.signal })
+      registrarLlamada(path, fetchOpts.method, performance.now() - inicio, response.status)
       assertOperatorSession(operatorSession)
       return guardOperatorResponse(response, operatorSession)
     } finally {
