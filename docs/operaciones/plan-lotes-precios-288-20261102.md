@@ -1,6 +1,6 @@
 # Actualización masiva de precios: historial y restauración (migración 288)
 
-**Fecha:** 2026-11-02 · **Estado:** aplicada y verificada en **staging** (2026-11-02). **Falta probarla en pantalla con el Worker de staging y, con autorización del dueño, aplicarla en producción.**
+**Fecha:** 2026-11-02 · **Estado:** aplicada y verificada en **staging** (2026-11-02). **Aplicada en producción el 2026-11-02** con autorización del dueño: tablas y funciones creadas, permisos verificados (`anon` y `authenticated` sin acceso), 0 lotes y 471 productos sin cambios. Respaldo de precios previo guardado solo en el computador (no en git): `supabase/release/main/backup_pre_288/`.
 
 ## En resumen
 
