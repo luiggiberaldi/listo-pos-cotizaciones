@@ -152,6 +152,17 @@ describe('handleBatchPriceUpdate — reglas de seguridad de precios', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('avisa cuántos productos tienen precio 0, que un porcentaje no puede mover', async () => {
+    validateOperator.mockResolvedValue(auth('administracion'))
+    mockBase([prod(1), prod(2, { precio_usd: 0 }), prod(3, { precio_usd: 0 })])
+    const pre = await jsonBody(await handleBatchPriceUpdate(post(batchBody({ preview_only: true })), ENV))
+    expect(pre.body.count).toBe(1)
+    expect(pre.body.en_cero).toBe(2)
+    const fijo = await jsonBody(await handleBatchPriceUpdate(post(batchBody({ preview_only: true, modo: 'valor_fijo', valor_fijo: 5 })), ENV))
+    expect(fijo.body.count).toBe(3)
+    expect(fijo.body.en_cero).toBe(0)
+  })
+
   it('vendedor y logística no pueden usar la actualización masiva', async () => {
     for (const rol of ['vendedor', 'logistica']) {
       validateOperator.mockResolvedValue(auth(rol))

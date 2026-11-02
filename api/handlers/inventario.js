@@ -757,12 +757,15 @@ export async function handleBatchPriceUpdate(request, env) {
   // Solo se cambian los precios que existen y que realmente cambian.
   const cambios = [];
   let sinPrecio = 0;
+  let enCero = 0; // con porcentaje, un precio en 0 se queda en 0
   for (const p of productos) {
     const campos = {};
     let tienePrecio = false;
+    let tieneCero = false;
     for (const f of targetFields) {
       if (p[f] === null || p[f] === undefined) continue;
       tienePrecio = true;
+      if (modo === 'porcentaje' && Number(p[f]) === 0) tieneCero = true;
       const nuevo = calculateNewPrice(p[f]);
       if (!Number.isFinite(nuevo) || nuevo < 0 || nuevo > BATCH_MAX_PRECIO) {
         return jsonError(`El resultado para "${p.nombre}" queda fuera de rango (${nuevo}). No se cambió ningún precio`, 400, request);
@@ -770,12 +773,13 @@ export async function handleBatchPriceUpdate(request, env) {
       if (nuevo !== Math.round(Number(p[f]) * 100) / 100) campos[f] = { actual: Number(p[f]), nuevo };
     }
     if (!tienePrecio) sinPrecio++;
+    if (tieneCero) enCero++;
     if (Object.keys(campos).length) cambios.push({ p, campos });
   }
 
   if (preview_only) {
     const ejemplos = cambios.slice(0, 3).map(({ p, campos }) => ({ nombre: p.nombre, ...campos }));
-    return json({ count: cambios.length, total: productos.length, sin_precio: sinPrecio, ejemplos }, 200, request);
+    return json({ count: cambios.length, total: productos.length, sin_precio: sinPrecio, en_cero: enCero, ejemplos }, 200, request);
   }
 
   if (cambios.length === 0) return json({ updated: 0, sin_precio: sinPrecio, message: 'Ningún precio cambiaría' }, 200, request);
