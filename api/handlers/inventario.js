@@ -670,6 +670,30 @@ export async function handleSyncEmbeddings(request, env) {
 }
 
 // ── Actualización Masiva de Precios (Admin) ──────────────────────────────────
+// Reglas: (1) todo el cambio se guarda en UNA sola operación (o se aplica todo o
+// nada); (2) se leen TODOS los productos, no solo los primeros 1.000; (3) los
+// precios vacíos (precio 2 / precio 3 sin definir) no se tocan; (4) se rechazan
+// valores que dejarían precios negativos o absurdos antes de escribir nada.
+const BATCH_PAGE = 1000;
+const BATCH_MAX_PRODUCTOS = 10000;
+const BATCH_MAX_PORCENTAJE = 1000;
+const BATCH_MAX_PRECIO = 99999999.99;
+
+async function leerProductosParaPrecios(env, headers, cuentaId, categoria) {
+  const productos = [];
+  for (let offset = 0; offset < BATCH_MAX_PRODUCTOS + BATCH_PAGE; offset += BATCH_PAGE) {
+    let url = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${cuentaId}` +
+      `&select=id,nombre,precio_usd,precio_2,precio_3,categoria&order=id.asc&limit=${BATCH_PAGE}&offset=${offset}`;
+    if (categoria) url += `&categoria=eq.${encodeURIComponent(categoria)}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) return null;
+    const page = await res.json();
+    productos.push(...page);
+    if (page.length < BATCH_PAGE) break;
+  }
+  return productos;
+}
+
 export async function handleBatchPriceUpdate(request, env) {
   if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
@@ -684,88 +708,95 @@ export async function handleBatchPriceUpdate(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { 
-    modo, porcentaje, valor_fijo,
-    categoria, precio_objetivo, preview_only 
-  } = body;
+  const { modo, porcentaje, valor_fijo, categoria, precio_objetivo, preview_only, producto_ids } = body;
 
   if (!['porcentaje', 'valor_fijo'].includes(modo)) return jsonError('Modo inválido', 400, request);
   if (!['precio_usd', 'precio_2', 'precio_3', 'todos'].includes(precio_objetivo)) return jsonError('Precio objetivo inválido', 400, request);
+
+  const pct = Number(porcentaje);
+  const fijo = Number(valor_fijo);
+  if (modo === 'porcentaje') {
+    if (!Number.isFinite(pct) || pct === 0) return jsonError('Indica un porcentaje distinto de 0', 400, request);
+    if (pct <= -100) return jsonError('El porcentaje debe ser mayor a -100 (dejaría precios en cero o negativos)', 400, request);
+    if (pct > BATCH_MAX_PORCENTAJE) return jsonError(`El porcentaje no puede superar ${BATCH_MAX_PORCENTAJE}`, 400, request);
+  } else if (!Number.isFinite(fijo) || fijo <= 0 || fijo > BATCH_MAX_PRECIO) {
+    return jsonError('El precio fijo debe ser un número mayor a 0', 400, request);
+  }
+
+  // Selección manual (opcional): solo esos productos. Sin lista = todos los del filtro.
+  let idsElegidos = null;
+  if (producto_ids !== undefined && producto_ids !== null) {
+    if (!Array.isArray(producto_ids) || producto_ids.length === 0 || producto_ids.length > BATCH_MAX_PRODUCTOS || !producto_ids.every(isValidUuid)) {
+      return jsonError('La selección de productos no es válida', 400, request);
+    }
+    idsElegidos = new Set(producto_ids);
+  }
 
   // Tenant-safety: el tenant siempre es el del operador autenticado, nunca
   // el enviado por el cliente (evita actualizar precios de otro tenant).
   const cuentaId = operador.cuenta_id;
 
-  // 1. Obtener productos activos del tenant
-  let query = `${env.SUPABASE_URL}/rest/v1/productos?activo=eq.true&cuenta_id=eq.${cuentaId}&select=id,nombre,precio_usd,precio_2,precio_3,categoria`;
-  if (categoria) {
-    query += `&categoria=eq.${encodeURIComponent(categoria)}`;
+  let productos = await leerProductosParaPrecios(env, headers, cuentaId, categoria);
+  if (!productos) return jsonError('Error al obtener productos', 500, request);
+  // Los ids de otra cuenta nunca aparecen aquí: la lectura ya viene filtrada por tenant.
+  if (idsElegidos) productos = productos.filter(p => idsElegidos.has(p.id));
+  if (productos.length === 0) return json({ count: 0, updated: 0, sin_precio: 0, ejemplos: [], message: 'No se encontraron productos' }, 200, request);
+  if (productos.length > BATCH_MAX_PRODUCTOS) {
+    return jsonError(`Hay más de ${BATCH_MAX_PRODUCTOS} productos: filtra por categoría para actualizar por partes`, 400, request);
   }
 
-  const prodRes = await fetch(query, { headers });
-  if (!prodRes.ok) return jsonError('Error al obtener productos', 500, request);
-  const productos = await prodRes.json();
-
-  if (productos.length === 0) return json({ count: 0, updated: 0, message: 'No se encontraron productos' }, 200, request);
-
   const calculateNewPrice = (current) => {
-    let newVal = 0;
-    const actual = Number(current || 0);
-    if (modo === 'porcentaje') {
-      newVal = actual * (1 + (Number(porcentaje) || 0) / 100);
-    } else {
-      newVal = Number(valor_fijo) || 0;
-    }
+    const actual = Number(current);
+    const newVal = modo === 'porcentaje' ? actual * (1 + pct / 100) : fijo;
     return Math.round(newVal * 100) / 100;
   };
 
-  const fieldMap = {
-    'precio_usd': ['precio_usd'],
-    'precio_2': ['precio_2'],
-    'precio_3': ['precio_3'],
-    'todos': ['precio_usd', 'precio_2', 'precio_3']
-  };
-
-  const targetFields = fieldMap[precio_objetivo];
+  const targetFields = precio_objetivo === 'todos' ? ['precio_usd', 'precio_2', 'precio_3'] : [precio_objetivo];
   const timestamp = new Date().toISOString();
 
-  if (preview_only) {
-    const ejemplos = productos.slice(0, 3).map(p => {
-      const result = { nombre: p.nombre };
-      targetFields.forEach(f => {
-        result[f] = { actual: p[f], nuevo: calculateNewPrice(p[f]) };
-      });
-      return result;
-    });
-    return json({ count: productos.length, ejemplos }, 200, request);
-  }
-
-  // Actualización masiva (vía RPC o múltiples patches, preferimos upsert si js-sdk permitiera bulk patch por id)
-  // Como fetch directo a PostgREST no soporta "bulk patch different values", usamos upsert con IDs
-  const updates = productos.map(p => {
-    const updateObj = { id: p.id, actualizado_en: timestamp };
-    targetFields.forEach(f => {
-      updateObj[f] = calculateNewPrice(p[f]);
-    });
-    return updateObj;
-  });
-
-  // Dividir en batches de 100 para evitar límites de payload
-  const batchSize = 100;
-  let totalUpdated = 0;
-  for (let i = 0; i < updates.length; i += batchSize) {
-    const batch = updates.slice(i, i + batchSize);
-    const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos`, {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
-      body: JSON.stringify(batch)
-    });
-    if (!upRes.ok) {
-      const errText = await upRes.text();
-      return jsonError(`Error al actualizar batch: ${errText}`, 500, request);
+  // Solo se cambian los precios que existen y que realmente cambian.
+  const cambios = [];
+  let sinPrecio = 0;
+  for (const p of productos) {
+    const campos = {};
+    let tienePrecio = false;
+    for (const f of targetFields) {
+      if (p[f] === null || p[f] === undefined) continue;
+      tienePrecio = true;
+      const nuevo = calculateNewPrice(p[f]);
+      if (!Number.isFinite(nuevo) || nuevo < 0 || nuevo > BATCH_MAX_PRECIO) {
+        return jsonError(`El resultado para "${p.nombre}" queda fuera de rango (${nuevo}). No se cambió ningún precio`, 400, request);
+      }
+      if (nuevo !== Math.round(Number(p[f]) * 100) / 100) campos[f] = { actual: Number(p[f]), nuevo };
     }
-    totalUpdated += batch.length;
+    if (!tienePrecio) sinPrecio++;
+    if (Object.keys(campos).length) cambios.push({ p, campos });
   }
+
+  if (preview_only) {
+    const ejemplos = cambios.slice(0, 3).map(({ p, campos }) => ({ nombre: p.nombre, ...campos }));
+    return json({ count: cambios.length, total: productos.length, sin_precio: sinPrecio, ejemplos }, 200, request);
+  }
+
+  if (cambios.length === 0) return json({ updated: 0, sin_precio: sinPrecio, message: 'Ningún precio cambiaría' }, 200, request);
+
+  // Una sola petición = una sola operación en la base: o cambian todos o ninguno.
+  // Se reenvía el nombre porque la base lo exige en este tipo de escritura.
+  const updates = cambios.map(({ p, campos }) => {
+    const obj = { id: p.id, nombre: p.nombre, actualizado_en: timestamp };
+    for (const f of Object.keys(campos)) obj[f] = campos[f].nuevo;
+    return obj;
+  });
+  const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?on_conflict=id`, {
+    method: 'POST',
+    headers: { ...headers, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(updates)
+  });
+  if (!upRes.ok) {
+    const errText = await upRes.text();
+    return jsonError(`No se cambió ningún precio. Error: ${errText}`, 500, request);
+  }
+  const totalUpdated = updates.length;
 
   // Auditoría
   try {
@@ -773,14 +804,14 @@ export async function handleBatchPriceUpdate(request, env) {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
       categoria: 'INVENTARIO', accion: 'BATCH_PRICE_UPDATE',
       descripcion: `Actualización masiva de precios (${modo}): ${totalUpdated} productos.`,
-      entidadTipo: 'productos', entidadId: null, 
-      meta: { modo, porcentaje, valor_fijo, categoria, precio_objetivo, count: totalUpdated }, ip
+      entidadTipo: 'productos', entidadId: null,
+      meta: { modo, porcentaje, valor_fijo, categoria, precio_objetivo, count: totalUpdated, sin_precio: sinPrecio }, ip
     });
   } catch {
     // La auditoría es best-effort y no debe invalidar la actualización.
   }
 
-  return json({ updated: totalUpdated }, 200, request);
+  return json({ updated: totalUpdated, sin_precio: sinPrecio }, 200, request);
 }
 
 // ── Producto + Kardex: helpers para RPCs tenant-safe ───────────────────────
