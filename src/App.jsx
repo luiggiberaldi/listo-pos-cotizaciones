@@ -14,6 +14,7 @@ import queryClient from './lib/queryClient'
 import { indexedDbPersister, CACHE_BUSTER } from './lib/queryPersister'
 import { mayPersistQuery } from './utils/dashboardAccess'
 import OfflineBanner from './components/ui/OfflineBanner'
+import AvisoVersionNueva from './components/ui/AvisoVersionNueva'
 import useAuthStore from './store/useAuthStore'
 import { ToastProvider } from './components/ui/Toast'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
@@ -378,6 +379,7 @@ export default function App() {
             <OfflineBanner>
               <AppRoutes />
             </OfflineBanner>
+            <AvisoVersionNueva />
           </ToastProvider>
         </BrowserRouter>
       </PersistQueryClientProvider>
