@@ -1,7 +1,7 @@
 // src/hooks/usePushNotifications.js
 // Maneja suscripción/desuscripción a Web Push Notifications
 import { useState, useEffect, useCallback } from 'react'
-import supabase from '../services/supabase/client'
+import { authFetch } from '../services/authFetch'
 import { apiUrl } from '../services/apiBase'
 
 const SW_PATH = '/sw.js'
@@ -74,17 +74,10 @@ export function usePushNotifications() {
         applicationServerKey: urlBase64ToUint8Array(keyToUse),
       })
 
-      // Obtener token de sesión para autenticar la petición
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('No hay sesión activa')
-
-      // Enviar suscripción al servidor
-      const res = await fetch(apiUrl('/api/push/subscribe'), {
+      // Enviar suscripción al servidor con la sesión del operador (PIN)
+      const res = await authFetch('/api/push/subscribe', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subscription.toJSON()),
       })
 
@@ -115,17 +108,11 @@ export function usePushNotifications() {
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          await fetch(apiUrl('/api/push/unsubscribe'), {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({ endpoint: sub.endpoint }),
-          })
-        }
+        await authFetch('/api/push/unsubscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        }).catch(() => {})
         await sub.unsubscribe()
       }
       setSubscribed(false)
@@ -144,15 +131,9 @@ export function usePushNotifications() {
 // targetUserId: UUID — enviar solo a un usuario específico
 export async function sendPushNotification({ title, message, url = '/', tag, targetRole, targetUserId }) {
   try {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-
-    await fetch(apiUrl('/api/push/send'), {
+    await authFetch('/api/push/send', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, message, url, tag, targetRole, targetUserId }),
     })
   } catch {
