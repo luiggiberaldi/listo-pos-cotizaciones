@@ -9,7 +9,7 @@ vi.mock('../../lib/audit.js', () => ({
 }))
 
 import { validateOperator } from '../../lib/auth.js'
-import { handleClearInventory, handleAplicarMovimientoLote, handleTransformacionInventario, handleBatchIngest, handleBatchPriceUpdate } from '../inventario.js'
+import { handleClearInventory, handleAplicarMovimientoLote, handleTransformacionInventario, handleBatchIngest, handleBatchPriceUpdate, handleListarLotesPrecios, handleRestaurarLotePrecios } from '../inventario.js'
 
 const ENV = { SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_KEY: 'service-key' }
 const cuentaId = '11111111-1111-4111-8111-111111111111'
@@ -394,9 +394,15 @@ describe('handleBatchPriceUpdate — reglas de seguridad de precios', () => {
   // Simula PostgREST: páginas de 1000 por offset y una sola escritura.
   function mockBase(productos) {
     const writes = []
+    writes.rpcs = []
     vi.stubGlobal('fetch', vi.fn(async (url, init) => {
       const u = String(url)
-      if (init?.method === 'POST') { writes.push(JSON.parse(init.body)); return new Response('', { status: 201 }) }
+      if (init?.method === 'POST') {
+        const b = JSON.parse(init.body)
+        writes.push(b.p_cambios)
+        writes.rpcs.push(b)
+        return new Response(JSON.stringify({ lote_id: 'lote-1', updated: b.p_cambios.length }), { status: 200 })
+      }
       const offset = Number(/offset=(\d+)/.exec(u)[1])
       const limit = Number(/limit=(\d+)/.exec(u)[1])
       return new Response(JSON.stringify(productos.slice(offset, offset + limit)), { status: 200 })
@@ -411,7 +417,8 @@ describe('handleBatchPriceUpdate — reglas de seguridad de precios', () => {
     expect(r.body.updated).toBe(2500)
     expect(writes).toHaveLength(1)
     expect(writes[0]).toHaveLength(2500)
-    expect(writes[0][0]).toMatchObject({ id: 'id-0', nombre: 'Prod 0', precio_usd: 11 })
+    expect(writes[0][0]).toMatchObject({ id: 'id-0', nombre: 'Prod 0', precio_usd: { antes: 10, despues: 11 } })
+    expect(r.body.lote_id).toBe('lote-1')
   })
 
   it('la vista previa cuenta todos los productos y no escribe nada', async () => {
@@ -431,7 +438,7 @@ describe('handleBatchPriceUpdate — reglas de seguridad de precios', () => {
     expect(r.body.updated).toBe(1)
     expect(r.body.sin_precio).toBe(1)
     expect(writes[0]).toHaveLength(1)
-    expect(writes[0][0]).toMatchObject({ id: 'id-1', precio_2: 22 })
+    expect(writes[0][0]).toMatchObject({ id: 'id-1', precio_2: { antes: 20, despues: 22 } })
     expect(writes[0][0]).not.toHaveProperty('precio_usd')
   })
 
@@ -440,9 +447,9 @@ describe('handleBatchPriceUpdate — reglas de seguridad de precios', () => {
     const writes = mockBase([prod(1, { precio_3: 30 }), prod(2)])
     await handleBatchPriceUpdate(post(batchBody({ precio_objetivo: 'todos', modo: 'valor_fijo', valor_fijo: 5 })), ENV)
     const porId = Object.fromEntries(writes[0].map(w => [w.id, w]))
-    expect(porId['id-1']).toMatchObject({ precio_usd: 5, precio_3: 5 })
+    expect(porId['id-1']).toMatchObject({ precio_usd: { antes: 10, despues: 5 }, precio_3: { antes: 30, despues: 5 } })
     expect(porId['id-1']).not.toHaveProperty('precio_2')
-    expect(porId['id-2']).toMatchObject({ precio_usd: 5 })
+    expect(porId['id-2']).toMatchObject({ precio_usd: { antes: 10, despues: 5 } })
     expect(porId['id-2']).not.toHaveProperty('precio_3')
   })
 
@@ -521,11 +528,78 @@ describe('handleBatchPriceUpdate — reglas de seguridad de precios', () => {
     expect(fijo.body.en_cero).toBe(0)
   })
 
+  it('envía a la función de la base la cuenta del operador, el modo y los precios de antes y después', async () => {
+    validateOperator.mockResolvedValue(auth('jefe'))
+    const writes = mockBase([prod(1)])
+    await handleBatchPriceUpdate(post(batchBody({ cuenta_id: '99999999-9999-4999-8999-999999999999' })), ENV)
+    const rpc = writes.rpcs[0]
+    expect(rpc.p_cuenta_id).toBe(cuentaId)
+    expect(rpc).toMatchObject({ p_modo: 'porcentaje', p_porcentaje: 10, p_precio_objetivo: 'precio_usd', p_seleccion_manual: false, p_operador_rol: 'jefe' })
+    expect(rpc.p_cambios[0].precio_usd).toEqual({ antes: 10, despues: 11 })
+  })
+
+  it('si un precio cambió mientras el usuario revisaba responde 409 y no cambia nada', async () => {
+    validateOperator.mockResolvedValue(auth('administracion'))
+    vi.stubGlobal('fetch', vi.fn(async (_u, init) =>
+      init?.method === 'POST' ? new Response('{"message":"PRECIO_CAMBIO_CONCURRENTE"}', { status: 400 }) : new Response(JSON.stringify([prod(1)]), { status: 200 })))
+    const r = await jsonBody(await handleBatchPriceUpdate(post(batchBody()), ENV))
+    expect(r.status).toBe(409)
+    expect(r.body.error).toContain('No se cambió ningún precio')
+  })
+
   it('vendedor y logística no pueden usar la actualización masiva', async () => {
     for (const rol of ['vendedor', 'logistica']) {
       validateOperator.mockResolvedValue(auth(rol))
       const response = await handleBatchPriceUpdate(post(batchBody()), ENV)
       expect(response.status).toBe(403)
     }
+  })
+})
+
+describe('lotes de precios: historial y restaurar', () => {
+  const loteId = '44444444-4444-4444-8444-444444444444'
+
+  it('listar: solo administración, jefe y desarrollador; la cuenta es la del operador', async () => {
+    validateOperator.mockResolvedValue(auth('vendedor'))
+    expect((await handleListarLotesPrecios(new Request('https://app.test/x'), ENV)).status).toBe(403)
+
+    validateOperator.mockResolvedValue(auth('jefe'))
+    const urls = []
+    vi.stubGlobal('fetch', vi.fn(async (u) => { urls.push(String(u)); return new Response(JSON.stringify([{ id: loteId }]), { status: 200 }) }))
+    const r = await jsonBody(await handleListarLotesPrecios(new Request('https://app.test/x'), ENV))
+    expect(r.body.lotes).toHaveLength(1)
+    expect(urls[0]).toContain(`cuenta_id=eq.${cuentaId}`)
+    expect(urls[0]).toContain('limit=20')
+  })
+
+  it('restaurar: rechaza roles sin permiso y ids inválidos sin llamar a la base', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    validateOperator.mockResolvedValue(auth('logistica'))
+    expect((await handleRestaurarLotePrecios(post({ lote_id: loteId }), ENV)).status).toBe(403)
+    validateOperator.mockResolvedValue(auth('administracion'))
+    expect((await handleRestaurarLotePrecios(post({ lote_id: 'no-uuid' }), ENV)).status).toBe(400)
+    expect((await handleRestaurarLotePrecios(post({}), ENV)).status).toBe(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('restaurar: usa la cuenta del operador (ignora la del cliente) y devuelve el resultado', async () => {
+    validateOperator.mockResolvedValue(auth('administracion'))
+    const bodies = []
+    vi.stubGlobal('fetch', vi.fn(async (_u, init) => { bodies.push(JSON.parse(init.body)); return new Response(JSON.stringify({ restaurados: 3, parciales: 1, omitidos: 2 }), { status: 200 }) }))
+    const r = await jsonBody(await handleRestaurarLotePrecios(post({ lote_id: loteId, cuenta_id: '99999999-9999-4999-8999-999999999999' }), ENV))
+    expect(r.body).toEqual({ restaurados: 3, parciales: 1, omitidos: 2 })
+    expect(bodies[0].p_cuenta_id).toBe(cuentaId)
+    expect(bodies[0].p_lote_id).toBe(loteId)
+  })
+
+  it.each([
+    ['LOTE_NO_ENCONTRADO', 404],
+    ['LOTE_YA_RESTAURADO', 409],
+    ['algo raro', 500],
+  ])('restaurar: el error %s responde %i', async (texto, estado) => {
+    validateOperator.mockResolvedValue(auth('administracion'))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(`{"message":"${texto}"}`, { status: 400 })))
+    expect((await handleRestaurarLotePrecios(post({ lote_id: loteId }), ENV)).status).toBe(estado)
   })
 })

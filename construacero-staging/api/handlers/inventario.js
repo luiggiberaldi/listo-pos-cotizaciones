@@ -787,7 +787,6 @@ export async function handleBatchPriceUpdate(request, env) {
   };
 
   const targetFields = precio_objetivo === 'todos' ? ['precio_usd', 'precio_2', 'precio_3'] : [precio_objetivo];
-  const timestamp = new Date().toISOString();
 
   // Solo se cambian los precios que existen y que realmente cambian.
   const cambios = [];
@@ -819,23 +818,40 @@ export async function handleBatchPriceUpdate(request, env) {
 
   if (cambios.length === 0) return json({ updated: 0, sin_precio: sinPrecio, message: 'Ningún precio cambiaría' }, 200, request);
 
-  // Una sola petición = una sola operación en la base: o cambian todos o ninguno.
-  // Se reenvía el nombre porque la base lo exige en este tipo de escritura.
-  const updates = cambios.map(({ p, campos }) => {
-    const obj = { id: p.id, nombre: p.nombre, actualizado_en: timestamp };
-    for (const f of Object.keys(campos)) obj[f] = campos[f].nuevo;
+  // Todo el cambio (y su historial para restaurar) se guarda en UNA sola transacción en la base:
+  // o cambian todos los precios o ninguno. La función también verifica que ningún precio haya
+  // cambiado desde la vista previa.
+  const cambiosRpc = cambios.map(({ p, campos }) => {
+    const obj = { id: p.id, nombre: p.nombre };
+    for (const f of Object.keys(campos)) obj[f] = { antes: campos[f].actual, despues: campos[f].nuevo };
     return obj;
   });
-  const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?on_conflict=id`, {
+  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/aplicar_lote_precios`, {
     method: 'POST',
-    headers: { ...headers, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify(updates)
+    headers,
+    body: JSON.stringify({
+      p_cuenta_id: cuentaId,
+      p_operador_id: operador.id || user.operator_id || null,
+      p_operador_nombre: operador.nombre,
+      p_operador_rol: operador.rol,
+      p_modo: modo,
+      p_porcentaje: modo === 'porcentaje' ? pct : null,
+      p_categoria: categoria || null,
+      p_precio_objetivo: precio_objetivo,
+      p_seleccion_manual: !!idsElegidos,
+      p_cambios: cambiosRpc,
+    })
   });
-  if (!upRes.ok) {
-    const errText = await upRes.text();
-    return jsonError(`No se cambió ningún precio. Error: ${errText}`, 500, request);
+  if (!rpcRes.ok) {
+    const errText = await rpcRes.text();
+    if (/PRECIO_CAMBIO_CONCURRENTE|PRODUCTO_NO_ENCONTRADO/.test(errText)) {
+      return jsonError('Un precio cambió mientras revisabas. No se cambió ningún precio: revisa el resumen y confirma de nuevo', 409, request);
+    }
+    return jsonError('No se cambió ningún precio por un error del servidor. Intenta de nuevo', 500, request);
   }
-  const totalUpdated = updates.length;
+  const aplicado = await rpcRes.json().catch(() => ({}));
+  const totalUpdated = aplicado.updated ?? cambiosRpc.length;
+  const loteId = aplicado.lote_id ?? null;
 
   // Auditoría
   try {
@@ -844,14 +860,82 @@ export async function handleBatchPriceUpdate(request, env) {
       categoria: 'INVENTARIO', accion: 'BATCH_PRICE_UPDATE',
       descripcion: `Actualización masiva de precios (${modo}): ${totalUpdated} productos.`,
       entidadTipo: 'productos', entidadId: null,
-      meta: { modo, porcentaje, valor_fijo, categoria, precio_objetivo, count: totalUpdated, sin_precio: sinPrecio }, ip
+      meta: { modo, porcentaje, valor_fijo, categoria, precio_objetivo, count: totalUpdated, sin_precio: sinPrecio, lote_id: loteId, seleccion_manual: !!idsElegidos }, ip
     });
   } catch {
     // La auditoría es best-effort y no debe invalidar la actualización.
   }
 
-  return json({ updated: totalUpdated, sin_precio: sinPrecio }, 200, request);
+  return json({ updated: totalUpdated, sin_precio: sinPrecio, lote_id: loteId }, 200, request);
 }
+
+// ── Historial de lotes de precios y restauración ─────────────────────────────
+const ROLES_PRECIOS_MASIVOS = ['administracion', 'jefe', 'desarrollador'];
+
+export async function handleListarLotesPrecios(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { operador, headers } = v;
+  if (!ROLES_PRECIOS_MASIVOS.includes(operador.rol)) {
+    return jsonError('Permisos insuficientes para ver el historial de precios', 403, request);
+  }
+  const cols = 'id,creado_en,operador_nombre,modo,porcentaje,categoria,precio_objetivo,seleccion_manual,total_productos,restaurado_en,restaurado_por_nombre,restaurados,parciales,omitidos';
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/productos_precio_lotes?cuenta_id=eq.${operador.cuenta_id}&select=${cols}&order=creado_en.desc&limit=20`,
+    { headers }
+  );
+  if (!res.ok) return jsonError('No se pudo leer el historial de precios', 500, request);
+  return json({ lotes: await res.json() }, 200, request);
+}
+
+export async function handleRestaurarLotePrecios(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+  if (!ROLES_PRECIOS_MASIVOS.includes(operador.rol)) {
+    return jsonError('Permisos insuficientes para restaurar precios', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  if (!isValidUuid(body?.lote_id)) return jsonError('Lote inválido', 400, request);
+
+  // La cuenta siempre es la del operador autenticado, nunca la que envíe el cliente.
+  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/restaurar_lote_precios`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      p_cuenta_id: operador.cuenta_id,
+      p_lote_id: body.lote_id,
+      p_operador_id: operador.id || user.operator_id || null,
+      p_operador_nombre: operador.nombre,
+    })
+  });
+  if (!rpcRes.ok) {
+    const errText = await rpcRes.text();
+    if (/LOTE_NO_ENCONTRADO/.test(errText)) return jsonError('No se encontró ese cambio de precios', 404, request);
+    if (/LOTE_YA_RESTAURADO/.test(errText)) return jsonError('Ese cambio de precios ya fue restaurado', 409, request);
+    return jsonError('No se restauró ningún precio por un error del servidor. Intenta de nuevo', 500, request);
+  }
+  const resultado = await rpcRes.json().catch(() => ({}));
+
+  try {
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+      categoria: 'INVENTARIO', accion: 'BATCH_PRICE_RESTORE',
+      descripcion: `Restauración de un cambio masivo de precios: ${resultado.restaurados ?? 0} completos, ${resultado.parciales ?? 0} parciales, ${resultado.omitidos ?? 0} omitidos.`,
+      entidadTipo: 'productos', entidadId: null,
+      meta: { lote_id: body.lote_id, ...resultado }, ip
+    });
+  } catch {
+    // La auditoría es best-effort y no debe invalidar la restauración.
+  }
+
+  return json(resultado, 200, request);
+}
+
 
 // ── Transformación atómica de inventario ─────────────────────────────────────
 export async function handleTransformacionInventario(request, env) {

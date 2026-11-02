@@ -21,7 +21,7 @@ import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/h
 import { handleMarcarComisionPagada, handleLiberarComisionCxc, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
 import { handleRegistrarAbono, handleRevertirAbono, handleRevertirCargoCxc, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
-import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
+import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleListarLotesPrecios, handleRestaurarLotePrecios, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleCambiarFechaEntregaDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleEditarCodigosExternos, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho, handleRegularizarCodEfectivo } from './api/handlers/despachos.js'
 import { handleResumenFinancieroDespacho, handleConciliarPagoCod } from './api/handlers/cod.js'
@@ -177,6 +177,12 @@ export default {
     }
 
     // ── API: Actualización masiva de precios ────────────────────────────────
+    if (url.pathname === '/api/productos/batch-price/lotes' && request.method === 'GET') {
+      return handleListarLotesPrecios(request, env);
+    }
+    if (url.pathname === '/api/productos/batch-price/restaurar' && request.method === 'POST') {
+      return handleRestaurarLotePrecios(request, env);
+    }
     if (url.pathname === '/api/productos/batch-price' && request.method === 'PATCH') {
       return handleBatchPriceUpdate(request, env);
     }

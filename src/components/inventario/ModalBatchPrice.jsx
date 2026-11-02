@@ -4,13 +4,136 @@ import CustomSelect from '../ui/CustomSelect'
 import { showToast } from '../ui/Toast'
 import { authFetch } from '../../services/authFetch'
 import { validarValorMasivo, precioNuevoMasivo } from '../../utils/precioMasivo'
-import { CheckCircle2, AlertCircle, Search } from 'lucide-react'
+import { CheckCircle2, AlertCircle, Search, History, RotateCcw } from 'lucide-react'
 
 const CAMPOS_PRECIO = [['precio_usd', 'Precio 1'], ['precio_2', 'Precio 2'], ['precio_3', 'Precio 3']]
+// El valor fijo está oculto por decisión del negocio; el servidor lo sigue aceptando.
+const PERMITIR_VALOR_FIJO = false
 const MAX_FILAS = 150
 const ESPERA_VISTA_PREVIA_MS = 500
 
 const fmt = n => `$${Number(n).toFixed(2)}`
+
+const OBJETIVO_TEXTO = { precio_usd: 'Precio 1', precio_2: 'Precio 2', precio_3: 'Precio 3', todos: 'Todos los precios' }
+
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`
+
+function textoResultado(res) {
+  if (!res) return ''
+  const partes = [plural(res.restaurados ?? 0, 'producto restaurado', 'productos restaurados')]
+  if (res.parciales) partes.push(plural(res.parciales, 'restaurado solo en parte', 'restaurados solo en parte'))
+  if (res.omitidos) partes.push(`${plural(res.omitidos, 'no se tocó', 'no se tocaron')} porque ya se habían modificado después`)
+  return partes.join(' · ')
+}
+
+function descripcionLote(l) {
+  const cambio = l.porcentaje === null || l.porcentaje === undefined
+    ? 'Precio fijo'
+    : `${Number(l.porcentaje) > 0 ? '+' : ''}${Number(l.porcentaje)} %`
+  const donde = l.seleccion_manual ? 'productos elegidos' : (l.categoria || 'todos los productos')
+  const que = l.precio_objetivo === 'todos' ? 'a todos los precios' : `al ${OBJETIVO_TEXTO[l.precio_objetivo] || l.precio_objetivo}`
+  return `${cambio} ${que} · ${donde}`
+}
+
+const fechaCorta = iso => {
+  try { return new Date(iso).toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' }) } catch { return iso }
+}
+
+function PanelExito({ lote, resultado, restaurando, onDeshacer, onCerrar, onHistorial }) {
+  return (
+    <div className="py-4 space-y-5 text-center max-w-md mx-auto">
+      <div className="mx-auto w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center">
+        <CheckCircle2 size={30} className="text-emerald-600" />
+      </div>
+      {resultado ? (
+        <>
+          <div>
+            <p className="font-black text-slate-800 text-lg">Cambio deshecho</p>
+            <p className="text-sm text-slate-500 mt-1">{textoResultado(resultado)}</p>
+          </div>
+          <button onClick={onCerrar} className="w-full py-3 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-all">Cerrar</button>
+        </>
+      ) : (
+        <>
+          <div>
+            <p className="font-black text-slate-800 text-lg">{plural(lote.updated, 'producto actualizado', 'productos actualizados')}</p>
+            <p className="text-sm text-slate-500 mt-1">¿Te equivocaste? Puedes devolver los precios a como estaban.</p>
+          </div>
+          <div className="grid gap-2">
+            <button
+              onClick={onDeshacer}
+              disabled={restaurando}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-amber-400 bg-amber-50 text-amber-800 font-bold hover:bg-amber-100 transition-all disabled:opacity-50"
+            >
+              {restaurando ? <div className="w-4 h-4 border-2 border-amber-700 border-t-transparent rounded-full animate-spin" /> : <RotateCcw size={16} />}
+              Deshacer este cambio
+            </button>
+            <button onClick={onCerrar} disabled={restaurando} className="w-full py-3 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-all">Listo</button>
+            <button onClick={onHistorial} className="text-xs text-slate-500 hover:underline">Ver historial de cambios</button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function PanelHistorial({ lotes, cargando, error, confirmandoId, restaurandoId, resultados, onPedirRestaurar, onCancelar, onRestaurar, onVolver }) {
+  return (
+    <div className="space-y-4">
+      <button onClick={onVolver} className="text-xs font-bold text-slate-500 hover:underline">← Volver a la actualización</button>
+      <p className="text-xs text-slate-500 leading-snug">
+        Aquí quedan los últimos cambios masivos (se guardan unos 60 días). Al restaurar, cada producto vuelve a su precio anterior, salvo los que
+        se hayan modificado después: esos no se tocan.
+      </p>
+      {cargando && <div className="flex items-center gap-2 text-sm text-slate-500"><div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />Cargando…</div>}
+      {error && <div className="flex items-start gap-2 text-sm text-red-600"><AlertCircle size={16} className="shrink-0 mt-0.5" />{error}</div>}
+      {!cargando && !error && lotes.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">Todavía no hay cambios masivos guardados.</p>}
+      <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
+        {lotes.map(l => {
+          const res = resultados[l.id] || (l.restaurado_en ? { restaurados: l.restaurados, parciales: l.parciales, omitidos: l.omitidos } : null)
+          return (
+            <li key={l.id} className="px-4 py-3 bg-white space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-800 leading-snug">{descripcionLote(l)}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {plural(l.total_productos, 'producto', 'productos')} · {fechaCorta(l.creado_en)} · {l.operador_nombre}
+                  </p>
+                </div>
+                {!l.restaurado_en && !resultados[l.id] && confirmandoId !== l.id && (
+                  <button
+                    onClick={() => onPedirRestaurar(l.id)}
+                    disabled={!!restaurandoId}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-800 bg-amber-50 text-xs font-bold hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    <RotateCcw size={13} /> Restaurar
+                  </button>
+                )}
+              </div>
+              {confirmandoId === l.id && (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-2">
+                  <p className="text-xs text-amber-900">{`Se devolverán hasta ${plural(l.total_productos, 'producto', 'productos')} a sus precios anteriores. ¿Restaurar este cambio?`}</p>
+                  <div className="flex gap-2">
+                    <button onClick={onCancelar} disabled={restaurandoId === l.id} className="flex-1 py-2 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-600">Cancelar</button>
+                    <button onClick={() => onRestaurar(l.id)} disabled={restaurandoId === l.id} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 disabled:opacity-60">
+                      {restaurandoId === l.id ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : null}
+                      Sí, restaurar
+                    </button>
+                  </div>
+                </div>
+              )}
+              {res && (
+                <p className="text-[11px] text-emerald-700 bg-emerald-50 rounded-lg px-2.5 py-1.5">
+                  {`Restaurado${l.restaurado_por_nombre ? ` por ${l.restaurado_por_nombre}` : ''}${l.restaurado_en ? ` el ${fechaCorta(l.restaurado_en)}` : ''}: ${textoResultado(res)}`}
+                </p>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
 
 export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias = [], productos = [], onSuccess }) {
   const [modo, setModo] = useState('porcentaje')
@@ -26,6 +149,15 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
   const [errorPreview, setErrorPreview] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const seq = useRef(0)
+  const [vista, setVista] = useState('editar') // 'editar' | 'exito' | 'historial'
+  const [ultimoLote, setUltimoLote] = useState(null) // { id, updated }
+  const [resultadoDeshacer, setResultadoDeshacer] = useState(null)
+  const [lotes, setLotes] = useState([])
+  const [cargandoLotes, setCargandoLotes] = useState(false)
+  const [errorLotes, setErrorLotes] = useState(null)
+  const [confirmandoId, setConfirmandoId] = useState(null)
+  const [restaurandoId, setRestaurandoId] = useState(null)
+  const [resultados, setResultados] = useState({})
 
   // Resetear estado al cerrar
   useEffect(() => {
@@ -42,6 +174,14 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
       setCargandoPreview(false)
       setErrorPreview(null)
       setGuardando(false)
+      setVista('editar')
+      setUltimoLote(null)
+      setResultadoDeshacer(null)
+      setLotes([])
+      setErrorLotes(null)
+      setConfirmandoId(null)
+      setRestaurandoId(null)
+      setResultados({})
       seq.current++
     }
   }, [isOpen])
@@ -101,7 +241,8 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
   }, [isOpen, listo, claveParams])
 
   // Productos que se pueden elegir: activos, de la categoría filtrada y que coincidan con la búsqueda
-  const campoPrecio = precioObjetivo === 'todos' ? 'precio_usd' : precioObjetivo
+  const esTodos = precioObjetivo === 'todos'
+  const camposVisibles = esTodos ? CAMPOS_PRECIO : CAMPOS_PRECIO.filter(([f]) => f === precioObjetivo)
   const candidatos = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     return productos
@@ -134,13 +275,55 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
         throw new Error(err.error || 'Error al actualizar precios')
       }
       const data = await res.json()
-      showToast(`${data.updated} producto${data.updated !== 1 ? 's' : ''} actualizado${data.updated !== 1 ? 's' : ''} con éxito`, 'success')
       if (onSuccess) onSuccess()
-      onClose()
+      if (data.lote_id) {
+        setUltimoLote({ id: data.lote_id, updated: data.updated })
+        setResultadoDeshacer(null)
+        setVista('exito')
+      } else {
+        showToast(`${data.updated} producto${data.updated !== 1 ? 's' : ''} actualizado${data.updated !== 1 ? 's' : ''} con éxito`, 'success')
+        onClose()
+      }
     } catch (error) {
       showToast(error.message, 'error')
     } finally {
       setGuardando(false)
+    }
+  }
+
+  const cargarLotes = async () => {
+    setVista('historial')
+    setCargandoLotes(true)
+    setErrorLotes(null)
+    try {
+      const res = await authFetch('/api/productos/batch-price/lotes', { method: 'GET' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo cargar el historial')
+      setLotes(data.lotes || [])
+    } catch (error) {
+      setErrorLotes(error.message)
+    } finally {
+      setCargandoLotes(false)
+    }
+  }
+
+  const restaurarLote = async loteId => {
+    setRestaurandoId(loteId)
+    try {
+      const res = await authFetch('/api/productos/batch-price/restaurar', { method: 'POST', body: JSON.stringify({ lote_id: loteId }) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo restaurar el cambio')
+      if (onSuccess) onSuccess()
+      setConfirmandoId(null)
+      if (vista === 'exito') setResultadoDeshacer(data)
+      else {
+        setResultados(prev => ({ ...prev, [loteId]: data }))
+        showToast('Precios restaurados', 'success')
+      }
+    } catch (error) {
+      showToast(error.message, 'error')
+    } finally {
+      setRestaurandoId(null)
     }
   }
 
@@ -151,7 +334,7 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
 
   const modoOptions = [
     { value: 'porcentaje', label: 'Porcentaje (%)' },
-    { value: 'valor_fijo', label: 'Valor fijo (USD)' }
+    ...(PERMITIR_VALOR_FIJO ? [{ value: 'valor_fijo', label: 'Valor fijo (USD)' }] : [])
   ]
 
   const objetivoOptions = [
@@ -164,15 +347,44 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
   const etiquetaSeccion = 'text-[11px] font-black uppercase tracking-widest text-slate-400 ml-1'
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Actualización Masiva" className="max-w-md md:max-w-4xl">
+    <Modal isOpen={isOpen} onClose={onClose} title={vista === 'historial' ? 'Historial de cambios de precios' : 'Actualización Masiva'} className="max-w-md md:max-w-4xl">
+      {vista === 'exito' && ultimoLote && (
+        <PanelExito
+          lote={ultimoLote}
+          resultado={resultadoDeshacer}
+          restaurando={restaurandoId === ultimoLote.id}
+          onDeshacer={() => restaurarLote(ultimoLote.id)}
+          onCerrar={onClose}
+          onHistorial={cargarLotes}
+        />
+      )}
+
+      {vista === 'historial' && (
+        <PanelHistorial
+          lotes={lotes}
+          cargando={cargandoLotes}
+          error={errorLotes}
+          confirmandoId={confirmandoId}
+          restaurandoId={restaurandoId}
+          resultados={resultados}
+          onPedirRestaurar={setConfirmandoId}
+          onCancelar={() => setConfirmandoId(null)}
+          onRestaurar={restaurarLote}
+          onVolver={() => { setVista('editar'); setConfirmandoId(null) }}
+        />
+      )}
+
+      {vista === 'editar' && (
       <div className="grid gap-5 md:grid-cols-2 md:gap-x-8">
 
         {/* A · Ajustes */}
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <label className={etiquetaSeccion}>Modo de ajuste</label>
-            <CustomSelect options={modoOptions} value={modo} onChange={setModo} placeholder="Seleccionar modo" />
-          </div>
+          {PERMITIR_VALOR_FIJO && (
+            <div className="space-y-1.5">
+              <label className={etiquetaSeccion}>Modo de ajuste</label>
+              <CustomSelect options={modoOptions} value={modo} onChange={setModo} placeholder="Seleccionar modo" />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className={etiquetaSeccion}>
@@ -248,10 +460,16 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
               <ul className="max-h-56 md:max-h-[26rem] overflow-y-auto divide-y divide-slate-100">
                 {candidatos.slice(0, MAX_FILAS).map(p => {
                   const marcado = idsSet.has(p.id)
-                  const actual = p[campoPrecio]
-                  // Precio nuevo en vivo, solo para los productos elegidos
-                  const nuevo = marcado ? precioNuevoMasivo(modo, valorTexto, actual) : null
-                  const cambia = nuevo !== null && nuevo !== Math.round(Number(actual) * 100) / 100
+                  // Un precio por línea. Con "Todos los precios" se muestran los que el producto tiene definidos.
+                  const lineas = camposVisibles
+                    .filter(([f]) => !esTodos || (p[f] !== null && p[f] !== undefined))
+                    .map(([f, etiqueta]) => {
+                      const actual = p[f]
+                      // Precio nuevo en vivo, solo para los productos elegidos
+                      const nuevo = marcado ? precioNuevoMasivo(modo, valorTexto, actual) : null
+                      const cambia = nuevo !== null && nuevo !== Math.round(Number(actual) * 100) / 100
+                      return { f, etiqueta, actual, nuevo, cambia }
+                    })
                   return (
                     <li key={p.id}>
                       <label className={`flex items-start gap-3 px-3 py-2.5 cursor-pointer text-sm ${marcado ? 'bg-amber-50/60' : 'hover:bg-slate-50'}`}>
@@ -260,18 +478,24 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
                           <span className="block font-medium text-slate-700 leading-snug break-words">{p.nombre}</span>
                           {p.codigo && <span className="block text-[10px] text-slate-400">{p.codigo}</span>}
                         </span>
-                        <span className="font-mono text-xs font-bold shrink-0 flex items-center gap-1.5 whitespace-nowrap pt-0.5">
-                          {actual === null || actual === undefined ? (
-                            <span className="text-slate-400">—</span>
-                          ) : cambia ? (
-                            <>
-                              <span className="text-slate-400 line-through decoration-slate-300">{fmt(actual)}</span>
-                              <span className="text-slate-400 font-sans">→</span>
-                              <span className="text-emerald-700">{fmt(nuevo)}</span>
-                            </>
-                          ) : (
-                            <span className="text-slate-500">{fmt(actual)}</span>
-                          )}
+                        <span className="font-mono text-xs font-bold shrink-0 flex flex-col items-end gap-0.5 whitespace-nowrap pt-0.5">
+                          {lineas.length === 0 && <span className="text-slate-400">—</span>}
+                          {lineas.map(({ f, etiqueta, actual, nuevo, cambia }) => (
+                            <span key={f} className="flex items-center gap-1.5">
+                              {esTodos && <span className="font-sans font-semibold text-[10px] text-slate-400">{etiqueta}</span>}
+                              {actual === null || actual === undefined ? (
+                                <span className="text-slate-400">—</span>
+                              ) : cambia ? (
+                                <>
+                                  <span className="text-slate-400 line-through decoration-slate-300">{fmt(actual)}</span>
+                                  <span className="text-slate-400 font-sans">→</span>
+                                  <span className="text-emerald-700">{fmt(nuevo)}</span>
+                                </>
+                              ) : (
+                                <span className="text-slate-500">{fmt(actual)}</span>
+                              )}
+                            </span>
+                          ))}
                         </span>
                       </label>
                     </li>
@@ -329,7 +553,7 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
                 {previewVigente.en_cero > 0 && (
                   <div className="flex items-start gap-2 text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-2">
                     <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                    {`${previewVigente.en_cero} producto${previewVigente.en_cero !== 1 ? 's tienen' : ' tiene'} precio $0 y un porcentaje no lo cambia. Para ponerles precio usa "Valor fijo".`}
+                    {`${previewVigente.en_cero} producto${previewVigente.en_cero !== 1 ? 's tienen' : ' tiene'} precio $0 y un porcentaje no lo cambia.${PERMITIR_VALOR_FIJO ? ' Para ponerles precio usa "Valor fijo".' : ''}`}
                   </div>
                 )}
                 {seleccion === 'todos' && previewVigente.ejemplos?.length > 0 && (
@@ -369,12 +593,17 @@ export default function ModalBatchPrice({ isOpen, onClose, cuentaId, categorias 
             {guardando ? <div className="w-5 h-5 border-2 border-white/70 border-t-transparent rounded-full animate-spin" /> : null}
             Confirmar actualización
           </button>
+
+          <button type="button" onClick={cargarLotes} className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 hover:underline">
+            <History size={13} /> Historial de cambios de precios
+          </button>
         </div>
 
         {/* Espaciador para evitar que los dropdowns se corten al final del modal */}
         <div className="h-20 md:col-span-2 md:h-12" />
 
       </div>
+      )}
     </Modal>
   )
 }
