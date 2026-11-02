@@ -60,6 +60,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
         // Una versión nueva ya tomó el control. La sesión del PIN vive solo en memoria:
         // si recargamos con un operador adentro lo sacamos al login. Se aplica al cerrar sesión.
         if (!getOperatorSession()) { window.location.reload(); return }
+        window.dispatchEvent(new Event('app:version-nueva'))
         const dejar = subscribeOperatorSession(() => {
           if (!getOperatorSession()) { dejar(); window.location.reload() }
         })
