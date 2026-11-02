@@ -45,6 +45,9 @@ export default defineConfig({
         globIgnores: [
           '**/node_modules/**/*',
           '**/pdf-*.js',
+          '**/jspdf*.js',
+          '**/html2canvas*.js',
+          '**/purify*.js',
           '**/pdf.*.js',
           '**/pdf-*.css',
           '**/pdf.*.css'
