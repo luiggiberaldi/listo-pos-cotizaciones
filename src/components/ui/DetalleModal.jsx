@@ -10,6 +10,7 @@ import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { getComisionPctForItem } from '../../utils/comisionUtils'
 import { showToast } from './Toast'
+import { formatPeso, pesoLinea, comparaCapacidad } from '../../utils/pesoDespacho'
 
 function calcDescMonto(desc, totalLinea, cantidad) {
   if (!desc) return 0
@@ -62,6 +63,11 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil })
       </td>
       <td className="py-3 px-3 text-center text-sm text-slate-600 whitespace-nowrap">
         {cant} <span className="text-slate-400 text-[11px]">{item.unidad_snap || 'und'}</span>
+        {'peso_unit_kg' in item && (
+          item.peso_unit_kg != null
+            ? <div className="text-[10px] text-slate-400" title={`${formatPeso(item.peso_unit_kg)} por unidad`}>{formatPeso(pesoLinea(cant, item.peso_unit_kg))}</div>
+            : <div className="text-[10px] text-amber-600">sin peso</div>
+        )}
       </td>
       <td className="py-3 px-3 text-right text-sm text-slate-600 whitespace-nowrap">
         {descMonto > 0 ? (
@@ -136,6 +142,11 @@ function ItemCard({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }
       <div className="flex gap-3 mt-1 text-xs text-slate-500">
         <span>{cant} {item.unidad_snap || 'und'}</span>
         <span>× {fmt(precio)}</span>
+        {'peso_unit_kg' in item && (
+          item.peso_unit_kg != null
+            ? <span>· {formatPeso(pesoLinea(cant, item.peso_unit_kg))}</span>
+            : <span className="text-amber-600">· sin peso</span>
+        )}
       </div>
       {descMonto > 0 && (
         <p className="text-[11px] text-amber-600 mt-1 font-medium">
@@ -250,6 +261,18 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         const esCorte = (it) => it.nombre_snap?.toLowerCase().startsWith('corte')
         const sumaCorte = allItems.filter(esCorte).reduce((s, it) => s + (Number(it.total_linea_usd) || 0), 0)
         setCorteDesdeItems(sumaCorte)
+        // Peso por unidad de cada línea (vista despacho_pesos): si no existe o falla, se muestra sin peso
+        if (tipo === 'despacho') {
+          try {
+            const { data: pesos, error: pesoError } = await supabase.from('despacho_items_peso').select('item_id, producto_id, peso_unit_kg').eq('despacho_id', registro.id)
+            if (!pesoError && Array.isArray(pesos)) {
+              const porItem = Object.fromEntries(pesos.map(p => [p.item_id, p.peso_unit_kg]))
+              const porProducto = {}
+              for (const p of pesos) if (p.producto_id && p.peso_unit_kg != null && porProducto[p.producto_id] === undefined) porProducto[p.producto_id] = p.peso_unit_kg
+              allItems = allItems.map(it => ({ ...it, peso_unit_kg: (it.id && porItem[it.id] !== undefined) ? porItem[it.id] : (porProducto[it.producto_id] ?? null) }))
+            }
+          } catch { /* sin peso: no rompe el detalle */ }
+        }
         setItems(allItems.filter(it => !esCorte(it)))
       } catch (err) {
         console.error('Error fetching items:', err)
@@ -682,6 +705,24 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <div className={`flex justify-between font-black text-slate-800 text-base ${hayDesglose ? 'pt-1 border-t border-slate-200' : ''}`}>
               <span>Total</span><span>{fmtUsd(totalFinal)}</span>
             </div>
+            {tipo === 'despacho' && itemsConFallback.some(it => 'peso_unit_kg' in it) && (() => {
+              const lineas = itemsConFallback.filter(it => !it.es_prestamo)
+              const conPeso = lineas.filter(it => it.peso_unit_kg != null)
+              const sinPeso = lineas.length - conPeso.length
+              if (!conPeso.length) return null
+              const totalKg = conPeso.reduce((acc, it) => acc + (pesoLinea(it.cantidad, it.peso_unit_kg) || 0), 0)
+              const cap = comparaCapacidad(totalKg, registro?.vehiculo_viaje?.capacidad_kg)
+              return (
+                <div className="flex flex-col items-end gap-0.5 text-xs">
+                  <span className="font-semibold text-slate-600">Peso total: {formatPeso(totalKg)}{sinPeso > 0 && <span className="text-amber-600"> (incompleto: {sinPeso} sin peso)</span>}</span>
+                  {cap && (
+                    <span className={cap.excede ? 'font-bold text-red-600' : 'text-slate-400'}>
+                      {cap.excede && '⚠ '}{cap.pct}% de la capacidad del camión ({formatPeso(cap.capacidadKg)}){cap.excede && ' — supera la capacidad (solo advertencia)'}
+                    </span>
+                  )}
+                </div>
+              )
+            })()}
             {tasa > 0 && (
               <div className="flex justify-end text-xs text-slate-400">
                 <span>{fmtBs(usdToBs(totalFinal, tasa))}</span>

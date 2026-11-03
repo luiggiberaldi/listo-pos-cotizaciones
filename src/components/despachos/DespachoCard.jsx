@@ -14,6 +14,7 @@ import { fetchDespachoConsolidado } from '../../services/despachoItemsService'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import DetalleModal from '../ui/DetalleModal'
+import { formatPeso, resumenPeso, comparaCapacidad } from '../../utils/pesoDespacho'
 import { Modal } from '../ui/Modal'
 import DescuentoModal from './DescuentoModal'
 import EditDespachoModal from './EditDespachoModal'
@@ -333,6 +334,9 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canDespachar = (esAdministracion || esDesarrollador || rol === 'jefe') && despacho.estado === 'pendiente'
   const canEntregar = (['logistica', 'jefe', 'desarrollador', 'administracion'].includes(perfil?.rol)) && despacho.estado === 'despachada'
   const esVendedorPropio = perfil?.id === despacho.vendedor_id
+  // Peso total del despacho y comparación con la capacidad del camión (solo advierte)
+  const pesoResumen = resumenPeso(despacho.peso_info)
+  const capacidadPeso = comparaCapacidad(pesoResumen.totalKg, despacho.vehiculo_viaje?.capacidad_kg)
   const canAnular = despacho.estado === 'pendiente' && (esDesarrollador || esAdministracion || esSupervisor || esVendedorPropio)
   const canDevolver = (despacho.estado === 'despachada' || despacho.estado === 'entregada') && ['logistica', 'jefe', 'desarrollador', 'administracion'].includes(perfil?.rol)
   const canDevolucionParcial = despacho.estado === 'entregada' && ['administracion', 'logistica', 'desarrollador', 'jefe'].includes(perfil?.rol)
@@ -1064,6 +1068,16 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               <span className="truncate" title={[camion.vehiculo, camion.placa_chuto, camion.placa_batea && `batea ${camion.placa_batea}`].filter(Boolean).join(' · ')}>
                 Camión: {camion.vehiculo}{camion.placa_chuto ? ` (${camion.placa_chuto})` : ''}
               </span>
+              {capacidadPeso && (
+                <span
+                  className={`shrink-0 font-semibold ${capacidadPeso.excede ? 'text-red-600' : 'text-slate-500'}`}
+                  title={capacidadPeso.excede
+                    ? `El peso supera la capacidad del camión por ${formatPeso(-capacidadPeso.libreKg)} (solo una advertencia)`
+                    : `${capacidadPeso.pct}% de la capacidad del camión (${formatPeso(capacidadPeso.capacidadKg)})`}
+                >
+                  {capacidadPeso.excede && '⚠ '}· {formatPeso(pesoResumen.totalKg)} / {formatPeso(capacidadPeso.capacidadKg)}
+                </span>
+              )}
             </div>
           )
         })()}
@@ -1134,6 +1148,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
               >
                 <PackageCheck size={11} />
                 {Number(despacho.items_count[0].count) || 0} {Number(despacho.items_count[0].count) === 1 ? 'Ítem' : 'Ítems'}
+                {despacho.peso_info && (
+                  pesoResumen.sinDatos ? null : (
+                    <span className={`font-semibold ${pesoResumen.incompleto ? 'text-amber-600' : 'text-slate-500'}`}>
+                      · {formatPeso(pesoResumen.totalKg)}{pesoResumen.incompleto ? ' (peso incompleto)' : ''}
+                    </span>
+                  )
+                )}
               </button>
             )}
           </div>

@@ -13,6 +13,25 @@ import { showToast } from '../components/ui/Toast'
 
 export const DESPACHOS_KEY = ['despachos']
 
+// Peso total por despacho (vista despacho_pesos). Si la vista no existe o falla, la lista se muestra igual sin peso.
+// Se pide en tandas de 60 ids para no pasar el límite de largo de la URL.
+async function cargarPesosDespachos(ids) {
+  const unicos = [...new Set((ids ?? []).filter(Boolean))]
+  if (!unicos.length) return {}
+  const tandas = []
+  for (let i = 0; i < unicos.length; i += 60) tandas.push(unicos.slice(i, i + 60))
+  try {
+    const res = await Promise.all(tandas.map(t =>
+      supabase.from('despacho_pesos').select('despacho_id, peso_total_kg, items_sin_peso, items_total').in('despacho_id', t)
+    ))
+    const mapa = {}
+    for (const r of res) if (!r.error) for (const f of r.data ?? []) mapa[f.despacho_id] = f
+    return mapa
+  } catch {
+    return {}
+  }
+}
+
 // ─── Lista de despachos ─────────────────────────────────────────────────────
 export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqueda = '', esHoy = false } = {}) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
@@ -185,7 +204,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
       //    (antes era en serie: 3 viajes → ahora 1 tanda + 1 condicional)
       //    El lookup de clientes degrada a [] si falla: la lista se muestra
       //    con "cliente: —" en vez de fallar completa.
-      const [clientesData, vendedoresDespRes] = await Promise.all([
+      const [clientesData, vendedoresDespRes, pesosPorDespacho] = await Promise.all([
         clienteIds.length
           ? fetch(apiUrl('/api/clientes/lookup'), {
               method: 'POST',
@@ -200,6 +219,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
         vendedorIds.length
           ? supabase.from('usuarios').select(VENDEDOR_COLS).in('id', vendedorIds)
           : Promise.resolve({ data: [] }),
+        cargarPesosDespachos(data.map(r => r.id)),
       ])
 
       const vendedoresMap = Object.fromEntries(
@@ -230,6 +250,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
         cliente: clientesMap[r.cliente_id] ?? null,
         cliente_factura: clientesMap[r.cliente_factura_id] ?? null,
         vendedor: vendedoresMap[r.vendedor_id] ?? r.vendedor ?? null,
+        peso_info: pesosPorDespacho[r.id] ?? null,
       }))
     },
     enabled: !!perfil,

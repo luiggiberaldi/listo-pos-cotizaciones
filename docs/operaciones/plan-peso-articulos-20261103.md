@@ -45,6 +45,8 @@ Vamos a guardar cuánto pesa cada artículo (por unidad), sumar el peso de cada 
 - Al elegir vehículo (`VehiculoViajeSelect`, despachos y cotizaciones): "3.200 kg de 5.000 kg (64 %)". Si se pasa: advertencia roja, sin bloquear (según tu decisión 1).
 - Las ediciones de cantidad en un despacho recalculan el total; las devoluciones parciales lo reducen.
 
+**Estado Fase 2 (2026-11-03):** construida y probada en staging (base de datos, vistas, ficha y detalle); pendiente de tu revisión en pantalla. No publicada. Diseño de la ficha acordado: el peso va junto a "N ítems" bajo el TOTAL, y el peso contra la capacidad en la línea del camión (rojo si se pasa, solo advertencia); el desglose por artículo está en el detalle. El peso total se calcula en la base de datos (vista `despacho_pesos`), no en cada pantalla, para que la lista no se vuelva lenta.
+
 **Staging**
 - Migración `296_staging_peso_lineas.sql` (columnas + disparador; reversa que los quita).
 - Pruebas: cotización → despacho con artículos con y sin peso; editar cantidades; cambiar el peso del producto después y comprobar que el despacho viejo no cambia; vehículo con y sin capacidad; venta rápida.
