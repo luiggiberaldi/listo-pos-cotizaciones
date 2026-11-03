@@ -2,7 +2,7 @@
 // Formulario para crear/editar productos — solo supervisor
 import { useState, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X, Clipboard } from 'lucide-react'
+import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X, Clipboard, Scale } from 'lucide-react'
 import { useCrearProducto, useActualizarProducto, useCategorias, refrescarCacheTrasMetadatos } from '../../hooks/useInventario'
 import { comprimirImagen, subirImagenProducto } from '../../utils/imageCompress'
 import supabase from '../../services/supabase/client'
@@ -35,7 +35,7 @@ const inputClass = `
 const VACIO = {
   codigo: '', nombre: '', descripcion: '', categoria: '',
   unidad: 'und', precio_usd: '', precio_2: '', precio_3: '', costo_usd: '',
-  stock_actual: '0', stock_minimo: '0',
+  stock_actual: '0', stock_minimo: '0', peso_kg: '',
   precio1_porcentaje: '', precio2_porcentaje: '', precio3_porcentaje: '',
   precio2_habilitado: true, precio3_habilitado: true
 }
@@ -144,6 +144,8 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
   const esAdmin = perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe'
   const esEdicion = !!producto && !isClone
   const [campos, setCampos] = useState(VACIO)
+  // Peso con el que se abrió el formulario (undefined = aún no se sabe: la búsqueda no lo trae)
+  const [pesoOriginal, setPesoOriginal] = useState(undefined)
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState('')
 
@@ -207,7 +209,9 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
         costo_usd:    producto.costo_usd  != null ? String(producto.costo_usd)  : '',
         stock_actual: isClone ? '0' : (producto.stock_actual != null ? String(producto.stock_actual) : '0'),
         stock_minimo: isClone ? '0' : (producto.stock_minimo != null ? String(producto.stock_minimo) : '0'),
+        peso_kg:      producto.peso_kg != null ? String(producto.peso_kg) : '',
       })
+      setPesoOriginal(producto.peso_kg === undefined ? undefined : (producto.peso_kg ?? null))
       if (producto.imagen_url && !isClone) setImagenPreview(producto.imagen_url)
 
       // Cargar valores iniciales en los selectores del generador de códigos
@@ -408,7 +412,20 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
     setImagenEliminada(true)
   }
 
-  const camposNumericos = new Set(['precio_usd', 'precio_2', 'precio_3', 'costo_usd', 'stock_actual', 'stock_minimo', 'precio1_porcentaje', 'precio2_porcentaje', 'precio3_porcentaje'])
+  const camposNumericos = new Set(['precio_usd', 'precio_2', 'precio_3', 'costo_usd', 'stock_actual', 'stock_minimo', 'peso_kg', 'precio1_porcentaje', 'precio2_porcentaje', 'precio3_porcentaje'])
+
+  // La búsqueda de inventario no trae el peso: al editar se consulta directamente
+  useEffect(() => {
+    if (!esEdicion || !esAdmin || pesoOriginal !== undefined || !producto?.id) return
+    let cancelado = false
+    supabase.from('productos').select('peso_kg').eq('id', producto.id).maybeSingle().then(({ data, error }) => {
+      if (cancelado || error) return
+      const p = data?.peso_kg ?? null
+      setPesoOriginal(p)
+      setCampos(c => ({ ...c, peso_kg: p != null ? String(p) : '' }))
+    })
+    return () => { cancelado = true }
+  }, [esEdicion, esAdmin, producto?.id, pesoOriginal])
 
   function cambiar(e) {
     const { name } = e.target
@@ -494,6 +511,8 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
       errs.costo_usd = 'Costo inválido'
     if (isNaN(Number(campos.stock_actual)))
       errs.stock_actual = 'Stock inválido'
+    if (campos.peso_kg !== '' && (isNaN(Number(campos.peso_kg)) || Number(campos.peso_kg) < 0 || Number(campos.peso_kg) > 100000))
+      errs.peso_kg = 'Peso inválido: escribe los kilos con punto decimal (100 g = 0.1)'
     
     // Validar estructura de código estructurado
     if (campos.codigo && campos.codigo.trim() !== '') {
@@ -532,6 +551,11 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
         const metadatos = {}
         if (campos.precio2_habilitado !== (producto.precio2_habilitado !== false)) metadatos.precio2_habilitado = campos.precio2_habilitado
         if (campos.precio3_habilitado !== (producto.precio3_habilitado !== false)) metadatos.precio3_habilitado = campos.precio3_habilitado
+        // Peso por unidad: solo administración/jefe, y solo si cambió respecto al valor con el que se abrió
+        if (esAdmin && pesoOriginal !== undefined) {
+          const pesoNuevo = campos.peso_kg === '' ? null : Number(campos.peso_kg)
+          if (pesoNuevo !== pesoOriginal) metadatos.peso_kg = pesoNuevo
+        }
         if (Object.keys(metadatos).length) {
           await guardarMetadatos(producto.id, metadatos)
           await refrescarCacheTrasMetadatos(qc, producto.id, metadatos)
@@ -546,6 +570,7 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
           if (imagenBlob) metadatos.imagen_url = await subirImagenProducto(supabase, productoResult.id, imagenBlob)
           if (!campos.precio2_habilitado) metadatos.precio2_habilitado = false
           if (!campos.precio3_habilitado) metadatos.precio3_habilitado = false
+          if (esAdmin && campos.peso_kg !== '') metadatos.peso_kg = Number(campos.peso_kg)
           if (Object.keys(metadatos).length) {
             await guardarMetadatos(productoResult.id, metadatos)
             await refrescarCacheTrasMetadatos(qc, productoResult.id, metadatos)
@@ -784,6 +809,19 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
           />
         </Campo>
       </div>
+
+      {/* Peso por unidad (kg): lo cargan administración/jefe; el resto solo lo ve */}
+      <Campo label="Peso por unidad (kg)" icono={Scale} error={errores.peso_kg}>
+        <input type="text" inputMode="decimal" name="peso_kg" value={campos.peso_kg}
+          onChange={cambiar} placeholder="Ej: 10.7"
+          className={inputClass} disabled={cargando || !esAdmin || (esEdicion && pesoOriginal === undefined)} />
+        <div className="rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2 text-xs text-slate-600 space-y-1">
+          <p><span className="font-semibold">Peso de UNA unidad de venta, en kilogramos.</span> Se usa para calcular el peso total de cada despacho y compararlo con la capacidad del vehículo.</p>
+          <p>Usa punto decimal: <span className="font-semibold">100 g = 0.1 kg</span> · 250 g = 0.25 kg · 1 tonelada = 1000 kg.</p>
+          <p>Si el artículo se vende por kilo (unidad "kg"), su peso por unidad es 1. Déjalo vacío si aún no lo has pesado.</p>
+          {!esAdmin && <p className="font-semibold text-slate-500">Solo administración o jefe pueden cargar o cambiar el peso.</p>}
+        </div>
+      </Campo>
 
       {/* Descripción */}
       <Campo label="Descripción" icono={Package} error={errores.descripcion}>

@@ -10,6 +10,7 @@ import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { getComisionPctForItem } from '../../utils/comisionUtils'
 import { showToast } from './Toast'
+import { formatPeso, pesoLinea, comparaCapacidad } from '../../utils/pesoDespacho'
 
 function calcDescMonto(desc, totalLinea, cantidad) {
   if (!desc) return 0
@@ -19,7 +20,7 @@ function calcDescMonto(desc, totalLinea, cantidad) {
   return Math.round(Math.min(v * Number(cantidad), totalLinea) * 10000) / 10000
 }
 
-function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }) {
+function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil, mostrarPeso = false }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -63,6 +64,13 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil })
       <td className="py-3 px-3 text-center text-sm text-slate-600 whitespace-nowrap">
         {cant} <span className="text-slate-400 text-[11px]">{item.unidad_snap || 'und'}</span>
       </td>
+      {mostrarPeso && (
+        <td className="py-3 px-3 text-right text-xs whitespace-nowrap" title={item.peso_unit_kg != null ? `${formatPeso(item.peso_unit_kg)} por unidad` : 'Este artículo no tiene peso cargado'}>
+          {item.peso_unit_kg != null
+            ? <span className="text-slate-500">{formatPeso(pesoLinea(cant, item.peso_unit_kg))}</span>
+            : <span className="text-amber-600">sin peso</span>}
+        </td>
+      )}
       <td className="py-3 px-3 text-right text-sm text-slate-600 whitespace-nowrap">
         {descMonto > 0 ? (
           <span>
@@ -136,6 +144,11 @@ function ItemCard({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }
       <div className="flex gap-3 mt-1 text-xs text-slate-500">
         <span>{cant} {item.unidad_snap || 'und'}</span>
         <span>× {fmt(precio)}</span>
+        {'peso_unit_kg' in item && (
+          item.peso_unit_kg != null
+            ? <span>· {formatPeso(pesoLinea(cant, item.peso_unit_kg))}</span>
+            : <span className="text-amber-600">· sin peso</span>
+        )}
       </div>
       {descMonto > 0 && (
         <p className="text-[11px] text-amber-600 mt-1 font-medium">
@@ -250,6 +263,18 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
         const esCorte = (it) => it.nombre_snap?.toLowerCase().startsWith('corte')
         const sumaCorte = allItems.filter(esCorte).reduce((s, it) => s + (Number(it.total_linea_usd) || 0), 0)
         setCorteDesdeItems(sumaCorte)
+        // Peso por unidad de cada línea (vista despacho_pesos): si no existe o falla, se muestra sin peso
+        if (tipo === 'despacho') {
+          try {
+            const { data: pesos, error: pesoError } = await supabase.from('despacho_items_peso').select('item_id, producto_id, peso_unit_kg').eq('despacho_id', registro.id)
+            if (!pesoError && Array.isArray(pesos)) {
+              const porItem = Object.fromEntries(pesos.map(p => [p.item_id, p.peso_unit_kg]))
+              const porProducto = {}
+              for (const p of pesos) if (p.producto_id && p.peso_unit_kg != null && porProducto[p.producto_id] === undefined) porProducto[p.producto_id] = p.peso_unit_kg
+              allItems = allItems.map(it => ({ ...it, peso_unit_kg: (it.id && porItem[it.id] !== undefined) ? porItem[it.id] : (porProducto[it.producto_id] ?? null) }))
+            }
+          } catch { /* sin peso: no rompe el detalle */ }
+        }
         setItems(allItems.filter(it => !esCorte(it)))
       } catch (err) {
         console.error('Error fetching items:', err)
@@ -290,6 +315,16 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
   const itemsConFallback = tipo === 'despacho' && tienePrestamos && items.length > 0 && !items.some(x => x.es_prestamo)
     ? items.map(it => ({ ...it, es_prestamo: true }))
     : items
+
+  // Peso del despacho (solo informativo): se muestra en el encabezado de Productos, sin ocupar espacio extra
+  const pesoDet = (() => {
+    if (tipo !== 'despacho' || !itemsConFallback.some(it => 'peso_unit_kg' in it)) return null
+    const lineas = itemsConFallback.filter(it => !it.es_prestamo)
+    const conPeso = lineas.filter(it => it.peso_unit_kg != null)
+    if (!conPeso.length) return null
+    const totalKg = conPeso.reduce((acc, it) => acc + (pesoLinea(it.cantidad, it.peso_unit_kg) || 0), 0)
+    return { totalKg, sinPeso: lineas.length - conPeso.length, cap: comparaCapacidad(totalKg, registro?.vehiculo_viaje?.capacidad_kg) }
+  })()
 
   const numDisplay = esCot
     ? `COT-${String(registro.numero).padStart(5, '0')}`
@@ -523,6 +558,17 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <Package size={12} />Productos
             </p>
+            {pesoDet && (
+              <span
+                className={`ml-auto mr-2 text-[11px] font-semibold ${pesoDet.cap?.excede ? 'text-red-600' : 'text-slate-500'}`}
+                title={pesoDet.cap
+                  ? `${pesoDet.cap.pct}% de la capacidad del camión (${formatPeso(pesoDet.cap.capacidadKg)})${pesoDet.cap.excede ? ': supera la capacidad (solo advertencia)' : ''}`
+                  : 'Peso total del despacho'}
+              >
+                {pesoDet.cap?.excede && '⚠ '}Peso: {formatPeso(pesoDet.totalKg)}{pesoDet.cap ? ` / ${formatPeso(pesoDet.cap.capacidadKg)}` : ''}
+                {pesoDet.sinPeso > 0 && <span className="text-amber-600"> · {pesoDet.sinPeso} sin peso</span>}
+              </span>
+            )}
             {puedeEditarProfundamente && registro.estado === 'pendiente' && (
               <button
                 onClick={() => setShowEditItems(true)}
@@ -560,12 +606,13 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                     <tr className="border-b-2 border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider">
                       <th className="pb-2 text-left pr-3">Producto</th>
                       <th className="pb-2 text-center px-3">Cant.</th>
+                      {pesoDet && <th className="pb-2 text-right px-3">Peso</th>}
                       <th className="pb-2 text-right px-3">Precio</th>
                       <th className="pb-2 text-right pl-3">Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {itemsConFallback.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
+                    {itemsConFallback.map(it => <ItemRow key={it.id} mostrarPeso={!!pesoDet} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
                   </tbody>
                 </table>
               </div>

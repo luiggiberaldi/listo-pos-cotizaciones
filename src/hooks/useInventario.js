@@ -18,7 +18,7 @@ export const INVENTARIO_KEY = ['inventario']
 // precios): PostgREST responde 400 por columnas inexistentes y sin esta
 // degradación se cae todo el inventario. Los flags ausentes se tratan como
 // "habilitado" (comportamiento histórico) hasta aplicar la migración.
-const SELECT_PRODUCTOS = 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, precio1_porcentaje, precio2_porcentaje, precio3_porcentaje, precio2_habilitado, precio3_habilitado, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en'
+const SELECT_PRODUCTOS = 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, precio1_porcentaje, precio2_porcentaje, precio3_porcentaje, precio2_habilitado, precio3_habilitado, peso_kg, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en'
 const SELECT_PRODUCTOS_COMPAT = 'id, codigo, nombre, descripcion, categoria, unidad, precio_usd, precio_2, precio_3, precio1_porcentaje, precio2_porcentaje, precio3_porcentaje, costo_usd, stock_actual, stock_minimo, activo, imagen_url, creado_en, actualizado_en'
 
 // ─── Refresco de cache tras escribir metadatos (flags de precios 2/3) ─────────
@@ -38,6 +38,8 @@ export async function refrescarCacheTrasMetadatos(qc, id, metadatos) {
     }
   })
   qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+  // El peso de un producto cambia el peso mostrado en los despachos abiertos
+  if (metadatos && 'peso_kg' in metadatos) qc.invalidateQueries({ queryKey: ['despachos'] })
 }
 
 function nuevaIdempotencyKey() {
