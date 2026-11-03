@@ -1069,14 +1069,20 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                 Camión: {camion.vehiculo}{camion.placa_chuto ? ` (${camion.placa_chuto})` : ''}
               </span>
               {capacidadPeso && (
-                <span
-                  className={`shrink-0 font-semibold ${capacidadPeso.excede ? 'text-red-600' : 'text-slate-500'}`}
-                  title={capacidadPeso.excede
-                    ? `El peso supera la capacidad del camión por ${formatPeso(-capacidadPeso.libreKg)} (solo una advertencia)`
-                    : `${capacidadPeso.pct}% de la capacidad del camión (${formatPeso(capacidadPeso.capacidadKg)})`}
-                >
-                  {capacidadPeso.excede && '⚠ '}· {formatPeso(pesoResumen.totalKg)} / {formatPeso(capacidadPeso.capacidadKg)}
-                </span>
+                (!despacho.peso_info || pesoResumen.sinDatos) ? (
+                  <span className="shrink-0 font-semibold text-amber-600" title="Ningún artículo de este despacho tiene peso cargado (lo cargan administración o jefe en Inventario)">
+                    · sin peso cargado
+                  </span>
+                ) : (
+                  <span
+                    className={`shrink-0 font-semibold ${capacidadPeso.excede ? 'text-red-600' : pesoResumen.incompleto ? 'text-amber-600' : 'text-slate-500'}`}
+                    title={capacidadPeso.excede
+                      ? `El peso supera la capacidad del camión por ${formatPeso(-capacidadPeso.libreKg)} (solo una advertencia)`
+                      : `${capacidadPeso.pct}% de la capacidad del camión (${formatPeso(capacidadPeso.capacidadKg)})${pesoResumen.incompleto ? ` · faltan ${pesoResumen.sinPeso} artículo(s) sin peso` : ''}`}
+                  >
+                    {capacidadPeso.excede && '⚠ '}· {pesoResumen.incompleto ? 'mín. ' : ''}{formatPeso(pesoResumen.totalKg)} / {formatPeso(capacidadPeso.capacidadKg)}
+                  </span>
+                )
               )}
             </div>
           )

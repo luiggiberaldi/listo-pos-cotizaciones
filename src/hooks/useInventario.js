@@ -38,6 +38,8 @@ export async function refrescarCacheTrasMetadatos(qc, id, metadatos) {
     }
   })
   qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+  // El peso de un producto cambia el peso mostrado en los despachos abiertos
+  if (metadatos && 'peso_kg' in metadatos) qc.invalidateQueries({ queryKey: ['despachos'] })
 }
 
 function nuevaIdempotencyKey() {
