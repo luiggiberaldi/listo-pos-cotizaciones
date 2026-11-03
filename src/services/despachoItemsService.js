@@ -14,7 +14,7 @@ import supabase from './supabase/client'
  * @param {object} despacho    Objeto despacho (con tiene_devoluciones, etc.)
  * @returns {{ itemsConsolidados: Array, tieneDevoluciones: boolean }}
  */
-export async function fetchDespachoConsolidado(despachoId, despacho) {
+async function fetchDespachoConsolidadoBase(despachoId, despacho) {
   // 1. Siempre traer los ítems originales
   const itemsRes = await supabase
     .from('notas_despacho_items')
@@ -146,4 +146,29 @@ export async function fetchDespachoConsolidado(despachoId, despacho) {
   const itemsConsolidados = [...itemsAjustados, ...intercambios]
 
   return { itemsConsolidados, tieneDevoluciones: true }
+}
+
+/**
+ * Ítems consolidados + peso por unidad de cada línea (vista despacho_items_peso, migración 296).
+ * Si la vista no existe o falla, los ítems se devuelven tal cual (sin la propiedad peso_unit_kg)
+ * y los documentos simplemente no muestran peso.
+ */
+export async function fetchDespachoConsolidado(despachoId, despacho) {
+  const resultado = await fetchDespachoConsolidadoBase(despachoId, despacho)
+  try {
+    const { data, error } = await supabase.from('despacho_items_peso').select('item_id, producto_id, peso_unit_kg').eq('despacho_id', despachoId)
+    if (error || !Array.isArray(data)) return resultado
+    const porItem = Object.fromEntries(data.map(p => [p.item_id, p.peso_unit_kg]))
+    const porProducto = {}
+    for (const p of data) if (p.producto_id && p.peso_unit_kg != null && porProducto[p.producto_id] === undefined) porProducto[p.producto_id] = p.peso_unit_kg
+    return {
+      ...resultado,
+      itemsConsolidados: resultado.itemsConsolidados.map(it => ({
+        ...it,
+        peso_unit_kg: (it.id && porItem[it.id] !== undefined) ? porItem[it.id] : (porProducto[it.producto_id] ?? null),
+      })),
+    }
+  } catch {
+    return resultado
+  }
 }

@@ -110,6 +110,16 @@ export function useReporteFlota({ desde = null, hasta = null, rol = null, enable
   })
 }
 
+// Peso de cada viaje (lo usa también el PDF del reporte). Devuelve [] si la base aún no lo tiene.
+export async function cargarPesoFlota({ desde = null, hasta = null } = {}) {
+  const params = new URLSearchParams()
+  if (desde) params.set('desde', desde)
+  if (hasta) params.set('hasta', hasta)
+  const qs = params.toString() ? `?${params}` : ''
+  const data = await pedir(`/api/reportes/flota-peso${qs}`)
+  return Array.isArray(data.viajes) ? data.viajes : []
+}
+
 // Peso de cada viaje (migración 297): una fila por viaje con su peso total y la capacidad del camión.
 // Si la base aún no la tiene o falla, el reporte se muestra igual, sin la parte de peso.
 export function usePesoFlota({ desde = null, hasta = null, rol = null, enabled = true } = {}) {
