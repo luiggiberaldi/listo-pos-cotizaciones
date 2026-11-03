@@ -43,7 +43,7 @@ import {
 } from './api/handlers/proveedores.js'
 import { handleCierreDiarioSync } from './api/handlers/finanzas-sync.js'
 import { handleDashboard } from './api/handlers/dashboard.js'
-import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota } from './api/handlers/vehiculos.js'
+import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota, handleReportePesoFlota } from './api/handlers/vehiculos.js'
 
 // Permite que los avisos push se envíen DESPUÉS de responder (no hacen esperar al usuario).
 function conWaitUntil(env, ctx) {
@@ -417,6 +417,10 @@ export default {
 
     if (url.pathname === '/api/reportes/flota-viajes' && request.method === 'GET') {
       return handleDetalleViajesFlota(request, env);
+    }
+
+    if (url.pathname === '/api/reportes/flota-peso' && request.method === 'GET') {
+      return handleReportePesoFlota(request, env);
     }
 
     // ── API: obtener lista de comisiones (bypass RLS) ──────────────────────

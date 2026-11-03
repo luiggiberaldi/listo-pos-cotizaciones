@@ -6,13 +6,14 @@
 //  - al abrir un camión, el detalle viaje por viaje;
 //  - aviso de viajes de choferes locales sin camión registrado.
 import { Fragment, useState } from 'react'
-import { Truck, ChevronDown, ChevronRight, AlertTriangle, Building2, Route } from 'lucide-react'
+import { Truck, ChevronDown, ChevronRight, AlertTriangle, Building2, Route, Scale, Gauge, DollarSign } from 'lucide-react'
 import { useDetalleViajesFlota } from '../../hooks/useVehiculos'
 import {
   num, totalesVehiculos, variacion, porcentaje, diasDelPeriodo, textoDestinos, MARCA_ESTIMADO,
 } from '../../utils/flotaReporte'
 import { nombreVehiculo, placasVehiculo } from '../../utils/vehiculoImpreso'
 import TarjetaMovil from './TarjetaMovil'
+import { resumirViajes, resumirPor, soloConCamion, usoPct, textoPeso, CARGA_BAJA_PCT } from '../../utils/pesoFlota'
 
 function fmt(n) {
   return num(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -44,7 +45,22 @@ function Resumen({ titulo, valor, actual, anterior, hayAnterior, icon: Icon }) {
   )
 }
 
-function TablaViajes({ viajes = [], isLoading, mostrarCamion = false }) {
+function TextoCarga({ fila, capacidadKg }) {
+  if (!fila) return <span className="text-slate-300">—</span>
+  const pct = usoPct({ ...fila, capacidad_kg: fila.capacidad_kg ?? capacidadKg })
+  const sin = Number(fila.items_sin_peso) || 0
+  const total = Number(fila.items_total) || 0
+  if (total > 0 && sin >= total) return <span className="text-amber-600">sin peso</span>
+  const excede = pct != null && pct > 100
+  const baja = pct != null && pct < CARGA_BAJA_PCT
+  return (
+    <span className={excede ? 'text-red-600 font-bold' : baja ? 'text-amber-600' : 'text-slate-600'}>
+      {sin > 0 ? 'mín. ' : ''}{textoPeso(fila.peso_total_kg)}{pct != null ? ` · ${pct}%` : ''}{excede ? ' ⚠' : ''}
+    </span>
+  )
+}
+
+function TablaViajes({ viajes = [], isLoading, mostrarCamion = false, pesoPorDespacho = null }) {
   if (isLoading) return <p className="text-xs text-slate-400 py-2">Cargando viajes...</p>
   if (viajes.length === 0) return <p className="text-xs text-slate-400 py-2">Sin viajes en el período.</p>
   return (
@@ -62,6 +78,7 @@ function TablaViajes({ viajes = [], isLoading, mostrarCamion = false }) {
             { label: 'Destino', valor: [v.ciudad, v.estado_destino].filter(Boolean).join(', ') || '—' },
             { label: 'Chofer', valor: v.chofer_nombre || '—' },
             mostrarCamion ? { label: 'Camión', valor: v.vehiculo_nombre || 'Sin camión' } : null,
+            pesoPorDespacho ? { label: 'Carga', valor: <TextoCarga fila={pesoPorDespacho[v.despacho_id]} /> } : null,
             { label: 'Flete', valor: `$${fmt(v.flete_usd)}` },
             { label: 'Para el chofer', valor: `$${fmt(v.chofer_usd)}`, clase: 'text-amber-700' },
           ]}
@@ -78,6 +95,7 @@ function TablaViajes({ viajes = [], isLoading, mostrarCamion = false }) {
             <th className="text-left px-2 py-1">Destino</th>
             <th className="text-left px-2 py-1">Chofer</th>
             {mostrarCamion && <th className="text-left px-2 py-1">Camión</th>}
+            {pesoPorDespacho && <th className="text-right px-2 py-1">Carga</th>}
             <th className="text-right px-2 py-1">Flete</th>
             <th className="text-right px-2 py-1">Chofer</th>
             <th className="text-right px-2 py-1">Empresa</th>
@@ -96,6 +114,7 @@ function TablaViajes({ viajes = [], isLoading, mostrarCamion = false }) {
               <td className="px-2 py-1 text-slate-500 truncate max-w-[10rem]">{[v.ciudad, v.estado_destino].filter(Boolean).join(', ') || '—'}</td>
               <td className="px-2 py-1 text-slate-600 truncate max-w-[8rem]">{v.chofer_nombre || '—'}</td>
               {mostrarCamion && <td className="px-2 py-1 text-slate-500">{v.vehiculo_nombre || 'Sin camión'}</td>}
+              {pesoPorDespacho && <td className="px-2 py-1 text-right whitespace-nowrap"><TextoCarga fila={pesoPorDespacho[v.despacho_id]} /></td>}
               <td className="px-2 py-1 text-right text-slate-700">${fmt(v.flete_usd)}</td>
               <td className="px-2 py-1 text-right text-amber-700">${fmt(v.chofer_usd)}</td>
               <td className="px-2 py-1 text-right font-semibold text-emerald-700">${fmt(v.empresa_usd)}</td>
@@ -109,7 +128,7 @@ function TablaViajes({ viajes = [], isLoading, mostrarCamion = false }) {
   )
 }
 
-function DetalleCamion({ vehiculo, desde, hasta, rol }) {
+function DetalleCamion({ vehiculo, desde, hasta, rol, pesoPorDespacho = null, resumenPeso = null }) {
   const { data: viajes = [], isLoading } = useDetalleViajesFlota({ desde, hasta, vehiculoId: vehiculo.vehiculo_id, rol })
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 text-xs">
@@ -117,6 +136,16 @@ function DetalleCamion({ vehiculo, desde, hasta, rol }) {
         <p><span className="text-slate-400">Placas:</span> {placasVehiculo(vehiculo)}</p>
         <p><span className="text-slate-400">Mercancía movilizada:</span> ${fmt(vehiculo.total_mercancia_usd)}</p>
         <p><span className="text-slate-400">Flete promedio por viaje:</span> ${fmt(vehiculo.promedio_flete_viaje_usd)}</p>
+        {resumenPeso && resumenPeso.viajes > 0 && (
+          <p>
+            <span className="text-slate-400">Carga:</span>{' '}
+            {resumenPeso.toneladas > 0 ? `${textoPeso(resumenPeso.toneladas * 1000)} movidos` : 'sin peso cargado'}
+            {resumenPeso.costoPorTonelada != null && ` · $${fmt(resumenPeso.costoPorTonelada)} por tonelada`}
+            {resumenPeso.usoPromedioPct != null && ` · uso promedio ${resumenPeso.usoPromedioPct}%`}
+            {resumenPeso.sobrecargados > 0 && <span className="text-red-600 font-bold"> · {resumenPeso.sobrecargados} sobrecargado{resumenPeso.sobrecargados === 1 ? '' : 's'}</span>}
+            {resumenPeso.cargaBaja > 0 && <span className="text-amber-600"> · {resumenPeso.cargaBaja} con carga baja</span>}
+          </p>
+        )}
         <p><span className="text-slate-400">Carabobo / fuera:</span> {num(vehiculo.viajes_en_carabobo)} / {num(vehiculo.viajes_fuera_carabobo)}</p>
         <p><span className="text-slate-400">Destinos más frecuentes:</span> {textoDestinos(vehiculo.destinos_top) || '—'}</p>
         <p>
@@ -126,13 +155,13 @@ function DetalleCamion({ vehiculo, desde, hasta, rol }) {
       </div>
       <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 p-2">
         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Viaje por viaje</p>
-        <TablaViajes viajes={viajes} isLoading={isLoading} />
+        <TablaViajes viajes={viajes} isLoading={isLoading} pesoPorDespacho={pesoPorDespacho} />
       </div>
     </div>
   )
 }
 
-export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null, sinCamion = null, desde, hasta, rol }) {
+export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null, sinCamion = null, desde, hasta, rol, pesoViajes = null, pesoAnterior = null }) {
   const [abierto, setAbierto] = useState(null)
   const [verSinCamion, setVerSinCamion] = useState(false)
   const { data: viajesSinCamion = [], isLoading: cargandoSinCamion } = useDetalleViajesFlota({
@@ -148,6 +177,15 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
   const anteriorPorId = Object.fromEntries((anterior || []).map(v => [v.vehiculo_id, v]))
   const diasPeriodo = diasDelPeriodo(desde, hasta)
   const masActivo = porVehiculo.find(v => num(v.total_viajes) > 0)
+
+  // Peso transportado (solo si la base ya entrega el peso de los viajes)
+  const hayPeso = Array.isArray(pesoViajes)
+  const pesoConCamion = hayPeso ? soloConCamion(pesoViajes) : []
+  const resumenPeso = resumirViajes(pesoConCamion)
+  const pesoPorVehiculo = resumirPor(pesoConCamion, 'vehiculo_id')
+  const pesoPorDespacho = hayPeso ? Object.fromEntries(pesoViajes.map(v => [v.despacho_id, v])) : null
+  const resumenPesoAnt = Array.isArray(pesoAnterior) ? resumirViajes(soloConCamion(pesoAnterior)) : null
+  const sinCoberturaCompleta = resumenPeso.incompletos + resumenPeso.sinDatos
 
   return (
     <div className="space-y-3">
@@ -167,6 +205,40 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
         <p className="text-[11px] text-slate-400">Elige un rango de fechas para comparar con el período anterior (▲▼).</p>
       )}
 
+      {/* Peso transportado y uso de la capacidad */}
+      {hayPeso && (
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            <Resumen icon={Scale} titulo="Carga transportada" valor={textoPeso(resumenPeso.toneladas * 1000)}
+              actual={resumenPeso.toneladas} anterior={resumenPesoAnt?.toneladas} hayAnterior={!!resumenPesoAnt} />
+            <Resumen icon={DollarSign} titulo="Costo de flete por tonelada"
+              valor={resumenPeso.costoPorTonelada != null ? `$${fmt(resumenPeso.costoPorTonelada)}` : '—'}
+              actual={0} anterior={0} hayAnterior={false} />
+            <Resumen icon={Gauge} titulo="Uso de la capacidad"
+              valor={resumenPeso.usoPromedioPct != null ? `${resumenPeso.usoPromedioPct}%` : '—'}
+              actual={0} anterior={0} hayAnterior={false} />
+            <div className="bg-white border border-slate-200 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                <AlertTriangle size={13} className="text-slate-400" /> Control de carga
+              </div>
+              <div className="mt-1 text-xs space-y-0.5">
+                <div className={resumenPeso.sobrecargados > 0 ? 'font-black text-red-600' : 'font-bold text-slate-700'}>
+                  {resumenPeso.sobrecargados} sobrecargado{resumenPeso.sobrecargados === 1 ? '' : 's'}
+                </div>
+                <div className={resumenPeso.cargaBaja > 0 ? 'font-bold text-amber-600' : 'text-slate-500'}>
+                  {resumenPeso.cargaBaja} con carga baja (&lt;{CARGA_BAJA_PCT}%)
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Peso completo en {resumenPeso.completos} de {resumenPeso.viajes} viajes
+            {sinCoberturaCompleta > 0 ? ` · ${resumenPeso.incompletos} con peso incompleto y ${resumenPeso.sinDatos} sin peso (los viajes anteriores a la carga de pesos no cuentan)` : ''}.
+            El costo por tonelada y el uso de la capacidad se calculan solo con viajes de peso completo.
+          </p>
+        </div>
+      )}
+
       {/* Viajes sin camión registrado */}
       {num(sinCamion?.viajes) > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
@@ -180,7 +252,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
               {verSinCamion ? 'Ocultar' : 'Ver cuáles'}
             </button>
           </div>
-          {verSinCamion && <TablaViajes viajes={viajesSinCamion} isLoading={cargandoSinCamion} />}
+          {verSinCamion && <TablaViajes viajes={viajesSinCamion} isLoading={cargandoSinCamion} pesoPorDespacho={pesoPorDespacho} />}
         </div>
       )}
 
@@ -213,12 +285,15 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                   detalles={[
                     { label: 'Días trabajados', valor: `${num(v.dias_trabajados)}${diasPeriodo ? ` de ${diasPeriodo}` : ''}` },
                     hayAnterior ? { label: 'Vs. anterior', valor: <Variacion actual={v.total_viajes} anterior={ant?.total_viajes} hayAnterior={hayAnterior} /> } : null,
+                    hayPeso && pesoPorVehiculo[v.vehiculo_id]?.toneladas > 0
+                      ? { label: 'Carga', valor: `${textoPeso(pesoPorVehiculo[v.vehiculo_id].toneladas * 1000)}${pesoPorVehiculo[v.vehiculo_id].usoPromedioPct != null ? ` · uso ${pesoPorVehiculo[v.vehiculo_id].usoPromedioPct}%` : ''}` }
+                      : null,
                     { label: 'Fletes', valor: `$${fmt(v.total_flete_usd)}` },
                     { label: 'Para la empresa', valor: `$${fmt(v.empresa_usd)}`, clase: 'text-emerald-700' },
                     { label: 'Último viaje', valor: v.ultimo_viaje_en ? `${fechaCorta(v.ultimo_viaje_en)} · ${v.ultimo_chofer_nombre || '—'}` : 'Sin viajes', ancho: true },
                   ]}
                 >
-                  {estaAbierto ? <DetalleCamion vehiculo={v} desde={desde} hasta={hasta} rol={rol} /> : null}
+                  {estaAbierto ? <DetalleCamion vehiculo={v} desde={desde} hasta={hasta} rol={rol} pesoPorDespacho={pesoPorDespacho} resumenPeso={pesoPorVehiculo[v.vehiculo_id]} /> : null}
                 </TarjetaMovil>
               )
             })}
@@ -234,6 +309,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                   <th className="text-left px-3 py-2">Vehículo</th>
                   <th className="text-right px-3 py-2">Viajes</th>
                   <th className="text-right px-3 py-2">Días trabajados</th>
+                  {hayPeso && <th className="text-right px-3 py-2">Carga</th>}
                   <th className="text-right px-3 py-2">Fletes</th>
                   <th className="text-right px-3 py-2">Para choferes</th>
                   <th className="text-right px-3 py-2">Para la empresa</th>
@@ -273,6 +349,22 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                         <td className="text-right px-3 py-2 text-slate-600">
                           {num(v.dias_trabajados)}{diasPeriodo ? <span className="text-slate-400"> de {diasPeriodo}</span> : ''}
                         </td>
+                        {hayPeso && (() => {
+                          const pv = pesoPorVehiculo[v.vehiculo_id]
+                          return (
+                            <td className="text-right px-3 py-2 text-slate-700 whitespace-nowrap">
+                              {pv && pv.toneladas > 0 ? (
+                                <>
+                                  <span className="font-semibold">{textoPeso(pv.toneladas * 1000)}</span>
+                                  <div className="text-[10px]">
+                                    {pv.usoPromedioPct != null && <span className={pv.usoPromedioPct < CARGA_BAJA_PCT ? 'text-amber-600' : 'text-slate-400'}>uso {pv.usoPromedioPct}%</span>}
+                                    {pv.sobrecargados > 0 && <span className="text-red-600 font-bold"> · ⚠ {pv.sobrecargados} sobrecargado{pv.sobrecargados === 1 ? '' : 's'}</span>}
+                                  </div>
+                                </>
+                              ) : <span className="text-slate-300">sin peso</span>}
+                            </td>
+                          )
+                        })()}
                         <td className="text-right px-3 py-2 font-semibold text-slate-800">${fmt(v.total_flete_usd)}</td>
                         <td className="text-right px-3 py-2 text-amber-700">${fmt(v.comision_choferes_usd)}</td>
                         <td className="text-right px-3 py-2 font-black text-emerald-700">${fmt(v.empresa_usd)}</td>
@@ -282,8 +374,8 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                       </tr>
                       {estaAbierto && (
                         <tr className="bg-slate-50/70">
-                          <td colSpan={7} className="px-3 py-3">
-                            <DetalleCamion vehiculo={v} desde={desde} hasta={hasta} rol={rol} />
+                          <td colSpan={hayPeso ? 8 : 7} className="px-3 py-3">
+                            <DetalleCamion vehiculo={v} desde={desde} hasta={hasta} rol={rol} pesoPorDespacho={pesoPorDespacho} resumenPeso={pesoPorVehiculo[v.vehiculo_id]} />
                           </td>
                         </tr>
                       )}
@@ -296,6 +388,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                   <td className="px-3 py-2">Total ({porVehiculo.length} vehículos)</td>
                   <td className="text-right px-3 py-2">{tot.viajes}</td>
                   <td className="text-right px-3 py-2">—</td>
+                  {hayPeso && <td className="text-right px-3 py-2">{textoPeso(resumenPeso.toneladas * 1000)}</td>}
                   <td className="text-right px-3 py-2">${fmt(tot.flete)}</td>
                   <td className="text-right px-3 py-2">${fmt(totChoferes)}</td>
                   <td className="text-right px-3 py-2">${fmt(totEmpresa)}</td>

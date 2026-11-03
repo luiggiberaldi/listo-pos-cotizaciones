@@ -110,6 +110,25 @@ export function useReporteFlota({ desde = null, hasta = null, rol = null, enable
   })
 }
 
+// Peso de cada viaje (migración 297): una fila por viaje con su peso total y la capacidad del camión.
+// Si la base aún no la tiene o falla, el reporte se muestra igual, sin la parte de peso.
+export function usePesoFlota({ desde = null, hasta = null, rol = null, enabled = true } = {}) {
+  return useQuery({
+    queryKey: [...KEY, 'peso', desde, hasta],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (desde) params.set('desde', desde)
+      if (hasta) params.set('hasta', hasta)
+      const qs = params.toString() ? `?${params}` : ''
+      const data = await pedir(`/api/reportes/flota-peso${qs}`)
+      return Array.isArray(data.viajes) ? data.viajes : []
+    },
+    enabled: puedeVerReporteFlota(rol) && enabled,
+    staleTime: 1000 * 60 * 2,
+    retry: 0,
+  })
+}
+
 // Detalle viaje por viaje (migración 286): de un camión, de todos, o solo los
 // viajes de choferes locales sin camión registrado.
 export function useDetalleViajesFlota({ desde = null, hasta = null, vehiculoId = null, sinCamion = false, rol = null, enabled = true } = {}) {

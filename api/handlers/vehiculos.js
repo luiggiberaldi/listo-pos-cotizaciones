@@ -465,3 +465,39 @@ export async function handleDetalleViajesFlota(request, env) {
   try { resultado = texto ? JSON.parse(texto) : {} } catch { /* respuesta vacía */ }
   return json({ ok: true, desde, hasta: hastaFinal, viajes: resultado.viajes || [] }, 200, request)
 }
+
+// ── GET /api/reportes/flota-peso?desde&hasta ───────────────────────────────────
+// Una fila por viaje con su peso total y la capacidad del camión (migración 297).
+// Misma regla de acceso y de fechas que el reporte de flota.
+export async function handleReportePesoFlota(request, env) {
+  const v = await validateOperator(request, env)
+  if (v.error) return v.error
+  const { operador, headers } = v
+  if (!ROLES_REPORTE.includes(operador.rol)) {
+    return jsonError('Acceso denegado: no tienes permiso para ver este reporte', 403, request)
+  }
+  const cuenta = requireCuenta(operador, request)
+  if (cuenta.error) return cuenta.error
+
+  const url = new URL(request.url)
+  const desde = url.searchParams.get('desde') || '2000-01-01'
+  const hastaFinal = url.searchParams.get('hasta') || new Date().toISOString().slice(0, 10)
+  if (!fechaValida(desde)) return jsonError('desde inválida (formato YYYY-MM-DD)', 400, request)
+  if (!fechaValida(hastaFinal)) return jsonError('hasta inválida (formato YYYY-MM-DD)', 400, request)
+  if (desde > hastaFinal) return jsonError('desde no puede ser mayor que hasta', 400, request)
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/obtener_peso_viajes_flota`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      p_cuenta_id: cuenta.cuentaId,
+      p_fecha_inicio: `${desde}T00:00:00${HORA_CARACAS}`,
+      p_fecha_fin: `${hastaFinal}T23:59:59.999${HORA_CARACAS}`,
+    }),
+  })
+  const texto = await res.text().catch(() => '')
+  if (!res.ok) return jsonError(`No se pudo obtener el peso de los viajes: ${texto}`, 500, request)
+  let resultado = {}
+  try { resultado = texto ? JSON.parse(texto) : {} } catch { /* respuesta vacía */ }
+  return json({ ok: true, desde, hasta: hastaFinal, viajes: resultado.viajes || [] }, 200, request)
+}
