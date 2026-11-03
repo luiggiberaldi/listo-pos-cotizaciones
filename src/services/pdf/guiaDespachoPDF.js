@@ -1,7 +1,6 @@
 // src/services/pdf/guiaDespachoPDF.js
 // Genera PDF de Guía de Despacho — solo para logística, sin precios, con eslogan y datos de chofer
 import { datosVehiculoImpreso } from '../../utils/vehiculoImpreso'
-import { resumenPesoItems } from '../../utils/pesoDespacho'
 import { jsPDF } from 'jspdf'
 import { LOGO_DESPACHO } from './logoDespachoBase64'
 import {
@@ -226,24 +225,12 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS (sin precios, optimizada)
   // ══════════════════════════════════════════════════════════════════════════
-  // Peso: solo si los ítems traen peso (migración 296). Sin peso, el documento queda exactamente como siempre.
-  const resumenPeso = resumenPesoItems(items, despacho.vehiculo_viaje?.capacidad_kg)
-  const hayPesoCol = !!resumenPeso
-  const COLS = hayPesoCol
-    ? [
-      { label: 'CANT.',       x: MARGIN,        w: 14,  align: 'center' },
-      { label: 'CÓD. ACC.',   x: MARGIN + 14,   w: 26,  align: 'center' },
-      { label: 'DESCRIPCIÓN COMPLETA DEL ARTÍCULO', x: MARGIN + 40,   w: 102, align: 'center' },
-      { label: 'UNID.',       x: MARGIN + 142,  w: 20,  align: 'center' },
-      { label: 'PESO KG',     x: MARGIN + 162,  w: 26,  align: 'center' },
-    ]
-    : [
-      { label: 'CANT.',       x: MARGIN,        w: 15,  align: 'center' },
-      { label: 'CÓD. ACC.',   x: MARGIN + 15,   w: 28,  align: 'center' },
-      { label: 'DESCRIPCIÓN COMPLETA DEL ARTÍCULO', x: MARGIN + 43,   w: 125, align: 'center' },
-      { label: 'UNID.',       x: MARGIN + 168,  w: 20,  align: 'center' },
-    ]
-  const fmtKg = (kg) => Number(kg).toLocaleString('es-VE', { maximumFractionDigits: 1 })
+  const COLS = [
+    { label: 'CANT.',       x: MARGIN,        w: 15,  align: 'center' },
+    { label: 'CÓD. ACC.',   x: MARGIN + 15,   w: 28,  align: 'center' },
+    { label: 'DESCRIPCIÓN COMPLETA DEL ARTÍCULO', x: MARGIN + 43,   w: 125, align: 'center' },
+    { label: 'UNID.',       x: MARGIN + 168,  w: 20,  align: 'center' },
+  ]
   const ROW_H_BASE = 6.0
 
   doc.setFillColor(60, 60, 60)
@@ -281,22 +268,6 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
       codigo_snap: 'CRT1254698',
       nombre_snap: 'SERVICIO DE CORTE (E)',
       unidad_snap: 'UND',
-    })
-  }
-
-  // Fila final con el peso total de la carga y la capacidad del camión (solo advierte)
-  if (hayPesoCol) {
-    const partes = ['PESO TOTAL DE LA CARGA']
-    if (resumenPeso.capacidadKg) partes.push(`CAPACIDAD DEL CAMIÓN: ${fmtKg(resumenPeso.capacidadKg)} KG (${resumenPeso.pct}%)`)
-    if (resumenPeso.excede) partes.push('SUPERA LA CAPACIDAD DEL CAMIÓN')
-    if (resumenPeso.sinPeso > 0) partes.push(`INCOMPLETO: ${resumenPeso.sinPeso} ARTÍCULO(S) SIN PESO`)
-    itemsToRender.push({
-      cantidad: '',
-      codigo_snap: '—',
-      nombre_snap: partes.length > 1 ? `${partes[0]} (${partes.slice(1).join(' · ')})` : partes[0],
-      unidad_snap: 'KG',
-      esResumenPeso: true,
-      peso_linea_kg: resumenPeso.totalKg,
     })
   }
 
@@ -386,21 +357,6 @@ export async function generarGuiaDespachoPDF({ despacho, items = [], config = {}
       doc.setFontSize(uniSize)
     }
     doc.text(uniText, COLS[3].x + COLS[3].w / 2, midY, { align: 'center' })
-
-    if (hayPesoCol) {
-      const kgLinea = item.esResumenPeso
-        ? item.peso_linea_kg
-        : (item.peso_unit_kg != null && item.cantidad != null && item.cantidad !== '' ? Number(item.cantidad) * Number(item.peso_unit_kg) : null)
-      doc.setFont('helvetica', item.esResumenPeso ? 'bold' : 'normal')
-      let kgSize = item.esResumenPeso ? 10 : 9.5
-      doc.setFontSize(kgSize)
-      const kgText = kgLinea != null ? fmtKg(kgLinea) : '—'
-      while (doc.getTextWidth(kgText) > COLS[4].w - 3 && kgSize > 6.5) {
-        kgSize -= 0.5
-        doc.setFontSize(kgSize)
-      }
-      doc.text(kgText, COLS[4].x + COLS[4].w / 2, midY, { align: 'center' })
-    }
 
     y += ROW_H
   })
