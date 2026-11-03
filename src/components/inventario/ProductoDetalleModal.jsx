@@ -256,6 +256,11 @@ export default function ProductoDetalleModal({ isOpen, onClose, producto, tasa =
                 Unidad de medida: <span className="font-semibold text-slate-600">{producto.unidad}</span>
               </p>
             )}
+            {producto.peso_kg != null && (
+              <p className="text-center text-xs text-slate-400">
+                Peso por unidad: <span className="font-semibold text-slate-600">{Number(producto.peso_kg).toLocaleString('es-VE', { maximumFractionDigits: 3 })} kg</span>
+              </p>
+            )}
 
             {/* Footer branding */}
             <div className="text-center pt-2 border-t border-slate-100">

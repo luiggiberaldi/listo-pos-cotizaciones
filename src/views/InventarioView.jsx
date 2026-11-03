@@ -4,7 +4,7 @@
 // — Supervisor: vista completa + crear/editar/desactivar
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Package, Plus, Search, RefreshCw, X, Filter, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste, TrendingUp, FileSpreadsheet, EyeOff } from 'lucide-react'
+import { Package, Plus, Search, RefreshCw, X, Filter, AlertTriangle, ArrowLeftRight, FileText, ClipboardPaste, TrendingUp, FileSpreadsheet, EyeOff, Scale } from 'lucide-react'
 import { smartSearchProductos } from '../utils/smartSearch'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -75,6 +75,7 @@ export default function InventarioView() {
   const [stockBajo,     setStockBajo]     = useState(() => searchParams.get('filtro') === 'stock_bajo')
   const [stockNegativo, setStockNegativo] = useState(false)
   const [soloDesactivados, setSoloDesactivados] = useState(false)
+  const [sinPeso, setSinPeso] = useState(false)
   const [pagina,        setPagina]        = useState(1)
 
   // Sincronizar URL param con estado
@@ -135,6 +136,7 @@ export default function InventarioView() {
   // Filtrar por stock bajo / negativo
   const productosFiltrados = useMemo(() => {
     let list = productos
+    if (sinPeso) list = list.filter(p => p.peso_kg == null)
     if (stockNegativo) {
       list = list.filter(p => (Number(p.stock_actual) || 0) < 0)
     } else if (stockBajo) {
@@ -157,7 +159,10 @@ export default function InventarioView() {
       if (aZero !== bZero) return aZero - bZero
       return aStock - bStock
     })
-  }, [productos, busqueda, stockBajo, stockNegativo])
+  }, [productos, busqueda, stockBajo, stockNegativo, sinPeso])
+
+  // Cuántos productos activos aún no tienen peso cargado (para dar seguimiento a la carga)
+  const cantidadSinPeso = useMemo(() => productosRaw.filter(p => p.activo !== false && p.peso_kg == null).length, [productosRaw])
 
   // Paginación
   const totalPaginas = Math.max(1, Math.ceil(productosFiltrados.length / ITEMS_POR_PAGINA))
@@ -182,6 +187,7 @@ export default function InventarioView() {
     setCategoria('')
     setStockBajo(false)
     setSoloDesactivados(false)
+    setSinPeso(false)
     setSearchParams({})
     setPagina(1)
   }
@@ -246,7 +252,7 @@ export default function InventarioView() {
     }
   }
 
-  const hayFiltros = busqueda || categoria || stockBajo || stockNegativo || soloDesactivados
+  const hayFiltros = busqueda || categoria || stockBajo || stockNegativo || soloDesactivados || sinPeso
 
   // Guardarraíl: migrar posibles valores 'list' guardados en localStorage a 'grid'
   {
@@ -404,6 +410,23 @@ export default function InventarioView() {
             >
               <EyeOff size={14} />
               <span>Solo desactivados</span>
+            </button>
+          )}
+
+          {/* Filtro sin peso (solo quienes cargan el peso: administración/jefe) */}
+          {puedeGestionarInventario && (
+            <button
+              type="button"
+              onClick={() => { setSinPeso(!sinPeso); setPagina(1) }}
+              title="Productos que aún no tienen el peso por unidad cargado"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors border shrink-0 ${
+                sinPeso
+                  ? 'bg-sky-50 border-sky-300 text-sky-700 hover:bg-sky-100 ring-2 ring-sky-200'
+                  : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-sky-600'
+              }`}
+            >
+              <Scale size={14} />
+              <span>Sin peso ({cantidadSinPeso})</span>
             </button>
           )}
         </div>

@@ -1139,8 +1139,23 @@ export async function handleActualizarProductoMetadatos(request, env) {
   const hasActivo = Object.prototype.hasOwnProperty.call(body, 'activo');
   const hasPrecio2Habilitado = Object.prototype.hasOwnProperty.call(body, 'precio2_habilitado');
   const hasPrecio3Habilitado = Object.prototype.hasOwnProperty.call(body, 'precio3_habilitado');
-  if (!hasImagen && !hasActivo && !hasPrecio2Habilitado && !hasPrecio3Habilitado) {
-    return jsonError('Sin campos a actualizar (imagen_url, activo, precio2_habilitado o precio3_habilitado)', 400, request);
+  const hasPeso = Object.prototype.hasOwnProperty.call(body, 'peso_kg');
+  if (!hasImagen && !hasActivo && !hasPrecio2Habilitado && !hasPrecio3Habilitado && !hasPeso) {
+    return jsonError('Sin campos a actualizar (imagen_url, activo, precio2_habilitado, precio3_habilitado o peso_kg)', 400, request);
+  }
+  // Peso por unidad (kg): lo cargan a mano administración, jefe o desarrollador. null = quitar el peso.
+  let pesoKg = null;
+  if (hasPeso) {
+    if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
+      return jsonError('Solo administración o jefe pueden cargar el peso de los productos', 403, request);
+    }
+    if (body.peso_kg !== null) {
+      pesoKg = typeof body.peso_kg === 'string' && body.peso_kg.trim() !== '' ? Number(body.peso_kg.replace(',', '.')) : body.peso_kg;
+      if (typeof pesoKg !== 'number' || !Number.isFinite(pesoKg) || pesoKg < 0 || pesoKg > 100000) {
+        return jsonError('peso_kg inválido: debe ser un número entre 0 y 100000 (en kilogramos; 100 g = 0.1)', 400, request);
+      }
+      pesoKg = Math.round(pesoKg * 1000) / 1000;
+    }
   }
   if (hasActivo && typeof body.activo !== 'boolean') return jsonError('activo debe ser booleano', 400, request);
   if (hasPrecio2Habilitado && typeof body.precio2_habilitado !== 'boolean') return jsonError('precio2_habilitado debe ser booleano', 400, request);
@@ -1162,6 +1177,7 @@ export async function handleActualizarProductoMetadatos(request, env) {
   if (hasActivo) patch.activo = body.activo;
   if (hasPrecio2Habilitado) patch.precio2_habilitado = body.precio2_habilitado;
   if (hasPrecio3Habilitado) patch.precio3_habilitado = body.precio3_habilitado;
+  if (hasPeso) patch.peso_kg = pesoKg;
 
   const upRes = await fetch(`${env.SUPABASE_URL}/rest/v1/productos?id=eq.${idQ}&cuenta_id=eq.${cuentaQ}`, {
     method: 'PATCH',
@@ -1173,6 +1189,9 @@ export async function handleActualizarProductoMetadatos(request, env) {
     if (errText.includes('precio2_habilitado') || errText.includes('precio3_habilitado')) {
       return jsonError('La migración 276 (habilitación de precios) aún no está aplicada en la base de datos', 503, request);
     }
+    if (errText.includes('peso_kg')) {
+      return jsonError('La migración 295 (peso por unidad) aún no está aplicada en la base de datos', 503, request);
+    }
     return jsonError(`Error actualizando producto: ${errText}`, 500, request);
   }
   const updated = await upRes.json();
@@ -1182,13 +1201,14 @@ export async function handleActualizarProductoMetadatos(request, env) {
     await registrarAuditoria(env, headers, {
       usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
       categoria: 'INVENTARIO', accion: 'ACTUALIZAR_PRODUCTO_METADATOS',
-      descripcion: 'Actualización de metadatos del producto (imagen_url/activo/precios habilitados)',
+      descripcion: 'Actualización de metadatos del producto (imagen_url/activo/precios habilitados/peso)',
       entidadTipo: 'productos', entidadId: id,
       meta: {
         imagen_url: hasImagen ? body.imagen_url : undefined,
         activo: hasActivo ? body.activo : undefined,
         precio2_habilitado: hasPrecio2Habilitado ? body.precio2_habilitado : undefined,
         precio3_habilitado: hasPrecio3Habilitado ? body.precio3_habilitado : undefined,
+        peso_kg: hasPeso ? pesoKg : undefined,
       },
       ip,
     });
