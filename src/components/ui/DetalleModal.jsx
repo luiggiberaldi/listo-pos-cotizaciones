@@ -20,7 +20,7 @@ function calcDescMonto(desc, totalLinea, cantidad) {
   return Math.round(Math.min(v * Number(cantidad), totalLinea) * 10000) / 10000
 }
 
-function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }) {
+function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil, mostrarPeso = false }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -63,12 +63,14 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil })
       </td>
       <td className="py-3 px-3 text-center text-sm text-slate-600 whitespace-nowrap">
         {cant} <span className="text-slate-400 text-[11px]">{item.unidad_snap || 'und'}</span>
-        {'peso_unit_kg' in item && (
-          item.peso_unit_kg != null
-            ? <div className="text-[10px] text-slate-400" title={`${formatPeso(item.peso_unit_kg)} por unidad`}>{formatPeso(pesoLinea(cant, item.peso_unit_kg))}</div>
-            : <div className="text-[10px] text-amber-600">sin peso</div>
-        )}
       </td>
+      {mostrarPeso && (
+        <td className="py-3 px-3 text-right text-xs whitespace-nowrap" title={item.peso_unit_kg != null ? `${formatPeso(item.peso_unit_kg)} por unidad` : 'Este artículo no tiene peso cargado'}>
+          {item.peso_unit_kg != null
+            ? <span className="text-slate-500">{formatPeso(pesoLinea(cant, item.peso_unit_kg))}</span>
+            : <span className="text-amber-600">sin peso</span>}
+        </td>
+      )}
       <td className="py-3 px-3 text-right text-sm text-slate-600 whitespace-nowrap">
         {descMonto > 0 ? (
           <span>
@@ -314,6 +316,16 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
     ? items.map(it => ({ ...it, es_prestamo: true }))
     : items
 
+  // Peso del despacho (solo informativo): se muestra en el encabezado de Productos, sin ocupar espacio extra
+  const pesoDet = (() => {
+    if (tipo !== 'despacho' || !itemsConFallback.some(it => 'peso_unit_kg' in it)) return null
+    const lineas = itemsConFallback.filter(it => !it.es_prestamo)
+    const conPeso = lineas.filter(it => it.peso_unit_kg != null)
+    if (!conPeso.length) return null
+    const totalKg = conPeso.reduce((acc, it) => acc + (pesoLinea(it.cantidad, it.peso_unit_kg) || 0), 0)
+    return { totalKg, sinPeso: lineas.length - conPeso.length, cap: comparaCapacidad(totalKg, registro?.vehiculo_viaje?.capacidad_kg) }
+  })()
+
   const numDisplay = esCot
     ? `COT-${String(registro.numero).padStart(5, '0')}`
     : `DES-${String(registro.numero).padStart(5, '0')}`
@@ -546,6 +558,17 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <Package size={12} />Productos
             </p>
+            {pesoDet && (
+              <span
+                className={`ml-auto mr-2 text-[11px] font-semibold ${pesoDet.cap?.excede ? 'text-red-600' : 'text-slate-500'}`}
+                title={pesoDet.cap
+                  ? `${pesoDet.cap.pct}% de la capacidad del camión (${formatPeso(pesoDet.cap.capacidadKg)})${pesoDet.cap.excede ? ': supera la capacidad (solo advertencia)' : ''}`
+                  : 'Peso total del despacho'}
+              >
+                {pesoDet.cap?.excede && '⚠ '}Peso: {formatPeso(pesoDet.totalKg)}{pesoDet.cap ? ` / ${formatPeso(pesoDet.cap.capacidadKg)}` : ''}
+                {pesoDet.sinPeso > 0 && <span className="text-amber-600"> · {pesoDet.sinPeso} sin peso</span>}
+              </span>
+            )}
             {puedeEditarProfundamente && registro.estado === 'pendiente' && (
               <button
                 onClick={() => setShowEditItems(true)}
@@ -583,12 +606,13 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                     <tr className="border-b-2 border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider">
                       <th className="pb-2 text-left pr-3">Producto</th>
                       <th className="pb-2 text-center px-3">Cant.</th>
+                      {pesoDet && <th className="pb-2 text-right px-3">Peso</th>}
                       <th className="pb-2 text-right px-3">Precio</th>
                       <th className="pb-2 text-right pl-3">Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {itemsConFallback.map(it => <ItemRow key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
+                    {itemsConFallback.map(it => <ItemRow key={it.id} mostrarPeso={!!pesoDet} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
                   </tbody>
                 </table>
               </div>
@@ -705,24 +729,6 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <div className={`flex justify-between font-black text-slate-800 text-base ${hayDesglose ? 'pt-1 border-t border-slate-200' : ''}`}>
               <span>Total</span><span>{fmtUsd(totalFinal)}</span>
             </div>
-            {tipo === 'despacho' && itemsConFallback.some(it => 'peso_unit_kg' in it) && (() => {
-              const lineas = itemsConFallback.filter(it => !it.es_prestamo)
-              const conPeso = lineas.filter(it => it.peso_unit_kg != null)
-              const sinPeso = lineas.length - conPeso.length
-              if (!conPeso.length) return null
-              const totalKg = conPeso.reduce((acc, it) => acc + (pesoLinea(it.cantidad, it.peso_unit_kg) || 0), 0)
-              const cap = comparaCapacidad(totalKg, registro?.vehiculo_viaje?.capacidad_kg)
-              return (
-                <div className="flex flex-col items-end gap-0.5 text-xs">
-                  <span className="font-semibold text-slate-600">Peso total: {formatPeso(totalKg)}{sinPeso > 0 && <span className="text-amber-600"> (incompleto: {sinPeso} sin peso)</span>}</span>
-                  {cap && (
-                    <span className={cap.excede ? 'font-bold text-red-600' : 'text-slate-400'}>
-                      {cap.excede && '⚠ '}{cap.pct}% de la capacidad del camión ({formatPeso(cap.capacidadKg)}){cap.excede && ' — supera la capacidad (solo advertencia)'}
-                    </span>
-                  )}
-                </div>
-              )
-            })()}
             {tasa > 0 && (
               <div className="flex justify-end text-xs text-slate-400">
                 <span>{fmtBs(usdToBs(totalFinal, tasa))}</span>
