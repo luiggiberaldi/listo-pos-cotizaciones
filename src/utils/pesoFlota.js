@@ -83,3 +83,13 @@ export function textoPeso(kg) {
   if (x >= 1000) return `${(x / 1000).toLocaleString('es-VE', { maximumFractionDigits: 2 })} t`
   return `${x.toLocaleString('es-VE', { maximumFractionDigits: 1 })} kg`
 }
+
+/** Totales del reporte: siempre en toneladas con 2 decimales ("0,85 t", "1,50 t"), para comparar períodos sin mezclar unidades. */
+export function textoToneladas(kg) {
+  return `${(n(kg) / 1000).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} t`
+}
+
+/** Kilos exactos para el texto de ayuda: "1.500 kg". */
+export function textoKilos(kg) {
+  return `${n(kg).toLocaleString('es-VE', { maximumFractionDigits: 1 })} kg`
+}

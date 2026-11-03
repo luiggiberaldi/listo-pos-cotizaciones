@@ -13,7 +13,7 @@ import {
 } from '../../utils/flotaReporte'
 import { nombreVehiculo, placasVehiculo } from '../../utils/vehiculoImpreso'
 import TarjetaMovil from './TarjetaMovil'
-import { resumirViajes, resumirPor, soloConCamion, usoPct, textoPeso, CARGA_BAJA_PCT } from '../../utils/pesoFlota'
+import { resumirViajes, resumirPor, soloConCamion, usoPct, textoPeso, textoToneladas, textoKilos, CARGA_BAJA_PCT } from '../../utils/pesoFlota'
 
 function fmt(n) {
   return num(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -31,9 +31,9 @@ function Variacion({ actual, anterior, hayAnterior }) {
   return <span className={`text-[10px] font-bold ${color}`} title="Comparado con el período anterior de la misma duración">{v.texto}</span>
 }
 
-function Resumen({ titulo, valor, actual, anterior, hayAnterior, icon: Icon }) {
+function Resumen({ titulo, valor, actual, anterior, hayAnterior, icon: Icon, ayuda }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-3">
+    <div className="bg-white border border-slate-200 rounded-xl p-3" title={ayuda}>
       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
         <Icon size={13} className="text-slate-400" /> {titulo}
       </div>
@@ -139,7 +139,7 @@ function DetalleCamion({ vehiculo, desde, hasta, rol, pesoPorDespacho = null, re
         {resumenPeso && resumenPeso.viajes > 0 && (
           <p>
             <span className="text-slate-400">Carga:</span>{' '}
-            {resumenPeso.toneladas > 0 ? `${textoPeso(resumenPeso.toneladas * 1000)} movidos` : 'sin peso cargado'}
+            {resumenPeso.toneladas > 0 ? `${textoToneladas(resumenPeso.toneladas * 1000)} movidos (${textoKilos(resumenPeso.toneladas * 1000)})` : 'sin peso cargado'}
             {resumenPeso.costoPorTonelada != null && ` · $${fmt(resumenPeso.costoPorTonelada)} por tonelada`}
             {resumenPeso.usoPromedioPct != null && ` · uso promedio ${resumenPeso.usoPromedioPct}%`}
             {resumenPeso.sobrecargados > 0 && <span className="text-red-600 font-bold"> · {resumenPeso.sobrecargados} sobrecargado{resumenPeso.sobrecargados === 1 ? '' : 's'}</span>}
@@ -209,7 +209,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
       {hayPeso && (
         <div className="space-y-1.5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-            <Resumen icon={Scale} titulo="Carga transportada" valor={textoPeso(resumenPeso.toneladas * 1000)}
+            <Resumen icon={Scale} titulo="Carga transportada" valor={textoToneladas(resumenPeso.toneladas * 1000)} ayuda={`${textoKilos(resumenPeso.toneladas * 1000)} en total`}
               actual={resumenPeso.toneladas} anterior={resumenPesoAnt?.toneladas} hayAnterior={!!resumenPesoAnt} />
             <Resumen icon={DollarSign} titulo="Costo de flete por tonelada"
               valor={resumenPeso.costoPorTonelada != null ? `$${fmt(resumenPeso.costoPorTonelada)}` : '—'}
@@ -286,7 +286,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                     { label: 'Días trabajados', valor: `${num(v.dias_trabajados)}${diasPeriodo ? ` de ${diasPeriodo}` : ''}` },
                     hayAnterior ? { label: 'Vs. anterior', valor: <Variacion actual={v.total_viajes} anterior={ant?.total_viajes} hayAnterior={hayAnterior} /> } : null,
                     hayPeso && pesoPorVehiculo[v.vehiculo_id]?.toneladas > 0
-                      ? { label: 'Carga', valor: `${textoPeso(pesoPorVehiculo[v.vehiculo_id].toneladas * 1000)}${pesoPorVehiculo[v.vehiculo_id].usoPromedioPct != null ? ` · uso ${pesoPorVehiculo[v.vehiculo_id].usoPromedioPct}%` : ''}` }
+                      ? { label: 'Carga', valor: `${textoToneladas(pesoPorVehiculo[v.vehiculo_id].toneladas * 1000)}${pesoPorVehiculo[v.vehiculo_id].usoPromedioPct != null ? ` · uso ${pesoPorVehiculo[v.vehiculo_id].usoPromedioPct}%` : ''}` }
                       : null,
                     { label: 'Fletes', valor: `$${fmt(v.total_flete_usd)}` },
                     { label: 'Para la empresa', valor: `$${fmt(v.empresa_usd)}`, clase: 'text-emerald-700' },
@@ -355,7 +355,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                             <td className="text-right px-3 py-2 text-slate-700 whitespace-nowrap">
                               {pv && pv.toneladas > 0 ? (
                                 <>
-                                  <span className="font-semibold">{textoPeso(pv.toneladas * 1000)}</span>
+                                  <span className="font-semibold" title={textoKilos(pv.toneladas * 1000)}>{textoToneladas(pv.toneladas * 1000)}</span>
                                   <div className="text-[10px]">
                                     {pv.usoPromedioPct != null && <span className={pv.usoPromedioPct < CARGA_BAJA_PCT ? 'text-amber-600' : 'text-slate-400'}>uso {pv.usoPromedioPct}%</span>}
                                     {pv.sobrecargados > 0 && <span className="text-red-600 font-bold"> · ⚠ {pv.sobrecargados} sobrecargado{pv.sobrecargados === 1 ? '' : 's'}</span>}
@@ -388,7 +388,7 @@ export default function CuadroVehiculosFlota({ porVehiculo = [], anterior = null
                   <td className="px-3 py-2">Total ({porVehiculo.length} vehículos)</td>
                   <td className="text-right px-3 py-2">{tot.viajes}</td>
                   <td className="text-right px-3 py-2">—</td>
-                  {hayPeso && <td className="text-right px-3 py-2">{textoPeso(resumenPeso.toneladas * 1000)}</td>}
+                  {hayPeso && <td className="text-right px-3 py-2" title={textoKilos(resumenPeso.toneladas * 1000)}>{textoToneladas(resumenPeso.toneladas * 1000)}</td>}
                   <td className="text-right px-3 py-2">${fmt(tot.flete)}</td>
                   <td className="text-right px-3 py-2">${fmt(totChoferes)}</td>
                   <td className="text-right px-3 py-2">${fmt(totEmpresa)}</td>
