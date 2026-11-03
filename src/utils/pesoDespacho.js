@@ -40,3 +40,24 @@ export function pesoLinea(cantidad, pesoUnitKg) {
   if (c === null || p === null) return null
   return Math.round(c * p * 1000) / 1000
 }
+
+/**
+ * Peso de un despacho a partir de sus ítems (con peso_unit_kg), para documentos impresos.
+ * Los ítems sin la propiedad peso_unit_kg (servicios como flete o corte) no cuentan.
+ * @returns {null | { totalKg:number, sinPeso:number, lineas:number, capacidadKg:number|null, excede:boolean, pct:number|null }}
+ */
+export function resumenPesoItems(items = [], capacidadKg = null) {
+  const lineas = items.filter(it => it && 'peso_unit_kg' in it)
+  const conPeso = lineas.filter(it => num(it.peso_unit_kg) !== null && num(it.cantidad) !== null)
+  if (!conPeso.length) return null
+  const totalKg = Math.round(conPeso.reduce((s, it) => s + num(it.cantidad) * num(it.peso_unit_kg), 0) * 1000) / 1000
+  const cap = comparaCapacidad(totalKg, capacidadKg)
+  return {
+    totalKg,
+    sinPeso: lineas.length - conPeso.length,
+    lineas: lineas.length,
+    capacidadKg: cap ? cap.capacidadKg : null,
+    excede: cap ? cap.excede : false,
+    pct: cap ? cap.pct : null,
+  }
+}

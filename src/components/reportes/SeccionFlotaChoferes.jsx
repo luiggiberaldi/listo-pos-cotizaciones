@@ -5,7 +5,7 @@
 // que la pestaña de Transportistas.
 import { User, RefreshCw } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
-import { useReporteFlota, puedeVerReporteFlota } from '../../hooks/useVehiculos'
+import { useReporteFlota, usePesoFlota, puedeVerReporteFlota } from '../../hooks/useVehiculos'
 import {
   MARCA_ESTIMADO, num, textoViajes, totalesVehiculos, totalesChoferes,
   periodoAnterior,
@@ -39,6 +39,9 @@ export default function SeccionFlotaChoferes({ rango }) {
   const anterior = periodoAnterior(desde, hasta)
   const { data: dataAnterior } = useReporteFlota({ desde: anterior?.desde, hasta: anterior?.hasta, rol: perfil?.rol, enabled: !!anterior })
 
+  const { data: pesoViajes } = usePesoFlota({ desde, hasta, rol: perfil?.rol })
+  const { data: pesoAnterior } = usePesoFlota({ desde: anterior?.desde, hasta: anterior?.hasta, rol: perfil?.rol, enabled: !!anterior })
+
   if (!puedeVerReporteFlota(perfil?.rol)) return null
 
   const porVehiculo = data?.porVehiculo ?? []
@@ -71,6 +74,8 @@ export default function SeccionFlotaChoferes({ rango }) {
           <CuadroVehiculosFlota
             porVehiculo={porVehiculo}
             anterior={anterior ? (dataAnterior?.porVehiculo ?? null) : null}
+            pesoViajes={pesoViajes ?? null}
+            pesoAnterior={anterior ? (pesoAnterior ?? null) : null}
             sinCamion={data?.sinCamion}
             desde={desde}
             hasta={hasta}

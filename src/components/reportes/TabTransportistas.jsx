@@ -7,7 +7,7 @@ import { Truck, RefreshCw, FileText, DollarSign, Building2, User, ListTree } fro
 import { useReporteTransportistas } from '../../hooks/useTransportistas'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { repartoFlete, periodoAnterior, num } from '../../utils/flotaReporte'
-import { cargarReporteFlota, cargarDetalleViajesFlota } from '../../hooks/useVehiculos'
+import { cargarReporteFlota, cargarDetalleViajesFlota, cargarPesoFlota } from '../../hooks/useVehiculos'
 import { showToast } from '../ui/Toast'
 import BarraPeriodoReporte from './BarraPeriodoReporte'
 import { getDayRange } from '../../utils/dateHelpers'
@@ -58,6 +58,11 @@ export default function TabTransportistas() {
         cargarReporteFlota({ desde, hasta }),
         anterior ? cargarReporteFlota(anterior) : Promise.resolve(null),
       ])
+      // Peso de los viajes (si la base aún no lo entrega, el PDF sale sin esa parte)
+      const [pesoViajes, pesoAnterior] = await Promise.all([
+        cargarPesoFlota({ desde, hasta }).catch(() => null),
+        anterior ? cargarPesoFlota(anterior).catch(() => null) : Promise.resolve(null),
+      ])
       const [detalle, detalleSinCamion] = detallado
         ? await Promise.all([
           cargarDetalleViajesFlota({ desde, hasta }),
@@ -72,6 +77,7 @@ export default function TabTransportistas() {
         porChofer: flota.porChofer.filter(c => c.activo !== false || num(c.total_viajes) > 0),
         sinCamion: flota.sinCamion,
         anterior: flotaAnterior ? flotaAnterior.porVehiculo : null,
+        pesoViajes, pesoAnterior,
         detalle, detalleSinCamion,
         config: configNegocio ?? {},
       })
