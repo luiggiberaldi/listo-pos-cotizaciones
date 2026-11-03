@@ -12,7 +12,7 @@ import MetricCard from '../components/ui/MetricCard'
 
 const roleLabels = {
   jefe: 'Dirección · Resultados de la empresa',
-  supervisor: 'Supervisión · Resultados de vendedores',
+  supervisor: 'Mi actividad · Ventas y comisiones',
   vendedor: 'Mi actividad · Ventas y comisiones',
   vendedor_sin_comision: 'Mi actividad · Ventas y comisiones',
   administracion: 'Administración · Control operativo',

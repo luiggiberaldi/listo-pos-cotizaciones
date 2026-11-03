@@ -8,7 +8,7 @@ import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '
 
 export default memo(function DespachoRow({ despacho, onVer, onEditar, tasa = 0 }) {
   const { perfil } = useAuthStore()
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
   const esPrivilegiado = esSupervisor || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
   const esVendedorExterno = !!despacho.vendedor?.es_externo || (despacho.vendedor?.markup_pct != null && Number(despacho.vendedor.markup_pct) > 0)
   const vendedorColor = esVendedorExterno ? '#D97706' : (despacho.vendedor?.color || '#64748b')

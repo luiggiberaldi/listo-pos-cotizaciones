@@ -129,8 +129,14 @@ export async function verifySupervisor(operatorId, env, accountId = null) {
   return ['supervisor', 'jefe', 'administracion', 'desarrollador'].includes(role)
 }
 
+// Administración del sistema: el supervisor (jefe de ventas) NO entra.
+export async function verifyAdminRole(operatorId, env, accountId = null) {
+  const role = await getOperatorRole(operatorId, env, accountId)
+  return ['jefe', 'administracion', 'desarrollador'].includes(role)
+}
+
 export async function verifyPrivileged(operatorId, env, accountId = null) {
-  return verifySupervisor(operatorId, env, accountId)
+  return verifyAdminRole(operatorId, env, accountId)
 }
 
 export async function validateOperator(request, env, { requireSupervisor = false } = {}) {

@@ -13,13 +13,16 @@ const cliId = '33333333-3333-4333-8333-333333333333'
 const actorId = '44444444-4444-4444-8444-444444444444'
 const otroId = '55555555-5555-4555-8555-555555555555'
 
-function stubDb({ formaPago = '[{"metodo":"Efectivo"}]', subs = [{ endpoint: 'https://fcm.googleapis.com/x', p256dh: 'p', auth: 'a', usuario_id: otroId }] } = {}) {
+const duenoId = '66666666-6666-4666-8666-666666666666'
+
+function stubDb({ formaPago = '[{"metodo":"Efectivo"}]', subs = [{ endpoint: 'https://fcm.googleapis.com/x', p256dh: 'p', auth: 'a', usuario_id: otroId }], vendedorId = null, duenoRol = null } = {}) {
   const urls = []
   vi.stubGlobal('fetch', vi.fn(async u => {
     const s = String(u); urls.push(s)
-    if (s.includes('notas_despacho?')) return new Response(JSON.stringify([{ numero: 7, cotizacion_id: cotId, cliente_id: cliId, forma_pago: formaPago }]), { status: 200 })
+    if (s.includes('notas_despacho?')) return new Response(JSON.stringify([{ numero: 7, cotizacion_id: cotId, cliente_id: cliId, forma_pago: formaPago, vendedor_id: vendedorId }]), { status: 200 })
     if (s.includes('cotizaciones?')) return new Response(JSON.stringify([{ numero: 123 }]), { status: 200 })
     if (s.includes('clientes?')) return new Response(JSON.stringify([{ nombre: 'Ferretería Sol' }]), { status: 200 })
+    if (s.includes('/usuarios?id=eq.')) return new Response(JSON.stringify(duenoRol ? [{ rol: duenoRol }] : []), { status: 200 })
     if (s.includes('/usuarios?')) return new Response(JSON.stringify([{ id: otroId }]), { status: 200 })
     if (s.includes('push_subscriptions?select')) return new Response(JSON.stringify(subs), { status: 200 })
     return new Response('', { status: 200 })
@@ -33,7 +36,7 @@ describe('avisarDespacho (aviso desde el servidor)', () => {
   it('despacho creado: avisa a dirección con datos leídos de la base y excluye a quien actuó', async () => {
     const urls = stubDb()
     await avisarDespacho(ENV, { tipo: 'creado', despachoId: despId, actor: { id: actorId, nombre: 'Ana' } })
-    expect(urls.find(u => u.includes('/usuarios?'))).toContain('rol=in.(supervisor,administracion,jefe)')
+    expect(urls.find(u => u.includes('/usuarios?'))).toContain('rol=in.(administracion,jefe)')
     expect(urls.find(u => u.includes('push_subscriptions?select'))).toContain(`usuario_id=neq.${actorId}`)
     const payload = JSON.parse(sendWebPush.mock.calls[0][3])
     expect(payload).toMatchObject({ title: '🚚 Orden de Despacho Creada', body: 'Despacho para cotización #00123 — Ferretería Sol', url: '/despachos', tag: 'despacho-00123' })
@@ -50,7 +53,18 @@ describe('avisarDespacho (aviso desde el servidor)', () => {
     expect(JSON.parse(sendWebPush.mock.calls[0][3]).body).toBe('Despacho #00123 — Ferretería Sol despachado por Luis')
     urls = stubDb()
     await avisarDespacho(ENV, { tipo: 'anulada', despachoId: despId, actor: { id: actorId, nombre: 'Luis' } })
-    expect(urls.find(u => u.includes('/usuarios?'))).toContain('vendedor_sin_comision')
+    const rolesAnulada = urls.find(u => u.includes('/usuarios?rol') || u.includes('rol=in.('))
+    expect(rolesAnulada).toContain('vendedor_sin_comision')
+    expect(rolesAnulada).not.toContain('supervisor')
+  })
+  it('el supervisor no recibe avisos del equipo, solo los de sus propios despachos', async () => {
+    let urls = stubDb({ vendedorId: duenoId, duenoRol: 'supervisor' })
+    await avisarDespacho(ENV, { tipo: 'entregada', despachoId: despId, actor: { id: actorId, nombre: 'Luis' } })
+    const subsUrls = urls.filter(u => u.includes('push_subscriptions?select'))
+    expect(subsUrls.some(u => u.includes(`usuario_id=eq.${duenoId}`))).toBe(true)
+    urls = stubDb({ vendedorId: duenoId, duenoRol: 'vendedor' })
+    await avisarDespacho(ENV, { tipo: 'entregada', despachoId: despId, actor: { id: actorId, nombre: 'Luis' } })
+    expect(urls.filter(u => u.includes('push_subscriptions?select')).some(u => u.includes(`usuario_id=eq.${duenoId}`))).toBe(false)
   })
   it('ignora tipos desconocidos e ids inválidos sin llamar a la base', async () => {
     const f = vi.fn(); vi.stubGlobal('fetch', f)

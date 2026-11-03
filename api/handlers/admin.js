@@ -1,6 +1,6 @@
 // api/handlers/admin.js
 import { json, jsonError, corsHeaders, isValidUuid, isRateLimited } from '../lib/utils.js'
-import { verifyAuth, verifySupervisor, verifyPrivileged, supaServiceHeaders, SUPER_ADMIN_UUID, validateOperator, invalidateOperatorCache } from '../lib/auth.js'
+import { verifyAuth, verifySupervisor, verifyAdminRole, verifyPrivileged, supaServiceHeaders, SUPER_ADMIN_UUID, validateOperator, invalidateOperatorCache } from '../lib/auth.js'
 import { hashPinPBKDF2, verifyPinPBKDF2, generateSalt } from '../lib/crypto.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 
@@ -27,8 +27,8 @@ export async function handleAdmin(request, env, url) {
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
   // Verificar que es supervisor (usa operator_id del JWT app_metadata)
-  const isSupervisor = await verifySupervisor(user.operator_id, env);
-  if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403, request);
+  const isSupervisor = await verifyAdminRole(user.operator_id, env);
+  if (!isSupervisor) return jsonError('Acceso denegado: solo jefe, administración o desarrollador', 403, request);
 
   // Parsear body
   let body;
@@ -359,8 +359,8 @@ export async function handleRestore(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const isSupervisor = await verifySupervisor(user.operator_id, env);
-  if (!isSupervisor) return jsonError('Acceso denegado: solo supervisores', 403, request);
+  const isSupervisor = await verifyAdminRole(user.operator_id, env);
+  if (!isSupervisor) return jsonError('Acceso denegado: solo jefe, administración o desarrollador', 403, request);
 
   let backup;
   try {
@@ -460,12 +460,12 @@ export async function handleSaveConfig(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  const ROLES_CONFIG = ['supervisor', 'jefe', 'administracion', 'desarrollador']
+  const ROLES_CONFIG = ['jefe', 'administracion', 'desarrollador']
   const rol = user.operator_rol
   if (!rol || !ROLES_CONFIG.includes(rol)) {
     // Fallback: si el JWT no tiene operator_rol aún, verificar via DB
     const isPriv = await verifyPrivileged(user.operator_id, env)
-    if (!isPriv) return jsonError('Solo supervisores o administración', 403, request)
+    if (!isPriv) return jsonError('Solo jefe o administración', 403, request)
   }
 
   const campos = await request.json();
@@ -727,8 +727,8 @@ export async function handleResetOperacional(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  const isSup = await verifySupervisor(user.operator_id, env);
-  if (!isSup) return jsonError('Solo supervisores', 403, request);
+  const isSup = await verifyAdminRole(user.operator_id, env);
+  if (!isSup) return jsonError('Solo jefe, administración o desarrollador', 403, request);
 
   const start = Date.now();
   const log = [];
@@ -794,8 +794,8 @@ export async function handleTesterClearAll(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  const isSup = await verifySupervisor(user.operator_id, env);
-  if (!isSup) return jsonError('Solo supervisores', 403, request);
+  const isSup = await verifyAdminRole(user.operator_id, env);
+  if (!isSup) return jsonError('Solo jefe, administración o desarrollador', 403, request);
 
   const start = Date.now();
   const log = [];
@@ -1000,8 +1000,8 @@ export async function handleTesterSeedDemo(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  const isSup = await verifySupervisor(user.operator_id, env);
-  if (!isSup) return jsonError('Solo supervisores', 403, request);
+  const isSup = await verifyAdminRole(user.operator_id, env);
+  if (!isSup) return jsonError('Solo jefe, administración o desarrollador', 403, request);
 
   const start = Date.now();
   const log = [];
@@ -1190,8 +1190,8 @@ export async function handleTesterStressSeed(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
-  const isSup = await verifySupervisor(user.operator_id, env);
-  if (!isSup) return jsonError('Solo supervisores', 403, request);
+  const isSup = await verifyAdminRole(user.operator_id, env);
+  if (!isSup) return jsonError('Solo jefe, administración o desarrollador', 403, request);
 
   let body;
   try { body = await request.json(); } catch { body = {}; }

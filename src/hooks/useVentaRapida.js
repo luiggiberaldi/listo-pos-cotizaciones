@@ -142,7 +142,7 @@ export function useVentaRapida() {
           message: `${vendedorNombre} vendió a "${clienteNombre}" (de ${clienteVendedorNombre || 'otro vendedor'}) — VR-${numero}`,
           tag: `cliente-ajeno-vr-${numero}`,
           url: '/despachos',
-          targetRole: 'supervisor',
+          targetRole: 'jefe',
         })
       }
     },

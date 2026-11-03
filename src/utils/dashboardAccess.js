@@ -1,7 +1,7 @@
 // Una matriz explícita compartida por la vista y el servidor. Sin herencia implícita.
 const policies = {
   jefe: { scope: 'empresa', sales: true, commissions: true, team: true, quote: true },
-  supervisor: { scope: 'equipo', sales: true, commissions: true, team: true, quote: true },
+  supervisor: { scope: 'propio', sales: true, commissions: true, quote: true },
   vendedor: { scope: 'propio', sales: true, commissions: true, quote: true },
   vendedor_sin_comision: { scope: 'propio', sales: true, noCommission: true, quote: true },
   administracion: { scope: 'administracion', operations: true, receivables: true, inventory: true },

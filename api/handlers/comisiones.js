@@ -9,7 +9,7 @@ import {
   isLoanPayment,
 } from '../../src/utils/comisionUtils.js'
 
-const PRIVILEGED_ROLES = new Set(['supervisor', 'administracion', 'desarrollador', 'jefe'])
+const PRIVILEGED_ROLES = new Set(['administracion', 'desarrollador', 'jefe'])
 const EMPTY_UUID = '00000000-0000-0000-0000-000000000000'
 
 function getCommissionPolicy(despacho = {}) {

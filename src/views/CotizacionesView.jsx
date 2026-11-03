@@ -1049,7 +1049,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   const navigate = useNavigate()
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esAdmin = perfil?.rol === 'administracion'
   const esPrivilegiado = esAdmin || esSupervisor || esDesarrollador

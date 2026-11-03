@@ -16,7 +16,7 @@ export const DESPACHOS_KEY = ['despachos']
 // ─── Lista de despachos ─────────────────────────────────────────────────────
 export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqueda = '', esHoy = false } = {}) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
   const esLogistica = perfil?.rol === 'logistica'
   const esAdmin = perfil?.rol === 'administracion'
   const esDesarrollador = perfil?.rol === 'desarrollador'

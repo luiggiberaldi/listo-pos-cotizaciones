@@ -77,24 +77,27 @@ export function programar(env, tarea) {
   return p
 }
 
-const TODOS_LOS_ROLES = ROLES_VALIDOS
+// El supervisor recibe solo los avisos de SUS despachos (ver más abajo), no los de todo el equipo.
+const TODOS_LOS_ROLES = ROLES_VALIDOS.filter(r => r !== 'supervisor')
 
 // Avisos de despachos. Lee los datos que necesita desde la base (nombre del cliente, número de la
 // cotización, forma de pago) para que el aviso salga igual sin importar quién lo disparó.
 const TIPOS = {
-  creado: { roles: ['supervisor', 'administracion', 'jefe'] },
-  venta_rapida: { roles: ['supervisor', 'administracion', 'jefe'] },
+  creado: { roles: ['administracion', 'jefe'] },
+  venta_rapida: { roles: ['administracion', 'jefe'] },
   despachada: { roles: ['vendedor', 'logistica'] },
   entregada: { roles: ['vendedor'] },
   anulada: { roles: TODOS_LOS_ROLES },
 }
+
+const AVISA_AL_DUENO = new Set(['despachada', 'entregada', 'anulada'])
 
 export function avisarDespacho(env, { tipo, despachoId, actor }) {
   if (!TIPOS[tipo] || !isValidUuid(despachoId)) return Promise.resolve()
   return programar(env, async () => {
     const headers = dbHeaders(env)
     const get = async p => { const r = await fetch(`${env.SUPABASE_URL}/rest/v1/${p}`, { headers }); return r.ok ? (await r.json())[0] : null }
-    const d = await get(`notas_despacho?id=eq.${despachoId}&select=numero,cotizacion_id,cliente_id,forma_pago`)
+    const d = await get(`notas_despacho?id=eq.${despachoId}&select=numero,cotizacion_id,cliente_id,forma_pago,vendedor_id`)
     if (!d) return
     const [cot, cli] = await Promise.all([
       isValidUuid(d.cotizacion_id) ? get(`cotizaciones?id=eq.${d.cotizacion_id}&select=numero`) : null,
@@ -116,5 +119,13 @@ export function avisarDespacho(env, { tipo, despachoId, actor }) {
     }[tipo]
 
     await enviarPush(env, { ...textos, url: '/despachos', roles: TIPOS[tipo].roles, excluirUsuarioId: actor?.id, usuarioNombre: quien })
+
+    // Si el dueño del despacho es un supervisor, se le avisa de lo suyo (no recibe los del resto del equipo)
+    if (AVISA_AL_DUENO.has(tipo) && isValidUuid(d.vendedor_id) && d.vendedor_id !== actor?.id) {
+      const dueno = await get(`usuarios?id=eq.${d.vendedor_id}&select=rol`)
+      if (dueno?.rol === 'supervisor') {
+        await enviarPush(env, { ...textos, url: '/despachos', userId: d.vendedor_id, excluirUsuarioId: actor?.id, usuarioNombre: quien })
+      }
+    }
   })
 }

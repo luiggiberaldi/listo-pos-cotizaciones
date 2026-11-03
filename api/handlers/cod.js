@@ -2,7 +2,7 @@ import { json, jsonError, isValidUuid, isSameOriginRequest } from '../lib/utils.
 import { SUPER_ADMIN_UUID, validateOperator } from '../lib/auth.js'
 import { convertBsToUsd } from '../../src/utils/codCurrency.js'
 
-const ROLES_CONCILIAR_COD = new Set(['administracion', 'jefe', 'supervisor', 'desarrollador'])
+const ROLES_CONCILIAR_COD = new Set(['administracion', 'jefe', 'desarrollador'])
 const METODOS_PAGO_EXTERNOS = new Set([
   'Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT',
 ])

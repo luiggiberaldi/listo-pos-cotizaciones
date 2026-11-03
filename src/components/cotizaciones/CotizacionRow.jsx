@@ -8,7 +8,7 @@ import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '
 
 export default memo(function CotizacionRow({ cotizacion, onEditar, onVer, tasa = 0 }) {
   const { perfil } = useAuthStore()
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
   const esBorrador = cotizacion.estado === 'borrador'
   const esPropietario = cotizacion.vendedor_id === perfil?.id
   const despacho = cotizacion.despacho

@@ -1,5 +1,5 @@
 import { json, jsonError, corsHeaders, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
-import { verifyAuth, validateOperator, verifySupervisor, SUPER_ADMIN_UUID } from '../lib/auth.js'
+import { verifyAuth, validateOperator, verifyAdminRole, SUPER_ADMIN_UUID } from '../lib/auth.js'
 import { avisarDespacho } from '../lib/notificarPush.js';
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
@@ -130,7 +130,7 @@ export async function handleGuardarCotizacion(request, env) {
         fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}&select=vendedor_id,estado`, {
           headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
         }),
-        verifySupervisor(user.operator_id, env),
+        verifyAdminRole(user.operator_id, env),
       ]);
       if (!checkRes.ok) return jsonError('Error al verificar cotización', 500, request);
       const [existing] = await checkRes.json();
@@ -191,9 +191,9 @@ export async function handleReciclarCotizacion(request, env) {
   const user = await verifyAuth(request, env);
   if (!user?.id) return jsonError('No autenticado', 401, request);
 
-  // Solo supervisores
-  const isSup = await verifySupervisor(user.operator_id, env);
-  if (!isSup) return jsonError('Solo supervisores pueden reciclar cotizaciones', 403, request);
+  // Reciclar a otro vendedor: jefe, administración o desarrollador (el supervisor ve solo lo suyo)
+  const isSup = await verifyAdminRole(user.operator_id, env);
+  if (!isSup) return jsonError('Solo jefe o administración pueden reciclar cotizaciones', 403, request);
 
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
@@ -417,7 +417,7 @@ export async function handleCrearVersion(request, env) {
     }
 
     // 4. Validar acceso
-    if (cotOrig.vendedor_id !== user.operator_id && !['supervisor', 'jefe', 'administracion', 'desarrollador'].includes(operador.rol)) {
+    if (cotOrig.vendedor_id !== user.operator_id && !['jefe', 'administracion', 'desarrollador'].includes(operador.rol)) {
       return jsonError('No tienes permiso para versionar esta cotización', 403, request);
     }
 
@@ -540,7 +540,7 @@ export async function handleEnviarCotizacion(request, env) {
     if (!cot) return jsonError('Cotización no encontrada', 404, request);
 
     // 2. Validar acceso
-    if (cot.vendedor_id !== user.operator_id && !['supervisor', 'jefe', 'administracion', 'desarrollador'].includes(operador.rol)) {
+    if (cot.vendedor_id !== user.operator_id && !['jefe', 'administracion', 'desarrollador'].includes(operador.rol)) {
       return jsonError('No tienes permiso para enviar esta cotización', 403, request);
     }
 

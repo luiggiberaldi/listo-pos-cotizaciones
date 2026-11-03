@@ -37,7 +37,7 @@ export function useCuentasCobrar(clienteId) {
 // ─── Resumen global CxC (para reporte) ────────────────────────────────────
 export function useResumenCxC(rango) {
   const { perfil } = useAuthStore()
-  const esPrivilegiado = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe') || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
+  const esPrivilegiado = (perfil?.rol === 'jefe') || perfil?.rol === 'administracion' || perfil?.rol === 'desarrollador'
 
   return useQuery({
     queryKey: [...CXC_KEY, 'resumen', esPrivilegiado, perfil?.id, rango?.from, rango?.to],

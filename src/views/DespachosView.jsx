@@ -136,7 +136,7 @@ const _PlantillaDropdown = PlantillaDropdown
 export default function DespachosView() {
   const navigate = useNavigate()
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esLogistica = perfil?.rol === 'logistica'

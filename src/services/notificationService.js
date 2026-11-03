@@ -99,7 +99,7 @@ const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.COTIZACION_ACEPTADA]:          ['vendedor'],
   [NOTIF_TYPES.COTIZACION_ACEPTADA_DESPACHO]: ['supervisor', 'jefe', 'desarrollador'],
   [NOTIF_TYPES.DESPACHO_CREADO]:              ['supervisor', 'administracion', 'jefe', 'desarrollador'],
-  [NOTIF_TYPES.DESPACHO_EN_RUTA]:             ['logistica', 'vendedor'],
+  [NOTIF_TYPES.DESPACHO_EN_RUTA]:             ['logistica', 'vendedor', 'supervisor'],
   [NOTIF_TYPES.DESPACHO_ENTREGADO]:           ['vendedor', 'supervisor', 'jefe', 'desarrollador'],
   [NOTIF_TYPES.DESPACHO_CANCELADO]:           ['supervisor', 'administracion', 'jefe', 'desarrollador'],
   [NOTIF_TYPES.DESPACHO_PENDIENTE_MUCHO]:     ['supervisor', 'jefe', 'desarrollador'],
@@ -181,6 +181,9 @@ export function createNotification(type, title, body, meta = null, currentRole =
 function _insertLocalNotification(type, title, body, meta) {
   if (!getKey()) return null
   if (['vendedor', 'vendedor_sin_comision'].includes(_currentRole) && meta?.vendedorId !== _currentUserId) return null
+  // El supervisor recibe solo lo suyo (como un vendedor); las alertas de stock no son de ventas ajenas
+  const TIPOS_STOCK = [NOTIF_TYPES.STOCK_BAJO, NOTIF_TYPES.STOCK_CRITICO, NOTIF_TYPES.STOCK_REABASTECIDO]
+  if (_currentRole === 'supervisor' && !TIPOS_STOCK.includes(type) && meta?.vendedorId !== _currentUserId) return null
   let notifs = readNotifs()
 
   if (STATE_TYPES.has(type)) {
