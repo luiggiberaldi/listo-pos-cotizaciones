@@ -165,7 +165,7 @@ export async function handleCrearDespacho(request, env) {
       return jsonError('Ya existe una nota de despacho para esta cotización', 400, request);
     }
 
-    const esSupervisorOp = ['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(operador.rol);
+    const esSupervisorOp = ['administracion', 'jefe', 'desarrollador'].includes(operador.rol);
     const esPropietario = cot.vendedor_id === operador.id;
 
     if (!['enviada', 'aceptada'].includes(cot.estado)) {
@@ -451,7 +451,7 @@ export async function handleEditarPagoDespacho(request, env) {
     return jsonError('El flete ya fue liquidado. Revierta el pago antes de modificar chofer, flete o destino.', 400, request);
   }
   
-  const esAdmin = ['supervisor', 'administracion', 'jefe', 'desarrollador', 'logistica'].includes(operador.rol);
+  const esAdmin = ['administracion', 'jefe', 'desarrollador', 'logistica'].includes(operador.rol);
   const esVendedorDueno = despacho.vendedor_id === operador.id;
   if (!esAdmin && !esVendedorDueno) return jsonError('No tienes permiso para editar este despacho', 403, request);
 
@@ -487,7 +487,7 @@ export async function handleEditarPagoDespacho(request, env) {
   }
 
   const esConciliacionCod = formaPago !== undefined && 
-    (['administracion', 'desarrollador', 'supervisor', 'jefe'].includes(operador.rol));
+    (['administracion', 'desarrollador', 'jefe'].includes(operador.rol));
 
   // La vía nueva ya fue validada al inicio del handler (rol + contrato del body
   // ANTES de consultar la base); aquí solo se marca para exentar de los guards
@@ -768,8 +768,8 @@ export async function handleActualizarEstadoDespacho(request, env) {
 
     // 2d. Anular: administración, supervisor, desarrollador, o vendedor dueño si está pendiente.
     if (nuevoEstado === 'anulada') {
-      const esVendedorPropio = ['vendedor', 'vendedor_sin_comision'].includes(rolOp) && desp.vendedor_id === operador.id && desp.estado === 'pendiente';
-      if (!['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
+      const esVendedorPropio = ['vendedor', 'vendedor_sin_comision', 'supervisor'].includes(rolOp) && desp.vendedor_id === operador.id && desp.estado === 'pendiente';
+      if (!['administracion', 'jefe', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
         return jsonError('No tiene permiso para anular despachos', 403, request);
       }
     }
@@ -898,7 +898,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
 
     // 2f. Revertir entrega (entregada→despachada): administración, supervisor, desarrollador
     if (desp.estado === 'entregada' && nuevoEstado === 'despachada') {
-      if (!['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp)) {
+      if (!['administracion', 'jefe', 'desarrollador'].includes(rolOp)) {
         return jsonError('Solo un supervisor o administración puede revertir un despacho entregado', 403, request);
       }
     }
@@ -1458,8 +1458,8 @@ export async function handleReciclarDespacho(request, env) {
     if (desp.estado !== 'anulada') return jsonError('Solo se pueden reciclar despachos anulados', 400, request);
 
     const rolOp = operador.rol;
-    const esVendedorPropio = ['vendedor', 'vendedor_sin_comision'].includes(rolOp) && desp.vendedor_id === operador.id;
-    if (!['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
+    const esVendedorPropio = ['vendedor', 'vendedor_sin_comision', 'supervisor'].includes(rolOp) && desp.vendedor_id === operador.id;
+    if (!['administracion', 'jefe', 'desarrollador'].includes(rolOp) && !esVendedorPropio) {
       return jsonError('No tiene permiso para reciclar despachos', 403, request);
     }
 

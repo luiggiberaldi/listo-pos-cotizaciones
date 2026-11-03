@@ -34,7 +34,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const pctOtros   = Number(configNegocio?.comision_pct_otros   ?? 0)
   const catCabilla = (configNegocio?.comision_categoria_cabilla || 'Cabilla').toLowerCase()
   const { perfil } = useAuthStore()
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esAdministracion = perfil?.rol === 'administracion'
   const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
@@ -334,7 +334,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   const canEntregar = (['logistica', 'jefe', 'desarrollador', 'administracion'].includes(perfil?.rol)) && despacho.estado === 'despachada'
   const esVendedorPropio = perfil?.id === despacho.vendedor_id
   const canAnular = despacho.estado === 'pendiente' && (esDesarrollador || esAdministracion || esSupervisor || esVendedorPropio)
-  const canDevolver = (despacho.estado === 'despachada' || despacho.estado === 'entregada') && ['logistica', 'jefe', 'desarrollador', 'administracion', 'supervisor'].includes(perfil?.rol)
+  const canDevolver = (despacho.estado === 'despachada' || despacho.estado === 'entregada') && ['logistica', 'jefe', 'desarrollador', 'administracion'].includes(perfil?.rol)
   const canDevolucionParcial = despacho.estado === 'entregada' && ['administracion', 'logistica', 'desarrollador', 'jefe'].includes(perfil?.rol)
   const canReciclar = ((esSupervisor || esDesarrollador) && despacho.estado === 'anulada' && onReciclar)
     || (['vendedor', 'vendedor_sin_comision'].includes(rol) && despacho.estado === 'anulada' && esVendedorPropio && onReciclar)
@@ -844,7 +844,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
     // Conciliación de Cobro a destino (solo Admin o Dev)
 
-    const esAdminConciliador = ['administracion', 'desarrollador', 'supervisor', 'jefe'].includes(rol)
+    const esAdminConciliador = ['administracion', 'desarrollador', 'jefe'].includes(rol)
     const canConciliarCod = esAdminConciliador && isCodUnpaid && ['despachada', 'entregada'].includes(despacho.estado)
     if (canConciliarCod) {
       actions.push({

@@ -106,7 +106,7 @@ export default function ClientesView() {
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esExterno = ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol) && Number(perfil?.markup_pct || 0) > 0
   const mostrarToggle = !esExterno && (esSupervisor || esDesarrollador || ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol))
-  const puedePromover = ['supervisor', 'administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const puedePromover = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
 
   // Búsqueda y filtros
   const [busqueda, setBusqueda] = useState('')

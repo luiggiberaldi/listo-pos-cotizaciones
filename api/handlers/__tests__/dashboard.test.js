@@ -89,16 +89,15 @@ describe('server-selected home data', () => {
     expect(body.comisiones.sinComisionConfigurada).toBe(true)
     expect(body.equipo).toBeUndefined()
   })
-  it('supervisor sees active sellers/supervisors and their earnings, never boss operations or company profit', async () => {
+  it('supervisor sees only their own sales and commissions (like a seller), never the team, boss operations or company profit', async () => {
     auth('supervisor')
     const body = await (await handleDashboard(request(), env)).json()
-    expect(body.scope).toBe('equipo')
-    // Seller A (115). Las ventas de EMPRESA (vendedor_sin_comision) quedan fuera del alcance del supervisor.
-    expect(body.ventas.totalUsd).toBe(115)
-    expect(body.equipo).toHaveLength(2)
-    expect(body.equipo.map(row => row.nombre)).not.toContain('Boss private')
-    expect(body.equipo.map(row => row.nombre)).not.toContain('Seller B')
-    expect(body.comisiones.totalUsd).toBe(5)
+    expect(body.scope).toBe('propio')
+    expect(body.equipo).toBeUndefined()
+    // Las ventas de Seller A (115), EMPRESA y jefe quedan fuera: el supervisor no tiene ventas propias en el fixture.
+    expect(body.ventas.totalUsd).toBe(0)
+    expect(body.comisiones.totalUsd).toBe(0)
+    expect(body.ultimasVentas.map(row => row.id)).toEqual([])
     expect(body.gananciasEmpresa).toBeUndefined()
     expect(calls.every(call => !['clientes', 'productos', 'cuentas_por_cobrar'].includes(call.table))).toBe(true)
   })

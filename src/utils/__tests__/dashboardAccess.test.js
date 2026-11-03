@@ -13,8 +13,9 @@ describe('explicit home permission matrix', () => {
       expect(getDashboardAccess(role).team).not.toBe(true)
     }
   })
-  it('grants supervisor seller breakdown, not company profit', () => {
-    expect(getDashboardAccess('supervisor')).toMatchObject({ scope: 'equipo', team: true })
+  it('limits supervisor to own scope, like a seller (no team breakdown)', () => {
+    expect(getDashboardAccess('supervisor')).toMatchObject({ scope: 'propio' })
+    expect(getDashboardAccess('supervisor').team).not.toBe(true)
   })
   it('team table lists vendedor and supervisor only; company seller is a total-only alias', () => {
     expect(SELLER_ROLES).toEqual(['vendedor', 'supervisor'])

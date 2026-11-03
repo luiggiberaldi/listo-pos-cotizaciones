@@ -306,7 +306,7 @@ function PanelDesignacion({ perfil, vendedores }) {
 // ─── Vista Principal ────────────────────────────────────────────────────────
 export default function ComisionesView() {
   const perfil = useAuthStore(state => state.perfil)
-  const esPrivilegiado = ['administracion', 'supervisor', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const esPrivilegiado = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
 
   // Rango inicial: Corte semanal vigente (viernes–jueves)
   const [rango, setRango] = useState(() => {

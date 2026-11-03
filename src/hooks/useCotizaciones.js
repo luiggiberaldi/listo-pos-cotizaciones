@@ -24,7 +24,7 @@ export const COTIZACIONES_KEY = ['cotizaciones']
 // ─── Lista de cotizaciones ────────────────────────────────────────────────────
 export function useCotizaciones({ estado = '', clienteId = '', veTodos = false } = {}) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esAdmin = perfil?.rol === 'administracion'
   // Admin siempre ve todos; supervisor/dev solo si toggle activo
@@ -125,7 +125,7 @@ export function useCotizaciones({ estado = '', clienteId = '', veTodos = false }
 // tabla por número o por cliente cuando el filtro local no encuentra nada.
 export function useBuscarCotizaciones(busqueda, { enabled = true } = {}) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
   const esDesarrollador = perfil?.rol === 'desarrollador'
   const esAdmin = perfil?.rol === 'administracion'
   const esPrivilegiado = esAdmin || esSupervisor || esDesarrollador
@@ -211,7 +211,7 @@ export function useBuscarCotizaciones(busqueda, { enabled = true } = {}) {
 // ─── Cotización individual con items ─────────────────────────────────────────
 export function useCotizacion(id) {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
 
   return useQuery({
     queryKey: [...COTIZACIONES_KEY, id],
@@ -487,7 +487,7 @@ export function useEnviarCotizacion() {
           message: `${vendedorNombre} cotizó con "${clienteNombre}" (de ${clienteVendedorNombre || 'otro vendedor'}) — COT-${numero}`,
           tag: `cliente-ajeno-cot-${numero}`,
           url: '/cotizaciones',
-          targetRole: 'supervisor',
+          targetRole: 'jefe',
         })
       }
     },
@@ -517,13 +517,13 @@ export function useAnularCotizacion() {
       broadcastEntidad('cotizaciones')
       showToast(`Cotización #${numero} anulada`, 'warning')
       notifyCotizacionAnulada(numero, usuarioNombre, rol)
-      // Push al otro rol
+      // Aviso a la dirección (el supervisor solo recibe lo suyo)
       sendPushNotification({
         title: '🚫 Cotización Anulada',
         message: `Cotización #${numero} fue anulada`,
         tag: `cotizacion-anulada-${numero}`,
         url: '/cotizaciones',
-        targetRole: rol === 'supervisor' ? 'vendedor' : 'supervisor',
+        targetRole: 'jefe',
       })
     },
   })
@@ -559,7 +559,7 @@ export function useActualizarEstado() {
           message: `COT-${numero} — ${clienteNombre} lista para crear nota de despacho`,
           tag: `cot-aceptada-despacho-${numero}`,
           url: '/cotizaciones',
-          targetRole: 'supervisor',
+          targetRole: 'jefe',
         })
       }
     },

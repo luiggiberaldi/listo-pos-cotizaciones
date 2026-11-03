@@ -27,7 +27,8 @@ export function useRecordatoriosCotizaciones() {
     if (!perfil) return
 
     async function check() {
-      const esSupervisor = perfil.rol === 'supervisor'
+      // El supervisor ve solo lo suyo (como un vendedor): sin avisos del equipo
+      const esSupervisor = false
 
       // ── 1. Cotizaciones enviadas sin respuesta (≥ 1 hora) ───────────────
       const umbralSinRespuesta = new Date(Date.now() - HORAS_SIN_RESPUESTA * 60 * 60 * 1000)

@@ -51,7 +51,7 @@ async function fetchClienteViaAPI(clienteId) {
 export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, onCambiarEstado, onDespachar, onReciclar, onClonar, onCambiarEstadoDespacho, tasa = 0 }) {
   const navigate = useNavigate()
   const { perfil } = useAuthStore()
-  const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
+  const esSupervisor = (perfil?.rol === 'jefe')
   const esAdministracion = perfil?.rol === 'administracion'
   const rol = perfil?.rol || 'vendedor'
   const esBorrador = cotizacion.estado === 'borrador'

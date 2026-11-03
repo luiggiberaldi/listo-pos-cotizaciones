@@ -177,6 +177,21 @@ function RutaSupervisor() {
   return <Outlet />
 }
 
+// ─── Ruta por lista de roles ──────────────────────────────────────────────────
+// Para pantallas que el supervisor NO debe abrir (Configuración, Usuarios, Reporte Vendedores)
+function RutaRoles({ roles }) {
+  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
+  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
+
+  if (!initialized) return <PantallaCarga />
+  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
+  if (!perfil) return <Navigate to="/login" replace />
+  if (!roles.includes(perfil.rol)) return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 // ─── Ruta para supervisor O administracion ───────────────────────────────────
 // Para secciones compartidas como reportes
 function RutaSupervisorOAdmin() {
@@ -326,15 +341,19 @@ function AppRoutes() {
               <Route path="/reportes"      element={<ReportesView />} />
             </Route>
 
-            {/* Configuración: supervisor y administracion */}
-            <Route element={<RutaSupervisorOAdmin />}>
+            {/* Configuración: administración, jefe y desarrollador (el supervisor no entra) */}
+            <Route element={<RutaRoles roles={['administracion', 'jefe', 'desarrollador']} />}>
               <Route path="/configuracion" element={<ConfiguracionView />} />
             </Route>
 
-            {/* Rutas exclusivas de supervisor */}
-            <Route element={<RutaSupervisor />}>
+            {/* Usuarios y Reporte Vendedores: jefe y desarrollador (el supervisor no entra) */}
+            <Route element={<RutaRoles roles={['jefe', 'desarrollador']} />}>
               <Route path="/usuarios"             element={<UsuariosView />} />
               <Route path="/reporte-vendedores"   element={<ReporteVendedoresView />} />
+            </Route>
+
+            {/* Orden de compra: supervisor, jefe y desarrollador */}
+            <Route element={<RutaSupervisor />}>
               <Route path="/orden-compra"         element={<OrdenCompraView />} />
             </Route>
 

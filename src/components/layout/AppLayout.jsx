@@ -87,11 +87,11 @@ const NAV_TODOS = [
 ]
 
 const NAV_SUPERVISOR = [
-  { path: '/reporte-vendedores', label: 'Reporte Vendedores', icono: BarChart2, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
+  { path: '/reporte-vendedores', label: 'Reporte Vendedores', icono: BarChart2, onlyRoles: ['jefe', 'desarrollador'] },
   { path: '/orden-compra',        label: 'Orden de Compra',   icono: ShoppingCart, onlyRoles: ['supervisor', 'jefe', 'desarrollador'] },
   { path: '/reportes',      label: 'Reportes',      icono: BarChart3,   excludeRoles: ['supervisor'] },
   { path: '/proveedores',   label: 'Proveedores',   icono: Briefcase,   onlyRoles: ['administracion', 'jefe', 'desarrollador'] },
-  { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['vendedor', 'vendedor_sin_comision', 'logistica'] },
+  { path: '/configuracion', label: 'Configuración', icono: Settings, excludeRoles: ['vendedor', 'vendedor_sin_comision', 'logistica', 'supervisor'] },
   { path: '/logs',          label: 'Buzón',         icono: MessageSquare, onlyRoles: ['desarrollador'] },
   { path: '/auditoria',     label: 'Auditoría',     icono: Shield,       onlyRoles: ['desarrollador', 'jefe', 'administracion', 'supervisor'] },
 ]
