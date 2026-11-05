@@ -4,13 +4,15 @@
 import { readAllRows, splitIds } from './dashboardData.js'
 import { enviarPush } from './notificarPush.js'
 import { isValidUuid } from './utils.js'
-import { DIAS_AVISO_COBRANZA, ROLES_AVISO_COBRANZA, fechaCaracas, resumirCobranza, textoCobranza } from '../../src/utils/cobranza.js'
+import { DIAS_AVISO_COBRANZA, ROLES_AVISO_COBRANZA, cargosPendientesDeTodos, fechaCaracas, resumirCargos, textoCobranza } from '../../src/utils/cobranza.js'
 
 export const URL_COBRANZA = '/reportes?tab=credito'
 
 const dbHeaders = env => ({ apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` })
 
-export async function leerResumenCobranza(env, cuentaId, now = new Date(), { signal } = {}) {
+// Lo que falta por cobrar de cada cargo de la cuenta (clientes activos con saldo).
+// También lo usa la tarjeta del inicio de administración (api/handlers/dashboard.js).
+export async function leerCargosPendientes(env, cuentaId, { signal } = {}) {
   if (!isValidUuid(cuentaId)) throw new Error('Cuenta inválida')
   const headers = dbHeaders(env)
   const clientes = await readAllRows(env, headers, 'clientes', new URLSearchParams({
@@ -23,7 +25,11 @@ export async function leerResumenCobranza(env, cuentaId, now = new Date(), { sig
       cuenta_id: `eq.${cuentaId}`, tipo: 'in.(cargo,abono)', cliente_id: `in.(${ids.join(',')})`,
     }), { signal }))
   }
-  return resumirCobranza(transacciones, fechaCaracas(now), DIAS_AVISO_COBRANZA)
+  return cargosPendientesDeTodos(transacciones)
+}
+
+export async function leerResumenCobranza(env, cuentaId, now = new Date(), { signal } = {}) {
+  return resumirCargos(await leerCargosPendientes(env, cuentaId, { signal }), fechaCaracas(now), DIAS_AVISO_COBRANZA)
 }
 
 // Tarea programada: un aviso por cuenta a sus jefes y administradores activos.

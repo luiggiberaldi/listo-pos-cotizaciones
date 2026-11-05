@@ -139,6 +139,7 @@ export default function DashboardView() {
                 {access.deliveries && <MetricCard color="emerald" icon={ClipboardList} label="Entregadas hoy" value={data.operaciones.entregadasHoy} sub="Día local de Venezuela" />}
 
                 {administration && <MetricCard color="gold" icon={AlertCircle} label="Deudas por vencer" value={fmtUsd(data.operaciones.deudasPorVencer.totalUsd)} sub={`${data.operaciones.deudasPorVencer.cantidad} cuentas · próximos 7 días`} />}
+                {administration && data.operaciones.deudasVencidas && <MetricCard color="red" icon={AlertCircle} label="Deudas vencidas" value={fmtUsd(data.operaciones.deudasVencidas.totalUsd)} sub={`${data.operaciones.deudasVencidas.cantidad} cuentas · ya pasaron su fecha`} />}
                 {!administration && access.receivables && <MetricCard color="blue" icon={AlertCircle} label="Cuentas por cobrar" value={fmtUsd(data.operaciones.cuentasPorCobrar.totalUsd)} sub={`${data.operaciones.cuentasPorCobrar.clientes} clientes con saldo pendiente`} />}
                 {access.inventory && <MetricCard color="gold" icon={Package} label="Inventario bajo stock" value={data.operaciones.stockBajo} sub="Productos activos que requieren reposición" />}
               </div>

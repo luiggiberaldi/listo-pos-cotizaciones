@@ -53,28 +53,36 @@ export function cargosPendientes(transacciones) {
   return cargos.filter(c => c.pendiente > 0.005)
 }
 
-// Agrupa los cargos pendientes en vencidos (antes de hoy) y por vencer (de hoy a hoy + dias).
-export function resumirCobranza(transacciones, hoy, dias = DIAS_AVISO_COBRANZA) {
-  const limite = sumarDias(hoy, dias)
+// Cargos pendientes de varios clientes a la vez (agrupa por cliente y aplica cargosPendientes).
+export function cargosPendientesDeTodos(transacciones) {
   const porCliente = new Map()
   for (const t of transacciones) {
     if (!porCliente.has(t.cliente_id)) porCliente.set(t.cliente_id, [])
     porCliente.get(t.cliente_id).push(t)
   }
+  return [...porCliente.values()].flatMap(cargosPendientes)
+}
+
+// Agrupa cargos YA pendientes en vencidos (antes de hoy) y por vencer (de hoy a hoy + dias).
+export function resumirCargos(cargos, hoy, dias = DIAS_AVISO_COBRANZA) {
+  const limite = sumarDias(hoy, dias)
   const resumen = { hoy, dias, vencidas: { cantidad: 0, totalUsd: 0 }, porVencer: { cantidad: 0, totalUsd: 0 } }
-  for (const txs of porCliente.values()) {
-    for (const cargo of cargosPendientes(txs)) {
-      const vence = typeof cargo.fecha_vencimiento === 'string' ? cargo.fecha_vencimiento.slice(0, 10) : null
-      if (!vence) continue
-      const grupo = vence < hoy ? resumen.vencidas : vence <= limite ? resumen.porVencer : null
-      if (!grupo) continue
-      grupo.cantidad++
-      grupo.totalUsd += cargo.pendiente
-    }
+  for (const cargo of cargos) {
+    const vence = typeof cargo.fecha_vencimiento === 'string' ? cargo.fecha_vencimiento.slice(0, 10) : null
+    if (!vence) continue
+    const grupo = vence < hoy ? resumen.vencidas : vence <= limite ? resumen.porVencer : null
+    if (!grupo) continue
+    grupo.cantidad++
+    grupo.totalUsd += cargo.pendiente
   }
   resumen.vencidas.totalUsd = Math.round(resumen.vencidas.totalUsd * 100) / 100
   resumen.porVencer.totalUsd = Math.round(resumen.porVencer.totalUsd * 100) / 100
   return resumen
+}
+
+// Igual que resumirCargos, partiendo de los cargos y abonos crudos.
+export function resumirCobranza(transacciones, hoy, dias = DIAS_AVISO_COBRANZA) {
+  return resumirCargos(cargosPendientesDeTodos(transacciones), hoy, dias)
 }
 
 const usd = n => `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
