@@ -23,6 +23,7 @@ import BuzonFAB from '../ui/BuzonFAB'
 import { useRealtimeSync } from '../../hooks/useRealtimeSync'
 import { useAdminAlerts } from '../../hooks/useAdminAlerts'
 import { useRecordatoriosCotizaciones } from '../../hooks/useRecordatoriosCotizaciones'
+import { useAvisoCobranza } from '../../hooks/useAvisoCobranza'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
 import { NOTIF_TYPES, setNotificationUserId, startRealtimeNotifications, stopRealtimeNotifications } from '../../services/notificationService'
@@ -60,6 +61,8 @@ const NOTIF_ICON_MAP = {
   [NOTIF_TYPES.COMPROMISO_ALTO]:               { icon: AlertTriangle, color: 'text-orange-500',  bg: 'bg-orange-50' },
   [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]:         { icon: UserX,         color: 'text-red-500',     bg: 'bg-red-50' },
   [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:      { icon: UserX,         color: 'text-amber-600',   bg: 'bg-amber-50' },
+  [NOTIF_TYPES.COBRANZA_VENCIDA]:               { icon: DollarSign,    color: 'text-red-600',     bg: 'bg-red-50' },
+  [NOTIF_TYPES.COBRANZA_POR_VENCER]:            { icon: DollarSign,    color: 'text-amber-600',   bg: 'bg-amber-50' },
 }
 const DEFAULT_NOTIF_ICON = { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' }
 
@@ -195,6 +198,9 @@ export default function AppLayout() {
 
   // Recordatorios de vencimiento deshabilitados (cotizaciones y despachos no vencen)
   // useRecordatoriosCotizaciones()
+
+  // Resumen diario de cuentas por cobrar vencidas / por vencer (jefe y administración)
+  useAvisoCobranza()
 
   // Notificaciones
   const { unreadCount, notifications, markAllRead, clearAll } = useAdminAlerts()
@@ -457,6 +463,8 @@ export default function AppLayout() {
                       [NOTIF_TYPES.COMPROMISO_ALTO]: '/inventario',
                       [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]: '/despachos',
                       [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]: '/despachos',
+                      [NOTIF_TYPES.COBRANZA_VENCIDA]: '/reportes?tab=credito',
+                      [NOTIF_TYPES.COBRANZA_POR_VENCER]: '/reportes?tab=credito',
                     }[n.type]
                     const isClickable = !!navTarget
                     const iconData = NOTIF_ICON_MAP[n.type] || DEFAULT_NOTIF_ICON

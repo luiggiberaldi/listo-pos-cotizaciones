@@ -43,7 +43,12 @@ import {
 } from './api/handlers/proveedores.js'
 import { handleCierreDiarioSync } from './api/handlers/finanzas-sync.js'
 import { handleDashboard } from './api/handlers/dashboard.js'
+import { handleResumenCobranza } from './api/handlers/cobranza.js'
+import { runAvisoCobranza } from './api/lib/cobranza.js'
 import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota, handleReportePesoFlota } from './api/handlers/vehiculos.js'
+
+// Debe coincidir con el segundo cron de wrangler.toml (12:00 UTC = 8:00 a. m. en Venezuela).
+const CRON_AVISO_COBRANZA = '0 12 * * *';
 
 // Permite que los avisos push se envíen DESPUÉS de responder (no hacen esperar al usuario).
 function conWaitUntil(env, ctx) {
@@ -91,6 +96,10 @@ export default {
 
     if (url.pathname === '/api/dashboard/inicio') {
       return handleDashboard(request, env)
+    }
+
+    if (url.pathname === '/api/cobranza/resumen') {
+      return handleResumenCobranza(request, env)
     }
 
     // ── API: sincronización de ventas con Nómina y Finanzas ─────────────
@@ -640,6 +649,15 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    // 8:00 a. m. de Venezuela: resumen de cobranza a jefe y administración
+    if (event.cron === CRON_AVISO_COBRANZA) {
+      ctx.waitUntil(
+        runAvisoCobranza(env)
+          .then(res => console.log('[CRON AVISO_COBRANZA] Completado:', JSON.stringify(res)))
+          .catch(err => console.error('[CRON AVISO_COBRANZA] Falló:', err?.message))
+      );
+      return;
+    }
     ctx.waitUntil(
       Promise.allSettled([
         runPurgeTrackingImages(env),

@@ -1,6 +1,7 @@
 // src/views/ReportesView.jsx
 // Vista profesional de reportes administrativos con tabs
 import { useState, useMemo, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   BarChart3, CreditCard, RefreshCw, Download,
   FileText, DollarSign, AlertTriangle,
@@ -2766,7 +2767,19 @@ function TabArticulosExternos({ configNeg }) {
 // ═══════════════════════════════════════════════════════════════════════════
 export default function ReportesView() {
   const perfil = useAuthStore(s => s.perfil)
-  const [activeTab, setActiveTab] = useState(() => tabsDelRol(perfil?.rol)[0]?.id ?? 'comisiones')
+  // ?tab=credito abre directo una pestaña (ej. desde el aviso de cobranza), si el rol la tiene
+  const [searchParams] = useSearchParams()
+  const tabPedida = searchParams.get('tab')
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabs = tabsDelRol(perfil?.rol)
+    return tabs.find(t => t.id === tabPedida)?.id ?? tabs[0]?.id ?? 'comisiones'
+  })
+  // Si ya estaba en Reportes y llega otro ?tab=, se cambia de pestaña
+  const [tabUrlVista, setTabUrlVista] = useState(tabPedida)
+  if (tabPedida !== tabUrlVista) {
+    setTabUrlVista(tabPedida)
+    if (tabPedida && tabsDelRol(perfil?.rol).some(t => t.id === tabPedida)) setActiveTab(tabPedida)
+  }
   const { data: configNeg = {} } = useConfigNegocio()
 
   return (
