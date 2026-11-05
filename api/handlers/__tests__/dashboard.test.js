@@ -132,6 +132,35 @@ describe('server-selected home data', () => {
     expect(pendingCall.query).toContain('creado_en=gte.2026-09-15T00%3A00%3A00-04%3A00')
     expect(pendingCall.query).toContain('creado_en=lt.2026-09-16T00%3A00%3A00-04%3A00')
   })
+  it('administration counts only what is still owed per debt, and shows overdue debts apart', async () => {
+    auth('administracion')
+    const cargo = (id, cliente, monto, saldoCorrido, vence, creado, despacho) => ({ id, cuenta_id: account, cliente_id: cliente, despacho_id: despacho, tipo: 'cargo', metodo_pago: 'cxc', monto_usd: monto, saldo_usd: saldoCorrido, fecha_vencimiento: vence, creado_en: creado })
+    const abono = (id, cliente, monto, creado, despacho) => ({ id, cuenta_id: account, cliente_id: cliente, despacho_id: despacho, tipo: 'abono', monto_usd: monto, creado_en: creado })
+    fixtures.clientes.push(
+      { id: 'client2', cuenta_id: account, nombre: 'Debtor', activo: true, saldo_pendiente: 550 },
+      { id: 'client3', cuenta_id: account, nombre: 'Inactive', activo: false, saldo_pendiente: 70 },
+    )
+    fixtures.cuentas_por_cobrar.push(
+      cargo('old1', 'client2', 500, 500, '2026-09-10', '2026-08-01T12:00:00Z', 'saleOld'), // vencida, sin pagos
+      cargo('new1', 'client2', 90, 590, '2026-09-18', '2026-09-01T12:00:00Z', 'saleX'), // la fila dice 590 (saldo del cliente)
+      abono('ab1', 'client2', 40, '2026-09-02T12:00:00Z', 'saleX'), // → falta 50
+      cargo('paid1', 'client2', 30, 620, '2026-09-19', '2026-09-03T12:00:00Z', 'saleY'),
+      abono('ab2', 'client2', 30, '2026-09-04T12:00:00Z', 'saleY'), // pagada completa → no cuenta
+      cargo('inac1', 'client3', 70, 70, '2026-09-17', '2026-09-05T12:00:00Z', 'saleZ'), // cliente inactivo → no cuenta
+    )
+    const body = await (await handleDashboard(request(), env)).json()
+    // Antes: 90 + 590 + 620 + 70 = 1370 en 4 cuentas
+    expect(body.operaciones.deudasPorVencer).toEqual({ cantidad: 2, totalUsd: 140 })
+    expect(body.operaciones.deudasVencidas).toEqual({ cantidad: 1, totalUsd: 500 })
+  })
+  it('only administration receives the receivables cards', async () => {
+    for (const rol of ['jefe', 'vendedor', 'supervisor', 'logistica']) {
+      auth(rol)
+      const body = await (await handleDashboard(request(), env)).json()
+      expect(body.operaciones?.deudasPorVencer).toBeUndefined()
+      expect(body.operaciones?.deudasVencidas).toBeUndefined()
+    }
+  })
   it('logistics shows only today pending deliveries, never historical ones', async () => {
     auth('logistica')
     fixtures.notas_despacho.push({ ...fixtures.notas_despacho[0], id: 'sale6', numero: 6, creado_en: '2026-09-15T12:00:00Z', estado: 'despachada' })

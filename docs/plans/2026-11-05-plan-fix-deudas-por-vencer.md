@@ -93,3 +93,17 @@ La diferencia en "por vencer" se notará en las semanas en que venzan deudas de 
 | 2 | Comparación con producción (solo lectura) | Permitir la lectura cuando aparezca el aviso |
 | 3 | Publicar Parte A | Tu autorización |
 | 4 | Parte B (rama aparte) | Tu autorización para empezar y para publicar |
+
+---
+
+## Avance
+
+**Parte A — hecha (rama `fix/deudas-por-vencer`), pendiente de publicar.**
+- La tarjeta usa `leerCargosPendientes` + `resumirCargos` (los mismos del aviso de cobranza). Por vencer: de hoy a hoy + 6 días. Vencidas: antes de hoy, con saldo.
+- Cambio respecto al plan: ya no se filtra por `metodo_pago = 'cxc'`. Cuenta toda deuda con fecha de vencimiento, igual que el reporte de Crédito y el aviso, para que las tres pantallas digan lo mismo.
+- Se dejó sin tocar la tarjeta muerta "Cuentas por cobrar": no hace daño y quitarla no era necesario.
+- Pruebas: 2 nuevas en `dashboard.test.js` (caso realista: antes $1,370, ahora $140; fallan con el código viejo). Suite 974/974, build correcto.
+- Verificado solo leyendo, 2026-11-05: **producción** por vencer 2 · $5,549, vencidas **45 · $49,976.45**; **staging** 0 · $0 y 36 · $43,497.15. Coincide con la auditoría.
+- No verificado: la tarjeta en el navegador.
+
+**Parte B — en evaluación** (ver la decisión en la conversación del 2026-11-05).

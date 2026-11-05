@@ -5,6 +5,8 @@ import { readAllRows, splitIds, getDashboardPeriod, addPeriod, money } from '../
 import { getDashboardAccess, SELLER_ROLES } from '../../src/utils/dashboardAccess.js'
 import { isDonationPayment, isLoanPayment } from '../../src/utils/comisionUtils.js'
 import { enrichCommissions } from './comisiones.js'
+import { leerCargosPendientes } from '../lib/cobranza.js'
+import { resumirCargos } from '../../src/utils/cobranza.js'
 
 const noStore = response => {
   response.headers.set('Cache-Control', 'private, no-store, max-age=0')
@@ -145,19 +147,12 @@ async function readOperations(env, headers, user, access, signal, now) {
     ubicacion: access.deliveries ? [names.get(row.cliente_id)?.ciudad, names.get(row.cliente_id)?.estado].filter(Boolean).join(', ') : undefined,
   }))
   if (isAdministration) {
-    const dueQuery = paramsFor('cuentas_por_cobrar', user.id, 'id,cliente_id,despacho_id,monto_usd,saldo_usd,fecha_vencimiento')
-    dueQuery.set('tipo', 'eq.cargo')
-    dueQuery.set('metodo_pago', 'eq.cxc')
-    dueQuery.set('saldo_usd', 'gt.0')
-    dueQuery.set('fecha_vencimiento', `gte.${today.desde.slice(0, 10)}`)
-    const dueUntil = new Date(today.hasta)
-    dueUntil.setUTCDate(dueUntil.getUTCDate() + 6)
-    dueQuery.append('fecha_vencimiento', `lt.${dueUntil.toISOString().slice(0, 10)}`)
-    const dueRows = await readAllRows(env, headers, 'cuentas_por_cobrar', dueQuery, { signal })
-    result.operaciones.deudasPorVencer = {
-      cantidad: dueRows.length,
-      totalUsd: money(dueRows.reduce((sum, row) => sum + Number(row.saldo_usd || 0), 0)),
-    }
+    // Lo pendiente de cada cargo (abonos aplicados), igual que el reporte de Crédito y el aviso
+    // de cobranza: saldo_usd de la fila es el saldo corrido del cliente, no lo que falta del cargo.
+    const cargos = await leerCargosPendientes(env, user.id, { signal })
+    const { vencidas, porVencer } = resumirCargos(cargos, today.desde.slice(0, 10), 6)
+    result.operaciones.deudasPorVencer = porVencer
+    result.operaciones.deudasVencidas = vencidas
   } else if (access.receivables) {
     const query = paramsFor('clientes', user.id, 'id,saldo_pendiente')
     query.set('activo', 'eq.true')
