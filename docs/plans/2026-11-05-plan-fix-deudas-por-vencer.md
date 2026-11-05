@@ -106,4 +106,4 @@ La diferencia en "por vencer" se notará en las semanas en que venzan deudas de 
 - Verificado solo leyendo, 2026-11-05: **producción** por vencer 2 · $5,549, vencidas **45 · $49,976.45**; **staging** 0 · $0 y 36 · $43,497.15. Coincide con la auditoría.
 - No verificado: la tarjeta en el navegador.
 
-**Parte B — en evaluación** (ver la decisión en la conversación del 2026-11-05).
+**Parte B — no se hace por ahora (no es necesaria).** Medido en producción (solo lectura, 2026-11-05): de 200 deudas con fecha de vencimiento, **0** se registraron después de las 8 p. m. de Venezuela, así que ninguna quedó corrida un día. Revisar si el negocio empieza a registrar ventas de noche (`tmp/medir-parte-b.mjs`).
