@@ -20,6 +20,7 @@ const URGENT_TYPES = new Set([
   'compromiso_alto',
   'despacho_en_ruta',
   'seguimiento_urgente',
+  'cobranza_vencida',
 ])
 
 function playNotifSound(type) {
@@ -76,6 +77,8 @@ export const NOTIF_TYPES = {
   FACTURACION_CLIENTE_AJENO:     'facturacion_cliente_ajeno',
   SEGUIMIENTO_CREADO:            'seguimiento_creado',
   SEGUIMIENTO_URGENTE:           'seguimiento_urgente',
+  COBRANZA_VENCIDA:              'cobranza_vencida',
+  COBRANZA_POR_VENCER:           'cobranza_por_vencer',
 }
 
 // ─── Clasificación STATE vs EVENT para deduplicación inteligente ──────────────
@@ -86,6 +89,8 @@ const STATE_TYPES = new Set([
   'stock_critico',
   'compromiso_alto',
   'stock_reabastecido',
+  'cobranza_vencida',
+  'cobranza_por_vencer',
 ])
 
 const EVENT_DEBOUNCE_MS = 30_000 // 30 segundos
@@ -110,6 +115,8 @@ const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:    ['supervisor', 'jefe', 'desarrollador', 'administracion'],
   [NOTIF_TYPES.SEGUIMIENTO_CREADO]:           ['supervisor', 'jefe', 'desarrollador', 'administracion'],
   [NOTIF_TYPES.SEGUIMIENTO_URGENTE]:          ['supervisor', 'jefe', 'desarrollador', 'administracion'],
+  [NOTIF_TYPES.COBRANZA_VENCIDA]:             ['jefe', 'administracion', 'desarrollador'],
+  [NOTIF_TYPES.COBRANZA_POR_VENCER]:          ['jefe', 'administracion', 'desarrollador'],
 }
 
 function readNotifs() {
@@ -581,5 +588,22 @@ export function notifySeguimientoCreado(entrada, usuarioNombre, currentRole = nu
       prioridad: entrada.prioridad
     },
     currentRole
+  )
+}
+
+/**
+ * Resumen diario de cobranza (cuentas vencidas / por vencer). Solo queda el último:
+ * se retira el del día anterior aunque haya cambiado de tipo.
+ */
+export function notifyCobranza({ title, body, urgente, hoy }, currentRole = null) {
+  const previas = readNotifs()
+  const sinCobranza = previas.filter(n => n.type !== NOTIF_TYPES.COBRANZA_VENCIDA && n.type !== NOTIF_TYPES.COBRANZA_POR_VENCER)
+  if (sinCobranza.length !== previas.length) saveNotifs(sinCobranza)
+  return createNotification(
+    urgente ? NOTIF_TYPES.COBRANZA_VENCIDA : NOTIF_TYPES.COBRANZA_POR_VENCER,
+    title,
+    body,
+    { hoy },
+    currentRole,
   )
 }

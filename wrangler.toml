@@ -4,7 +4,8 @@ compatibility_date = "2024-12-01"
 workers_dev = true
 
 [triggers]
-crons = ["0 3 * * *"]
+# 03:00 UTC: limpiezas nocturnas · 12:00 UTC (8 a. m. Venezuela): aviso de cobranza
+crons = ["0 3 * * *", "0 12 * * *"]
 
 [assets]
 directory = "./dist/"

@@ -14,13 +14,17 @@ const dbHeaders = env => ({ apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Be
 // Envía el aviso a los dispositivos de los roles (o del usuario) indicados.
 // Si no se indica destino, avisa a todos (el llamador decide si eso está permitido).
 // Nunca lanza: devuelve un resumen.
-export async function enviarPush(env, { title, message, tag, url = '/', roles, userId, excluirUsuarioId, usuarioNombre }) {
+export async function enviarPush(env, { title, message, tag, url = '/', roles, userId, usuarioIds, excluirUsuarioId, usuarioNombre }) {
   const headers = dbHeaders(env)
   let subsUrl = `${env.SUPABASE_URL}/rest/v1/push_subscriptions?select=endpoint,p256dh,auth,usuario_id`
 
   if (userId) {
     if (!isValidUuid(userId)) return { error: 'Destino inválido', status: 400 }
     subsUrl += `&usuario_id=eq.${userId}`
+  } else if (usuarioIds) {
+    const ids = usuarioIds.filter(isValidUuid)
+    if (!ids.length) return { sent: 0, failed: 0, removed: 0, destinos: 0 }
+    subsUrl += `&usuario_id=in.(${ids.join(',')})`
   } else if (roles?.length) {
     const usersRes = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?select=id&rol=in.(${roles.join(',')})`, { headers })
     if (!usersRes.ok) return { error: 'Error al obtener usuarios', status: 500 }
