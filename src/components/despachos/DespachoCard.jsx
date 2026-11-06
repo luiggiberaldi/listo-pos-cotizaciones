@@ -22,6 +22,7 @@ import EditDespachoModal from './EditDespachoModal'
 import DevolverAnularModal from './DevolverAnularModal'
 import CambiarTransportistaModal from './CambiarTransportistaModal'
 import ConciliarCodModal from './ConciliarCodModal'
+import { resumenCod } from '../../utils/codAbonos'
 import EditarPagoEntregadoModal from './EditarPagoEntregadoModal'
 import FacturaModal from './FacturaModal'
 import DevolucionParcialModal from './DevolucionParcialModal'
@@ -402,11 +403,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   let numMetodos = 0
   let isCodUnpaid = false
   let isCodPaid = false
+  let codResumen = null
   let metodosPagoList = []
   let pendientePagoUsd = 0
   let esCreditoLegacy = false
   let tooltipPendiente = ''
   const fmtMonto = (n) => '$' + Math.round(n).toLocaleString('es-VE')
+  const fmtUsd2 = (n) => '$' + Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   try {
     const fp = typeof despacho.forma_pago === 'string' ? JSON.parse(despacho.forma_pago) : (despacho.forma_pago || [])
     if (Array.isArray(fp)) {
@@ -429,6 +432,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
       const cod = fp.find(f => f.metodo === 'Cobro a destino')
       if (cod) {
+        codResumen = resumenCod(cod)
         if (!cod.cobro_destino_pagado) {
           isCodUnpaid = true
         } else {
@@ -439,8 +443,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         const m = Number(f.monto)
         if (!m || m <= 0) continue
         if (f.metodo === 'Cobro a destino' && !f.cobro_destino_pagado) {
-          pendientePagoUsd += m
-          tooltipPendiente = (tooltipPendiente ? tooltipPendiente + ' · ' : '') + `Cobro a destino ${fmtMonto(m)} pendiente`
+          // Si hubo abonos parciales, solo cuenta lo que falta por cobrar
+          const rc = resumenCod(f)
+          pendientePagoUsd += rc.falta
+          tooltipPendiente = (tooltipPendiente ? tooltipPendiente + ' · ' : '') + (rc.parcial
+            ? `Cobro a destino: abonado ${fmtMonto(rc.abonado)}, faltan ${fmtMonto(rc.falta)}`
+            : `Cobro a destino ${fmtMonto(m)} pendiente`)
         } else if (f.metodo === 'Cta por cobrar') {
           pendientePagoUsd += m
           tooltipPendiente = (tooltipPendiente ? tooltipPendiente + ' · ' : '') + `Cta. por cobrar ${fmtMonto(m)}${f.diasVencimiento > 0 ? ` (vence en ${f.diasVencimiento}d)` : ''}`
@@ -850,7 +858,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     const canConciliarCod = esAdminConciliador && isCodUnpaid && ['despachada', 'entregada'].includes(despacho.estado)
     if (canConciliarCod) {
       actions.push({
-        label: 'Marcar COD como pagado',
+        label: codResumen?.parcial ? 'Registrar otro abono COD' : 'Registrar cobro / abono COD',
         icon: DollarSign,
         onClick: () => setShowConciliarCod(true),
         textColor: 'text-rose-600 font-bold'
@@ -955,7 +963,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
           {esCreditoVenta && (
             <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-400/50 shadow-sm uppercase tracking-wider leading-none shrink-0 select-none"
               title={tooltipPendiente || 'Venta a crédito'}>
-              PENDIENTE{pendientePagoUsd > 0 ? ` ${fmtMonto(pendientePagoUsd)}` : ''}
+              PENDIENTE{pendientePagoUsd > 0 ? ` ${codResumen?.parcial ? fmtUsd2(pendientePagoUsd) : fmtMonto(pendientePagoUsd)}` : ''}
             </span>
           )}
           {esContadoVenta && (
@@ -995,14 +1003,22 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
 
       {/* Banner de Cobro a destino (Pendiente) */}
       {isCodUnpaid && (
-        <div className="bg-rose-50/90 border-b border-rose-100 px-3 py-2 flex items-center justify-between animate-fade-in duration-200">
-          <div className="flex items-center gap-1.5 text-rose-600 font-extrabold text-[11px] uppercase tracking-wider">
-            <Truck size={14} className="shrink-0 text-rose-500 animate-bounce" style={{ animationDuration: '2s' }} />
-            <span>Cobro a Destino (Pendiente)</span>
+        <div className="bg-rose-50/90 border-b border-rose-100 px-3 py-2 animate-fade-in duration-200">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0 text-rose-600 font-extrabold text-[11px] uppercase tracking-wider">
+              <Truck size={14} className="shrink-0 text-rose-500 animate-bounce" style={{ animationDuration: '2s' }} />
+              <span className="truncate">{codResumen?.parcial ? 'Cobro a Destino (Abonado)' : 'Cobro a Destino (Pendiente)'}</span>
+            </div>
+            <span className="shrink-0 text-[9px] bg-rose-500 text-white font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-sm shadow-rose-500/10">
+              COD
+            </span>
           </div>
-          <span className="text-[9px] bg-rose-500 text-white font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-sm shadow-rose-500/10">
-            COD
-          </span>
+          {codResumen?.parcial && (
+            <div className="mt-1 pl-5 flex flex-wrap gap-x-2 text-[11px] font-bold" title="Abonos registrados en el cobro a destino. El saldo exacto se confirma al abrir el cobro.">
+              <span className="text-emerald-700">Abonado {fmtUsd2(codResumen.abonado)}</span>
+              <span className="text-rose-700">Falta {fmtUsd2(codResumen.falta)}</span>
+            </div>
+          )}
         </div>
       )}
 
