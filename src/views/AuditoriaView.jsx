@@ -552,7 +552,7 @@ export default function AuditoriaView() {
         .select(`
           *,
           cliente:clientes!notas_despacho_cliente_id_fkey(*),
-          vendedor:usuarios!notas_despacho_vendedor_id_fkey(*),
+          vendedor:usuarios!notas_despacho_vendedor_id_fkey(id, nombre, rol, color, codigo, telefono),
           cotizacion:cotizaciones(id, numero, creado_en)
         `)
         .eq('numero', parseInt(cleanNum, 10))
