@@ -206,7 +206,7 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
   // ══════════════════════════════════════════════════════════════════════════
   const comboLeftW = Math.round(CONTENT_W * 0.62)
   const comboRightW = CONTENT_W - comboLeftW
-  const leftLabels = ['8 DÍAS DE CRÉDITO CONTINUO', '']
+  const leftLabels = ['NO SE ACEPTAN DEVOLUCIONES', '']
   const rightLabels = ['Base', 'Flete (E)']
   const comboRowsActual = 2
 
@@ -216,11 +216,13 @@ export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
     // Celda izquierda
     doc.setDrawColor(160, 160, 160)
     doc.setLineWidth(0.15)
+    if (r === 0) { doc.setFillColor(240, 240, 240); doc.rect(MARGIN, ry, comboLeftW, dataRowH, 'F') }
     doc.rect(MARGIN, ry, comboLeftW, dataRowH, 'S')
     doc.setFont('helvetica', r === 0 ? 'bold' : 'normal')
     doc.setFontSize(r === 0 ? 9 : 7.5)
     doc.setTextColor(...C_DARK)
-    doc.text(leftLabels[r], MARGIN + 3, ry + dataRowH / 2 + 1)
+    if (r === 0) doc.text(leftLabels[r], MARGIN + comboLeftW / 2, ry + dataRowH / 2 + 1, { align: 'center' })
+    else doc.text(leftLabels[r], MARGIN + 3, ry + dataRowH / 2 + 1)
 
     // Celda derecha
     doc.rect(MARGIN + comboLeftW, ry, comboRightW, dataRowH, 'S')
