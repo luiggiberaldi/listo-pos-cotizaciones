@@ -1,3 +1,4 @@
+import { vencimientoDespacho } from '../../utils/vencimientoDespacho'
 // src/services/pdf/ordenDespachoPDF.js
 // Genera PDF de Orden de Despacho — sin footer, cuentas, slogan ni condiciones
 import { datosVehiculoImpreso } from '../../utils/vehiculoImpreso'
@@ -11,7 +12,7 @@ import {
 } from './pdfShared'
 
 export async function generarOrdenDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false, porcentaje = 100 }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   const factor = Number(porcentaje || 100) / 100
   const factorBcv = (tasaUsdt > 0 && tasaBcv > 0) ? tasaUsdt / tasaBcv : 0
@@ -253,6 +254,26 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
   doc.text(vStr, MARGIN + tlfLblW + tlfValW + vendLblW + 2, f6Y + rowH / 2 + 1)
 
   y = f6Y + rowH + 2
+
+  // ── Fila 7 (solo ventas a crédito): CRÉDITO + fecha de vencimiento ──
+  // Solo en la ORDEN de despacho (la nota de entrega no lleva esta línea).
+  const venc = vencimientoDespacho(despacho)
+  if (venc) {
+    const f7Y = f6Y + rowH
+    const credLblW = 25
+    doc.setDrawColor(120, 120, 120)
+    doc.setLineWidth(gridLW)
+    doc.rect(MARGIN, f7Y, credLblW, rowH, 'S')
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...C_DARK)
+    doc.text('CRÉDITO:', MARGIN + 2, f7Y + rowH / 2 + 1)
+    doc.rect(MARGIN + credLblW, f7Y, CONTENT_W - credLblW, rowH, 'S')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text(venc.textoPdf, MARGIN + credLblW + 2, f7Y + rowH / 2 + 1)
+    y = f7Y + rowH + 2
+  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // 3. TABLA DE PRODUCTOS
