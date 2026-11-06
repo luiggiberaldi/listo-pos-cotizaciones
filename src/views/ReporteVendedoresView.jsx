@@ -8,6 +8,7 @@ import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 import { fmtUsdSimple as fmtUsd, fmtFecha } from '../utils/format'
 import { shouldIncludeReporteVendedor } from '../utils/reporteVendedoresAccess'
+import IndicadorActualizando from '../components/reportes/IndicadorActualizando'
 
 // ─── Helpers de rango ─────────────────────────────────────────────────────────
 function getRango(tipo) {
@@ -283,7 +284,7 @@ export default function ReporteVendedoresView() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [exportMenuOpen])
 
-  const { data, isLoading, isError, refetch } = useReporteVendedores({
+  const { data, isLoading, isError, refetch, isFetching, isPlaceholderData } = useReporteVendedores({
     from: rango.from,
     to: rango.to,
     prevFrom: rango.prevFrom,
@@ -379,6 +380,7 @@ export default function ReporteVendedoresView() {
 
   return (
     <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-4">
+      <IndicadorActualizando visible={isPlaceholderData} />
       <PageHeader
         icon={BarChart3}
         title="Reporte de Vendedores"
@@ -426,7 +428,7 @@ export default function ReporteVendedoresView() {
               )}
             </div>
             <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
-              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+              <RefreshCw size={14} className={isLoading || isFetching ? 'animate-spin' : ''} />
             </button>
           </div>
         }

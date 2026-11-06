@@ -1,9 +1,10 @@
 // src/hooks/useReporteVendedores.js
 // Hook de datos para el Reporte Detallado de Vendedores — solo supervisores/jefes
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import { fetchComisionesTodas } from './useComisiones'
 import { leerTodasLasPaginas } from '../utils/leerPaginas'
+import { agruparPor } from '../utils/agruparPor'
 import useAuthStore from '../store/useAuthStore'
 import { getComisionPctForItem, getNonCxcFraction, isDonationPayment, isLoanPayment } from '../utils/comisionUtils'
 import { shouldIncludeReporteVendedor } from '../utils/reporteVendedoresAccess'
@@ -51,15 +52,20 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           .order('despacho_id', { ascending: true })
           .range(desde, hasta))
 
-      const [despachos, prevDespachos] = await Promise.all([
+      // Todo lo que no depende de lo demás se pide a la vez (antes: un paso tras otro).
+      const arrancar = f => { const pr = Promise.resolve(f()); pr.catch(() => {}); return pr }
+      const pDespachos = arrancar(() => Promise.all([
         fetchDespachos(from, to),
         fetchDespachos(prevFrom, prevTo),
-      ])
+      ]))
+      const pUsuarios = arrancar(() => supabase
+        .from('usuarios')
+        .select('id, nombre, color, activo, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo'))
 
       // ── 2. Cotizaciones del período por vendedor ─────────────────────────
       // Todas las páginas: .limit(5000) NO alcanzaba, la base igual corta en 1.000.
       // Un error lanza (reporte financiero: nunca renderizar con ceros).
-      const [cotizaciones, prevCotizaciones] = await Promise.all([
+      const pCotizaciones = arrancar(() => Promise.all([
         leerTodasLasPaginas((desde, hasta) => supabase
           .from('cotizaciones')
           .select('id, vendedor_id, estado, total_usd, creado_en')
@@ -74,7 +80,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           .lte('creado_en', `${prevTo}T23:59:59${tzStr}`)
           .order('id', { ascending: true })
           .range(desde, hasta)),
-      ])
+      ]))
 
       // ── 3. Comisiones del período ────────────────────────────────────────
       // Comisiones guardadas (todas las páginas). Si fallan, se estiman como antes.
@@ -101,33 +107,15 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         }
       }
 
-      const [comisionesRaw, prevComisionesRaw, config] = await Promise.all([
+      const pComisiones = arrancar(() => Promise.all([
         fetchComisiones(from, to),
         fetchComisiones(prevFrom, prevTo),
         fetchConfiguracion(),
-      ])
+      ]))
 
-      // ── 4. Items de cotizaciones → para Top Productos por vendedor ────────
-      const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
-      let items = []
-      if (cotIds.length > 0) {
-        // Lotes de 50 en paralelo (antes: await secuencial por lote)
-        const batches = []
-        for (let i = 0; i < cotIds.length; i += 50) batches.push(cotIds.slice(i, i + 50))
-        const results = await Promise.all(batches.map(batch =>
-          supabase
-            .from('cotizacion_items')
-            .select('id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, cotizacion_id, origen')
-            .in('cotizacion_id', batch)
-        ))
-        for (const { data, error } of results) {
-          if (error) throw error
-          const filtrados = (data ?? []).filter(it =>
-            !it.nombre_snap || !it.nombre_snap.toLowerCase().trimStart().startsWith('corte')
-          )
-          items = items.concat(filtrados)
-        }
-      }
+      const [despachos, prevDespachos] = await pDespachos
+      const [cotizaciones, prevCotizaciones] = await pCotizaciones
+      const [comisionesRaw, prevComisionesRaw, config] = await pComisiones
 
       // Map cotizacion_id → asesor_id para vincular items con vendedor
       const cotToVendedor = Object.fromEntries(
@@ -153,7 +141,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         const results = await Promise.all(batches.map(batch => Promise.all([
           supabase
             .from('notas_despacho_items')
-            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen, es_prestamo')
+            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen, es_prestamo, producto:productos(categoria)')
             .in('despacho_id', batch),
           supabase
             .from('despacho_descuentos')
@@ -168,10 +156,36 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         }
       }
 
+      // ── 4. Items de cotizaciones → para Top Productos por vendedor ────────
+      // Solo hacen falta para las ventas que no tienen artículos propios (casi ninguna).
+      const despachosConItems = new Set(ndItems.map(it => it.despacho_id))
+      const cotIds = [...new Set(despachos.filter(d => !despachosConItems.has(d.despacho_id)).map(d => d.cotizacion_id).filter(Boolean))]
+      let items = []
+      if (cotIds.length > 0) {
+        // Lotes de 50 en paralelo (antes: await secuencial por lote)
+        const batches = []
+        for (let i = 0; i < cotIds.length; i += 50) batches.push(cotIds.slice(i, i + 50))
+        const results = await Promise.all(batches.map(batch =>
+          supabase
+            .from('cotizacion_items')
+            .select('id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, cotizacion_id, origen')
+            .in('cotizacion_id', batch)
+        ))
+        for (const { data, error } of results) {
+          if (error) throw error
+          const filtrados = (data ?? []).filter(it =>
+            !it.nombre_snap || !it.nombre_snap.toLowerCase().trimStart().startsWith('corte')
+          )
+          items = items.concat(filtrados)
+        }
+      }
+
       // ── 4.5. Unificación e Identificación de Préstamos/Donaciones en Items ──
       const itemsFinales = []
+      const ndItemsPorDespacho = agruparPor(ndItems, 'despacho_id')
+      const cotItemsPorCot = agruparPor(items, 'cotizacion_id')
       despachos.forEach(d => {
-        const dispatchItems = ndItems.filter(it => it.despacho_id === d.despacho_id)
+        const dispatchItems = ndItemsPorDespacho.get(d.despacho_id) || []
         const fp = Array.isArray(d.forma_pago) ? d.forma_pago : []
         const tienePrestamoFp = fp.some(f => f.metodo === 'Préstamo' || f.metodo === 'Prestamo')
         const esDonacion = fp.some(f => f.metodo === 'Donación')
@@ -188,7 +202,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
             })
           })
         } else {
-          const cotItems = items.filter(it => it.cotizacion_id === d.cotizacion_id)
+          const cotItems = cotItemsPorCot.get(d.cotizacion_id) || []
           cotItems.forEach(it => {
             const desc = despachoDescuentos.find(dd => dd.despacho_id === d.despacho_id && dd.cotizacion_item_id === it.id)
             const descMonto = desc ? Number(desc.monto_usd || 0) : 0
@@ -211,10 +225,12 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         ].filter(Boolean))
       ]
       const productCategories = {}
-      if (allProductIds.length > 0) {
+      for (const it of ndItems) if (it.producto_id && it.producto?.categoria != null) productCategories[it.producto_id] = it.producto.categoria || ''
+      const idsSinCategoria = allProductIds.filter(id => !(id in productCategories))
+      if (idsSinCategoria.length > 0) {
         // Lotes de 50 en paralelo (antes: await secuencial por lote)
         const batches = []
-        for (let i = 0; i < allProductIds.length; i += 50) batches.push(allProductIds.slice(i, i + 50))
+        for (let i = 0; i < idsSinCategoria.length; i += 50) batches.push(idsSinCategoria.slice(i, i + 50))
         const results = await Promise.all(batches.map(batch =>
           supabase
             .from('productos')
@@ -232,9 +248,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       // ── 5. Construir mapa por vendedor ────────────────────────────────────
       const ventaNeta = (d) => Number(d.venta_neta_usd || 0)
 
-      const { data: vData, error: vError } = await supabase
-        .from('usuarios')
-        .select('id, nombre, color, activo, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo')
+      const { data: vData, error: vError } = await pUsuarios
       if (vError) throw vError
 
       let vendedoresInfo = {}
@@ -359,8 +373,9 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       // ── Split designado (sábados): filas reales del Worker una por beneficiario.
       const construirComisionesDeDespachos = (listaDespachos, comisionesList) => {
         const out = []
+        const comisionesPorDespacho = agruparPor(comisionesList, 'despachoid')
         listaDespachos.forEach(d => {
-          const filas = (comisionesList || []).filter(c => c.despachoid === d.despacho_id)
+          const filas = comisionesPorDespacho.get(d.despacho_id) || []
           if (filas.length > 0) {
             filas.forEach(c => {
               const seller = vendedoresInfo[c.vendedorid]
@@ -435,8 +450,9 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       })
 
        // Map dispatch prestamo metadata based on itemsFinales
+       const itemsFinalesPorDespacho = agruparPor(itemsFinales, 'despacho_id')
        const despachosMapeados = despachos.map(d => {
-         const dispatchItems = itemsFinales.filter(it => it.despacho_id === d.despacho_id)
+         const dispatchItems = itemsFinalesPorDespacho.get(d.despacho_id) || []
          const hasPrestamos = dispatchItems.some(it => it.es_prestamo)
          const esPrestamoPuro = hasPrestamos && Number(d.venta_neta_usd || 0) === 0
          const esPrestamoMixto = hasPrestamos && Number(d.venta_neta_usd || 0) > 0
@@ -590,6 +606,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       }
     },
     enabled: !!perfil && esPrivilegiado && !!from && !!to,
+    placeholderData: keepPreviousData,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 15,
   })
