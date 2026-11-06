@@ -11,6 +11,7 @@ import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoAc
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import { datosVehiculoImpreso } from '../../utils/vehiculoImpreso'
 import supabase from '../../services/supabase/client'
+import { SELECT_DESPACHO_PARA_PDF, combinarDespachoFresco } from '../../utils/despachoPdfDatos'
 import { fetchDespachoConsolidado } from '../../services/despachoItemsService'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
@@ -488,13 +489,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   // imprime: es preferible un error a un PDF con un monto equivocado.
   async function fetchDatosParaPdf() {
     const [freshRes, items] = await Promise.all([
-      supabase.from('notas_despacho').select('*').eq('id', despacho.id).single(),
+      supabase.from('notas_despacho').select(SELECT_DESPACHO_PARA_PDF).eq('id', despacho.id).single(),
       fetchItemsParaPdf(),
     ])
-    if (freshRes.error || !freshRes.data) {
-      throw new Error('No se pudo verificar el monto actualizado del despacho. Revisa tu conexión e intenta de nuevo.')
-    }
-    return { despacho: { ...despacho, ...freshRes.data }, items }
+    // Si falla la lectura, combinarDespachoFresco lanza el aviso y NO se imprime.
+    // También verifica que cliente / vendedor no hayan cambiado respecto a la tarjeta.
+    return { despacho: combinarDespachoFresco(despacho, freshRes.error ? null : freshRes.data), items }
   }
 
   async function descargarPDF() {
