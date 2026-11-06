@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
+import { authFetch } from '../services/authFetch'
 import { showToast } from '../components/ui/Toast'
 
 const KEY_MIS_MENSAJES = ['buzon', 'mis-mensajes']
@@ -76,6 +77,21 @@ export function useEnviarSugerencia() {
   })
 }
 
+// El navegador del desarrollador no puede leer la tabla de usuarios, así que el nombre de quien escribió
+// llegaba vacío ("Usuario desconocido"). Se completa con la lista de operadores del servidor.
+async function completarAutores(mensajes) {
+  if (!mensajes.some(m => !m.usuario)) return mensajes
+  try {
+    const res = await authFetch('/api/auth/operators')
+    if (!res.ok) return mensajes
+    const { operators } = await res.json()
+    const porId = new Map((operators || []).map(o => [o.id, { nombre: o.nombre, color: o.color, rol: o.rol }]))
+    return mensajes.map(m => (m.usuario ? m : { ...m, usuario: porId.get(m.usuario_id) ?? null }))
+  } catch {
+    return mensajes
+  }
+}
+
 /**
  * Hook para el panel de desarrollador: obtener todos los mensajes de la cuenta
  */
@@ -90,6 +106,7 @@ export function useBuzonAdmin() {
         .from('buzon_sugerencias')
         .select(`
           id,
+          usuario_id,
           tipo,
           mensaje,
           estado,
@@ -101,10 +118,13 @@ export function useBuzonAdmin() {
         .order('creado_en', { ascending: false })
 
       if (error) throw error
-      return data ?? []
+      return await completarAutores(data ?? [])
     },
     enabled: isDev,
     staleTime: 1000 * 15, // 15s
+    // Revisa cada minuto si llegó algo nuevo (aviso de la campanita y número del menú)
+    refetchInterval: isDev ? 60 * 1000 : false,
+    refetchIntervalInBackground: true,
   })
 }
 

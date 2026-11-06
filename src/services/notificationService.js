@@ -77,6 +77,7 @@ export const NOTIF_TYPES = {
   FACTURACION_CLIENTE_AJENO:     'facturacion_cliente_ajeno',
   SEGUIMIENTO_CREADO:            'seguimiento_creado',
   SEGUIMIENTO_URGENTE:           'seguimiento_urgente',
+  BUZON_NUEVO:                   'buzon_nuevo',
   COBRANZA_VENCIDA:              'cobranza_vencida',
   COBRANZA_POR_VENCER:           'cobranza_por_vencer',
 }
@@ -115,6 +116,7 @@ const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:    ['supervisor', 'jefe', 'desarrollador', 'administracion'],
   [NOTIF_TYPES.SEGUIMIENTO_CREADO]:           ['supervisor', 'jefe', 'desarrollador', 'administracion'],
   [NOTIF_TYPES.SEGUIMIENTO_URGENTE]:          ['supervisor', 'jefe', 'desarrollador', 'administracion'],
+  [NOTIF_TYPES.BUZON_NUEVO]:                  ['desarrollador'],
   [NOTIF_TYPES.COBRANZA_VENCIDA]:             ['jefe', 'administracion', 'desarrollador'],
   [NOTIF_TYPES.COBRANZA_POR_VENCER]:          ['jefe', 'administracion', 'desarrollador'],
 }
@@ -606,4 +608,12 @@ export function notifyCobranza({ title, body, urgente, hoy }, currentRole = null
     { hoy },
     currentRole,
   )
+}
+
+/**
+ * Aviso de mensajes nuevos en el Buzón de sugerencias (solo desarrollador).
+ * Se crea solo en este equipo (no se retransmite): cada equipo del desarrollador revisa el Buzón por su cuenta.
+ */
+export function notifyBuzon({ title, body, cantidad }) {
+  return _insertLocalNotification(NOTIF_TYPES.BUZON_NUEVO, title, body, { cantidad })
 }

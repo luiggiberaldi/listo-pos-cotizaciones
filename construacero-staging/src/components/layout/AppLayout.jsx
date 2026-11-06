@@ -22,6 +22,7 @@ import QuickQuoteFAB from '../cotizaciones/QuickQuoteFAB'
 import BuzonFAB from '../ui/BuzonFAB'
 import { useRealtimeSync } from '../../hooks/useRealtimeSync'
 import { useAdminAlerts } from '../../hooks/useAdminAlerts'
+import { useAvisoBuzon } from '../../hooks/useAvisoBuzon'
 import { useRecordatoriosCotizaciones } from '../../hooks/useRecordatoriosCotizaciones'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
@@ -60,6 +61,7 @@ const NOTIF_ICON_MAP = {
   [NOTIF_TYPES.COMPROMISO_ALTO]:               { icon: AlertTriangle, color: 'text-orange-500',  bg: 'bg-orange-50' },
   [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]:         { icon: UserX,         color: 'text-red-500',     bg: 'bg-red-50' },
   [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:      { icon: UserX,         color: 'text-amber-600',   bg: 'bg-amber-50' },
+  [NOTIF_TYPES.BUZON_NUEVO]:                    { icon: MessageSquare, color: 'text-indigo-600',  bg: 'bg-indigo-50' },
 }
 const DEFAULT_NOTIF_ICON = { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' }
 
@@ -118,7 +120,7 @@ function BadgeRol({ rol }) {
 }
 
 // ─── Item de navegación ────────────────────────────────────────────────────────
-const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }) {
+const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed, badge = 0 }) {
   return (
     <NavLink
       to={path}
@@ -126,7 +128,7 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
       onClick={onClick}
       title={collapsed ? label : undefined}
       className={({ isActive }) => `
-        flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-1.5 rounded-xl
+        relative flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${collapsed ? 'px-2' : 'px-3'} py-1.5 rounded-xl
         text-sm font-bold transition-colors duration-150
         ${isActive
           ? 'text-white shadow-lg'
@@ -142,6 +144,9 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed }
     >
       <Icono size={18} />
       {!collapsed && <span>{label}</span>}
+      {badge > 0 && (
+        <span className={`${collapsed ? 'absolute -top-1 -right-1' : 'ml-auto'} min-w-5 h-5 px-1.5 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center`}>{badge}</span>
+      )}
     </NavLink>
   )
 })
@@ -200,6 +205,7 @@ export default function AppLayout() {
 
   // Notificaciones
   const { unreadCount, notifications, markAllRead, clearAll } = useAdminAlerts()
+  const { pendientes: buzonPendientes } = useAvisoBuzon()
   const [showNotifs, setShowNotifs] = useState(false)
   const notifsRef = useRef(null)
 
@@ -459,6 +465,7 @@ export default function AppLayout() {
                       [NOTIF_TYPES.COMPROMISO_ALTO]: '/inventario',
                       [NOTIF_TYPES.DESPACHO_CLIENTE_AJENO]: '/despachos',
                       [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]: '/despachos',
+                      [NOTIF_TYPES.BUZON_NUEVO]: '/logs',
                     }[n.type]
                     const isClickable = !!navTarget
                     const iconData = NOTIF_ICON_MAP[n.type] || DEFAULT_NOTIF_ICON
@@ -609,7 +616,7 @@ export default function AppLayout() {
               return (!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol))
             })
             .map(({ path, label, labelByRole, icono: Icono }) => (
-            <NavItem key={path} path={path} label={labelByRole?.[perfil?.rol] || label} Icono={Icono} onClick={cerrarMenu} collapsed={collapsed} />
+            <NavItem key={path} path={path} label={labelByRole?.[perfil?.rol] || label} Icono={Icono} onClick={cerrarMenu} collapsed={collapsed} badge={path === '/logs' ? buzonPendientes : 0} />
           ))}
           {/* Logística entra al bloque solo por Reportes (sus filtros le ocultan el resto) */}
           {(esPrivilegiado || perfil?.rol === 'logistica') && (
@@ -630,7 +637,7 @@ export default function AppLayout() {
                   return (!item.excludeRoles || !item.excludeRoles.includes(perfil?.rol)) && (!item.onlyRoles || item.onlyRoles.includes(perfil?.rol));
                 })
                 .map(({ path, label, icono: Icono }) => (
-                <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={collapsed} />
+                <NavItem key={path} path={path} label={label} Icono={Icono} onClick={cerrarMenu} collapsed={collapsed} badge={path === '/logs' ? buzonPendientes : 0} />
               ))}
             </>
           )}

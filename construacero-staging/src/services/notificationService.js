@@ -70,6 +70,7 @@ export const NOTIF_TYPES = {
   FACTURACION_CLIENTE_AJENO:     'facturacion_cliente_ajeno',
   SEGUIMIENTO_CREADO:            'seguimiento_creado',
   SEGUIMIENTO_URGENTE:           'seguimiento_urgente',
+  BUZON_NUEVO:                   'buzon_nuevo',
 }
 
 // ─── Clasificación STATE vs EVENT para deduplicación inteligente ──────────────
@@ -104,6 +105,7 @@ const NOTIF_TARGET_ROLE = {
   [NOTIF_TYPES.FACTURACION_CLIENTE_AJENO]:    ['supervisor', 'jefe', 'desarrollador', 'administracion'],
   [NOTIF_TYPES.SEGUIMIENTO_CREADO]:           ['supervisor', 'jefe', 'desarrollador', 'administracion'],
   [NOTIF_TYPES.SEGUIMIENTO_URGENTE]:          ['supervisor', 'jefe', 'desarrollador', 'administracion'],
+  [NOTIF_TYPES.BUZON_NUEVO]:                  ['desarrollador'],
 }
 
 function readNotifs() {
@@ -605,5 +607,18 @@ export function notifySeguimientoCreado(entrada, usuarioNombre, currentRole = nu
       prioridad: entrada.prioridad
     },
     currentRole
+  )
+}
+
+/**
+ * Aviso de mensajes nuevos en el Buzón de sugerencias (solo desarrollador).
+ * Se crea solo en este equipo (no se retransmite): cada equipo del desarrollador revisa el Buzón por su cuenta.
+ */
+export function notifyBuzon({ title, body, urgente, cantidad }) {
+  return _insertLocalNotification(
+    NOTIF_TYPES.BUZON_NUEVO,
+    title,
+    body,
+    { cantidad },
   )
 }
