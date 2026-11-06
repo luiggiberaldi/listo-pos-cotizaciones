@@ -17,7 +17,7 @@ const C_ACCENT  = [59, 59, 59]      // Gris #3b3b3b (Acento de la marca)
 const C_DARK    = [59, 59, 59]      // Gris #3b3b3b para texto legible
 
 export async function generarPDF({ cotizacion, items = [], config = {}, returnBlob = false, monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, conIVA = false }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   let y = 0
 
   // Factor BCV: cuántos dólares BCV equivale 1 USDT (ej: 1.30)

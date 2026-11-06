@@ -45,7 +45,7 @@ function checkPage(doc, y, needed = 30) {
 
 // ─── Generar Reporte de Pipeline ────────────────────────────────────────────
 export async function generarPipelinePDF({ reporte, rango, config = {} }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = await cargarLogo(config.logo_url)
   let y = 0
 

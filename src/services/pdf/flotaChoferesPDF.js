@@ -107,7 +107,7 @@ export async function generarFlotaChoferesPDF({
   config = {}, action = 'download',
 }) {
   const detallado = modo === 'detallado'
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = await cargarLogo(config.logo_url)
   let y = drawPremiumHeader({
     doc,

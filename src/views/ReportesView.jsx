@@ -8,7 +8,7 @@ import {
   Clock, Users, Percent, ArrowUpCircle, ArrowDownCircle, Loader2, Briefcase,
   ChevronDown, ChevronLeft, ChevronRight, Globe, UserCheck, Printer, CheckCircle, Truck
 } from 'lucide-react'
-import IndicadorActualizando from '../components/reportes/IndicadorActualizando'
+import { claseAtenuar } from '../utils/atenuarActualizando'
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useReporteExternos } from '../hooks/useReporteExternos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -691,8 +691,7 @@ function TabVentas({ configNeg }) {
   }
 
   return (
-    <div className="space-y-4">
-      <IndicadorActualizando visible={cambiandoVentas} />
+    <div className={`space-y-4 ${claseAtenuar(cambiandoVentas)}`}>
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-6">
           <div className="w-full">
@@ -702,7 +701,7 @@ function TabVentas({ configNeg }) {
                 {rangoLabel}
               </span>
             </div>
-            <DateRangeSelector value={rango} onChange={setRango} ocultarPresets={esAdministracion ? ['thisMonth', 'lastMonth'] : undefined} />
+            <DateRangeSelector value={rango} onChange={setRango} actualizando={cambiandoVentas} ocultarPresets={esAdministracion ? ['thisMonth', 'lastMonth'] : undefined} />
           </div>
           
           <div className="flex justify-end items-center gap-3 border-t border-slate-50 pt-4 relative">
@@ -1322,15 +1321,14 @@ function TabComisiones({ configNeg }) {
   // El bloque de KPIs ya no usa stats locales sino useComisionesResumen (resumen)
 
   return (
-    <div className="space-y-4">
-      <IndicadorActualizando visible={cambiandoComisiones} />
+    <div className={`space-y-4 ${claseAtenuar(cambiandoComisiones)}`}>
       {/* Filtros */}
       <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-3.5">
           {/* Fila Superior: Periodo (con mucho espacio) */}
           <div className="w-full">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Rango de Periodo</label>
-            <DateRangeSelector value={rango} onChange={setRango} />
+            <DateRangeSelector value={rango} onChange={setRango} actualizando={cambiandoComisiones} />
           </div>
 
           {/* Fila Inferior: Otros Filtros y Acciones */}
@@ -2027,8 +2025,7 @@ function TabCredito() {
   const rangoLabel = `${new Date(`${rango.from}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })} - ${new Date(`${rango.to}T00:00:00`).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
 
   return (
-    <div className="space-y-4">
-      <IndicadorActualizando visible={cambiandoCxc} />
+    <div className={`space-y-4 ${claseAtenuar(cambiandoCxc)}`}>
       {/* Selector de Rango de Fecha para Cobranza/Abonos */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-6">
@@ -2045,7 +2042,7 @@ function TabCredito() {
               setPaginaClientes(1)
               setPaginaMovimientos(1)
               setPaginaProveedores(1)
-            }} envolverPresets />
+            }} envolverPresets actualizando={cambiandoCxc} />
           </div>
         </div>
       </div>
@@ -2590,8 +2587,7 @@ function TabArticulosExternos({ configNeg }) {
   if (isError) return <ErrorMsg onRetry={refetch} />
 
   return (
-    <div className="space-y-4">
-      <IndicadorActualizando visible={cambiandoExternos} />
+    <div className={`space-y-4 ${claseAtenuar(cambiandoExternos)}`}>
       {/* Filtros */}
       <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-3.5">
@@ -2603,7 +2599,7 @@ function TabArticulosExternos({ configNeg }) {
                 {rangoLabel}
               </span>
             </div>
-            <DateRangeSelector value={rango} onChange={setRango} />
+            <DateRangeSelector value={rango} onChange={setRango} actualizando={cambiandoExternos} />
           </div>
 
           {/* Fila Inferior: Otros Filtros y Acciones */}
