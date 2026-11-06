@@ -83,7 +83,7 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
     desde: rango?.from,
     hasta: rango?.to,
     vendedorId: vendedor?.id,
-    pageSize: 1000,
+    todas: true,
   })
   const detalle = comisionesRes?.data ?? []
 

@@ -333,14 +333,14 @@ export default function ComisionesView() {
     vendedorId: esPrivilegiado ? filtroVendedor : '',
     desde: rango.from,
     hasta: rango.to,
-    pageSize: 1000,
+    todas: true,
   })
 
   // Consulta paralela para alimentar el dropdown con todos los asesores del rango
   const { data: comisionesDropdownRes } = useComisiones({
     desde: rango.from,
     hasta: rango.to,
-    pageSize: 2000,
+    todas: true,
   })
 
   const { data: resumen, isLoading: resumenLoading } = useComisionesResumen({

@@ -74,7 +74,7 @@ function addCommissionFilters(query, params, user, operador) {
 }
 
 function baseCommissionQuery(env) {
-  return `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en),split:calculo_evidencia->>split_cliente_ajeno,designado_ev:calculo_evidencia->>split_designado_id&order=creadoen.desc`
+  return `${env.SUPABASE_URL}/rest/v1/comisiones?select=id,despachoid,vendedorid,cotizacionid,cuentaid,totalcomision,comisioncabilla,comisionotros,pctcabilla,pctotros,estado,creadoen,actualizadoen,despacho:notas_despacho!inner(creado_en),split:calculo_evidencia->>split_cliente_ajeno,designado_ev:calculo_evidencia->>split_designado_id&order=creadoen.desc,id.asc`
 }
 
 async function fetchByIds(env, headers, table, ids, select, { strict = false, cuentaId } = {}) {
@@ -350,6 +350,9 @@ export async function handleGetComisiones(request, env) {
   }
 
   const rows = await response.json()
+  // Total REAL de filas (antes de quitar las de $0): permite al navegador saber si hay más páginas.
+  const totalFilasHeader = parseInt(response.headers.get('content-range')?.split('/')[1] ?? '', 10)
+  const totalFilas = Number.isFinite(totalFilasHeader) ? totalFilasHeader : null
   const enriched = await enrichCommissions(env, headers, rows, user.id)
   const includeExcluded = url.searchParams.get('incluirExcluidas') === 'true'
   const visible = includeExcluded ? enriched : enriched.filter(row => row.totalcomision > 0)
@@ -365,6 +368,9 @@ export async function handleGetComisiones(request, env) {
     page,
     pageSize,
     totalPages: Math.ceil(total / pageSize),
+    // Paginación real: filas leídas en esta página y total en la base (antes de filtrar las de $0).
+    filasLeidas: rows.length,
+    totalFilas,
   }, 200, request)
 }
 

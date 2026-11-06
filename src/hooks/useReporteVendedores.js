@@ -2,7 +2,8 @@
 // Hook de datos para el Reporte Detallado de Vendedores — solo supervisores/jefes
 import { useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
-import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { fetchComisionesTodas } from './useComisiones'
+import { leerTodasLasPaginas } from '../utils/leerPaginas'
 import useAuthStore from '../store/useAuthStore'
 import { getComisionPctForItem, getNonCxcFraction, isDonationPayment, isLoanPayment } from '../utils/comisionUtils'
 import { shouldIncludeReporteVendedor } from '../utils/reporteVendedoresAccess'
@@ -39,15 +40,16 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       //   - forma_pago normalizada a JSONB array
       //   - timezone America/Caracas para fechas
       //   - SECURITY DEFINER con validación de rol
-      const fetchDespachos = async (f, t) => {
-        const { data, error } = await supabase.rpc('obtener_reporte_ventas_operaciones', {
+      // Todas las páginas (la base entrega máximo 1.000 filas por pedido). Orden estable.
+      const fetchDespachos = (f, t) => leerTodasLasPaginas((desde, hasta) =>
+        supabase.rpc('obtener_reporte_ventas_operaciones', {
           p_fecha_inicio: f,
           p_fecha_fin: t,
           p_vendedor_id: null, // null = todos los vendedores (privilegiado)
         })
-        if (error) throw error
-        return data ?? []
-      }
+          .order('fecha', { ascending: false })
+          .order('despacho_id', { ascending: true })
+          .range(desde, hasta))
 
       const [despachos, prevDespachos] = await Promise.all([
         fetchDespachos(from, to),
@@ -55,37 +57,34 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       ])
 
       // ── 2. Cotizaciones del período por vendedor ─────────────────────────
-      const [cotActualRes, cotPrevRes] = await Promise.all([
-        supabase
+      // Todas las páginas: .limit(5000) NO alcanzaba, la base igual corta en 1.000.
+      // Un error lanza (reporte financiero: nunca renderizar con ceros).
+      const [cotizaciones, prevCotizaciones] = await Promise.all([
+        leerTodasLasPaginas((desde, hasta) => supabase
           .from('cotizaciones')
           .select('id, vendedor_id, estado, total_usd, creado_en')
           .gte('creado_en', `${from}T00:00:00${tzStr}`)
           .lte('creado_en', `${to}T23:59:59${tzStr}`)
-          .limit(5000), // tope de seguridad — sin él Supabase corta en 1000 sin avisar
-        supabase
+          .order('id', { ascending: true })
+          .range(desde, hasta)),
+        leerTodasLasPaginas((desde, hasta) => supabase
           .from('cotizaciones')
           .select('id, vendedor_id, estado')
           .gte('creado_en', `${prevFrom}T00:00:00${tzStr}`)
           .lte('creado_en', `${prevTo}T23:59:59${tzStr}`)
-          .limit(5000),
+          .order('id', { ascending: true })
+          .range(desde, hasta)),
       ])
-      // Reporte financiero: un error debe verse, nunca renderizar con ceros
-      if (cotActualRes.error) throw cotActualRes.error
-      if (cotPrevRes.error) throw cotPrevRes.error
-      const cotizaciones = cotActualRes.data ?? []
-      const prevCotizaciones = cotPrevRes.data ?? []
 
       // ── 3. Comisiones del período ────────────────────────────────────────
+      // Comisiones guardadas (todas las páginas). Si fallan, se estiman como antes.
       const fetchComisiones = async (f, t) => {
-        const params = new URLSearchParams()
-        params.set('desde', f)
-        params.set('hasta', t)
-        params.set('pageSize', '1000')
-        const headers = await getAuthHeaders()
-        const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
-        if (!res.ok) return []
-        const json = await res.json()
-        return json?.data ?? []
+        try {
+          const res = await fetchComisionesTodas({ desde: f, hasta: t })
+          return res?.data ?? []
+        } catch {
+          return []
+        }
       }
 
       const fetchConfiguracion = async () => {
@@ -502,7 +501,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         v.comisionTotal += monto
         // Todas las comisiones son generadas; no hay ciclo pagada/pendiente
         v.comisionGenerada += monto
-        if (c.es_split) v.comisionSplit = (v.comisionSplit || 0) + monto
+        // (antes aquí también se sumaba el split: quedaba al doble; se suma una sola vez abajo)
 
         // Acumular comisiones de cabillas al 2% y 3%.
         // Las filas split (0.5%/1.5% por cliente ajeno) van aparte: no son 2% ni 3%.
