@@ -5,6 +5,7 @@
 import { json, jsonError, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
+import { leerTodasLasPaginas } from '../../src/utils/leerPaginas.js'
 
 // Los días del reporte son días de Venezuela (UTC-4, sin horario de verano):
 // sin esto, un despacho de las 11 p. m. caía en el día siguiente.
@@ -116,18 +117,28 @@ export async function handleReporteTransportistas(request, env) {
     hasta ? `&creado_en=lt.${fechaSiguiente(hasta)}T00:00:00${HORA_CARACAS}` : '',
   ].join('')
 
-  const dRes = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/notas_despacho` +
-    `?${cuenta.filter}&transportista_id=not.is.null&estado=neq.anulada${fechaFiltro}` +
-    `&select=id,transportista_id,flete_usd,flete_neto_transportista_usd,flete_comisionable,flete_regla_aplicada,flete_pagado,estado,creado_en&limit=5000`,
-    { headers }
-  )
-  if (!dRes.ok) {
-    const detalle = await dRes.text().catch(() => '')
-    console.error('[TRANSPORTISTAS][REPORTE] Error leyendo despachos:', detalle)
+  // Todas las páginas: la base entrega máximo 1.000 filas por pedido (el antiguo
+  // limit=5000 no servía: igual cortaba en 1.000 sin avisar).
+  let despachos
+  try {
+    despachos = await leerTodasLasPaginas(async (desde, hasta) => {
+      const dRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/notas_despacho` +
+        `?${cuenta.filter}&transportista_id=not.is.null&estado=neq.anulada${fechaFiltro}` +
+        `&select=id,transportista_id,flete_usd,flete_neto_transportista_usd,flete_comisionable,flete_regla_aplicada,flete_pagado,estado,creado_en` +
+        `&order=id.asc&offset=${desde}&limit=${hasta - desde + 1}`,
+        { headers }
+      )
+      if (!dRes.ok) {
+        const detalle = await dRes.text().catch(() => '')
+        console.error('[TRANSPORTISTAS][REPORTE] Error leyendo despachos:', detalle)
+        throw new Error('lectura')
+      }
+      return dRes.json()
+    })
+  } catch {
     return jsonError('Error al leer despachos del reporte. Verifica que las migraciones 206, 221 y 235 estén aplicadas.', 500, request)
   }
-  const despachos = await dRes.json()
 
   // Agregar por transportista (Map preserva orden de inserción).
   const mapa = new Map(transportistas.map(t => [t.id, {

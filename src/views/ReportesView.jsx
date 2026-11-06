@@ -1061,7 +1061,7 @@ function TabComisiones({ configNeg }) {
     vendedorId: filtroVendedor,
     desde: rango.from,
     hasta: rango.to,
-    pageSize: 1000
+    todas: true,
   })
   const comisiones = comisionesRes?.data ?? []
 
@@ -1070,7 +1070,7 @@ function TabComisiones({ configNeg }) {
   const { data: comisionesDropdownRes } = useComisiones({
     desde: rango.from,
     hasta: rango.to,
-    pageSize: 2000
+    todas: true,
   })
   const comisionesParaDropdown = comisionesDropdownRes?.data ?? []
 

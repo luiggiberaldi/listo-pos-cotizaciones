@@ -2,8 +2,9 @@
 // Hook principal para datos del reporte de ventas
 import { useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
-import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
+import { fetchComisionesTodas } from './useComisiones'
+import { leerTodasLasPaginas } from '../utils/leerPaginas'
 import { getComisionPctForItem, getNonCxcFraction, isDonationPayment, isLoanPayment } from '../utils/comisionUtils'
 import { aplicarDescuentosItems } from '../utils/reporteDescuentos'
 
@@ -26,28 +27,27 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const tzStr = `${sign}${String(Math.floor(absOffset / 60)).padStart(2, '0')}:${String(absOffset % 60).padStart(2, '0')}`
 
       // ── 1. Despachos entregados y en entrega (vía RPC) ──
-      const fetchDespachos = async (f, t) => {
-        const { data, error } = await supabase.rpc('obtener_reporte_ventas_operaciones', {
+      // Todas las páginas: la base entrega máximo 1.000 filas por pedido (antes, los períodos
+      // largos salían incompletos sin avisar). Orden estable: fecha y luego id del despacho.
+      const fetchDespachos = (f, t) => leerTodasLasPaginas((desde, hasta) =>
+        supabase.rpc('obtener_reporte_ventas_operaciones', {
           p_fecha_inicio: f,
           p_fecha_fin: t,
           p_vendedor_id: esPrivilegiado ? null : perfil?.id
         })
-        if (error) throw error
-        return data ?? []
-      }
+          .order('fecha', { ascending: false })
+          .order('despacho_id', { ascending: true })
+          .range(desde, hasta))
 
-      // Queries al Worker para comisiones (v2) — evita RLS directo y usa nombres v2
+      // Comisiones guardadas (todas las páginas, vía Worker). Si fallan, el reporte
+      // las estima como antes en lugar de quedarse sin datos.
       const fetchComisionesWorker = async (f, t) => {
-        const params = new URLSearchParams()
-        params.set('desde', f)
-        params.set('hasta', t)
-        params.set('pageSize', '1000')
-        if (!esPrivilegiado && perfil?.id) params.set('vendedorId', perfil.id)
-        const headers = await getAuthHeaders()
-        const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
-        if (!res.ok) return []
-        const json = await res.json()
-        return json?.data ?? []
+        try {
+          const res = await fetchComisionesTodas({ desde: f, hasta: t, vendedorId: !esPrivilegiado ? perfil?.id : '' })
+          return res?.data ?? []
+        } catch {
+          return []
+        }
       }
 
       // Fetch all users to have correct markup_pct, color and rates
@@ -73,7 +73,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       }
 
       const fetchDevoluciones = async (f, t) => {
-        const { data, error } = await supabase
+        const data = await leerTodasLasPaginas((desde, hasta) => supabase
           .from('cuentas_por_cobrar')
           .select(`
             id, cliente_id, despacho_id, monto_usd, forma_pago_abono, referencia, descripcion, creado_en, registrado_por,
@@ -83,10 +83,10 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           .gte('creado_en', `${f}T00:00:00${tzStr}`)
           .lte('creado_en', `${t}T23:59:59.999${tzStr}`)
           .order('creado_en', { ascending: false })
+          .order('id', { ascending: true })
+          .range(desde, hasta))
 
-        if (error) throw error
-
-        const filtered = (data ?? []).filter(item => {
+        const filtered = data.filter(item => {
           if (!item.cliente) return false
           if (!esPrivilegiado && item.cliente.vendedor_id !== perfil?.id) return false
           return true
