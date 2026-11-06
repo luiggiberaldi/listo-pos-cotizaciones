@@ -10,7 +10,7 @@ import {
 } from './pdfShared'
 
 export async function generarOrdenCompraPDF({ orden, items = [], config = {}, returnBlob = false }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   let y = 0
   const numOC = `OC-${String(orden.numero).padStart(5, '0')}`

@@ -52,7 +52,7 @@ function drawFooter(doc, config) {
 }
 
 export async function generarTransportistasPDF({ items = [], config = {}, action = 'download' }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = await cargarLogo(config.logo_url)
 
   let y = drawHeader(doc, logoData, config)

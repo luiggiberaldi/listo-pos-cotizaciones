@@ -11,7 +11,7 @@ import {
 } from './pdfShared'
 
 export async function generarDespachoPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false, porcentaje = 100 }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   const factor = Number(porcentaje || 100) / 100
   const factorBcv = (tasaUsdt > 0 && tasaBcv > 0) ? tasaUsdt / tasaBcv : 0
@@ -578,7 +578,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   const CHOFER_ROW_H = 6.0
   const CHOFER_H = 4.5 + CHOFER_ROW_H * 2  // header(4.5) + 2 filas
   const creditRowY = sloganY - 4 - CHOFER_H - CREDIT_ROW_H
-  const choferGridY = creditRowY + CREDIT_ROW_H
+  const choferGridY = creditRowY
   const comboBottom = creditRowY - 2
   const dataRowH = 3.6
   const comboTop = comboBottom - totalBarH - numComboRows * dataRowH
@@ -638,14 +638,6 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // 5. DATOS DEL CHOFER Y VEHÍCULO — cuadrícula fija encima del slogan
   // ══════════════════════════════════════════════════════════════════════════
 
-  // Fila: 8 DÍAS DE CRÉDITO CONTINUO
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.3)
-  doc.rect(MARGIN, creditRowY, CONTENT_W, CREDIT_ROW_H, 'S')
-  const creditText = cliente.tipo_cliente === 'personal'
-    ? `PERSONAL DE LA EMPRESA (DESC. ${config.descuento_personal_pct ?? 10}% APLICADO)`
-    : '8 DÍAS DE CRÉDITO CONTINUO'
-  doc.text(creditText, MARGIN + 3, creditRowY + CREDIT_ROW_H / 2 + 1.0)
 
   // Grid del chofer
   doc.setFillColor(240, 240, 240)
@@ -716,6 +708,31 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   drawChoferRow(choferRow1Fields, choferRow1Y)
   drawChoferRow(choferRow2Fields, choferRow2Y)
+
+  // Aviso de devoluciones — debajo de los datos del chofer
+  {
+    const avisoY = choferRow2Y + CHOFER_ROW_H
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...C_DARK)
+    if (esMembrete) {
+      // Hoja especial: más grande, en 2 líneas y separado una línea del cuadro del chofer
+      const size = 11
+      doc.setFontSize(size)
+      const partes = ['LA MERCANCÍA DESPACHADA NO TIENE CAMBIO NI DEVOLUCIÓN.', 'POR FAVOR REVISE SU PEDIDO ANTES DE RETIRARLO']
+      const lineH = size * 0.3528 * 1.25
+      partes.forEach((t, k) => doc.text(t, PAGE_W / 2, avisoY + 3 + size * 0.3528 * 0.75 + k * lineH, { align: 'center' }))
+    } else {
+      // Modo normal: una sola línea compacta (debajo va el lema impreso)
+      const aviso = 'LA MERCANCÍA DESPACHADA NO TIENE CAMBIO NI DEVOLUCIÓN. POR FAVOR REVISE SU PEDIDO ANTES DE RETIRARLO'
+      let avisoSize = 9
+      doc.setFontSize(avisoSize)
+      while (doc.getTextWidth(aviso) > CONTENT_W - 2 && avisoSize > 5.5) {
+        avisoSize -= 0.25
+        doc.setFontSize(avisoSize)
+      }
+      doc.text(aviso, PAGE_W / 2, avisoY + CREDIT_ROW_H / 2 + 1.1, { align: 'center' })
+    }
+  }
 
   // ── Slogan ──
   if (y < sloganY) {

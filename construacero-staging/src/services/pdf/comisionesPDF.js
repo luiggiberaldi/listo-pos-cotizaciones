@@ -57,7 +57,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     ? new Date(tasaActualizadaEn).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })
     : 'N/D'
 
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   let y = 0
 
   const logoData = LOGO_LISTA_PRECIOS
@@ -708,37 +708,15 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 3. RESUMEN
+  // 3. RESUMEN (sin ciclo pagada/pendiente/cta_cobrar)
   // ══════════════════════════════════════════════════════════════════════════
-  const pends = comisionesNorm.filter(c => c.estado === 'pendiente')
-  const cxc = comisionesNorm.filter(c => c.estado === 'cta_cobrar')
-  const pagadas = comisionesNorm.filter(c => c.estado === 'pagada')
-  
-  // 1) "Saldo Pendiente": sum( max(totalcomision - montopagado, 0) ) para estados pendiente y cta_cobrar
-  const totalPendiente = comisionesNorm
-    .filter(c => ['pendiente', 'cta_cobrar'].includes(c.estado))
-    .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
-    
-  // Desglose de pendientes
-  const totalPendienteRegular = comisionesNorm
-    .filter(c => c.estado === 'pendiente')
-    .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
-
-  const totalPendienteCxc = comisionesNorm
-    .filter(c => c.estado === 'cta_cobrar')
-    .reduce((s, c) => s + Math.max(c.totalcomision - (c.montopagado || 0), 0), 0)
-    
-  // 2) "Total Pagado": sum(COALESCE(montopagado, 0)) de todas
-  const totalPagado = comisionesNorm.reduce((s, c) => s + (c.montopagado || 0), 0)
-  
-  // 3) "Generado Histórico": sum(totalcomision) de todas
   const totalGeneral = comisionesNorm.reduce((s, c) => s + c.totalcomision, 0)
 
   // Cuadro resumen premium
   const boxH = 18
   const boxW = CONTENT_W / 3
   const uniqueDocsCount = new Set(comisionesNorm.map(c => c.despachonumero)).size
-  const uniquePagadasCount = new Set(pagadas.map(c => c.despachonumero)).size
+  const uniqueCount = new Set(comisionesNorm.map(c => c.despachonumero)).size
   const uniquePendsCount = new Set(pends.map(c => c.despachonumero)).size
   const uniqueCxcCount = new Set(cxc.map(c => c.despachonumero)).size
 
@@ -1176,9 +1154,6 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
       doc.text(vNombre.toUpperCase(), MARGIN + 7, y + 4);
       y += 7;
 
-      const comisionesNormales = vItems.filter(c => c.estado !== 'cta_cobrar');
-      const cuentasCobrar = vItems.filter(c => c.estado === 'cta_cobrar');
-
       let totalCabillaUsd = 0;
       let totalOtrosUsd = 0;
       let totalTotalUsd = 0;
@@ -1471,7 +1446,6 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
   if (formato === 'resumido') {
     const resumenSellers = {}
     comisionesNorm.forEach(c => {
-      if (c.estado === 'cta_cobrar') return; // Excluir cuentas por cobrar (cxc) del resumido
       const vId = c.vendedor?.id || 'sin_asesor'
       const vName = c.vendedor?.nombre || 'Sin asesor'
       const esExterno = !!c.vendedor?.es_externo || (c.vendedor?.markup_pct != null && Number(c.vendedor.markup_pct) > 0)
@@ -1602,7 +1576,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
 // ─── Generar Reporte de Ventas PDF ───────────────────────────────────────────
 export async function generarReporteVentasPDF({ reporte, rango, config = {}, action = 'download', cxcData = null }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   let y = 0
 
   const logoData = LOGO_LISTA_PRECIOS
@@ -1784,10 +1758,29 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
         doc.setTextColor(...C_DARK);
         
         const esVendedorExterno = !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0);
-        const displayName = esVendedorExterno
-          ? (v.markup_pct != null && Number(v.markup_pct) > 0 ? `${v.vendedor} (E) (+${v.markup_pct}%)` : `${v.vendedor} (E)`)
-          : v.vendedor;
-        doc.text(displayName || '—', MARGIN + 7, y + 4.5);
+        const vendedorNombre = v.vendedor || '—';
+        doc.text(vendedorNombre, MARGIN + 7, y + 4.5);
+        
+        let curX = MARGIN + 7 + doc.getTextWidth(vendedorNombre);
+        if (v.codigo) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(6.5);
+          doc.setTextColor(110, 120, 135);
+          const codeStr = ` [${String(v.codigo).toUpperCase()}]`;
+          doc.text(codeStr, curX, y + 4.5);
+          curX += doc.getTextWidth(codeStr);
+        }
+        if (esVendedorExterno) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(7.5);
+          doc.setTextColor(234, 88, 12);
+          const extText = (v.markup_pct != null && Number(v.markup_pct) > 0 ? ` (E) (+${v.markup_pct}%)` : ` (E)`);
+          doc.text(extText, curX, y + 4.5);
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...C_DARK);
         doc.text(fmtUsd(v.totalUsd), MARGIN + 85, y + 4.5);
         doc.text(fmtUsd(v.comision), MARGIN + 125, y + 4.5);
         
@@ -1805,12 +1798,12 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
           
           subCabilla += totalCabilla;
           subOtros += (v.comisionOtros || 0);
+          subSplit += (v.comisionSplit || 0);
         }
         
         subCount += (v.count || 0);
         subTotalUsd += (v.totalUsd || 0);
         subComision += (v.comision || 0);
-        subSplit += (v.comisionSplit || 0);
 
         y += rowH;
       });
@@ -1959,13 +1952,11 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
         y = checkPage(doc, y, 22);
 
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10.5); // Aumentado de 8.5 a 10.5
+        doc.setFontSize(10.5);
         doc.setTextColor(...C_DARK);
 
         const esVendedorExterno = !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0);
-        const displayName = esVendedorExterno
-          ? (v.markup_pct != null && Number(v.markup_pct) > 0 ? `${v.vendedor} (E) (+${v.markup_pct}%)` : `${v.vendedor} (E)`)
-          : v.vendedor;
+        const vendedorNombre = v.vendedor || '—';
 
         // Círculo de color
         if (v.vendedorColor) {
@@ -1973,7 +1964,25 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
           doc.setFillColor(vc[0], vc[1], vc[2]);
           doc.circle(MARGIN + 3, y + 2.5, 1.8, 'F');
         }
-        doc.text(displayName || '—', MARGIN + 7, y + 3.5);
+        doc.text(vendedorNombre, MARGIN + 7, y + 3.5);
+        let curX = MARGIN + 7 + doc.getTextWidth(vendedorNombre);
+
+        if (v.codigo) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          doc.setTextColor(110, 120, 135);
+          const codeStr = ` [${String(v.codigo).toUpperCase()}]`;
+          doc.text(codeStr, curX, y + 3.5);
+          curX += doc.getTextWidth(codeStr);
+        }
+
+        if (esVendedorExterno) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8.5);
+          doc.setTextColor(234, 88, 12);
+          const extText = (v.markup_pct != null && Number(v.markup_pct) > 0 ? ` (E) (+${v.markup_pct}%)` : ` (E)`);
+          doc.text(extText, curX, y + 3.5);
+        }
         y += 7;
 
         // Cabecera de la sub-tabla de documentos
@@ -2612,6 +2621,9 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     }
   }
 
+  if (action === 'return') {
+    return doc;
+  }
   if (action === 'print') {
     doc.autoPrint();
     const hNV = doc.output('bloburl');

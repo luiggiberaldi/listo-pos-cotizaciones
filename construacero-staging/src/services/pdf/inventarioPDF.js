@@ -34,7 +34,7 @@ function drawHeader(doc, logoData, config, titulo) {
 
 // ─── Generar Reporte de Inventario ──────────────────────────────────────────
 export async function generarInventarioPDF({ reporte, config = {} }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = LOGO_LISTA_PRECIOS
 
   const originalAddPage = doc.addPage.bind(doc)

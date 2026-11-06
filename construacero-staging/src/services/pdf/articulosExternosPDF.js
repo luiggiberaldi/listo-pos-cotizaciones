@@ -21,7 +21,7 @@ function clipText(text, maxWidth, doc) {
 }
 
 export async function generarArticulosExternosPDF({ items, rango, kpis, config = {}, action = 'download' }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = LOGO_LISTA_PRECIOS
 
   const originalAddPage = doc.addPage.bind(doc)

@@ -125,7 +125,9 @@ export function drawWatermark(doc) {
     const wmSize = 140
     doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize, 'WATERMARK_LOGO', 'FAST')
     doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  } catch {
+    return
+  }
 }
 
 /** Dibuja marca de agua "ANULADA" en rojo, diagonal, semitransparente */
@@ -175,7 +177,9 @@ export function drawAprobadoWatermark(doc, nombre) {
     doc.setFontSize(28) // Nombre más grande
     doc.text(`${nombre}`.toUpperCase(), cx + 8, cy + 10, { align: 'center', angle: 35 })
     doc.restoreGraphicsState()
-  } catch (_) {}
+  } catch {
+    return
+  }
 }
 
 /** Verifica si necesita salto de página, agrega nueva con watermark y ejecuta callback si existe */
@@ -192,6 +196,68 @@ export function checkPage(doc, y, needed = 30, onPageAdd = null, customBottomMar
   return y
 }
 
+/** Ajusta un texto del header a un bloque de ancho y alto limitado. */
+function headerTextLines(doc, text, maxWidth, initialSize, minSize, maxLines = 2) {
+  const value = String(text || '').trim()
+  if (!value) return { fontSize: initialSize, lines: [] }
+
+  let fontSize = initialSize
+  while (fontSize >= minSize) {
+    doc.setFontSize(fontSize)
+    const lines = doc.splitTextToSize(value, maxWidth)
+    if (lines.length <= maxLines) return { fontSize, lines }
+    fontSize = Math.round((fontSize - 0.5) * 10) / 10
+  }
+
+  doc.setFontSize(minSize)
+  const lines = doc.splitTextToSize(value, maxWidth)
+  if (lines.length <= maxLines) return { fontSize: minSize, lines }
+
+  const visible = lines.slice(0, maxLines)
+  let last = visible[maxLines - 1] || ''
+  while (last.length > 0 && doc.getTextWidth(`${last}...`) > maxWidth) {
+    last = last.slice(0, -1)
+  }
+  visible[maxLines - 1] = `${last.trimEnd()}...`
+  return { fontSize: minSize, lines: visible }
+}
+
+function headerSingleLine(doc, text, maxWidth, initialSize, minSize) {
+  const value = String(text || '').trim()
+  if (!value) return { fontSize: initialSize, text: '' }
+
+  let fontSize = initialSize
+  while (fontSize >= minSize) {
+    doc.setFontSize(fontSize)
+    if (doc.getTextWidth(value) <= maxWidth) return { fontSize, text: value }
+    fontSize = Math.round((fontSize - 0.5) * 10) / 10
+  }
+
+  doc.setFontSize(minSize)
+  let fittedText = value
+  while (fittedText.length > 0 && doc.getTextWidth(`${fittedText}...`) > maxWidth) {
+    fittedText = fittedText.slice(0, -1)
+  }
+  return { fontSize: minSize, text: `${fittedText.trimEnd()}...` }
+}
+
+export function getPremiumHeaderLayout(doc) {
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const reportWidth = pageWidth >= 250 ? 86 : 68
+  const reportX = pageWidth - MARGIN - reportWidth
+  const brandX = MARGIN + 48
+  const brandRight = reportX - 8
+
+  return {
+    brandX,
+    brandWidth: Math.max(48, brandRight - brandX),
+    brandCenterX: brandX + Math.max(48, brandRight - brandX) / 2,
+    reportX,
+    reportWidth,
+    reportRight: pageWidth - MARGIN,
+  }
+}
+
 /** 
  * Dibuja un encabezado simplificado (banner azul pequeño) para páginas subsiguientes.
  * @param {Object} doc - Instancia de jsPDF
@@ -202,26 +268,37 @@ export function checkPage(doc, y, needed = 30, onPageAdd = null, customBottomMar
 export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '', customBgColor = null, customTextColor = null) {
   const SHDR_H = 12
   const pageWidth = doc.internal.pageSize.getWidth()
+  const rightWidth = pageWidth >= 250 ? 86 : 66
+  const rightX = pageWidth - MARGIN - rightWidth
+  const brandX = MARGIN + 18
+  const brandWidth = Math.max(54, rightX - brandX - 4)
+
   doc.setFillColor(...(customBgColor || C_PRIMARY))
   doc.rect(0, 0, pageWidth, SHDR_H, 'F')
 
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 4, 0.75, 10.5, 10.5, 'HEADER_LOGO', 'FAST') } catch (_) {}
+    try {
+      doc.addImage(logoData, 'PNG', MARGIN + 4, 0.75, 10.5, 10.5, 'HEADER_LOGO', 'FAST')
+    } catch {
+      // El logo es opcional; el texto del header sigue siendo válido sin él.
+    }
   }
 
   let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
   if (!n || n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
-  
+
   doc.setFont('times', 'bold')
-  doc.setFontSize(15.5)
+  const brand = headerSingleLine(doc, n.toUpperCase(), brandWidth, 12, 7)
+  doc.setFontSize(brand.fontSize)
   doc.setTextColor(...(customTextColor || C_WHITE))
-  doc.text(n.toUpperCase(), pageWidth / 2, 8.5, { align: 'center' })
+  doc.text(brand.text, brandX, 8.5, { align: 'left' })
 
   if (rightTitle) {
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
+    const report = headerSingleLine(doc, rightTitle, rightWidth, 8, 5.5)
+    doc.setFontSize(report.fontSize)
     doc.setTextColor(...(customTextColor || C_WHITE))
-    doc.text(rightTitle, pageWidth - MARGIN, 8.5, { align: 'right' })
+    doc.text(report.text, pageWidth - MARGIN, 8.5, { align: 'right' })
   }
 
   // Si el fondo es blanco, agregamos una línea negra de borde para separar la cabecera simplificada del contenido
@@ -320,7 +397,11 @@ export function drawPremiumHeader({
 
   // Logo
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', MARGIN + 11, 3, 34, 34) } catch (_) {}
+    try {
+      doc.addImage(logoData, 'PNG', MARGIN + 11, 3, 34, 34)
+    } catch {
+      // El logo es opcional; el texto del header sigue siendo válido sin él.
+    }
   }
 
   // Títulos de negocio centrado
@@ -330,27 +411,48 @@ export function drawPremiumHeader({
   const main = (words[0] || 'CONSTRUACERO').toUpperCase()
   const secondary = words.slice(1).join(' ').toUpperCase() || 'CARABOBO C.A.'
   
+  const layout = getPremiumHeaderLayout(doc)
   doc.setFont('times', 'bold'); doc.setTextColor(...(customTextColor || C_WHITE))
-  if (centerBusinessName) {
-    doc.setFontSize(20); doc.text(main, W / 2, 17, { align: 'center' })
-    doc.setFontSize(13); doc.text(secondary, W / 2, 24, { align: 'center' })
-  } else {
-    // Alinear el nombre de la empresa a la izquierda, al lado del logo
-    const businessTextX = MARGIN + 48
-    doc.setFontSize(20); doc.text(main, businessTextX, 17, { align: 'left' })
-    doc.setFontSize(13); doc.text(secondary, businessTextX, 24, { align: 'left' })
-  }
 
-  // Títulos del reporte derecha (con un tamaño y posición refinados para que se vean espectaculares)
-  if (title) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
+  // La marca y el título del reporte tienen zonas independientes. Esto evita que
+  // un título largo invada "CARABOBO C.A." o el logo en cualquier formato.
+  const mainFit = headerSingleLine(doc, main, layout.brandWidth, 20, 13)
+  const secondaryFit = headerSingleLine(doc, secondary, layout.brandWidth, 13, 9)
+  doc.setFontSize(mainFit.fontSize)
+  doc.text(mainFit.text, centerBusinessName ? layout.brandCenterX : layout.brandX, 17, {
+    align: centerBusinessName ? 'center' : 'left',
+  })
+  doc.setFontSize(secondaryFit.fontSize)
+  doc.text(secondaryFit.text, centerBusinessName ? layout.brandCenterX : layout.brandX, 24, {
+    align: centerBusinessName ? 'center' : 'left',
+  })
+
+  // El bloque derecho admite hasta dos líneas y reduce el tamaño solo cuando es
+  // necesario. Así el subtítulo siempre queda dentro del header y no se recorta.
+  doc.setFont('helvetica', 'bold')
+  const titleLines = headerTextLines(doc, title, layout.reportWidth, 10.5, 7.5, 2)
+  doc.setFont('helvetica', 'normal')
+  const subtitleLines = headerTextLines(doc, subtitle, layout.reportWidth, 7.5, 5.8, 2)
+  const titleLineHeight = 4.2
+  const subtitleLineHeight = 3.2
+  const titleY = titleLines.lines.length > 1 ? 12.5 : 15.5
+  const subtitleY = titleY + titleLines.lines.length * titleLineHeight + 3.2
+
+  if (titleLines.lines.length > 0) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(titleLines.fontSize)
     doc.setTextColor(...(customTextColor || C_WHITE))
-    doc.text(title, W - MARGIN, HDR_H - 13, { align: 'right' })
+    titleLines.lines.forEach((line, index) => {
+      doc.text(line, layout.reportRight, titleY + index * titleLineHeight, { align: 'right' })
+    })
   }
-  if (subtitle) {
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5)
-    doc.setTextColor(...(customSubtitleColor || C_ACCENT)) // Color mostaza/amarillo de contraste para subtítulos (periodo/fecha) o color personalizado
-    doc.text(subtitle, W - MARGIN, HDR_H - 6, { align: 'right' })
+  if (subtitleLines.lines.length > 0) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(subtitleLines.fontSize)
+    doc.setTextColor(...(customSubtitleColor || C_ACCENT))
+    subtitleLines.lines.forEach((line, index) => {
+      doc.text(line, layout.reportRight, subtitleY + index * subtitleLineHeight, { align: 'right' })
+    })
   }
 
   return HDR_H + 6
@@ -428,7 +530,7 @@ export function drawPremiumFooter(doc, config, customBgColor = [255, 255, 255], 
         let cx = pw / 2 - totalW / 2
         const cy = ph - 7
 
-        parts.forEach((part, idx) => {
+        parts.forEach((part) => {
           doc.setFillColor(...customTextColor)
           doc.setDrawColor(...customTextColor)
           if (part.icon === 'phone') {

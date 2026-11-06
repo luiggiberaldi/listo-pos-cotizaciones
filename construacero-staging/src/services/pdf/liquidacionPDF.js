@@ -100,7 +100,7 @@ function drawDetalleHeader(doc, y) {
 // FUNCIÓN PRINCIPAL
 // ═════════════════════════════════════════════════════════════════════════════
 export async function generarLiquidacionPDF({ data, range, config = {} }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'landscape' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'landscape', compress: true })
   const logoData = await cargarLogo(config.logo_url)
 
   const { kpis, porAsesor } = data
