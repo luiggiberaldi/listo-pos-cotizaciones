@@ -27,11 +27,12 @@ async function leerTodo(env, headers, tabla, params, signal) {
 
 async function leerPorIds(env, headers, tabla, campo, ids, params, signal) {
   const unicos = [...new Set(ids.filter(isValidUuid))]
-  const filas = []
-  for (let i = 0; i < unicos.length; i += LOTE_IDS) {
-    filas.push(...await leerTodo(env, headers, tabla, new URLSearchParams([...new URLSearchParams(params), [campo, `in.(${unicos.slice(i, i + LOTE_IDS).join(',')})`]]), signal))
-  }
-  return filas
+  const tandas = []
+  for (let i = 0; i < unicos.length; i += LOTE_IDS) tandas.push(unicos.slice(i, i + LOTE_IDS))
+  // Todas las tandas a la vez (antes una tras otra): el tiempo es el de una sola consulta.
+  const lotes = await Promise.all(tandas.map(ids =>
+    leerTodo(env, headers, tabla, new URLSearchParams([...new URLSearchParams(params), [campo, `in.(${ids.join(',')})`]]), signal)))
+  return lotes.flat()
 }
 
 const sinCache = response => {
@@ -55,8 +56,6 @@ export async function handleMisVentas(request, env) {
   try {
     const cuenta = `eq.${user.id}`
     // Las ventas "de un vendedor" son las de SUS clientes: si otro usuario le vende a un cliente suyo, también cuenta.
-    const misClientes = await leerTodo(env, headers, 'clientes',
-      { select: 'id,nombre,rif_cedula', cuenta_id: cuenta, vendedor_id: `eq.${operador.id}` }, request.signal)
     const despachosParams = new URLSearchParams({
       select: 'id,numero,cotizacion_id,cliente_id,estado,creado_en,total_usd,flete_usd,descuento_total_usd,forma_pago,tiene_devoluciones',
       cuenta_id: cuenta,
@@ -64,7 +63,14 @@ export async function handleMisVentas(request, env) {
     })
     despachosParams.append('creado_en', `gte.${rango.desdeTs}`)
     despachosParams.append('creado_en', `lt.${rango.hastaTs}`)
-    const despachos = await leerPorIds(env, headers, 'notas_despacho', 'cliente_id', misClientes.map(c => c.id), despachosParams, request.signal)
+    // Una sola consulta de los despachos aprobados del rango (en vez de una por cada 50 clientes) y,
+    // a la vez, los clientes del vendedor; el cruce se hace aquí y al navegador solo llega lo suyo.
+    const [misClientes, despachosRango] = await Promise.all([
+      leerTodo(env, headers, 'clientes', { select: 'id,nombre,rif_cedula', cuenta_id: cuenta, vendedor_id: `eq.${operador.id}` }, request.signal),
+      leerTodo(env, headers, 'notas_despacho', despachosParams, request.signal),
+    ])
+    const idsMios = new Set(misClientes.map(c => c.id))
+    const despachos = despachosRango.filter(d => idsMios.has(d.cliente_id))
 
     const conComision = operador.rol !== 'vendedor_sin_comision'
     const ids = despachos.map(d => d.id)
