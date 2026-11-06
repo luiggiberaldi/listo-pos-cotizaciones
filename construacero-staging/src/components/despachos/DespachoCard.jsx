@@ -1,3 +1,4 @@
+import { vencimientoDespacho } from '../../utils/vencimientoDespacho'
 import { useState, useRef, useEffect, memo, Fragment } from 'react'
 import { FileText, Calendar, Truck, CheckCircle, Ban, RefreshCcw, RefreshCw, Download, Loader2, Eye, MoreHorizontal, MoreVertical, ChevronDown, Printer, Tag, Pencil, RotateCcw, AlertTriangle, Clock, CreditCard, DollarSign, Check, PackageCheck, Handshake, PackageX } from 'lucide-react'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
@@ -393,6 +394,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   let isCtaPorCobrar = false
   let isMixtoCxc = false
   let textVencimiento = null
+  let vencimiento = null
   let numMetodos = 0
   let isCodUnpaid = false
   let isCodPaid = false
@@ -412,12 +414,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const cta = fp.find(f => f.metodo === 'Cta por cobrar')
       if (cta && cta.diasVencimiento > 0) {
         isCtaPorCobrar = true
-        const fCreacion = new Date(despacho.creado_en)
-        const fVenc = new Date(fCreacion.getTime() + cta.diasVencimiento * 24 * 60 * 60 * 1000)
-        const hoy = new Date()
-        const restantes = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24))
-        const vencido = restantes < 0
-        textVencimiento = `${cta.diasVencimiento} días (${vencido ? `Vencido hace ${Math.abs(restantes)}d` : `${restantes}d restantes`})`
+        vencimiento = vencimientoDespacho(despacho)
+        textVencimiento = vencimiento ? vencimiento.textoCorto : null
       } else if (cta) {
         isCtaPorCobrar = true
       }
@@ -1089,7 +1087,11 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
             <span>
               <span className="text-slate-400">Pago: </span>
               {metodosPagoList.join(' + ')}
-              {isCtaPorCobrar && textVencimiento ? ` - ${textVencimiento}` : ''}
+              {isCtaPorCobrar && vencimiento ? (
+                <span title={vencimiento.textoDetalle} className={`ml-1 font-bold ${vencimiento.estado === 'vencido' ? 'text-red-600' : vencimiento.estado === 'por_vencer' ? 'text-amber-600' : 'text-slate-600'}`}>
+                  · Vence {vencimiento.fechaTexto} ({vencimiento.textoCorto})
+                </span>
+              ) : ''}
             </span>
           </div>
         )}

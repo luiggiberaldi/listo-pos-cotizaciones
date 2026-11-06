@@ -1,3 +1,4 @@
+import { vencimientoDespacho } from '../../utils/vencimientoDespacho'
 import { useEffect, useState } from 'react'
 import { X, Package, Loader2, Calendar, User, FileText, CreditCard, Hash, Truck, DollarSign, Pencil, AlertTriangle, Clock, Handshake, LockKeyhole } from 'lucide-react'
 import EditarItemsDespachoModal from '../despachos/EditarItemsDespachoModal'
@@ -423,17 +424,15 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
               {formasDisplay.map((fp, i) => {
                 let textVencimiento = null
                 if (fp.metodo === 'Cta por cobrar' && fp.diasVencimiento > 0) {
-                  const fCreacion = new Date(registro.creado_en)
-                  const fVenc = new Date(fCreacion.getTime() + fp.diasVencimiento * 24 * 60 * 60 * 1000)
-                  const hoy = new Date()
-                  const restantes = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24))
-                  const vencido = restantes < 0
-                  textVencimiento = (
-                    <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-md flex items-center gap-1 ${vencido ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                      <Clock size={10} />
-                      {fp.diasVencimiento} días ({vencido ? `Vencido hace ${Math.abs(restantes)}d` : `${restantes}d restantes`})
-                    </span>
-                  )
+                  const venc = vencimientoDespacho({ creado_en: registro.creado_en, forma_pago: [fp] })
+                  if (venc) {
+                    textVencimiento = (
+                      <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-md flex items-center gap-1 ${venc.estado === 'vencido' ? 'bg-red-100 text-red-700' : venc.estado === 'por_vencer' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                        <Clock size={10} />
+                        {venc.textoDetalle}
+                      </span>
+                    )
+                  }
                 }
 
                 return (
