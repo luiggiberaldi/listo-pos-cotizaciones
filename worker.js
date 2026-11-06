@@ -45,6 +45,7 @@ import { handleCierreDiarioSync } from './api/handlers/finanzas-sync.js'
 import { handleDashboard } from './api/handlers/dashboard.js'
 import { handleResumenCobranza } from './api/handlers/cobranza.js'
 import { runAvisoCobranza } from './api/lib/cobranza.js'
+import { handleMisVentas } from './api/handlers/misVentas.js'
 import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota, handleReportePesoFlota } from './api/handlers/vehiculos.js'
 
 // Debe coincidir con el segundo cron de wrangler.toml (12:00 UTC = 8:00 a. m. en Venezuela).
@@ -430,6 +431,11 @@ export default {
 
     if (url.pathname === '/api/reportes/flota-peso' && request.method === 'GET') {
       return handleReportePesoFlota(request, env);
+    }
+
+    // ── API: "Mis ventas" — detalle de lo vendido por el operador de la sesión ──
+    if (url.pathname === '/api/reportes/mis-ventas') {
+      return handleMisVentas(request, env);
     }
 
     // ── API: obtener lista de comisiones (bypass RLS) ──────────────────────

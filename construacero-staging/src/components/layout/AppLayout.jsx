@@ -83,6 +83,7 @@ const NAV_TODOS = [
   { path: '/inventario',     label: 'Inventario',     icono: Package,        excludeRoles: ['logistica'] },
   { path: '/transportistas', label: 'Transportistas', icono: Truck },
   { path: '/comisiones',     label: 'Comisiones',     icono: DollarSign,     excludeRoles: ['logistica', 'administracion'] },
+  { path: '/mis-ventas',     label: 'Mis ventas',     icono: BarChart3,      onlyRoles: ['vendedor', 'vendedor_sin_comision', 'supervisor'] },
   { path: '/tutorial',       label: 'Tutorial',       icono: HelpCircle, onlyRoles: ['vendedor', 'vendedor_sin_comision'] },
 ]
 
@@ -601,6 +602,7 @@ export default function AppLayout() {
               if (item.path === '/tutorial') {
                 return ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol)
               }
+              if (item.path === '/mis-ventas') return item.onlyRoles.includes(perfil?.rol) // solo vendedores y supervisor, ni jefe ni desarrollador
               if (perfil?.rol === 'desarrollador') return true
               if (item.onlyRoles?.length === 1 && item.onlyRoles[0] === 'desarrollador') return false
               if (perfil?.rol === 'jefe') return true
