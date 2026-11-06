@@ -15,7 +15,8 @@ const assert = (c, m) => { if (!c) throw new Error(`Falló: ${m}`); console.log(
 // Espera a que desaparezcan los "esqueletos" grises de carga (clase animate-pulse)
 let page
 const esperarDatos = async (nombre, t0 = Date.now()) => {
-  await page.waitForFunction(() => !document.querySelector('main .animate-pulse, .animate-pulse'), null, { timeout: 60000 })
+  await page.waitForFunction(() => !document.querySelector('main .animate-pulse, .animate-pulse') && ![...document.querySelectorAll('[role=status]')].some(e => e.innerText.includes('Actualizando')), null, { timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {})
   console.log(`    · ${nombre}: datos en pantalla en ${((Date.now() - t0) / 1000).toFixed(1)} s`)
 }
 

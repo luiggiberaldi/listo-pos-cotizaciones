@@ -2,6 +2,18 @@
 
 **Fecha:** 2026-11-06 · **Tipo:** revisión de solo lectura (no se cambió nada en producción) · **Estado:** Fase 1 construida y probada en la rama `fix/reportes-completos` (sin publicar). Fases 2 y 3 pendientes.
 
+## Resultado de la Fase 2 (2026-11-06) — construida, sin publicar
+
+**En resumen:** al cambiar de período los reportes ya no se quedan en blanco: muestran lo anterior con un aviso "Actualizando…". Además hacen menos pasos y menos trabajo en el aparato.
+
+- **Sin pantalla en blanco** (V4): Ventas, Comisiones, Crédito, Artículos externos y Reporte de Vendedores mantienen los datos anteriores con el aviso "Actualizando…" hasta que llegan los nuevos.
+- **Categorías en el mismo pedido** (V1): ya no se piden dos veces (la segunda tanda por tanda). Con datos reales: mismas categorías y totales, ago–oct 1.233 ms → 561 ms en ese tramo.
+- **Artículos de cotización solo si hacen falta** (V3): casi ninguna venta los necesita (1 de 478), así que ese pedido casi desaparece.
+- **Pasos a la vez en Vendedores** (V2, V7): ventas, cotizaciones, comisiones, configuración y usuarios se piden juntos, no uno tras otro.
+- **Búsquedas con índice** (V6) en Ventas y Vendedores; la lista de comisiones ya se pedía una sola vez en la Fase 1 (V5); el crédito ya pide en tandas a la vez (V8, Fase 1).
+- Se quitaron los mensajes `[DEBUG]` de la consola.
+- Pruebas: 1.020 en verde; recorrido real contra staging sin errores (el recorrido encontró y corrigió un fallo propio en el Reporte de Vendedores antes de publicar). Mismos números que en la Fase 1 ($3.841,35 · 16 despachos).
+
 ## Resultado de la Fase 1 (2026-11-06)
 
 **Qué se arregló:**

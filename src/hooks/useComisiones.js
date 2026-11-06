@@ -1,6 +1,6 @@
 // src/hooks/useComisiones.js
 // Queries y mutations para el sistema de comisiones
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
@@ -127,6 +127,7 @@ export function useComisiones({
   pageSize = 100,
   vista = '',
   todas = false,
+  mantenerAnterior = false, // pantallas con aviso "Actualizando…": muestran lo anterior mientras carga
 } = {}) {
   const perfil = useAuthStore(s => s.perfil)
   const esAdmin = perfil?.rol === 'administracion'
@@ -169,6 +170,7 @@ export function useComisiones({
 
   return useQuery({
     ...opciones,
+    ...(mantenerAnterior ? { placeholderData: keepPreviousData } : {}),
     enabled: !!perfil?.id,
     retry: 1,
     staleTime: 1000 * 60 * 5,
@@ -182,12 +184,13 @@ export function useComisiones({
  * y cantidad de despachos distintos. Antes el servidor sumaba solo las primeras 1.000 filas.
  * Comparte la descarga con useComisiones({ todas: true }) cuando los filtros coinciden.
  */
-export function useComisionesResumen({ vendedorId = '', desde = '', hasta = '', estado = '' } = {}) {
+export function useComisionesResumen({ vendedorId = '', desde = '', hasta = '', estado = '', mantenerAnterior = false } = {}) {
   const perfil = useAuthStore(s => s.perfil)
 
   return useQuery({
     ...consultaComisionesTodas(perfil, { estado, vendedorId, desde, hasta }),
     select: resumirComisiones,
+    ...(mantenerAnterior ? { placeholderData: keepPreviousData } : {}),
     enabled: !!perfil?.id,
     retry: 1,
     staleTime: 1000 * 60 * 5,

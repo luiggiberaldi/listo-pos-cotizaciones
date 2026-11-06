@@ -1,10 +1,11 @@
 // src/hooks/useReporteVentas.js
 // Hook principal para datos del reporte de ventas
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { fetchComisionesTodas } from './useComisiones'
 import { leerTodasLasPaginas } from '../utils/leerPaginas'
+import { agruparPor } from '../utils/agruparPor'
 import { getComisionPctForItem, getNonCxcFraction, isDonationPayment, isLoanPayment } from '../utils/comisionUtils'
 import { aplicarDescuentosItems } from '../utils/reporteDescuentos'
 
@@ -182,7 +183,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         const results = await Promise.all(batches.map(batch => Promise.all([
           supabase
             .from('notas_despacho_items')
-            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen, es_prestamo')
+            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen, es_prestamo, producto:productos(categoria)')
             .in('despacho_id', batch),
           supabase
             .from('despacho_descuentos')
@@ -198,7 +199,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       }
 
       // ── 2. Items de las cotizaciones de los despachos ──
-      const cotIds = [...new Set(despachos.map(d => d.cotizacion_id).filter(Boolean))]
+      // Solo hacen falta para las ventas que no tienen artículos propios (casi ninguna).
+      const despachosConItems = new Set(ndItems.map(it => it.despacho_id))
+      const cotIds = [...new Set(despachos.filter(d => !despachosConItems.has(d.despacho_id)).map(d => d.cotizacion_id).filter(Boolean))]
       let items = []
       if (cotIds.length > 0) {
         // Supabase .in() tiene límite, dividir en batches de 50 — en paralelo
@@ -218,8 +221,11 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
 
       // ── 2.5. Unificación e Identificación de Préstamos/Donaciones en Items ──
       const itemsFinales = []
+      const ndItemsPorDespacho = agruparPor(ndItems, 'despacho_id')
+      const descuentosPorDespacho = agruparPor(despachoDescuentos, 'despacho_id')
+      const cotItemsPorCot = agruparPor(items, 'cotizacion_id')
       despachos.forEach(d => {
-        const dispatchItems = ndItems.filter(it => it.despacho_id === d.despacho_id)
+        const dispatchItems = ndItemsPorDespacho.get(d.despacho_id) || []
         const fp = Array.isArray(d.forma_pago) ? d.forma_pago : []
         const tienePrestamoFp = fp.some(f => f.metodo === 'Préstamo' || f.metodo === 'Prestamo')
         const esDonacion = fp.some(f => f.metodo === 'Donación')
@@ -228,7 +234,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
           // F-03: aplicar también los descuentos por ítem (despacho_descuentos) a
           // los items de notas_despacho_items para que la sección por
           // producto/categoría cuadre con la venta neta cuando existen descuentos.
-          const descsDelDespacho = despachoDescuentos.filter(dd => dd.despacho_id === d.despacho_id)
+          const descsDelDespacho = descuentosPorDespacho.get(d.despacho_id) || []
           const dispatchItemsNetos = aplicarDescuentosItems(dispatchItems, descsDelDespacho)
           dispatchItemsNetos.forEach(it => {
             const esItemPrestamo = !!it.es_prestamo || tienePrestamoFp
@@ -241,9 +247,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
             })
           })
         } else {
-          const cotItems = items.filter(it => it.cotizacion_id === d.cotizacion_id)
+          const cotItems = cotItemsPorCot.get(d.cotizacion_id) || []
           cotItems.forEach(it => {
-            const desc = despachoDescuentos.find(dd => dd.despacho_id === d.despacho_id && dd.cotizacion_item_id === it.id)
+            const desc = (descuentosPorDespacho.get(d.despacho_id) || []).find(dd => dd.cotizacion_item_id === it.id)
             const descMonto = desc ? Number(desc.monto_usd || 0) : 0
             const totalNeto = Math.max(Number(it.total_linea_usd || 0) - descMonto, 0)
             const esItemPrestamo = tienePrestamoFp
@@ -264,10 +270,12 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         ].filter(Boolean))
       ]
       const productCategories = {}
-      if (allProductIds.length > 0) {
+      for (const it of [...ndItems]) if (it.producto_id && it.producto?.categoria != null) productCategories[it.producto_id] = it.producto.categoria || ''
+      const idsSinCategoria = allProductIds.filter(id => !(id in productCategories))
+      if (idsSinCategoria.length > 0) {
         // Lotes de 50 en paralelo (antes: await secuencial por lote)
         const batches = []
-        for (let i = 0; i < allProductIds.length; i += 50) batches.push(allProductIds.slice(i, i + 50))
+        for (let i = 0; i < idsSinCategoria.length; i += 50) batches.push(idsSinCategoria.slice(i, i + 50))
         const results = await Promise.all(batches.map(batch =>
           supabase
             .from('productos')
@@ -404,8 +412,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       // solo estimamos cuando el despacho no tiene filas guardadas.
       const construirComisionesDeDespachos = (listaDespachos, comisionesList) => {
         const out = []
+        const comisionesPorDespacho = agruparPor(comisionesList, 'despachoid')
         listaDespachos.forEach(d => {
-          const filas = (comisionesList || []).filter(c => c.despachoid === d.despacho_id)
+          const filas = comisionesPorDespacho.get(d.despacho_id) || []
           if (filas.length > 0) {
             filas.forEach(c => {
               const seller = dbVendedores.find(u => u.id === c.vendedorid)
@@ -555,9 +564,6 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         const montoOtros = Number(c.comisionotros || 0)
         vendedorMap[vid].comisionOtros = (vendedorMap[vid].comisionOtros || 0) + montoOtros
       })
-      if (comisiones.length > 0) {
-        console.log('[DEBUG] First comision from worker:', comisiones[0])
-      }
       const porVendedor = Object.values(vendedorMap)
         .filter(v => {
           if (v.rol === 'desarrollador') return false
@@ -586,7 +592,6 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
         clienteMap[cnombre].totalUsd += ventaNeta(d)
       })
       const porCliente = Object.values(clienteMap).sort((a, b) => b.totalUsd - a.totalUsd).slice(0, 10)
-      console.log('[DEBUG] Top Clientes generated:', porCliente)
 
       // Por producto
       const productoMap = {}
@@ -615,14 +620,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
       const productoIds = [...new Set(itemsFinales.map(i => i.producto_id).filter(Boolean))]
       let categoriaMap = {}
       if (productoIds.length > 0) {
-        const cats = {}
-        for (let i = 0; i < productoIds.length; i += 50) {
-          const batch = productoIds.slice(i, i + 50)
-          const { data } = await supabase.from('productos').select('id, categoria').in('id', batch)
-          if (data) data.forEach(p => { cats[p.id] = p.categoria || 'PRODUCTOS EXTERNOS' })
-        }
+        // Las categorías ya se leyeron arriba (antes se pedían otra vez, tanda por tanda).
         itemsFinales.forEach(it => {
-          const cat = cats[it.producto_id] || 'PRODUCTOS EXTERNOS'
+          const cat = productCategories[it.producto_id] || 'PRODUCTOS EXTERNOS'
           if (!categoriaMap[cat]) categoriaMap[cat] = { categoria: cat, unidades: 0, totalUsd: 0 }
           categoriaMap[cat].unidades += Number(it.cantidad || 0)
           categoriaMap[cat].totalUsd += Number(it.total_linea_usd || 0)
@@ -631,8 +631,9 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
        const porCategoria = Object.values(categoriaMap).sort((a, b) => b.totalUsd - a.totalUsd)
  
         // Map dispatch prestamo metadata based on itemsFinales
+        const itemsFinalesPorDespacho = agruparPor(itemsFinales, 'despacho_id')
         const despachosMapeados = despachos.map(d => {
-          const dispatchItems = itemsFinales.filter(it => it.despacho_id === d.despacho_id)
+          const dispatchItems = itemsFinalesPorDespacho.get(d.despacho_id) || []
           const hasPrestamos = dispatchItems.some(it => it.es_prestamo)
           const esPrestamoPuro = hasPrestamos && Number(d.venta_neta_usd || 0) === 0
           const esPrestamoMixto = hasPrestamos && Number(d.venta_neta_usd || 0) > 0
@@ -758,6 +759,7 @@ export function useReporteVentas({ from, to, prevFrom, prevTo }) {
        }
     },
     enabled: !!perfil && !!from && !!to,
+    placeholderData: keepPreviousData, // al cambiar de período se ve lo anterior mientras carga
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 15,
   })

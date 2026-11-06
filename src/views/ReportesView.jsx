@@ -8,6 +8,7 @@ import {
   Clock, Users, Percent, ArrowUpCircle, ArrowDownCircle, Loader2, Briefcase,
   ChevronDown, ChevronLeft, ChevronRight, Globe, UserCheck, Printer, CheckCircle, Truck
 } from 'lucide-react'
+import IndicadorActualizando from '../components/reportes/IndicadorActualizando'
 import { useReporteVentas } from '../hooks/useReporteVentas'
 import { useReporteExternos } from '../hooks/useReporteExternos'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
@@ -612,7 +613,7 @@ function TabVentas({ configNeg }) {
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
 
-  const { data: reporte, isLoading, isError, refetch } = useReporteVentas({
+  const { data: reporte, isLoading, isError, refetch, isPlaceholderData: cambiandoVentas } = useReporteVentas({
     from: rango.from,
     to: rango.to,
     prevFrom: rango.prevFrom,
@@ -691,6 +692,7 @@ function TabVentas({ configNeg }) {
 
   return (
     <div className="space-y-4">
+      <IndicadorActualizando visible={cambiandoVentas} />
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-6">
           <div className="w-full">
@@ -1057,7 +1059,8 @@ function TabComisiones({ configNeg }) {
     }))
   }
 
-  const { data: comisionesRes, isLoading: comisionesLoading, isError, refetch } = useComisiones({
+  const { data: comisionesRes, isLoading: comisionesLoading, isError, refetch, isPlaceholderData: cambiandoComisiones } = useComisiones({
+    mantenerAnterior: true,
     vendedorId: filtroVendedor,
     desde: rango.from,
     hasta: rango.to,
@@ -1068,6 +1071,7 @@ function TabComisiones({ configNeg }) {
   // Segunda llamada SIN filtro de vendedor, solo para construir el dropdown
   // de forma que siempre muestre los vendedores con comisiones en el rango
   const { data: comisionesDropdownRes } = useComisiones({
+    mantenerAnterior: true,
     desde: rango.from,
     hasta: rango.to,
     todas: true,
@@ -1075,6 +1079,7 @@ function TabComisiones({ configNeg }) {
   const comisionesParaDropdown = comisionesDropdownRes?.data ?? []
 
   const { data: resumen, isLoading: resumenLoading } = useComisionesResumen({
+    mantenerAnterior: true,
     vendedorId: filtroVendedor,
     desde: rango.from,
     hasta: rango.to
@@ -1318,6 +1323,7 @@ function TabComisiones({ configNeg }) {
 
   return (
     <div className="space-y-4">
+      <IndicadorActualizando visible={cambiandoComisiones} />
       {/* Filtros */}
       <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-3.5">
@@ -1889,7 +1895,7 @@ function TabCredito() {
   // El reporte del período (KPIs de saldo inicial/cargos/abonos, cuadre de
   // movimientos y movimientos del rango) lo construye el módulo probado
   // cxcPeriodReport.js a través de useReportePeriodoCxC.
-  const { data: cxcData, isLoading: cxcLoading, isError: cxcError, refetch: refetchCxc } = useReportePeriodoCxC(rango)
+  const { data: cxcData, isLoading: cxcLoading, isError: cxcError, refetch: refetchCxc, isPlaceholderData: cambiandoCxc } = useReportePeriodoCxC(rango)
   const { data: proveedores = [], isLoading: provLoading, isError: provError, refetch: refetchProv } = useProveedores()
 
   const [vistaCredito, setVistaCredito] = useState('resumen')
@@ -2022,6 +2028,7 @@ function TabCredito() {
 
   return (
     <div className="space-y-4">
+      <IndicadorActualizando visible={cambiandoCxc} />
       {/* Selector de Rango de Fecha para Cobranza/Abonos */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-6">
@@ -2517,7 +2524,7 @@ function TabArticulosExternos({ configNeg }) {
   const [filtroAsesor, setFiltroAsesor] = useState('')
   const [busqueda, setBusqueda] = useState('')
 
-  const { data: items = [], isLoading, isError, refetch } = useReporteExternos({
+  const { data: items = [], isLoading, isError, refetch, isPlaceholderData: cambiandoExternos } = useReporteExternos({
     from: rango.from,
     to: rango.to
   })
@@ -2584,6 +2591,7 @@ function TabArticulosExternos({ configNeg }) {
 
   return (
     <div className="space-y-4">
+      <IndicadorActualizando visible={cambiandoExternos} />
       {/* Filtros */}
       <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col gap-3.5">

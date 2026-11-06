@@ -7,7 +7,7 @@
 //
 // Este hook existe para no tocar `useCuentasCobrar.js` (contingencia del plan de
 // promoción del Lote ERP): solo consulta y delega el cálculo en el módulo probado.
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { CXC_KEY } from './useCuentasCobrar'
@@ -123,6 +123,7 @@ export function useReportePeriodoCxC(rango) {
       }
     },
     enabled: !!perfil,
+    placeholderData: keepPreviousData,
     retry: 1,
     staleTime: 1000 * 60 * 3,
   })

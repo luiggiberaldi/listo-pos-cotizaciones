@@ -1,5 +1,5 @@
 // src/hooks/useReporteExternos.js
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import supabase from '../services/supabase/client'
 
 export function useReporteExternos({ from, to, vendedorId }) {
@@ -14,6 +14,7 @@ export function useReporteExternos({ from, to, vendedorId }) {
       if (error) throw error
       return data ?? []
     },
+    placeholderData: keepPreviousData,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 15
   })
