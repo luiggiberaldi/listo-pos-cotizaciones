@@ -92,7 +92,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
     abonosFiltrados = abonos.filter(a => a.creado_en && new Date(a.creado_en) >= inicioHoy)
   }
   const abonosDelDia = abonosFiltrados
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = LOGO_LISTA_PRECIOS
   let y = 0
   const HDR_H = 40 // Altura del header premium

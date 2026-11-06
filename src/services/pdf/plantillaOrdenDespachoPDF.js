@@ -21,7 +21,7 @@ function drawCheck(doc, label, x, y) {
 }
 
 export async function generarPlantillaOrdenDespachoPDF({ config = {}, incluirTransporte = true } = {}) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   let y = 0
 

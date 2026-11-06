@@ -10,7 +10,7 @@ import {
 } from './pdfShared'
 
 export async function generarPlantillaNotaEntregaPDF({ config = {} } = {}) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   let y = 0
   const esMembrete = config.nota_entrega_plantilla === 'membrete'

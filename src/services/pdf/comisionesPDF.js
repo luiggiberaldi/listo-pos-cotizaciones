@@ -57,7 +57,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
     ? new Date(tasaActualizadaEn).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })
     : 'N/D'
 
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   let y = 0
 
   const logoData = LOGO_LISTA_PRECIOS
@@ -1576,7 +1576,7 @@ export async function generarComisionesPDF({ comisiones, vendedor = null, tipoVe
 
 // ─── Generar Reporte de Ventas PDF ───────────────────────────────────────────
 export async function generarReporteVentasPDF({ reporte, rango, config = {}, action = 'download', cxcData = null }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   let y = 0
 
   const logoData = LOGO_LISTA_PRECIOS

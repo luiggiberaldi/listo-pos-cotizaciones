@@ -1,4 +1,5 @@
 // src/components/reportes/DateRangeSelector.jsx
+import IndicadorActualizando from './IndicadorActualizando'
 import { useState, useMemo } from 'react'
 import { Calendar } from 'lucide-react'
 import { getDayRange, getWeekRange, getUltimoSabadoRange, getCorteSemanalRange, getMonthRange, getLocalISODate } from '../../utils/dateHelpers'
@@ -17,7 +18,7 @@ function mismoRango(a, b) {
   return a?.from === b?.from && a?.to === b?.to
 }
 
-export default function DateRangeSelector({ value, onChange, ocultarPresets, envolverPresets = false }) {
+export default function DateRangeSelector({ value, onChange, ocultarPresets, envolverPresets = false, actualizando = false }) {
   const [showCustom, setShowCustom] = useState(false)
   const presetsVisibles = useMemo(() => PRESETS.filter(p => !ocultarPresets?.includes(p.id)), [ocultarPresets])
   const [activePresetId, setActivePresetId] = useState(() => {
@@ -109,6 +110,7 @@ export default function DateRangeSelector({ value, onChange, ocultarPresets, env
           <span className="sm:hidden">Rango</span>
           <span className="hidden sm:inline">Personalizado</span>
         </button>
+        <IndicadorActualizando visible={actualizando} />
       </div>
       {customActivo && (
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 mt-2 transition-all duration-300">

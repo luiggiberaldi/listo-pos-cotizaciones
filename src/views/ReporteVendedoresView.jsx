@@ -379,8 +379,7 @@ export default function ReporteVendedoresView() {
   const isGlobalLoading = pdfLoading === 'general' || pdfLoading === 'internos' || pdfLoading === 'externos'
 
   return (
-    <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-4">
-      <IndicadorActualizando visible={isPlaceholderData} />
+    <div className={`p-3 sm:p-4 md:p-5 lg:p-6 space-y-4 ${isPlaceholderData ? '[&>*:nth-child(n+3)]:opacity-50 [&>*:nth-child(n+3)]:pointer-events-none' : ''}`}>
       <PageHeader
         icon={BarChart3}
         title="Reporte de Vendedores"
@@ -449,6 +448,7 @@ export default function ReporteVendedoresView() {
             {p.label}
           </button>
         ))}
+        <IndicadorActualizando visible={isPlaceholderData} />
       </div>
 
       {/* KPIs globales */}
