@@ -11,6 +11,7 @@ import { getDespachoAction, PRIMARY_ACTION_COLORS } from '../../utils/despachoAc
 import { fmtUsdSimple as fmtUsd, fmtFecha, fmtFechaHora, fmtBs, usdToBs } from '../../utils/format'
 import { datosVehiculoImpreso } from '../../utils/vehiculoImpreso'
 import supabase from '../../services/supabase/client'
+import { SELECT_DESPACHO_PARA_PDF, combinarDespachoFresco } from '../../utils/despachoPdfDatos'
 import { fetchDespachoConsolidado } from '../../services/despachoItemsService'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
@@ -492,16 +493,32 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     return itemsConsolidados
   }
 
+  // Helper para TODOS los PDFs: vuelve a leer el despacho de la base de datos
+  // justo antes de imprimir. La tarjeta en pantalla puede tener una copia vieja
+  // (p. ej. tras una edición profunda hecha en otro equipo o sin refrescar), y
+  // los ítems siempre se leen frescos: mezclar ambos imprimía líneas nuevas con
+  // total / monto COD viejos (caso despacho #4567). Si no se puede leer, NO se
+  // imprime: es preferible un error a un PDF con un monto equivocado.
+  async function fetchDatosParaPdf() {
+    const [freshRes, items] = await Promise.all([
+      supabase.from('notas_despacho').select(SELECT_DESPACHO_PARA_PDF).eq('id', despacho.id).single(),
+      fetchItemsParaPdf(),
+    ])
+    // Si falla la lectura, combinarDespachoFresco lanza el aviso y NO se imprime.
+    // También verifica que cliente / vendedor no hayan cambiado respecto a la tarjeta.
+    return { despacho: combinarDespachoFresco(despacho, freshRes.error ? null : freshRes.data), items }
+  }
+
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ generarDespachoPDF }, itemsFinal] = await Promise.all([
+      const [{ generarDespachoPDF }, { despacho: despachoPdf, items: itemsFinal }] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
-        fetchItemsParaPdf(),
+        fetchDatosParaPdf(),
       ])
       await generarDespachoPDF({
-        despacho, items: itemsFinal, config,
-        formaPago: despacho.forma_pago || '',
+        despacho: despachoPdf, items: itemsFinal, config,
+        formaPago: despachoPdf.forma_pago || '',
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         porcentaje: parsePorcentaje(porcentajePdf),
@@ -516,13 +533,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   async function descargarOrdenDespacho() {
     setOrdenLoading(true)
     try {
-      const [{ generarOrdenDespachoPDF }, itemsFinal] = await Promise.all([
+      const [{ generarOrdenDespachoPDF }, { despacho: despachoPdf, items: itemsFinal }] = await Promise.all([
         import('../../services/pdf/ordenDespachoPDF'),
-        fetchItemsParaPdf(),
+        fetchDatosParaPdf(),
       ])
       await generarOrdenDespachoPDF({
-        despacho, items: itemsFinal, config,
-        formaPago: despacho.forma_pago || '',
+        despacho: despachoPdf, items: itemsFinal, config,
+        formaPago: despachoPdf.forma_pago || '',
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         porcentaje: parsePorcentaje(porcentajePdf),
@@ -537,12 +554,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
   async function descargarGuiaDespacho() {
     setGuiaLoading(true)
     try {
-      const [{ generarGuiaDespachoPDF }, itemsFinal] = await Promise.all([
+      const [{ generarGuiaDespachoPDF }, { despacho: despachoPdf, items: itemsFinal }] = await Promise.all([
         import('../../services/pdf/guiaDespachoPDF'),
-        fetchItemsParaPdf(),
+        fetchDatosParaPdf(),
       ])
       await generarGuiaDespachoPDF({
-        despacho, items: itemsFinal, config
+        despacho: despachoPdf, items: itemsFinal, config
       })
     } catch (err) {
       showToast('Error al generar Guía de Despacho: ' + (err.message || 'Error desconocido'), 'error')
@@ -596,13 +613,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       setPdfLoading(true)
     }
     try {
-      const [{ generarFacturaPDF }, itemsFinal] = await Promise.all([
+      const [{ generarFacturaPDF }, { despacho: despachoPdf, items: itemsFinal }] = await Promise.all([
         import('../../services/pdf/facturaPDF'),
-        fetchItemsParaPdf(),
+        fetchDatosParaPdf(),
       ])
       const { blob, filename } = await generarFacturaPDF({
-        despacho, items: itemsFinal, config,
-        formaPago: despacho.forma_pago || '',
+        despacho: despachoPdf, items: itemsFinal, config,
+        formaPago: despachoPdf.forma_pago || '',
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
@@ -633,13 +650,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setPrintLoading(true)
     setShowPrintMenu(false)
     try {
-      const [{ generarDespachoPDF }, itemsFinal] = await Promise.all([
+      const [{ generarDespachoPDF }, { despacho: despachoPdf, items: itemsFinal }] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
-        fetchItemsParaPdf(),
+        fetchDatosParaPdf(),
       ])
       const { blob, filename } = await generarDespachoPDF({
-        despacho, items: itemsFinal, config,
-        formaPago: despacho.forma_pago || '',
+        despacho: despachoPdf, items: itemsFinal, config,
+        formaPago: despachoPdf.forma_pago || '',
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
@@ -657,13 +674,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setPrintLoading(true)
     setShowPrintMenu(false)
     try {
-      const [{ generarDespachoPDF }, itemsFinal] = await Promise.all([
+      const [{ generarDespachoPDF }, { despacho: despachoPdf, items: itemsFinal }] = await Promise.all([
         import('../../services/pdf/despachoPDF'),
-        fetchItemsParaPdf(),
+        fetchDatosParaPdf(),
       ])
       const { blob, filename } = await generarDespachoPDF({
-        despacho, items: itemsFinal, config,
-        formaPago: despacho.forma_pago || '',
+        despacho: despachoPdf, items: itemsFinal, config,
+        formaPago: despachoPdf.forma_pago || '',
         monedaPDF: 'bs', tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
@@ -705,13 +722,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setPrintLoading(true)
     setShowPrintMenu(false)
     try {
-      const [{ generarOrdenDespachoPDF }, itemsFinal] = await Promise.all([
+      const [{ generarOrdenDespachoPDF }, { despacho: despachoPdf, items: itemsFinal }] = await Promise.all([
         import('../../services/pdf/ordenDespachoPDF'),
-        fetchItemsParaPdf(),
+        fetchDatosParaPdf(),
       ])
       const { blob, filename } = await generarOrdenDespachoPDF({
-        despacho, items: itemsFinal, config,
-        formaPago: despacho.forma_pago || '',
+        despacho: despachoPdf, items: itemsFinal, config,
+        formaPago: despachoPdf.forma_pago || '',
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
@@ -729,12 +746,12 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setPrintLoading(true)
     setShowPrintMenu(false)
     try {
-      const [{ generarGuiaDespachoPDF }, itemsFinal] = await Promise.all([
+      const [{ generarGuiaDespachoPDF }, { despacho: despachoPdf, items: itemsFinal }] = await Promise.all([
         import('../../services/pdf/guiaDespachoPDF'),
-        fetchItemsParaPdf(),
+        fetchDatosParaPdf(),
       ])
       const { blob, filename } = await generarGuiaDespachoPDF({
-        despacho, items: itemsFinal, config,
+        despacho: despachoPdf, items: itemsFinal, config,
         returnBlob: true,
       })
       printOrDownloadPdf(blob, filename)
@@ -749,13 +766,13 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setPrintLoading(true)
     setShowPrintMenu(false)
     try {
-      const [{ generarOrdenDespachoPDF }, itemsFinal] = await Promise.all([
+      const [{ generarOrdenDespachoPDF }, { despacho: despachoPdf, items: itemsFinal }] = await Promise.all([
         import('../../services/pdf/ordenDespachoPDF'),
-        fetchItemsParaPdf(),
+        fetchDatosParaPdf(),
       ])
       const { blob, filename } = await generarOrdenDespachoPDF({
-        despacho, items: itemsFinal, config,
-        formaPago: despacho.forma_pago || '',
+        despacho: despachoPdf, items: itemsFinal, config,
+        formaPago: despachoPdf.forma_pago || '',
         monedaPDF: monedaPdf, tasa: tasaImpresion,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
