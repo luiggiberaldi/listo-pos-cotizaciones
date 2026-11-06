@@ -41,6 +41,7 @@ import {
   handleActualizarTransaccionCxP
 } from './api/handlers/proveedores.js'
 import { handleReporteTransportistas, handleDetalleTransportista, handlePagarTransportista, handleRevertirPagoTransportista } from './api/handlers/transportistas.js'
+import { handleMisVentas } from './api/handlers/misVentas.js'
 import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota } from './api/handlers/vehiculos.js'
 
 
@@ -404,6 +405,11 @@ export default {
 
     if (url.pathname === '/api/reportes/flota-viajes' && request.method === 'GET') {
       return handleDetalleViajesFlota(request, env);
+    }
+
+    // ── API: "Mis ventas" — detalle de lo vendido por el operador de la sesión ──
+    if (url.pathname === '/api/reportes/mis-ventas') {
+      return handleMisVentas(request, env);
     }
 
     // ── API: obtener lista de comisiones (bypass RLS) ──────────────────────

@@ -21,6 +21,7 @@ const MORE_ITEMS = [
   { path: '/inventario',          label: 'Inventario',         icon: Package,   excludeRoles: ['logistica'] },
   { path: '/transportistas',      label: 'Transportistas',     icon: Truck },
   { path: '/comisiones',          label: 'Comisiones',         icon: DollarSign, excludeRoles: ['logistica', 'administracion'] },
+  { path: '/mis-ventas',          label: 'Mis ventas',         icon: BarChart3, onlyRoles: ['vendedor', 'vendedor_sin_comision', 'supervisor'] },
   { path: '/reporte-vendedores',  label: 'Rep. Vendedores',    icon: BarChart2, onlyRoles: ['jefe', 'desarrollador'] },
   { path: '/reportes',            label: 'Reportes',           icon: BarChart3, onlyRoles: ['administracion', 'desarrollador', 'logistica'] },
   { path: '/configuracion',       label: 'Configuración',      icon: Settings,  onlyRoles: ['administracion', 'desarrollador'] },
@@ -36,6 +37,7 @@ export default function BottomNav({ esSupervisor, esAdministracion = false, rol:
   const [showMore, setShowMore] = useState(false)
 
   const moreItemsFiltrados = MORE_ITEMS.filter(item => {
+    if (item.path === '/mis-ventas') return item.onlyRoles.includes(rol) // solo vendedores y supervisor
     if (esDesarrollador) return true
     if (item.onlyRoles?.length === 1 && item.onlyRoles[0] === 'desarrollador') return false
     if (esJefe) return true

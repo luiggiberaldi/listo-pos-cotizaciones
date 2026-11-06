@@ -60,6 +60,7 @@ const PersonalView      = lazyRetry(() => import('./views/PersonalView'))
 const CotizacionesView  = lazyRetry(() => import('./views/CotizacionesView'))
 const DespachosView     = lazyRetry(() => import('./views/DespachosView'))
 const VentaRapidaView   = lazyRetry(() => import('./views/VentaRapidaView'))
+const MisVentasView     = lazyRetry(() => import('./views/MisVentasView'))
 const InventarioView    = lazyRetry(() => import('./views/InventarioView'))
 const TransportistasView = lazyRetry(() => import('./views/TransportistasView'))
 const UsuariosView      = lazyRetry(() => import('./views/UsuariosView'))
@@ -236,6 +237,20 @@ function RutaDesarrollador() {
 
 
 // ─── Ruta exclusiva de vendedores ─────────────────────────────────────────────
+// ─── Ruta "Mis ventas": vendedores y supervisor (cada uno ve solo lo suyo) ─────
+function RutaVentasPropias() {
+  const hasUser = useAuthStore(useCallback(s => !!s.user, []))
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
+  const initialized = useAuthStore(useCallback(s => s.initialized, []))
+  const cargandoPerfil = useAuthStore(useCallback(s => s._cargandoPerfil, []))
+
+  if (!initialized) return <PantallaCarga />
+  if (!perfil && hasUser && cargandoPerfil) return <PantallaCarga />
+  if (!perfil) return <Navigate to="/login" replace />
+  if (!['vendedor', 'vendedor_sin_comision', 'supervisor'].includes(perfil.rol)) return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 function RutaSoloVendedor() {
   const hasUser = useAuthStore(useCallback(s => !!s.user, []))
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
@@ -310,6 +325,11 @@ function AppRoutes() {
             
             <Route element={<RutaSoloVendedor />}>
               <Route path="/tutorial"      element={<TutorialView />} />
+            </Route>
+
+            {/* Mis ventas: el servidor devuelve solo las ventas del operador de la sesión */}
+            <Route element={<RutaVentasPropias />}>
+              <Route path="/mis-ventas"    element={<MisVentasView />} />
             </Route>
 
             {/* Transportistas: todos los roles (logística incluida: crea choferes y camiones) */}
