@@ -85,6 +85,12 @@ async function ui() {
     await page.locator('text=PRUEBA AVISO dos').first().click()
     await page.waitForURL('**/logs', { timeout: 10000 })
     assert(true, 'Tocar el aviso abre la pantalla del Buzón')
+    await page.waitForSelector('button:has-text("Actualizar")', { timeout: 10000 })
+    assert(true, 'La pantalla del Buzón tiene el botón Actualizar')
+    await page.click('button:has-text("Actualizar")')
+    await page.waitForSelector('text=PRUEBA AVISO dos', { timeout: 15000 })
+    assert(true, 'Al pulsar Actualizar siguen apareciendo los mensajes')
+    await page.screenshot({ path: path.join(raiz, 'tmp', 'aviso-buzon-3.png') })
     assert(errores.length === 0, `Sin errores de página${errores.length ? ': ' + errores[0] : ''}`)
   } finally {
     await browser.close()
