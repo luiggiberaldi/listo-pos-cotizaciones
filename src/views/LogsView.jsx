@@ -454,7 +454,7 @@ export default function LogsView() {
   const [notaText, setNotaText] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState(null)
 
-  const { data: buzonMensajes = [], isLoading: buzonLoading } = useBuzonAdmin()
+  const { data: buzonMensajes = [], isLoading: buzonLoading, isFetching: buzonActualizando, isError: buzonError, error: buzonErrorDetalle, refetch: actualizarBuzon } = useBuzonAdmin()
   const marcarBuzon = useMarcarBuzon()
   const eliminarBuzon = useEliminarBuzon()
 
@@ -1003,8 +1003,17 @@ export default function LogsView() {
                 <p className="text-xs text-slate-500 mt-0.5 font-medium">Mensajes recibidos de los operadores para soporte y mejora continua</p>
               </div>
               
-              {/* Filtros */}
-              <div className="flex gap-2">
+              {/* Actualizar + Filtros */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => actualizarBuzon()}
+                  disabled={buzonActualizando}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  title="Buscar mensajes nuevos"
+                >
+                  <RefreshCw size={14} className={buzonActualizando ? 'animate-spin' : ''} /> Actualizar
+                </button>
                 <CustomSelect
                   value={buzonFiltroEstado}
                   onChange={setBuzonFiltroEstado}
@@ -1033,6 +1042,10 @@ export default function LogsView() {
             {buzonLoading ? (
               <div className="space-y-2 py-4">
                 {[1,2,3].map(i => <div key={i} className="h-24 bg-slate-50 rounded-xl animate-pulse" />)}
+              </div>
+            ) : buzonError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                No se pudieron leer los mensajes del Buzón{buzonErrorDetalle?.message ? `: ${buzonErrorDetalle.message}` : ''}. Pulsa "Actualizar" para reintentar.
               </div>
             ) : buzonMensajes.length === 0 ? (
               <div className="text-center py-12 text-slate-400">

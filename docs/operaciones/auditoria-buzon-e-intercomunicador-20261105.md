@@ -45,3 +45,11 @@ Avatares/colores por persona, "marcar como leído" desde la notificación, y tan
 ## Pendiente de decisión del dueño
 
 Si se quiere construir el punto 1 (y 2–5) primero en staging.
+
+## Actualización (2026-11-06): por qué el Buzón del desarrollador salía vacío en producción
+
+- **Causa:** las reglas de seguridad de la tabla (migración 195) dejaban ver/editar/borrar mensajes ajenos solo si la cuenta compartida llevaba el dato `operator_rol = desarrollador` en su token. Desde la migración 241 el rol sale de la sesión del operador y ese dato ya no existe. En **producción** la cuenta no lo tiene → el desarrollador no veía nada (3 mensajes guardados, todos de Administración, 2 pendientes desde el 27/10).
+- **Por qué en staging parecía funcionar:** la cuenta de pruebas de staging conservaba ese dato antiguo (falso positivo). Se retiró para que staging se comporte como producción.
+- **Arreglo:** migración `299_buzon_politicas_por_operador.sql` (rollback incluido): las reglas usan `get_rol_actual()` (rol real del operador). Aplicada y probada en **staging**: el desarrollador ve/marca/borra, el vendedor ya no puede cambiar el estado de su mensaje, todos los roles pueden enviar.
+- **Pantalla:** botón **Actualizar** y aviso de error visible (antes un fallo de lectura se veía como "Buzón vacío").
+- **Estado:** pendiente de aplicar en producción (cambio en la base de datos, requiere autorización).
