@@ -49,7 +49,7 @@ describe('GET /api/reportes/mis-ventas', () => {
     const d = llamadas.find(l => l.tabla === 'notas_despacho').params
     // las ventas se buscan por CLIENTES DEL VENDEDOR, no por quién hizo el despacho
     expect(d.get('vendedor_id')).toBeNull()
-    expect(d.get('cliente_id')).toBe(`in.(${cli})`)
+    expect(d.get('cliente_id')).toBeNull() // se pide el rango completo y el cruce con sus clientes se hace en el servidor
     const cl = llamadas.find(l => l.tabla === 'clientes').params
     expect(cl.get('vendedor_id')).toBe(`eq.${yo}`)
     expect(d.get('cuenta_id')).toBe(`eq.${cuenta}`)
@@ -91,7 +91,26 @@ describe('GET /api/reportes/mis-ventas', () => {
     vi.stubGlobal('fetch', vi.fn(async (u) => { llamadas.push({ tabla: new URL(u).pathname.split('/').at(-1), params: new URL(u).searchParams }); return new Response('[]', { status: 200 }) }))
     const body = await (await pedir('desde=2026-10-30&hasta=2026-11-05')).json()
     expect(body.resumen.despachos).toBe(0)
-    expect(llamadas.some(l => l.tabla === 'notas_despacho')).toBe(false)
+    expect(body.despachos).toEqual([])
+  })
+
+  it('de los despachos del rango solo devuelve los de SUS clientes (el cruce se hace en el servidor)', async () => {
+    auth('vendedor')
+    const ajeno = '40000000-0000-4000-8000-0000000000ff'
+    vi.stubGlobal('fetch', vi.fn(async (u) => {
+      const tabla = new URL(u).pathname.split('/').at(-1)
+      const filas = {
+        notas_despacho: [
+          { id: desp, numero: 7, cotizacion_id: null, cliente_id: cli, estado: 'entregada', creado_en: '2026-11-01T15:00:00Z', total_usd: 50, forma_pago: '[]' },
+          { id: '30000000-0000-4000-8000-0000000000aa', numero: 8, cotizacion_id: null, cliente_id: ajeno, estado: 'entregada', creado_en: '2026-11-01T16:00:00Z', total_usd: 999, forma_pago: '[]' },
+        ],
+        clientes: [{ id: cli, nombre: 'Cliente', rif_cedula: 'J-1' }],
+      }[tabla] || []
+      return new Response(JSON.stringify(filas), { status: 200 })
+    }))
+    const body = await (await pedir('desde=2026-10-30&hasta=2026-11-05')).json()
+    expect(body.despachos.map(d => d.numero)).toEqual([7])
+    expect(body.resumen.totalUsd).toBe(50)
   })
 
   it('otros roles no pueden usarlo', async () => {

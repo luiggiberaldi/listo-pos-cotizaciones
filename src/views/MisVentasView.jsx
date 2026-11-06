@@ -3,7 +3,7 @@
 // artículos, cliente y montos), y lo descarga en PDF, lo imprime o lo comparte por WhatsApp.
 // Los datos los filtra el servidor por el operador de la sesión (/api/reportes/mis-ventas).
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { BarChart3, ChevronDown, ChevronRight, Download, Loader2, MessageCircle, Printer, Search } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { authFetch } from '../services/authFetch'
@@ -100,10 +100,12 @@ export default function MisVentasView() {
   const [busqueda, setBusqueda] = useState('')
   const [generando, setGenerando] = useState(null)
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, isPlaceholderData } = useQuery({
     queryKey: ['mis-ventas', perfil?.id, rango.from, rango.to],
     enabled: Boolean(perfil?.id && rango?.from && rango?.to),
     staleTime: 60_000,
+    // Al cambiar de período se sigue viendo lo anterior (atenuado) mientras llega lo nuevo, en vez de quedar en blanco.
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const res = await authFetch(`/api/reportes/mis-ventas?desde=${rango.from}&hasta=${rango.to}`)
       const body = await res.json().catch(() => ({}))
@@ -161,15 +163,15 @@ export default function MisVentasView() {
       <PageHeader icon={BarChart3} title="Mis ventas" subtitle="Todo lo que vendiste, a detalle, en el período que elijas"
         action={
           <div className="flex gap-2">
-            <button type="button" onClick={() => exportar('pdf')} disabled={!data || sinDatos || generando !== null}
+            <button type="button" onClick={() => exportar('pdf')} disabled={!data || sinDatos || isPlaceholderData || generando !== null}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
               {generando === 'pdf' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Descargar PDF
             </button>
-            <button type="button" onClick={() => exportar('imprimir')} disabled={!data || sinDatos || generando !== null}
+            <button type="button" onClick={() => exportar('imprimir')} disabled={!data || sinDatos || isPlaceholderData || generando !== null}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
               {generando === 'imprimir' ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Imprimir
             </button>
-            <button type="button" onClick={() => exportar('whatsapp')} disabled={!data || sinDatos || generando !== null}
+            <button type="button" onClick={() => exportar('whatsapp')} disabled={!data || sinDatos || isPlaceholderData || generando !== null}
               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
               {generando === 'whatsapp' ? <Loader2 size={14} className="animate-spin" /> : <MessageCircle size={14} />} Enviar por WhatsApp
             </button>
@@ -184,10 +186,13 @@ export default function MisVentasView() {
       )}
 
       {isLoading && <Skeleton className="h-40 w-full rounded-xl" />}
+      {isPlaceholderData && (
+        <p className="flex items-center gap-2 px-1 text-xs font-semibold text-slate-500" role="status"><Loader2 size={13} className="animate-spin" /> Actualizando…</p>
+      )}
       {isError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error?.message || 'No se pudo cargar el reporte'}</p>}
 
       {data && (
-        <>
+        <div className={`space-y-4 transition-opacity ${isPlaceholderData ? 'opacity-50 pointer-events-none' : ''}`}>
           <div className={`grid grid-cols-2 gap-3 ${conComision ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
             <Kpi label="Total vendido" value={fmtUsd(data.resumen.totalUsd)} />
             <Kpi label="Despachos" value={data.resumen.despachos} />
@@ -248,7 +253,7 @@ export default function MisVentasView() {
               </section>
             </>
           )}
-        </>
+        </div>
       )}
     </div>
   )
