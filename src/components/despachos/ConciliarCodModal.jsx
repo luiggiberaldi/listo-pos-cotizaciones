@@ -75,6 +75,10 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
   const deudaCxc = round2(Number(codLedger?.deuda_cxc_usd) || 0)
   const desbordeSinMarca = round2(Number(codLedger?.desborde_sin_marca_usd) || 0)
   const esPagoMixto = cargoCxc > 0
+  // Filas con monto 0 (o vacías) se ignoran: no cuentan como pago ni piden referencia.
+  const pagosActivos = useMemo(() => payments.filter(p => p.metodo === 'Efectivo Bs'
+    ? Number(p.monto_bs) > 0
+    : Number(p.monto) > 0), [payments])
   const totalIngresado = useMemo(
     () => round2(payments.reduce((sum, payment) => sum + getMontoUsd(payment, getTasaPago(payment, tasaEfectiva)), 0)),
     [payments, tasaEfectiva],
@@ -82,7 +86,7 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
   const diferencia = round2(totalIngresado - totalCod)
   const excedente = Math.max(0, diferencia)
   const coincide = diferencia >= 0 && diferencia <= 0.01
-  const pagosConPrecisionValida = payments.every(payment =>
+  const pagosConPrecisionValida = pagosActivos.every(payment =>
     hasMaxTwoDecimals(payment.metodo === 'Efectivo Bs' ? payment.monto_bs : payment.monto),
   )
   const pagoValido = pagosConPrecisionValida && totalIngresado >= 0.01 && diferencia <= 0.01
@@ -106,6 +110,24 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
     setPayments(current => current.map((payment, i) => i === indice ? { ...payment, ...cambios } : payment))
   }
 
+  // Botón "Total": pone en esta fila solo lo que falta, descontando lo ya escrito en las demás.
+  function llenarTotal(indice) {
+    const pago = payments[indice]
+    if (!pago) return
+    const tasa = getTasaPago(pago, tasaEfectiva)
+    const yaIngresadoOtros = round2(totalIngresado - getMontoUsd(pago, tasa))
+    const falta = Math.max(0, round2(totalCod - yaIngresadoOtros))
+    if (pago.metodo === 'Efectivo Bs') {
+      if (!(tasa > 0)) {
+        showToast('La tasa seleccionada no está disponible; no se puede convertir el total a bolívares.', 'warning')
+        return
+      }
+      actualizarPago(indice, { monto_bs: round2(falta * tasa).toFixed(2) })
+      return
+    }
+    actualizarPago(indice, { monto: falta })
+  }
+
   function eliminarPago(indice) {
     setPayments(current => current.filter((_, i) => i !== indice))
   }
@@ -115,20 +137,20 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
       showToast('El pago debe ser de al menos un centavo y no superar el saldo COD por más de un centavo.', 'warning')
       return
     }
-    if (payments.some(p => p.metodo === 'Efectivo Bs'
+    if (pagosActivos.some(p => p.metodo === 'Efectivo Bs'
       && (!(getTasaPago(p, tasaEfectiva) > 0) || !(Number(p.monto_bs) > 0)
         || getMontoUsd(p, getTasaPago(p, tasaEfectiva)) <= 0))) {
       showToast('Verifica el monto en bolívares y la tasa seleccionada antes de confirmar.', 'warning')
       return
     }
-    if (payments.some(p => !METODOS_EFECTIVO.has(p.metodo) && String(p.referencia || '').trim().length < 4)) {
+    if (pagosActivos.some(p => !METODOS_EFECTIVO.has(p.metodo) && String(p.referencia || '').trim().length < 4)) {
       showToast('Cada transferencia o pago digital requiere su referencia (mínimo 4 caracteres).', 'warning')
       return
     }
 
     setLoading(true)
     try {
-      const pagosConfirmados = payments.map(p => {
+      const pagosConfirmados = pagosActivos.map(p => {
         if (p.metodo !== 'Efectivo Bs') {
           return { ...p, monto: Number(Number(p.monto).toFixed(2)) }
         }
@@ -149,10 +171,10 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
           referencia: null,
         }
       })
-      setPayments(payments.map((payment, index) => payment.metodo === 'Efectivo Bs'
-        ? { ...payment, tasa_snapshot: pagosConfirmados[index].tasa_snapshot,
-          tasa_fuente: pagosConfirmados[index].tasa_fuente,
-          tasa_actualizada_en: pagosConfirmados[index].tasa_actualizada_en }
+      setPayments(payments.map(payment => payment.metodo === 'Efectivo Bs' && Number(payment.monto_bs) > 0
+        ? { ...payment, tasa_snapshot: pagosConfirmados[pagosActivos.indexOf(payment)].tasa_snapshot,
+          tasa_fuente: pagosConfirmados[pagosActivos.indexOf(payment)].tasa_fuente,
+          tasa_actualizada_en: pagosConfirmados[pagosActivos.indexOf(payment)].tasa_actualizada_en }
         : payment))
       const response = await authFetch('/api/despachos/conciliar-cod', {
         method: 'POST',
@@ -257,6 +279,11 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
                         ) : (
                           <input aria-label={`Monto ${payment.metodo}`} type="number" min="0.01" step="0.01" value={payment.monto} onChange={event => actualizarPago(index, { monto: event.target.value })} className="w-1/3 rounded-lg border px-2 py-2 text-sm" />
                         )}
+                        {puedeConciliar && (
+                          <button type="button" onClick={() => llenarTotal(index)} className="shrink-0 rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 dark:bg-slate-900">
+                            Total
+                          </button>
+                        )}
                         {!METODOS_EFECTIVO.has(payment.metodo) && (
                           <input aria-label={`Referencia ${payment.metodo}`} value={payment.referencia} onChange={event => actualizarPago(index, { referencia: event.target.value })} placeholder="Referencia obligatoria (mínimo 4)" className="min-w-0 flex-1 rounded-lg border px-2 py-2 text-sm" />
                         )}
@@ -296,7 +323,7 @@ export default function ConciliarCodModal({ isOpen, onClose, despacho }) {
 
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
           <button type="button" onClick={onClose} disabled={loading} className="rounded-xl px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">Cancelar</button>
-          <button type="button" onClick={confirmar} disabled={loading || loadingResumen || !resumen || !puedeConciliar || !pagoValido || payments.length === 0} className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" onClick={confirmar} disabled={loading || loadingResumen || !resumen || !puedeConciliar || !pagoValido || pagosActivos.length === 0} className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">
             {loading && <Loader2 size={12} className="animate-spin" />}
             Registrar abono COD
           </button>
