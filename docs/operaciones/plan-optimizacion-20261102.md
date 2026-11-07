@@ -61,3 +61,9 @@ Esta etapa no empieza sin ver los resultados de la etapa 0 y sin la aprobación 
 - Publicado: PR #5/#6 (librería de PDF bajo demanda, −40 % de carga inicial), PR #7 (3 imágenes sin uso borradas, ícono de 305 KB a 46 KB), PR #8 (aviso de versión nueva).
 - Medición (etapa 0): cada llamada al servidor registra ruta (sin ids ni parámetros), método, tiempo y estado. Cada 5 minutos (y al ocultar la pestaña) se envía **un resumen** a los logs del sistema con categoría `RENDIMIENTO` (nivel info). Se consulta en la tabla `system_logs`. No guarda datos de clientes.
 - Siguiente paso: dejar correr 1-2 días y sacar el ranking de las rutas más lentas (p95) para decidir la etapa 2.
+
+## Avance (2026-11-07) — Etapa 2, puntos 1 y 2
+
+- Publicado: PR #35 (búsqueda de clientes sin volver a descargar la lista; la lista carga 443 → 280 ms; mediciones a nombre del operador) y PR #36 (sesión del PIN y operador verificados a la vez: 376 → 205 ms en staging; cronómetro `Server-Timing` en el servidor).
+- Detalle completo, cifras y vuelta atrás: [etapa2-velocidad-20261107.md](etapa2-velocidad-20261107.md).
+- Siguiente: lectura programada de las mediciones el martes 10/11/2026 a las 9:00 a. m. para elegir entre guardar despachos en un solo paso, Smart Placement o logos de PDF.

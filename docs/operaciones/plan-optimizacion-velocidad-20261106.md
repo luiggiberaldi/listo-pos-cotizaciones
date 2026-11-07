@@ -194,3 +194,9 @@ Revisión hecha en modo **solo lectura** el 6/11/2026 con las herramientas de di
 - **Hallazgo aparte:** el producto `CON0929008` (UNION CONDUIT 1") apunta a un archivo basura de 28 bytes, así que su foto nunca se ve. Sin relación con este cambio; conviene resubirle la foto.
 - **Cómo deshacer:** borrar la carpeta `productos/thumbs/` y revertir el código. Las fotos originales nunca se modificaron.
 - **Script:** `scripts/generar-miniaturas-productos.mjs` (con `--subir` sube; sin él, prueba local).
+
+### Relacionado — Etapa 2 del plan de 2/11 (7/11/2026)
+
+- Publicado en producción (PR #35 y #36): búsqueda de clientes sin volver a descargar la lista (la lista carga 443 → 280 ms) y verificación de cada llamada en paralelo (376 → 205 ms en staging), más un cronómetro del servidor (`Server-Timing`).
+- Cubre en parte la **Fase 5** de este plan para la pantalla de Clientes (sin cambiar columnas). La base de datos no se tocó.
+- Detalle: [etapa2-velocidad-20261107.md](etapa2-velocidad-20261107.md).
