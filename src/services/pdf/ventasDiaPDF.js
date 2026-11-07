@@ -205,9 +205,6 @@ export function generarVentasDiaPDF({ reporte, tasa = 0, config = {}, comprimir 
   seccion('ENTREGADAS ESTE DÍA, PERO CREADAS OTRO DÍA',
     'Se entregaron este día pero se crearon antes. No están en la tabla ni suman en los totales: pertenecen a la hoja del día en que se crearon.',
     reporte.entregadasOtroDia)
-  saltoSiHaceFalta(8)
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139)
-  doc.text(`Notas anuladas este día: ${reporte.anuladas} (no suman). Números sin usar entre la primera y la última nota del día: ${reporte.saltos} (saltos normales del contador; no son ventas perdidas).`, M, y + 3)
 
   // Pie en todas las páginas
   const total = doc.getNumberOfPages()

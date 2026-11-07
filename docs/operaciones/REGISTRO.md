@@ -38,6 +38,7 @@
 | OP-2026-016 | 2026-11-07 | Propuesta: reporte de ventas del sábado hecho por el sistema (reemplaza la hoja a mano; pantalla solo para Logística) | **Publicado en producción 2026-11-07**; falta que Logística lo pruebe un sábado real junto al papel | Solicitud #39 (`d6dcae86`) | [plan](../plans/OP-2026-016_reporte-ventas-sabado.md) |
 | OP-2026-017 | 2026-11-07 | Aviso de devoluciones en una sola línea (nota de entrega con membrete) | Publicado en producción 2026-11-07; falta ver una nota real impresa | Solicitudes #39 (staging) y #41 | [OP-2026-017_aviso-devoluciones-una-linea.md](OP-2026-017_aviso-devoluciones-una-linea.md) |
 | OP-2026-018 | 2026-11-07 | Aviso "Hay una versión nueva" adaptado al celular | Publicado en producción 2026-11-07; falta verlo en un celular real con sesión | Solicitud #42 (`133140d3`) | [OP-2026-018_aviso-version-nueva-responsivo.md](OP-2026-018_aviso-version-nueva-responsivo.md) |
+| OP-2026-019 | 2026-11-07 | Quitar la línea de conteos (anuladas y saltos) del reporte "Ventas del día" en pantalla y PDF | En staging y en el repo principal (sin publicar a producción); pendiente de decisión | — | [OP-2026-019_quitar-linea-conteos.md](OP-2026-019_quitar-linea-conteos.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -53,7 +54,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-019**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-020**).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.

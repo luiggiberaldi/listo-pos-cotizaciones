@@ -248,10 +248,6 @@ export default function TabVentasDia() {
             filas={data.entregadasOtroDia}
             columnaFecha="creacion"
           />
-          <p className="px-1 text-xs text-slate-500" data-testid="ventas-dia-conteos">
-            Notas anuladas este día: <b>{data.anuladas}</b> (no suman). Números sin usar entre la primera y la última nota del día: <b>{data.saltos}</b>
-            {' '}(saltos normales del contador del sistema; no son ventas perdidas).
-          </p>
         </div>
       )}
     </div>
