@@ -35,8 +35,8 @@
 | OP-2026-013 | 2026-11-07 | Etapa 2 de velocidad: lista de clientes y verificación en paralelo | Publicado | Solicitudes #35, #36, #37 | [etapa2-velocidad-20261107.md](etapa2-velocidad-20261107.md) |
 | OP-2026-014 | 2026-11-07 | Auditoría de salud de Supabase (solo lectura) | Revisión terminada; no hubo cambios. **El documento no está en la carpeta** (desapareció del árbol de trabajo el 7-nov a las 10:38; pendiente de recuperar) | — | — |
 | OP-2026-015 | 2026-11-07 | Mapa del negocio, README actualizado y ley de documentación | Documento listo; pendiente de guardar en git | — | [OP-2026-015_mapa-de-negocio.md](OP-2026-015_mapa-de-negocio.md) · [README.md](../../README.md) |
-| OP-2026-016 | 2026-11-07 | Propuesta: reporte de ventas del sábado hecho por el sistema (reemplaza la hoja a mano; pantalla solo para Logística) | Construido y probado en staging; falta prueba de Logística y pase a producción. Sin guardar en git | — | [plan](../plans/OP-2026-016_reporte-ventas-sabado.md) |
-| OP-2026-017 | 2026-11-07 | Aviso de devoluciones en una sola línea (nota de entrega con membrete) | Hecho y probado en staging; falta pasarlo a producción. Sin guardar en git | — | [OP-2026-017_aviso-devoluciones-una-linea.md](OP-2026-017_aviso-devoluciones-una-linea.md) |
+| OP-2026-016 | 2026-11-07 | Propuesta: reporte de ventas del sábado hecho por el sistema (reemplaza la hoja a mano; pantalla solo para Logística) | **Publicado en producción 2026-11-07**; falta que Logística lo pruebe un sábado real junto al papel | Solicitud #39 (`d6dcae86`) | [plan](../plans/OP-2026-016_reporte-ventas-sabado.md) |
+| OP-2026-017 | 2026-11-07 | Aviso de devoluciones en una sola línea (nota de entrega con membrete) | Hecho y probado en staging (guardado en git); **no está en producción** | Solicitud #39 (`d6dcae86`, solo árbol staging) | [OP-2026-017_aviso-devoluciones-una-linea.md](OP-2026-017_aviso-devoluciones-una-linea.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 

@@ -113,3 +113,9 @@ Pendiente / sin verificar:
 - Se quitaron las líneas de firma del PDF. El nombre de quien preparó la hoja queda en el pie.
 - Formas de pago distintas al efectivo en dólares: cada una tiene su columna (Efectivo Bs, Pago móvil, Punto, Zelle, USDT, Por cobrar, Cobro al entregar). Cruce y Donación van a la columna "Otros $" con su nombre en la última columna. Ver la respuesta en la conversación: las donaciones y cruces suman al total vendido pero no al "dinero cobrado".
 - Se quitó el recuadro de **cuadre de efectivo** (pantalla y PDF) por pedido del dueño. Ya no hay casilla de "contado en caja".
+
+## Publicación en producción (2026-11-07)
+- Solicitud #39, commit `d6dcae86` en `main`. El servidor (Cloudflare) se desplegó con éxito y la pantalla (Vercel) también.
+- Verificado: `GET /api/reportes/ventas-dia` sin sesión responde **401** (la ruta existe; una ruta inventada da 404) y el código de la pestaña está en la página publicada.
+- **Sin verificar en producción:** abrir la pestaña con un usuario real de Logística. Pendiente: que Logística la pruebe un sábado real junto a la hoja de papel.
+- Sin cambios en la base de datos. Para quitarlo: revertir la solicitud #39.
