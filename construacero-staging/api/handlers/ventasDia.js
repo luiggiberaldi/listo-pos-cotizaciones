@@ -1,10 +1,10 @@
 // api/handlers/ventasDia.js
 // GET /api/reportes/ventas-dia?fecha=YYYY-MM-DD
-// Hoja "Ventas del día" que Logística le deja a Administración (los sábados). Solo Logística
+// Hoja "Ventas del día" que Logística le deja a Administración (los sábados): notas creadas Y entregadas ese día. Solo Logística
 // (y desarrollador, para soporte). La cuenta sale de la sesión; solo se acepta la fecha.
 import { validateOperator } from '../lib/auth.js'
 import { json, jsonError, isValidUuid } from '../lib/utils.js'
-import { ROLES_VENTAS_DIA, validarFechaVentasDia, construirVentasDia, numerosFaltantes } from '../../src/utils/ventasDia.js'
+import { ROLES_VENTAS_DIA, validarFechaVentasDia, construirVentasDia } from '../../src/utils/ventasDia.js'
 
 const PAGINA = 1000
 const LOTE = 50
@@ -48,22 +48,19 @@ export async function handleVentasDia(request, env) {
 
   try {
     const cuenta = `eq.${user.id}`
+    // Notas creadas ese día O entregadas ese día; el cruce (creadas Y entregadas) se hace en construirVentasDia.
+    const dia = c => `and(${c}.gte.${rango.desdeTs},${c}.lt.${rango.hastaTs})`
     const params = new URLSearchParams({
-      select: 'id,numero,cliente_id,estado,creado_en,total_usd,forma_pago,referencia_pago',
+      select: 'id,numero,cliente_id,estado,creado_en,entregada_en,total_usd,forma_pago,referencia_pago',
       cuenta_id: cuenta,
+      or: `(${dia('creado_en')},${dia('entregada_en')})`,
     })
-    params.append('creado_en', `gte.${rango.desdeTs}`)
-    params.append('creado_en', `lt.${rango.hastaTs}`)
     const despachos = await leerTodo(env, headers, 'notas_despacho', params, request.signal)
 
     const idsClientes = despachos.map(d => d.cliente_id).filter(isValidUuid)
-    const faltan = numerosFaltantes(despachos).filter(Number.isInteger)
-    const [clientes, otrosNumeros] = await Promise.all([
-      leerEnTandas(env, headers, 'clientes', 'id', idsClientes, { select: 'id,nombre', cuenta_id: cuenta }, request.signal),
-      leerEnTandas(env, headers, 'notas_despacho', 'numero', faltan, { select: 'id,numero,estado,creado_en', cuenta_id: cuenta }, request.signal),
-    ])
+    const clientes = await leerEnTandas(env, headers, 'clientes', 'id', idsClientes, { select: 'id,nombre', cuenta_id: cuenta }, request.signal)
 
-    const reporte = construirVentasDia({ fecha: rango.fecha, despachos, clientes, otrosNumeros })
+    const reporte = construirVentasDia({ fecha: rango.fecha, despachos, clientes })
     const res = json({ ...reporte, preparadoPor: operador.nombre || '', generadoEn: new Date().toISOString() }, 200, request)
     res.headers.set('Cache-Control', 'private, no-store, max-age=0')
     return res

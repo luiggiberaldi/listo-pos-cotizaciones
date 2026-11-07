@@ -119,3 +119,16 @@ Pendiente / sin verificar:
 - Verificado: `GET /api/reportes/ventas-dia` sin sesión responde **401** (la ruta existe; una ruta inventada da 404) y el código de la pestaña está en la página publicada.
 - **Sin verificar en producción:** abrir la pestaña con un usuario real de Logística. Pendiente: que Logística la pruebe un sábado real junto a la hoja de papel.
 - Sin cambios en la base de datos. Para quitarlo: revertir la solicitud #39.
+
+## Cambio de regla (2026-11-07): solo creadas Y entregadas el mismo día
+**Por qué:** se revisaron en el sistema real las 16 notas de la hoja de papel del 24-10-2026. Todas se crearon, se aprobaron y se entregaron ese mismo día (la 4269 es del 26-10 y no pertenece a esa hoja). Los números que "faltaban" (4249, 4250, 4253, 4254, 4258, 4267) no existen como despachos: son saltos normales del contador, no ventas perdidas. Además, los 20 $ por cobrar son de la nota 4270 (Ana Rivero), no de la 4268; y los bolívares eran Punto de venta y Efectivo Bs, no pago móvil.
+
+**Regla nueva:**
+- La **hoja principal** trae solo las notas creadas **y** entregadas ese día (hora de Venezuela). Los totales salen solo de ahí.
+- **Aparte, con explicación, sin sumar:** (1) "Creadas este día y no entregadas este día" (pendientes, por entregar o entregadas después, con su estado y fecha de entrega) y (2) "Entregadas este día, pero creadas otro día" (con su fecha de creación).
+- Las anuladas y los saltos del contador solo se cuentan en una línea; se quitó la lista de números "que no existen".
+- Ana Rivero ya no sale con aviso "sin pago": su nota es a crédito y suma a "por cobrar".
+
+**Pruebas:** staging 314 pruebas y recorrido real de 26 comprobaciones (`scripts/test-ventas-dia-ui.mjs`); principal 1.094 pruebas y compilación correcta. El caso real del 24-10 da 16 notas, efectivo 813,76 $, por cobrar 20 $ y total 1.175,97 $.
+
+**Estado:** en una solicitud de cambio, **sin publicar** hasta que el dueño lo autorice.
