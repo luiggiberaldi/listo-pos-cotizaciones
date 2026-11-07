@@ -10,7 +10,7 @@ import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { getDayRange } from '../../utils/dateHelpers'
 import { compartirPorWhatsApp } from '../../utils/whatsapp'
-import { COLUMNAS_PAGO, montoFila, subtotalMostrado } from '../../utils/ventasDia'
+import { COLUMNAS_PAGO, ETIQUETA_ESTADO, fmtDiaHora, montoFila, subtotalMostrado } from '../../utils/ventasDia'
 import Skeleton from '../ui/Skeleton'
 import { showToast } from '../ui/Toast'
 
@@ -26,6 +26,38 @@ function Linea({ label, valor, fuerte = false }) {
   return (
     <div className={`flex justify-between gap-4 py-1 ${fuerte ? 'border-t border-slate-300 pt-2 text-base font-black text-slate-900' : 'text-sm text-slate-700'}`}>
       <span>{label}</span><span className="tabular-nums">{valor}</span>
+    </div>
+  )
+}
+
+function SeccionAparte({ testid, titulo, explicacion, filas = [], columnaFecha }) {
+  if (!filas.length) return null
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3" data-testid={testid}>
+      <h3 className="mb-0.5 flex items-center gap-1 text-xs font-black uppercase text-amber-800"><AlertTriangle size={13} /> {titulo} ({filas.length})</h3>
+      <p className="mb-2 text-xs text-amber-900">{explicacion}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-xs text-amber-950">
+          <thead>
+            <tr className="border-b border-amber-300 text-left text-[10px] uppercase text-amber-800">
+              <th className="py-1 pr-2">Nota N°</th><th className="py-1 pr-2">Cliente</th><th className="py-1 pr-2">Estado</th>
+              <th className="py-1 pr-2 text-right">Total $</th><th className="py-1 pr-2">Creada</th><th className="py-1">Entregada</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map(f => (
+              <tr key={f.id} className="border-b border-amber-100">
+                <td className="py-1 pr-2 font-bold tabular-nums">{pad(f.numero)}</td>
+                <td className="py-1 pr-2">{f.cliente}</td>
+                <td className="py-1 pr-2">{ETIQUETA_ESTADO[f.estado] || f.estado}</td>
+                <td className="py-1 pr-2 text-right tabular-nums">{fmt(f.totalUsd)}</td>
+                <td className={`py-1 pr-2 tabular-nums ${columnaFecha === 'creacion' ? 'font-bold' : ''}`}>{fmtDiaHora(f.creadaEn) || '—'}</td>
+                <td className={`py-1 tabular-nums ${columnaFecha === 'entrega' ? 'font-bold' : ''}`}>{fmtDiaHora(f.entregadaEn) || 'Aún no'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -140,7 +172,7 @@ export default function TabVentasDia() {
             </div>
 
             {sinDatos ? (
-              <p className="py-6 text-center text-sm text-slate-500">No hay notas creadas este día.</p>
+              <p className="py-6 text-center text-sm text-slate-500">No hay notas creadas y entregadas este día.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-xs" data-testid="ventas-dia-tabla">
@@ -202,14 +234,24 @@ export default function TabVentasDia() {
             </div>
           </div>
 
-          {data.faltantes.length > 0 && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3" data-testid="ventas-dia-faltantes">
-              <h3 className="mb-1 flex items-center gap-1 text-xs font-black uppercase text-amber-800"><AlertTriangle size={13} /> Notas que no aparecen en esta hoja</h3>
-              <ul className="grid gap-x-4 text-sm text-amber-900 sm:grid-cols-2">
-                {data.faltantes.map(f => <li key={f.numero}><span className="font-bold tabular-nums">{pad(f.numero)}</span> — {f.motivo}</li>)}
-              </ul>
-            </div>
-          )}
+          <SeccionAparte
+            testid="ventas-dia-sin-entregar"
+            titulo="Creadas este día y no entregadas este día"
+            explicacion="Estas notas se crearon este día, pero no se entregaron este mismo día: siguen pendientes de aprobar o por entregar, o se entregaron después. No suman en la tabla ni en los totales de esta hoja."
+            filas={data.sinEntregar}
+            columnaFecha="entrega"
+          />
+          <SeccionAparte
+            testid="ventas-dia-otro-dia"
+            titulo="Entregadas este día, pero creadas otro día"
+            explicacion="Estas notas se entregaron este día, pero se crearon antes. Por eso no están en la tabla ni suman en los totales de esta hoja: pertenecen a la hoja del día en que se crearon."
+            filas={data.entregadasOtroDia}
+            columnaFecha="creacion"
+          />
+          <p className="px-1 text-xs text-slate-500" data-testid="ventas-dia-conteos">
+            Notas anuladas este día: <b>{data.anuladas}</b> (no suman). Números sin usar entre la primera y la última nota del día: <b>{data.saltos}</b>
+            {' '}(saltos normales del contador del sistema; no son ventas perdidas).
+          </p>
         </div>
       )}
     </div>

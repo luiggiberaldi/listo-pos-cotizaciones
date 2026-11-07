@@ -1,12 +1,14 @@
 // src/utils/ventasDia.js
 // Reporte "Ventas del día" (hoja que Logística entrega a Administración los sábados).
-// Arma, a partir de los despachos creados en un día, una fila por nota con cada forma de pago en su
-// columna, los subtotales, el resumen (cobrado / por cobrar / total) y las notas que faltan en la
-// numeración. Lo usan el servidor (api/handlers/ventasDia.js), la pantalla y el PDF; no consulta la base.
+// REGLA: la hoja principal trae SOLO las notas creadas Y entregadas ese mismo día (hora de Venezuela).
+// Aparte, sin sumar a los totales: (1) creadas ese día y no entregadas ese día, (2) entregadas ese día
+// pero creadas otro día. Las anuladas y los saltos del contador solo se cuentan.
+// Arma una fila por nota con cada forma de pago en su columna, los subtotales y el resumen
+// (cobrado / por cobrar / total). Lo usan el servidor (api/handlers/ventasDia.js), la pantalla y el PDF;
+// no consulta la base.
 // Los montos de los despachos están en dólares; los bolívares se calculan con la tasa que se elija.
 
 export const ROLES_VENTAS_DIA = ['logistica', 'desarrollador']
-export const MAX_FALTANTES_CONSULTA = 200
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/
 const n = v => Number(v) || 0
@@ -72,15 +74,31 @@ export function leerPagos(formaPago) {
 const vacios = () => Object.fromEntries(COLUMNAS_PAGO.map(c => [c.id, 0]))
 
 /**
- * @param despachos  despachos creados ese día (todos los estados) {id,numero,cliente_id,estado,creado_en,total_usd,forma_pago,referencia_pago}
+ * @param despachos  notas creadas ese día O entregadas ese día (todos los estados)
+ *                   {id,numero,cliente_id,estado,creado_en,entregada_en,total_usd,forma_pago,referencia_pago}
  * @param clientes   {id,nombre}
- * @param otrosNumeros despachos con números que faltan en la secuencia del día {numero,estado,creado_en}
  */
-export function construirVentasDia({ fecha, despachos = [], clientes = [], otrosNumeros = [] }) {
+export function construirVentasDia({ fecha, despachos = [], clientes = [] }) {
   const clientePorId = new Map(clientes.map(c => [c.id, c]))
-  const activos = despachos.filter(d => d.estado !== 'anulada')
-  const anuladas = despachos.filter(d => d.estado === 'anulada')
-  const ordenados = [...activos].sort((a, b) => n(a.numero) - n(b.numero))
+  const fCre = d => fechaVenezuela(d.creado_en)
+  const fEnt = d => (d.entregada_en ? fechaVenezuela(d.entregada_en) : null)
+  const creadasHoy = despachos.filter(d => fCre(d) === fecha)
+  const anuladas = creadasHoy.filter(d => d.estado === 'anulada')
+  const vivas = despachos.filter(d => d.estado !== 'anulada')
+  const activos = vivas.filter(d => fCre(d) === fecha && fEnt(d) === fecha)
+  const aparte = d => ({
+    id: d.id,
+    numero: d.numero,
+    cliente: clientePorId.get(d.cliente_id)?.nombre || 'Cliente no disponible',
+    estado: d.estado,
+    totalUsd: r2(n(d.total_usd)),
+    creadaEn: d.creado_en,
+    entregadaEn: d.entregada_en || null,
+  })
+  const porNumero = (a, b) => n(a.numero) - n(b.numero)
+  const sinEntregar = vivas.filter(d => fCre(d) === fecha && fEnt(d) !== fecha).sort(porNumero).map(aparte)
+  const entregadasOtroDia = vivas.filter(d => fEnt(d) === fecha && fCre(d) !== fecha).sort(porNumero).map(aparte)
+  const ordenados = [...activos].sort(porNumero)
 
   const totales = vacios()
   let totalVendido = 0
@@ -114,7 +132,6 @@ export function construirVentasDia({ fecha, despachos = [], clientes = [], otros
     const avisos = []
     if (sumaPagos === 0) avisos.push('Sin pago registrado')
     else if (Math.abs(sumaPagos - total) > 0.01) avisos.push(`Los pagos (${sumaPagos.toFixed(2)} $) no cuadran con el total`)
-    if (d.estado === 'pendiente') avisos.push('Pendiente de aprobar')
 
     return {
       item: i + 1,
@@ -149,35 +166,34 @@ export function construirVentasDia({ fecha, despachos = [], clientes = [], otros
       efectivoUsdEsperado: totales.efectivoUsd,
       efectivoBsEsperadoUsd: totales.efectivoBs,
     },
-    faltantes: notasFaltantes({ fecha, despachos, otrosNumeros }),
+    sinEntregar,
+    entregadasOtroDia,
+    anuladas: anuladas.length,
+    saltos: numerosSinUsar(creadasHoy).length,
   }
 }
 
-// Números que faltan entre la primera y la última nota del día, con el motivo.
-export function numerosFaltantes(despachos = []) {
-  const nums = despachos.map(d => n(d.numero)).filter(x => x > 0)
+// Números sin usar entre la primera y la última nota creada ese día. Son saltos normales del contador
+// de la base (guardados que no se completaron, borrados, otras cuentas): NO son ventas perdidas.
+export function numerosSinUsar(creadasHoy = []) {
+  const nums = creadasHoy.map(d => n(d.numero)).filter(x => x > 0)
   if (!nums.length) return []
-  const presentes = new Set(despachos.filter(d => d.estado !== 'anulada').map(d => n(d.numero)))
+  const presentes = new Set(nums)
   const min = Math.min(...nums), max = Math.max(...nums)
   const faltan = []
-  for (let x = min; x <= max && faltan.length < MAX_FALTANTES_CONSULTA; x++) if (!presentes.has(x)) faltan.push(x)
+  for (let x = min; x <= max && faltan.length < 1000; x++) if (!presentes.has(x)) faltan.push(x)
   return faltan
 }
 
-export function notasFaltantes({ fecha, despachos = [], otrosNumeros = [] }) {
-  const delDia = new Map(despachos.map(d => [n(d.numero), d]))
-  const otros = new Map(otrosNumeros.map(d => [n(d.numero), d]))
-  return numerosFaltantes(despachos).map(numero => {
-    const d = delDia.get(numero) || otros.get(numero)
-    if (!d) return { numero, motivo: 'No existe en el sistema' }
-    if (d.estado === 'anulada') return { numero, motivo: 'Anulada' }
-    const f = fechaVenezuela(d.creado_en)
-    if (f && f !== fecha) {
-      const [y, m, dd] = f.split('-')
-      return { numero, motivo: `Es de otro día (${dd}/${m}/${y})` }
-    }
-    return { numero, motivo: 'Revisar' }
-  })
+export const ETIQUETA_ESTADO = { pendiente: 'Pendiente de aprobar', despachada: 'Aprobada, por entregar', entregada: 'Entregada' }
+
+// "24/10 09:34" en hora de Venezuela
+export function fmtDiaHora(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const v = new Date(d.getTime() - 4 * 3600000).toISOString()
+  return `${v.slice(8, 10)}/${v.slice(5, 7)} ${v.slice(11, 16)}`
 }
 
 // Montos de una columna para mostrar: en Bs si la columna es de bolívares.

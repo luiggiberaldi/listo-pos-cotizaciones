@@ -5,7 +5,7 @@
 import { jsPDF } from 'jspdf'
 import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import { drawPremiumHeader } from './pdfShared'
-import { COLUMNAS_PAGO, montoFila, subtotalMostrado } from '../../utils/ventasDia'
+import { COLUMNAS_PAGO, ETIQUETA_ESTADO, fmtDiaHora, montoFila, subtotalMostrado } from '../../utils/ventasDia'
 
 const M = 10
 const fmt = v => (v === null || v === undefined ? '—' : Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
@@ -82,7 +82,7 @@ export function generarVentasDiaPDF({ reporte, tasa = 0, config = {}, comprimir 
 
   if (!reporte.filas.length) {
     doc.setFont('helvetica', 'italic'); doc.setFontSize(10); doc.setTextColor(100, 116, 139)
-    doc.text('No hay notas creadas este día.', M, y + 6)
+    doc.text('No hay notas creadas y entregadas este día.', M, y + 6)
     y += 12
   } else {
     encabezadoTabla()
@@ -163,20 +163,51 @@ export function generarVentasDiaPDF({ reporte, tasa = 0, config = {}, comprimir 
   ]
   y += caja(M, 'RESUMEN', resumen) + 3
 
-  // Notas que faltan
-  if (reporte.faltantes.length) {
-    const textos = reporte.faltantes.map(f => `${pad(f.numero)}: ${f.motivo}`)
-    doc.setFontSize(7.5)
-    const lineas = doc.splitTextToSize(textos.join('   ·   '), ANCHO - 6)
-    saltoSiHaceFalta(8 + lineas.length * 3.6)
-    doc.setFillColor(255, 251, 235); doc.setDrawColor(252, 211, 77)
-    doc.roundedRect(M, y, ANCHO, 7 + lineas.length * 3.6, 1.5, 1.5, 'FD')
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(146, 64, 14)
-    doc.text('NOTAS QUE NO APARECEN EN ESTA HOJA', M + 3, y + 4.5)
+  // Secciones aparte (no suman en la hoja): creadas y no entregadas ese día / entregadas ese día y creadas otro día
+  const seccion = (titulo, explicacion, filas) => {
+    if (!filas.length) return
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5)
-    lineas.forEach((l, k) => doc.text(l, M + 3, y + 8.5 + k * 3.6))
-    y += 7 + lineas.length * 3.6
+    const lineasExp = doc.splitTextToSize(explicacion, ANCHO - 6)
+    const altoCab = 8 + lineasExp.length * 3.4 + 5
+    const altoTotal = altoCab + filas.length * 4.2 + 2
+    // La sección se mantiene junta (si cabe en una hoja); si no cabe en lo que queda, pasa a la hoja siguiente.
+    saltoSiHaceFalta(altoTotal <= H - 2 * M - 20 ? altoTotal + 2 : altoCab + 10)
+    y += 2
+    const xN = M + 3, xCli = M + 20, xEst = M + 108, xTot = M + 168, xCre = M + 172, xEnt = M + 205
+    const entra = y + altoTotal <= H - 14
+    if (entra) { doc.setFillColor(255, 251, 235); doc.setDrawColor(252, 211, 77); doc.roundedRect(M, y, ANCHO, altoTotal, 1.5, 1.5, 'FD') }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(146, 64, 14)
+    doc.text(`${titulo} (${filas.length})`, M + 3, y + 4.5)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(87, 53, 14)
+    lineasExp.forEach((l, k) => doc.text(l, M + 3, y + 8.2 + k * 3.4))
+    y += 8 + lineasExp.length * 3.4
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(146, 64, 14)
+    doc.text('NOTA N°', xN, y + 3); doc.text('CLIENTE', xCli, y + 3); doc.text('ESTADO', xEst, y + 3)
+    doc.text('TOTAL $', xTot, y + 3, { align: 'right' }); doc.text('CREADA', xCre, y + 3); doc.text('ENTREGADA', xEnt, y + 3)
+    y += 4.2
+    filas.forEach(f => {
+      if (y + 4.2 > H - 14) { doc.addPage(); y = M + 4 }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(15, 23, 42)
+      doc.text(pad(f.numero), xN, y + 3)
+      doc.setFont('helvetica', 'normal')
+      doc.text(cortar(doc, f.cliente, xEst - xCli - 2), xCli, y + 3)
+      doc.text(ETIQUETA_ESTADO[f.estado] || f.estado, xEst, y + 3)
+      doc.text(fmt(f.totalUsd), xTot, y + 3, { align: 'right' })
+      doc.text(fmtDiaHora(f.creadaEn) || '—', xCre, y + 3)
+      doc.text(fmtDiaHora(f.entregadaEn) || 'Aún no', xEnt, y + 3)
+      y += 4.2
+    })
+    y += 3
   }
+  seccion('CREADAS ESTE DÍA Y NO ENTREGADAS ESTE DÍA',
+    'Se crearon este día pero no se entregaron este mismo día: siguen pendientes de aprobar o por entregar, o se entregaron después. No suman en la tabla ni en los totales de esta hoja.',
+    reporte.sinEntregar)
+  seccion('ENTREGADAS ESTE DÍA, PERO CREADAS OTRO DÍA',
+    'Se entregaron este día pero se crearon antes. No están en la tabla ni suman en los totales: pertenecen a la hoja del día en que se crearon.',
+    reporte.entregadasOtroDia)
+  saltoSiHaceFalta(8)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139)
+  doc.text(`Notas anuladas este día: ${reporte.anuladas} (no suman). Números sin usar entre la primera y la última nota del día: ${reporte.saltos} (saltos normales del contador; no son ventas perdidas).`, M, y + 3)
 
   // Pie en todas las páginas
   const total = doc.getNumberOfPages()

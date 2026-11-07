@@ -3,7 +3,7 @@
  * Smoke de UI — "Ventas del día" (hoja de Logística para Administración) contra STAGING.
  *
  * Qué verifica, entrando por la interfaz real (login → operador Logística con PIN → Reportes → Ventas del día):
- *  - Aparecen las notas creadas ese día (incluida la pendiente), cada pago en su columna, Bs con la tasa
+ *  - La hoja trae solo notas creadas Y entregadas ese día; aparte, las no entregadas y las entregadas de otro día. Cada pago en su columna, Bs con la tasa
  *    escrita o con el monto real en Bs cuando el pago lo trae, referencias, subtotales y resumen.
  *  - Avisos: nota sin pago y nota pendiente. Notas que faltan: la anulada y la de otro día.
  *  - "Descargar PDF" baja la hoja (1 página) y "Enviar por WhatsApp" (PC) descarga y abre wa.me.
@@ -31,6 +31,7 @@ const PIN6 = '424242' // Logística y administración usan PIN de 6 dígitos
 const PIN4 = '4242'   // vendedores, 4
 const SABADO = '2026-10-31'
 const VIERNES = '2026-10-30'
+const DOMINGO = '2026-11-01'
 const TASA = '1012'
 
 function parseEnvFile(filePath) {
@@ -99,14 +100,15 @@ async function provisionar() {
   estado.clienteIds = clientes.map(c => c.id)
   const [sol, luna, ana] = clientes
 
-  // Se insertan en orden: así los números salen seguidos y la anulada y la del viernes quedan "en medio".
+  // Regla: la hoja trae solo las notas creadas Y entregadas el mismo día (sábado). `entrega` = día en que se entregó.
   const ventas = [
-    { k: 'A', cliente: sol.id, fecha: SABADO, total: 150, estado: 'despachada', pagos: [{ metodo: 'Efectivo $', monto: 100 }, { metodo: 'Transf. / Pago Móvil', monto: 50, referencia: '123456' }] },
+    { k: 'A', cliente: sol.id, fecha: SABADO, entrega: SABADO, total: 150, estado: 'entregada', pagos: [{ metodo: 'Efectivo $', monto: 100 }, { metodo: 'Transf. / Pago Móvil', monto: 50, referencia: '123456' }] },
     { k: 'ANULADA', cliente: luna.id, fecha: SABADO, total: 30, estado: 'anulada', pagos: [{ metodo: 'Zelle', monto: 30 }] },
-    { k: 'VIERNES', cliente: luna.id, fecha: VIERNES, total: 40, estado: 'entregada', pagos: [{ metodo: 'Zelle', monto: 40 }] },
-    { k: 'D', cliente: luna.id, fecha: SABADO, total: 118.81, estado: 'despachada', pagos: [{ metodo: 'Transf. / Pago Móvil', monto: 98.81, monto_bs: 100000, referencia: '777' }, { metodo: 'Cta por cobrar', monto: 20, diasVencimiento: 15 }] },
-    { k: 'CERO', cliente: ana.id, fecha: SABADO, total: 25, estado: 'despachada', pagos: [{ metodo: 'Efectivo $', monto: 0 }] },
+    { k: 'VIERNES', cliente: luna.id, fecha: VIERNES, entrega: SABADO, total: 40, estado: 'entregada', pagos: [{ metodo: 'Zelle', monto: 40 }] },
+    { k: 'D', cliente: luna.id, fecha: SABADO, entrega: SABADO, total: 118.81, estado: 'entregada', pagos: [{ metodo: 'Transf. / Pago Móvil', monto: 98.81, monto_bs: 100000, referencia: '777' }, { metodo: 'Cta por cobrar', monto: 20, diasVencimiento: 15 }] },
+    { k: 'CERO', cliente: ana.id, fecha: SABADO, entrega: SABADO, total: 25, estado: 'entregada', pagos: [{ metodo: 'Efectivo $', monto: 0 }] },
     { k: 'PEND', cliente: sol.id, fecha: SABADO, total: 13, estado: 'pendiente', pagos: [{ metodo: 'Efectivo $', monto: 13 }] },
+    { k: 'TARDE', cliente: ana.id, fecha: SABADO, entrega: DOMINGO, total: 22, estado: 'entregada', pagos: [{ metodo: 'Efectivo $', monto: 22 }] },
   ]
   for (const v of ventas) {
     const [cot] = await insertar('cotizaciones?select=id,numero', {
@@ -116,13 +118,13 @@ async function provisionar() {
     estado.cotizacionIds.push(cot.id)
     const [d] = await insertar('notas_despacho?select=id,numero', {
       cotizacion_id: cot.id, cuenta_id: estado.userId, vendedor_id: vend.id, cliente_id: v.cliente, estado: v.estado,
-      creado_en: `${v.fecha}T10:00:00-04:00`, total_usd: v.total, flete_usd: 0, descuento_total_usd: 0,
+      creado_en: `${v.fecha}T10:00:00-04:00`, ...(v.entrega ? { entregada_en: `${v.entrega}T11:00:00-04:00` } : {}), total_usd: v.total, flete_usd: 0, descuento_total_usd: 0,
       forma_pago: JSON.stringify(v.pagos), creado_por: vend.id,
     }, `Despacho ${v.k}`)
     estado.despachoIds.push(d.id)
     estado.numeros[v.k] = d.numero
   }
-  console.log(`  · Datos listos: sábado ${SABADO} con 5 notas (1 anulada) y 1 nota del viernes. Números: ${JSON.stringify(estado.numeros)}`)
+  console.log(`  · Datos listos: sábado ${SABADO} con notas creadas y entregadas, una anulada, una pendiente, una entregada el domingo y una del viernes entregada el sábado. Números: ${JSON.stringify(estado.numeros)}`)
 }
 
 async function limpiar() {
@@ -162,12 +164,12 @@ async function verificarServidor() {
   const ok = await fetch(url, { headers: h })
   const body = await ok.json()
   assert(ok.status === 200, 'Servidor: Logística consulta la hoja (200)')
-  assert(body.resumen.notas === 4, 'Servidor: 4 notas del sábado (sin la anulada ni la del viernes; con la pendiente)')
-  assert(body.resumen.totalVendidoUsd === 306.81 && body.resumen.cobradoUsd === 261.81 && body.resumen.porCobrarUsd === 20, 'Servidor: total $306,81 = cobrado $261,81 + por cobrar $20')
-  assert(body.resumen.efectivoUsdEsperado === 113, 'Servidor: efectivo $ esperado $113')
-  const motivos = Object.fromEntries(body.faltantes.map(f => [f.numero, f.motivo]))
-  assert(motivos[estado.numeros.ANULADA] === 'Anulada', 'Servidor: la nota anulada aparece en "faltantes" como Anulada')
-  assert(motivos[estado.numeros.VIERNES] === 'Es de otro día (30/10/2026)', 'Servidor: la nota del viernes aparece como "Es de otro día"')
+  assert(body.resumen.notas === 3, 'Servidor: 3 notas en la hoja (solo las creadas Y entregadas el sábado)')
+  assert(body.resumen.totalVendidoUsd === 293.81 && body.resumen.cobradoUsd === 248.81 && body.resumen.porCobrarUsd === 20, 'Servidor: total $293,81 = cobrado $248,81 + por cobrar $20 + $25 de una nota sin pago')
+  assert(body.resumen.efectivoUsdEsperado === 100, 'Servidor: efectivo $ esperado $100')
+  assert(body.sinEntregar.map(f => f.numero).sort().join() === [estado.numeros.PEND, estado.numeros.TARDE].sort().join(), 'Servidor: "creadas y no entregadas ese día" = la pendiente y la entregada el domingo')
+  assert(body.entregadasOtroDia.length === 1 && body.entregadasOtroDia[0].numero === estado.numeros.VIERNES, 'Servidor: "entregadas ese día pero creadas otro día" = la del viernes')
+  assert(body.anuladas === 1, 'Servidor: 1 nota anulada (solo se cuenta)')
 
   for (const rol of ['vendedor', 'administracion']) {
     const r = await fetch(url, { headers: await sesionDe(rol) })
@@ -209,14 +211,18 @@ async function verificarUI() {
     await page.waitForTimeout(800)
     const texto = limpio(await page.locator('[data-testid="ventas-dia"]').innerText())
     assert(texto.includes('Sábado 31/10/2026') && texto.includes('Tasa 1012,00'), 'Pantalla: muestra el día (Sábado 31/10/2026) y la tasa escrita')
-    assert(texto.includes('TEST VD FERRETERIA SOL') && texto.includes('TEST VD ANA RIVERO'), 'Pantalla: aparecen los clientes del sábado')
-    assert(texto.includes('50600,00') && texto.includes('100000,00') && texto.includes('150600,00'), 'Pantalla: pago móvil en Bs (con tasa y con monto real) y su subtotal 150.600,00')
-    assert(texto.includes('Ref. 123456') && texto.includes('Ref. 777'), 'Pantalla: referencias de pago móvil')
-    assert(texto.includes('Sin pago registrado') && texto.includes('Pendiente de aprobar'), 'Pantalla: avisos de nota sin pago y nota pendiente')
-    assert(texto.includes('$306,81') && texto.includes('$261,81') && texto.includes('$20,00'), 'Pantalla: resumen total $306,81, cobrado $261,81, por cobrar $20')
-    assert(texto.includes(`${String(estado.numeros.ANULADA).padStart(5, '0')} — Anulada`) && texto.includes('Es de otro día (30/10/2026)'), 'Pantalla: "Notas que no aparecen" con la anulada y la del viernes')
-
-    assert(!texto.includes('Cuadre'), 'Pantalla: ya no hay recuadro de cuadre de efectivo')
+    const tabla = limpio(await page.locator('[data-testid="ventas-dia-tabla"]').innerText())
+    assert(tabla.includes('TEST VD FERRETERIA SOL') && tabla.includes('TEST VD ANA RIVERO') && !tabla.includes('Pendiente de aprobar'), 'Pantalla: la tabla trae solo las notas creadas y entregadas el sábado')
+    assert(tabla.includes('50600,00') && tabla.includes('100000,00') && tabla.includes('150600,00'), 'Pantalla: pago móvil en Bs (con tasa y con monto real) y su subtotal 150.600,00')
+    assert(tabla.includes('Ref. 123456') && tabla.includes('Ref. 777'), 'Pantalla: referencias de pago móvil')
+    assert(tabla.includes('Sin pago registrado'), 'Pantalla: aviso de nota sin pago')
+    assert(texto.includes('$293,81') && texto.includes('$248,81') && texto.includes('$20,00'), 'Pantalla: resumen total $293,81, cobrado $248,81, por cobrar $20')
+    const sinEnt = limpio(await page.locator('[data-testid="ventas-dia-sin-entregar"]').innerText())
+    assert(sinEnt.toLowerCase().includes('creadas este día y no entregadas este día (2)') && sinEnt.includes('Pendiente de aprobar') && sinEnt.includes('Aún no') && sinEnt.includes('01/11'), 'Pantalla: sección "creadas y no entregadas" con la pendiente y la entregada el domingo, con su explicación')
+    const otroDia = limpio(await page.locator('[data-testid="ventas-dia-otro-dia"]').innerText())
+    assert(otroDia.toLowerCase().includes('entregadas este día, pero creadas otro día (1)') && otroDia.includes('30/10'), 'Pantalla: sección "entregadas hoy pero creadas otro día" con la fecha de creación (30/10)')
+    assert(limpio(await page.locator('[data-testid="ventas-dia-conteos"]').innerText()).includes('anuladas este día: 1'), 'Pantalla: cuenta la nota anulada sin listarla')
+    assert(!texto.includes('Cuadre'), 'Pantalla: no hay recuadro de cuadre de efectivo')
     await page.screenshot({ path: path.join(SHOT_DIR, '01-ventas-del-dia.png'), fullPage: true })
 
     const [descarga] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('button:has-text("Descargar PDF")')])
