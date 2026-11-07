@@ -1,6 +1,13 @@
 # Error en Auditoría: "permission denied for table usuarios"
 
-**Fecha:** 2026-11-06 · **Tipo:** diagnóstico de solo lectura (no se cambió nada) · **Estado:** causa encontrada, arreglo pendiente de aprobación.
+**Fecha:** 2026-11-06 · **Tipo:** diagnóstico de solo lectura (no se cambió nada) · **Estado:** **arreglado y publicado en producción el 2026-11-07** (solicitud de cambio #31, unida a `main` con el commit `cf9fb263`).
+
+## Estado final (2026-11-07)
+
+- **Lo que se arregló:** el buscador de Auditoría → Por Despacho ya pide solo las columnas que usa de la tabla de usuarios. Ya no falla con "permission denied". Se comprobó en staging (de error a respuesta correcta) antes de publicar.
+- **Protección nueva:** una prueba automática (`src/utils/__tests__/noPedirTodoDeUsuarios.test.js`) revisa todo el código y avisa si alguien vuelve a pedir "todas las columnas" de `usuarios`.
+- **Lo que queda abierto:** el error 500 de la lista de Auditoría (`limit=50`) no se pudo reproducir. Si vuelve a aparecer, hay que anotar la hora exacta para buscar los registros de error.
+- **Qué hacer tú:** entra como jefe a Auditoría → Por Despacho, busca el 4547 y pulsa "Generar Reporte". Debe abrir el reporte. Si sigue igual, recarga la página (Ctrl + F5) para cargar la versión nueva.
 
 ## En resumen
 
@@ -25,11 +32,11 @@ El pedido de la lista (`auditoria?...limit=50`) devolvió error 500. **No se pud
 
 Otro dato: la captura viene de `localhost` (versión de desarrollo) conectada a la base de producción, con el operador "enzo patti" (jefe). Es la misma base, así que el error también ocurre en la web publicada.
 
-## Arreglo propuesto
+## Arreglo (aplicado y publicado)
 
-1. Cambiar `usuarios(*)` por las columnas que realmente usa el reporte (`id, nombre, rol, color, codigo, telefono`).
-2. Una prueba automática que impida volver a pedir `*` de `usuarios`.
-3. Probar en staging (donde ocurre lo mismo) y publicar.
+1. Cambiar `usuarios(*)` por las columnas que realmente usa el reporte (`id, nombre, rol, color, codigo, telefono`). **Hecho** en `src/views/AuditoriaView.jsx`.
+2. Una prueba automática que impida volver a pedir `*` de `usuarios`. **Hecho.**
+3. Probar en staging (donde ocurre lo mismo) y publicar. **Hecho:** staging pasó de error 403 a 200; publicado en producción el 2026-11-07.
 
 Es un cambio de una línea, solo de lectura; no toca datos ni la base de datos.
 

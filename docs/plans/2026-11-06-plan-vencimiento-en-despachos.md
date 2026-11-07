@@ -1,6 +1,16 @@
 # Plan: fecha de vencimiento en despachos a crédito
 
-**Fecha:** 2026-11-06 · **Estado:** propuesto, pendiente de que el dueño lo retome · **Origen:** petición de Administración en el Buzón (27/10/2026): "que las notas de despacho, de acuerdo a los días de crédito, me digan la fecha de vencimiento".
+**Fecha:** 2026-11-06 · **Estado:** **publicado en producción el 2026-11-07** (solicitud de cambio #29, unida a `main` con el commit `ce3a0cc7`). **Origen:** petición de Administración en el Buzón (27/10/2026): "que las notas de despacho, de acuerdo a los días de crédito, me digan la fecha de vencimiento".
+
+## Qué quedó publicado (2026-11-07)
+
+- **Ficha del despacho:** línea "Vence dd/mm/aaaa" con color (normal, amarillo en 3 días o menos, rojo si está vencido).
+- **Detalle del despacho:** "Vence el dd/mm/aaaa · quedan N días".
+- **Orden de despacho (PDF):** una fila "CRÉDITO" con los días y la fecha. Solo aparece en la orden de despacho, como pidió Administración. La nota de entrega no cambió.
+- **Cálculo único:** un solo archivo (`src/utils/vencimientoDespacho.js`) calcula la fecha para los tres lugares, con hora de Venezuela.
+- **Pruebas:** probado en staging con seis despachos de prueba (`scripts/sembrar-despachos-credito-staging.mjs`). Esos despachos de prueba siguen en staging hasta que se quiten con `--quitar`.
+
+Lo que sigue pendiente: que Administración confirme en producción con un despacho real a crédito.
 
 ## En resumen
 

@@ -1,8 +1,8 @@
 # Auditoría de todos los reportes (exactitud y velocidad)
 
-**Fecha:** 2026-11-06 · **Tipo:** revisión de solo lectura (no se cambió nada en producción) · **Estado:** Fase 1 construida y probada en la rama `fix/reportes-completos` (sin publicar). Fases 2 y 3 pendientes.
+**Fecha:** 2026-11-06 · **Tipo:** revisión de solo lectura (no se cambió nada en producción) · **Estado:** **Fases 1 y 2 publicadas en producción** (solicitudes de cambio #26 y #27, unidas a `main` el 2026-11-06). El aviso "Actualizando…" quedó junto a los botones de período en la solicitud #28. La Fase 3 sigue pendiente y es opcional.
 
-## Resultado de la Fase 2 (2026-11-06) — construida, sin publicar
+## Resultado de la Fase 2 (2026-11-06) — publicada (solicitud #27)
 
 **En resumen:** al cambiar de período los reportes ya no se quedan en blanco: muestran lo anterior con un aviso "Actualizando…". Además hacen menos pasos y menos trabajo en el aparato.
 
@@ -14,7 +14,7 @@
 - Se quitaron los mensajes `[DEBUG]` de la consola.
 - Pruebas: 1.020 en verde; recorrido real contra staging sin errores (el recorrido encontró y corrigió un fallo propio en el Reporte de Vendedores antes de publicar). Mismos números que en la Fase 1 ($3.841,35 · 16 despachos).
 
-## Resultado de la Fase 1 (2026-11-06)
+## Resultado de la Fase 1 (2026-11-06) — publicada (solicitud #26)
 
 **Qué se arregló:**
 
