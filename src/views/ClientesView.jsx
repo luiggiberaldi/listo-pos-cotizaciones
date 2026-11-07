@@ -141,7 +141,9 @@ export default function ClientesView() {
   const [modalPromocionOpen, setModalPromocionOpen] = useState(false)
 
   // Data + mutations
-  const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
+  // La búsqueda se hace en pantalla (buscarClientes) sobre la lista ya cargada:
+  // no se vuelve a pedir la lista completa al servidor en cada búsqueda.
+  const { data: clientes = [], isLoading, isError, refetch } = useClientes()
   const { data: vendedores = [] } = useVendedores()
   const borrarCliente = useBorrarCliente()
   const activarCliente = useActivarCliente()

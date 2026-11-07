@@ -23,7 +23,7 @@ export async function handleLogFromClient(request, env) {
     stack: stack ? String(stack).slice(0, 5000) : null,
     endpoint: request.headers.get('Referer') || null,
     usuario_id: user.operator_id || user.id,
-    usuario_nombre: user.app_metadata?.operator_nombre || user.email,
+    usuario_nombre: user.operator_nombre || user.app_metadata?.operator_nombre || user.email,
     meta: meta || {},
   })
 

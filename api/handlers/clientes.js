@@ -55,7 +55,7 @@ export async function handleListarClientes(request, env) {
   // PostgREST tiene un límite duro de 1000 filas (max-rows).
   // Se pagina en bloques de 1000 para cargar todos los clientes (actualmente >1000),
   // evitando que clientes al final del alfabeto (como los que empiezan por Y o Z) queden truncados.
-  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,saldo_a_favor,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol,codigo)`;
+  let baseUrl = `${env.SUPABASE_URL}/rest/v1/clientes?cuenta_id=eq.${user.id}&order=nombre.asc,id.asc&select=id,codigo_cliente,nombre,rif_cedula,telefono,email,direccion,estado,ciudad,notas,tipo_cliente,activo,vendedor_id,saldo_pendiente,saldo_a_favor,creado_en,categoria,vendedor:usuarios!clientes_vendedor_id_fkey(id,nombre,color,rol,codigo)`;
 
   if (esExterno) {
     baseUrl += `&vendedor_id=eq.${operador.id}`;
@@ -68,8 +68,11 @@ export async function handleListarClientes(request, env) {
   let offset = 0;
   const BATCH_SIZE = 1000;
 
-  const [primeraPaginaRes, prestamosRes] = await Promise.all([
-    fetch(`${baseUrl}&limit=${BATCH_SIZE}&offset=${offset}`, { headers: supaHeaders }),
+  // La primera y la segunda página se piden a la vez (hoy hay >1000 clientes):
+  // ahorra una ida y vuelta completa a la base. Si la segunda falla, se reintenta abajo.
+  const [primeraPaginaRes, segundaPaginaRes, prestamosRes] = await Promise.all([
+    fetch(`${baseUrl}&limit=${BATCH_SIZE}&offset=0`, { headers: supaHeaders }),
+    fetch(`${baseUrl}&limit=${BATCH_SIZE}&offset=${BATCH_SIZE}`, { headers: supaHeaders }).catch(() => null),
     fetch(prestamosUrl, { headers: supaHeaders })
   ]);
 
@@ -81,8 +84,17 @@ export async function handleListarClientes(request, env) {
   const primeraPagina = await primeraPaginaRes.json();
   if (Array.isArray(primeraPagina)) rawClientes.push(...primeraPagina);
 
-  // Si la primera página vino llena (1000 filas), traer las páginas restantes
   let ultimosResultados = primeraPagina;
+  if (Array.isArray(primeraPagina) && primeraPagina.length === BATCH_SIZE && segundaPaginaRes?.ok) {
+    const segundaPagina = await segundaPaginaRes.json();
+    if (Array.isArray(segundaPagina)) {
+      offset = BATCH_SIZE;
+      rawClientes.push(...segundaPagina);
+      ultimosResultados = segundaPagina;
+    }
+  }
+
+  // Si la última página vino llena (1000 filas), traer las páginas restantes
   while (Array.isArray(ultimosResultados) && ultimosResultados.length === BATCH_SIZE) {
     offset += BATCH_SIZE;
     const sigRes = await fetch(`${baseUrl}&limit=${BATCH_SIZE}&offset=${offset}`, { headers: supaHeaders });

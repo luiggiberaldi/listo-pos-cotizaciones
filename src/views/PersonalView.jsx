@@ -130,8 +130,9 @@ export default function PersonalView() {
   const [clienteBorrando,  setClienteBorrando]  = useState(null)
   const [confirmBorrarOpen, setConfirmBorrarOpen] = useState(false)
 
-  // Data + mutations (filters in memory or we pass empty search query if we filter frontend)
-  const { data: clientes = [], isLoading, isError, refetch } = useClientes(busqueda)
+  // La búsqueda se hace en pantalla (buscarClientes) sobre la lista ya cargada:
+  // no se vuelve a pedir la lista completa al servidor en cada búsqueda.
+  const { data: clientes = [], isLoading, isError, refetch } = useClientes()
   const { data: vendedores = [] } = useVendedores()
   const empresaUser = vendedores.find(v => v.nombre?.toUpperCase() === 'EMPRESA')
   const forzarVendedorId = empresaUser?.id || null
