@@ -5,7 +5,7 @@
 - Se quitó la línea de texto gris que decía cuántas notas anuladas había y cuántos "saltos" del número de nota había.
 - La línea salía al final de la pantalla del reporte y al final del PDF.
 - Los datos siguen existiendo por dentro; solo dejó de mostrarse. No cambian los totales ni las tablas.
-- Probado en staging con las pruebas automáticas (pasan). Aún **no** está en producción: falta tu aprobación.
+- Probado en staging (pruebas automáticas y PDF de ejemplo). **Publicado en producción** con la solicitud #46 (commit `358bb324`).
 
 ## Qué se cambió
 
@@ -25,6 +25,10 @@ Archivos: `src/components/reportes/TabVentasDia.jsx`, `src/services/pdf/ventasDi
 - Pruebas automáticas del reporte y del PDF: 9 de 9 pasan.
 - Pendiente: revisar la pantalla y el PDF en staging con el recorrido de navegador (no se repitió en esta vuelta).
 
+## Publicación
+
+- Solicitud de cambio #46, unida a main como commit `358bb324`. El despliegue del servidor se disparó automáticamente.
+
 ## Qué falta
 
-- Tu "sí" para llevarlo a producción. Al publicar se anotará aquí el número de la solicitud de cambio y el commit.
+- Revisar la hoja real en producción con un usuario de Logística.
