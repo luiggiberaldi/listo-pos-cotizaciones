@@ -16,17 +16,23 @@ export default function AvisoVersionNueva() {
 
   if (!visible) return null
   return (
-    <div role="status" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] flex items-center gap-3 rounded-xl bg-slate-800 text-white text-sm px-4 py-2.5 shadow-lg">
-      <span>Hay una versión nueva. Se aplicará cuando cierres sesión.</span>
-      <button
-        type="button"
-        onClick={() => window.location.reload()}
-        className="shrink-0 rounded-lg bg-white/15 hover:bg-white/25 px-2.5 py-1 font-semibold"
-        title="Recarga ahora y tendrás que volver a poner tu PIN"
-      >
-        Actualizar ahora
-      </button>
-      <button type="button" onClick={() => setVisible(false)} aria-label="Cerrar aviso" className="shrink-0 text-white/70 hover:text-white">✕</button>
+    <div
+      role="status"
+      // Celular: ancho completo (con margen) y por encima de la barra inferior; PC: centrado y compacto.
+      className="fixed z-[60] left-3 right-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] sm:bottom-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-auto sm:max-w-xl flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-slate-800 text-white text-sm px-4 py-2.5 shadow-lg"
+    >
+      <span className="flex-1 min-w-[12rem]">Hay una versión nueva. Se aplicará cuando cierres sesión.</span>
+      <div className="flex items-center gap-2 ml-auto">
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="shrink-0 rounded-lg bg-white/15 hover:bg-white/25 px-2.5 py-1 font-semibold"
+          title="Recarga ahora y tendrás que volver a poner tu PIN"
+        >
+          Actualizar ahora
+        </button>
+        <button type="button" onClick={() => setVisible(false)} aria-label="Cerrar aviso" className="shrink-0 px-1 text-white/70 hover:text-white">✕</button>
+      </div>
     </div>
   )
 }
