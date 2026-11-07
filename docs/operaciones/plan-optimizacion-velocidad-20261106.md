@@ -200,3 +200,37 @@ Revisión hecha en modo **solo lectura** el 6/11/2026 con las herramientas de di
 - Publicado en producción (PR #35 y #36): búsqueda de clientes sin volver a descargar la lista (la lista carga 443 → 280 ms) y verificación de cada llamada en paralelo (376 → 205 ms en staging), más un cronómetro del servidor (`Server-Timing`).
 - Cubre en parte la **Fase 5** de este plan para la pantalla de Clientes (sin cambiar columnas). La base de datos no se tocó.
 - Detalle: [etapa2-velocidad-20261107.md](etapa2-velocidad-20261107.md).
+
+### Fase 4A — ✅ Probada en STAGING (7/11/2026). Producción: pendiente de aprobación
+
+**Qué se hizo:** en 138 de las 147 reglas de permisos de `public`, las funciones que dependen solo de la sesión (`auth.uid()`, `auth.role()`, `auth.jwt()`, `get_rol_actual()`, `get_operador_id()`) se envolvieron en `(SELECT …)`. Así Postgres las evalúa **una vez por consulta** y no una vez por fila. No cambia quién puede ver o hacer qué. (La Fase 4B —unificar reglas duplicadas— se descartó: no acelera nada porque Postgres evalúa las reglas permisivas con "O" de todas formas y el riesgo es mayor.)
+
+**Hallazgo previo:** el staging **no era un espejo de producción**: a producción le habían aplicado 4 reglas (`clientes/cotizaciones/despachos/productos_authenticated_select`) que el staging no tenía. Con ellas, 16 de 240 resultados cambiaron (p. ej. el supervisor pasa de ver 583 a 1.610 cotizaciones). Se agregaron al staging antes de probar. Además el staging tiene una regla propia que producción no tiene (`comisiones_supervision_select`) y 6 tablas de respaldo extra; no afectan la prueba.
+
+**Pruebas hechas (staging):**
+1. **Foto de permisos por rol** (8 personas × 30 tablas = 240 mediciones, dentro de transacciones que se deshacen): **0 diferencias** antes vs. después.
+2. **Equivalencia automática** del texto de cada una de las 138 reglas reescritas (al quitar los `(SELECT …)` queda idéntico al original).
+3. **Tiempos** (mediana de 5 repeticiones, contar filas como cada rol): suma de todas las mediciones **61,3 s → 7,8 s (7,9× más rápido)**. Ejemplos: auditoría para un vendedor 7.198 ms → 14 ms; movimientos de inventario 1.405 ms → 5 ms; cotizaciones de logística 1.347 ms → 407 ms.
+4. Solo 3 mediciones de unos pocos milisegundos empeoraron levemente (ruido).
+
+**Pendiente:** `cotizacion_items` sigue en ~460–1.000 ms: su regla llama `can_read_seller(...)` por fila (depende de cada fila, no se puede envolver). Es candidata a una Fase 4C.
+
+**Archivos:** `supabase/staging/301_rls_initplan_fase4a.sql` y `…_rollback.sql` (rollback restaura el texto original de las 138 reglas). Scripts de prueba en `tmp/fase4/` (ignorados por git): `matriz-permisos.mjs`, `tiempos-permisos.mjs`, `fase4a-reglas.mjs` (`produccion generar|aplicar`).
+
+#### Prueba de ESCRITURA por rol (staging, 7/11/2026) — ✅ sin diferencias
+
+- **Método:** 8 personas × 28 tablas × 3 operaciones (crear, editar, borrar) = **672 operaciones**, cada una dentro de un bloque que se deshace y con los disparadores apagados, para medir solo las reglas de permisos. Script: `tmp/fase4/matriz-escritura.mjs`.
+- **Secuencia:** reglas nuevas → rollback a las viejas → reglas nuevas otra vez.
+- **Resultado:** viejas vs. nuevas **0 diferencias** (dos veces). Lectura después de todo el ciclo: **0 diferencias** en 240 comparaciones.
+- **Tipos de resultado:** 458 permitidas, 148 denegadas por permisos, 18 rechazadas por dato duplicado (pasaron el permiso), 48 "crear" sin fila de ejemplo para copiar (no se pudo probar la creación en esas tablas).
+- **El rollback también quedó probado:** devolvió las 147 reglas a su texto original.
+
+#### ✅ APLICADA EN PRODUCCIÓN (7/11/2026, 14:31 UTC)
+
+- **Aprobación:** del usuario en chat ("Sí, aplícala").
+- **Cambio:** 137 de 146 reglas (producción no tiene `comisiones_supervision_select`, por eso es una menos que en staging). Archivos: `tmp/fase4/301-produccion.sql` y `tmp/fase4/301-produccion-rollback.sql`.
+- **Permisos antes vs. después** (8 personas × 30 tablas = 240 mediciones, todo con ROLLBACK): 218 idénticas; las 22 diferencias son **todas datos nuevos creados por usuarios reales entre las dos fotos** (2 cotizaciones, 1 despacho y 9 artículos entre 14:22 y 14:33 UTC, comprobado contra `creado_en`). Ningún rol perdió ni ganó acceso.
+- **Tiempos** (mediana de 5, contar filas como cada rol): total **61,7 s → 9,1 s (6,8× más rápido)**. Ejemplos: auditoría para logística 6.483 → 10 ms; cotizaciones para el jefe 1.010 → 270 ms; despachos para logística 941 → 246 ms; `cotizacion_items` para logística 5.048 → 1.274 ms (sigue siendo la más lenta → Fase 4C).
+- **Errores después del cambio:** 0 en la base de datos y 0 respuestas con error en la API (revisado hasta 14:35 UTC).
+- **Deshacer, si hiciera falta:** ejecutar `tmp/fase4/301-produccion-rollback.sql`.
+- Scripts de medición en producción (solo lectura, con ROLLBACK): `tmp/fase4/matriz-permisos-prod.mjs` y `tmp/fase4/tiempos-permisos-prod.mjs`.
