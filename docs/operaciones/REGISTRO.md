@@ -34,6 +34,7 @@
 | OP-2026-012 | 2026-11-06 / 11-07 | Despacho #4567: montos distintos en PDF y arreglo | Publicado (falta probar un PDF real en producción) | Solicitud #30 (`516825af`) | [caso-despacho-4567-y-arreglo-pdf-20261107.md](caso-despacho-4567-y-arreglo-pdf-20261107.md) |
 | OP-2026-013 | 2026-11-07 | Etapa 2 de velocidad: lista de clientes y verificación en paralelo | Publicado | Solicitudes #35, #36, #37 | [etapa2-velocidad-20261107.md](etapa2-velocidad-20261107.md) |
 | OP-2026-014 | 2026-11-07 | Auditoría de salud de Supabase (solo lectura) | Revisión terminada; no hubo cambios. **El documento no está en la carpeta** (desapareció del árbol de trabajo el 7-nov a las 10:38; pendiente de recuperar) | — | — |
+| OP-2026-015 | 2026-11-07 | Mapa del negocio, README actualizado y ley de documentación | Documento listo; pendiente de guardar en git | — | [OP-2026-015_mapa-de-negocio.md](OP-2026-015_mapa-de-negocio.md) · [README.md](../../README.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -49,7 +50,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-015**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-016**).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.
