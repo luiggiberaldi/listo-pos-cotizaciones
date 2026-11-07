@@ -131,4 +131,4 @@ Pendiente / sin verificar:
 
 **Pruebas:** staging 314 pruebas y recorrido real de 26 comprobaciones (`scripts/test-ventas-dia-ui.mjs`); principal 1.094 pruebas y compilación correcta. El caso real del 24-10 da 16 notas, efectivo 813,76 $, por cobrar 20 $ y total 1.175,97 $.
 
-**Estado:** en una solicitud de cambio, **sin publicar** hasta que el dueño lo autorice.
+**Estado:** publicado en producción el 2026-11-07 (solicitud #44, commit `381fc991`). Verificado: la ruta responde 401 sin sesión y las secciones nuevas están en la página publicada. **Sin verificar:** abrirlo con un usuario real de Logística en producción.
