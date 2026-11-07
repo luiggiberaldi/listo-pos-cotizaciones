@@ -46,6 +46,7 @@ import { handleDashboard } from './api/handlers/dashboard.js'
 import { handleResumenCobranza } from './api/handlers/cobranza.js'
 import { runAvisoCobranza } from './api/lib/cobranza.js'
 import { handleMisVentas } from './api/handlers/misVentas.js'
+import { handleVentasDia } from './api/handlers/ventasDia.js'
 import { conCronometro } from './api/lib/cronometro.js'
 import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota, handleReportePesoFlota } from './api/handlers/vehiculos.js'
 
@@ -437,6 +438,11 @@ const worker = {
     // ── API: "Mis ventas" — detalle de lo vendido por el operador de la sesión ──
     if (url.pathname === '/api/reportes/mis-ventas') {
       return handleMisVentas(request, env);
+    }
+
+    // ── API: "Ventas del día" — hoja de Logística para Administración ──
+    if (url.pathname === '/api/reportes/ventas-dia') {
+      return handleVentasDia(request, env);
     }
 
     // ── API: obtener lista de comisiones (bypass RLS) ──────────────────────

@@ -6,7 +6,7 @@ import {
   BarChart3, CreditCard, RefreshCw, Download,
   FileText, DollarSign, AlertTriangle,
   Clock, Users, Percent, ArrowUpCircle, ArrowDownCircle, Loader2, Briefcase,
-  ChevronDown, ChevronLeft, ChevronRight, Globe, UserCheck, Printer, CheckCircle, Truck
+  ChevronDown, ChevronLeft, ChevronRight, Globe, UserCheck, Printer, CheckCircle, Truck, ClipboardList
 } from 'lucide-react'
 import { claseAtenuar } from '../utils/atenuarActualizando'
 import { useReporteVentas } from '../hooks/useReporteVentas'
@@ -33,6 +33,7 @@ import TablaVendedores from '../components/reportes/TablaVendedores'
 import TablaProductos from '../components/reportes/TablaProductos'
 import TablaClientes from '../components/reportes/TablaClientes'
 import TabTransportistas from '../components/reportes/TabTransportistas'
+import TabVentasDia from '../components/reportes/TabVentasDia'
 import SeccionTransportistasVentas from '../components/reportes/SeccionTransportistasVentas'
 import ModalDetalleVendedor from '../components/reportes/ModalDetalleVendedor'
 import supabase from '../services/supabase/client'
@@ -106,7 +107,7 @@ function formatMetodoPago(val, fallback = '—') {
 
 
 // ─── Tabs Definition ──────────────────────────────────────────────────────
-// Logística solo ve Transportistas; administración no ve Transportistas.
+// Logística ve Transportistas y Ventas del día; administración no ve ninguna de las dos.
 const ROLES_GERENCIA = ['administracion', 'desarrollador', 'jefe']
 const TABS = [
   { id: 'comisiones', label: 'Comisiones', short: 'Comis.', icon: Percent, roles: ROLES_GERENCIA },
@@ -115,6 +116,8 @@ const TABS = [
   { id: 'transportistas', label: 'Transportistas', short: 'Transp.', icon: Truck,
     roles: ['desarrollador', 'logistica', 'jefe'] },
   { id: 'externos', label: 'Artículos Externos', short: 'Extern.', icon: Globe, roles: ROLES_GERENCIA },
+  // Hoja de ventas que Logística le deja a Administración los sábados: solo Logística (y soporte).
+  { id: 'ventasDia', label: 'Ventas del día', short: 'Del día', icon: ClipboardList, roles: ['logistica', 'desarrollador'] },
 ]
 const tabsDelRol = rol => TABS.filter(t => !t.roles || t.roles.includes(rol))
 
@@ -2837,6 +2840,7 @@ export default function ReportesView() {
        {activeTab === 'ventas' && <TabVentas configNeg={configNeg} />}
        {activeTab === 'transportistas' && <TabTransportistas />}
        {activeTab === 'externos' && <TabArticulosExternos configNeg={configNeg} />}
+       {activeTab === 'ventasDia' && <TabVentasDia />}
     </div>
   )
 }
