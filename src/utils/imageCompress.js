@@ -1,6 +1,7 @@
 // src/utils/imageCompress.js
 // Comprime imagen a WebP (max 300px, calidad 0.55) para Supabase Storage
 // Optimizado para plan gratuito: ~10-15KB por imagen
+import { MINIATURA_MAX, MINIATURA_CALIDAD } from './imagenMiniatura'
 
 /**
  * Comprime un File de imagen a WebP
@@ -70,6 +71,19 @@ export async function subirImagenProducto(supabase, productoId, blob) {
 
   if (error) throw error
 
+  // Miniatura para las listas. Si falla NO se interrumpe: la app cae a la foto grande.
+  try {
+    const mini = await comprimirImagen(blob, { maxSize: MINIATURA_MAX, quality: MINIATURA_CALIDAD })
+    mini.revoke()
+    await supabase.storage.from('productos').upload(`thumbs/${path}`, mini.blob, {
+      contentType: 'image/webp',
+      upsert: true,
+      cacheControl: '31536000',
+    })
+  } catch (e) {
+    console.warn('No se pudo crear la miniatura (se usará la foto grande):', e?.message)
+  }
+
   const { data } = supabase.storage.from('productos').getPublicUrl(path)
   // Agregar timestamp para bust cache cuando se actualiza
   return `${data.publicUrl}?v=${Date.now()}`
@@ -80,7 +94,7 @@ export async function subirImagenProducto(supabase, productoId, blob) {
  */
 export async function eliminarImagenProducto(supabase, productoId) {
   const path = `${productoId}.webp`
-  await supabase.storage.from('productos').remove([path])
+  await supabase.storage.from('productos').remove([path, `thumbs/${path}`])
 }
 
 /**
