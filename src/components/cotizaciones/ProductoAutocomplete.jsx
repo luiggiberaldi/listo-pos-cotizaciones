@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Search, Plus, Package, X } from 'lucide-react'
 import { smartSearchProductos } from '../../utils/smartSearch'
 import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
+import ImgProducto from "../inventario/ImgProducto"
 
 export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgregados = new Set(), placeholder = 'Búsqueda rápida por nombre o código...' }) {
   const [texto, setTexto] = useState('')
@@ -70,7 +71,7 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
               >
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${yaAgregado ? 'bg-emerald-100' : 'bg-slate-100'}`}>
                   {p.imagen_url
-                    ? <img src={p.imagen_url} alt="" className="h-full w-full object-contain rounded-lg" />
+                    ? <ImgProducto src={p.imagen_url} alt="" className="h-full w-full object-contain rounded-lg" />
                     : <Package size={14} className={yaAgregado ? 'text-emerald-400' : 'text-slate-300'} />
                   }
                 </div>

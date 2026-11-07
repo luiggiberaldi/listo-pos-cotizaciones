@@ -23,6 +23,7 @@ import { fmtUsdSimple as fmtUsd, fmtBs } from '../../utils/format'
 import { buscarClientes } from '../../utils/clienteSearch'
 import { guardarProductoReciente, getProductosRecientes } from './ProductosRecientes'
 import { showToast } from '../ui/Toast'
+import ImgProducto from "../inventario/ImgProducto"
 
 export default function CotizacionRapida({ onVolver, onGuardado }) {
   const { perfil } = useAuthStore()
@@ -427,7 +428,7 @@ export default function CotizacionRapida({ onVolver, onGuardado }) {
                   yaAgregado ? 'bg-emerald-50' : 'bg-slate-50'
                 }`}>
                   {p.imagen_url
-                    ? <img src={p.imagen_url} alt="" className="h-full w-full object-contain" loading="lazy" onError={e => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-300"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>' }} />
+                    ? <ImgProducto src={p.imagen_url} alt="" className="h-full w-full object-contain" loading="lazy" onError={e => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-300"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>' }} />
                     : yaAgregado ? <CheckCircle size={14} className="text-emerald-400" /> : <Package size={14} className="text-slate-300" />
                   }
                 </div>

@@ -10,6 +10,7 @@ import { useKardex, useRevertirMovimiento } from '../../hooks/useMovimientosInve
 import { MOTIVOS_TIPO, formatCorrelativo, getMotivoChipClasses } from '../../utils/motivosTipo'
 import useAuthStore from '../../store/useAuthStore'
 import { showToast } from '../ui/Toast'
+import ImgProducto from "./ImgProducto"
 
 function formatFecha(ts) {
   return new Date(ts).toLocaleString('es-VE', {
@@ -249,7 +250,7 @@ export default function KardexModal({ isOpen, onClose, producto }) {
         <div className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3">
           <div className="w-11 h-11 rounded-xl bg-sky-100 flex items-center justify-center shrink-0 overflow-hidden">
             {producto.imagen_url
-              ? <img src={producto.imagen_url} alt="" className="w-full h-full object-cover rounded-xl" />
+              ? <ImgProducto src={producto.imagen_url} alt="" className="w-full h-full object-cover rounded-xl" />
               : <Package size={20} className="text-sky-500" />
             }
           </div>

@@ -52,7 +52,7 @@ function drawFooter(doc, config) {
 }
 
 export async function generarClientesPDF({ items = [], config = {}, action = 'download', title = 'Base de Datos de Clientes' }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = await cargarLogo(config.logo_url)
 
   let y = drawHeader(doc, logoData, config, title)

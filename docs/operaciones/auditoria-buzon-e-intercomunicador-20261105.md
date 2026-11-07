@@ -52,4 +52,4 @@ Si se quiere construir el punto 1 (y 2–5) primero en staging.
 - **Por qué en staging parecía funcionar:** la cuenta de pruebas de staging conservaba ese dato antiguo (falso positivo). Se retiró para que staging se comporte como producción.
 - **Arreglo:** migración `299_buzon_politicas_por_operador.sql` (rollback incluido): las reglas usan `get_rol_actual()` (rol real del operador). Aplicada y probada en **staging**: el desarrollador ve/marca/borra, el vendedor ya no puede cambiar el estado de su mensaje, todos los roles pueden enviar.
 - **Pantalla:** botón **Actualizar** y aviso de error visible (antes un fallo de lectura se veía como "Buzón vacío").
-- **Estado:** pendiente de aplicar en producción (cambio en la base de datos, requiere autorización).
+- **Estado:** migración 299 **aplicada en producción el 2026-11-06** (reglas verificadas en el catálogo) y botón Actualizar publicado. El dueño confirmó que ya ve los 3 mensajes del Buzón. Reversa: `299_buzon_politicas_por_operador_rollback.sql`.

@@ -724,7 +724,7 @@ export async function generarComisionesPDF({
   const filenameBase = vendedor ? vendedor.nombre.replace(/\s+/g, '_') : 'General'
   const suffix = formato === 'resumido' ? 'Resumido' : modoCorteSemanal ? 'Detallado' : 'General'
   const filename = `Comisiones_${suffix}_${filenameBase}_${new Date().toISOString().slice(0, 10)}.pdf`
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   if (formato === 'resumido') {
     const summary = calcularResumenComisionesGeneradas(normalized, ajustesManuales, rate)

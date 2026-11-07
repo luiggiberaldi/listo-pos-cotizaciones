@@ -8,6 +8,7 @@ import { smartSearchProductos, canonicalizeOcr, findBestFuzzyCodeMatch, parsearL
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import ProductoAutocomplete from './ProductoAutocomplete'
 import { showToast } from '../ui/Toast'
+import ImgProducto from "../inventario/ImgProducto"
 
 const PROCESSING_STEPS = [
   { icon: '🔍', text: 'Preprocesando y binarizando imagen...' },
@@ -553,7 +554,7 @@ function ScanResultRow({ item, idx, tasa, onToggle, onCantidadChange, onSelectMa
         <div className="bg-slate-50 rounded-lg p-2 space-y-1">
           <div className="flex items-start gap-2">
             {match.imagen_url ? (
-              <img src={match.imagen_url} alt="" className="w-8 h-8 rounded object-cover shrink-0 bg-slate-100" />
+              <ImgProducto src={match.imagen_url} alt="" className="w-8 h-8 rounded object-cover shrink-0 bg-slate-100" />
             ) : (
               <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center shrink-0 border">
                 <Package size={14} className="text-slate-300" />

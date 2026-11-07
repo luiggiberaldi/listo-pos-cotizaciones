@@ -14,6 +14,7 @@ import {
 } from './pdfShared'
 import { num, totalesVehiculos, totalesChoferes, variacion, porcentaje, diasDelPeriodo, textoDestinos, repartoFlete } from '../../utils/flotaReporte'
 import { nombreVehiculo } from '../../utils/vehiculoImpreso'
+import { resumirViajes, resumirPor, soloConCamion, usoPct, textoToneladas, textoKilos, CARGA_BAJA_PCT } from '../../utils/pesoFlota'
 
 const MARCA_PDF = '~'
 
@@ -41,7 +42,7 @@ function drawFooter(doc, config) {
     doc.setFontSize(6)
     doc.setTextColor(...C_GRAY)
     doc.text((config && config.nombre_negocio) || 'Construacero Carabobo C.A.', MARGIN, PAGE_H - 10)
-    doc.text(`${MARCA_PDF} = viajes viejos con camión estimado por la ficha del chofer. Mercancía = total - flete - corte.`, MARGIN, PAGE_H - 6)
+    doc.text(`${MARCA_PDF} = viajes viejos con camión estimado por la ficha del chofer. Mercancía = total - flete - corte. SOBRE = supera la capacidad del camión; min. = peso incompleto.`, MARGIN, PAGE_H - 6)
     doc.text(`Página ${p} de ${total}`, MARGIN + CONTENT_W, PAGE_H - 10, { align: 'right' })
   }
 }
@@ -102,10 +103,11 @@ export async function generarFlotaChoferesPDF({
   porVehiculo = [], porChofer = [], desde = null, hasta = null,
   sinCamion = null, anterior = null, detalle = [], detalleSinCamion = [],
   tablaChoferes = [], modo = 'detallado',
+  pesoViajes = null, pesoAnterior = null,
   config = {}, action = 'download',
 }) {
   const detallado = modo === 'detallado'
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = await cargarLogo(config.logo_url)
   let y = drawPremiumHeader({
     doc,
@@ -119,6 +121,25 @@ export async function generarFlotaChoferesPDF({
   const totChoferes = porVehiculo.reduce((s, v) => s + num(v.comision_choferes_usd), 0)
   const totEmpresa = porVehiculo.reduce((s, v) => s + num(v.empresa_usd), 0)
   const dias = diasDelPeriodo(desde, hasta)
+
+  // Peso transportado (solo si hay datos de peso de los viajes)
+  const hayPeso = Array.isArray(pesoViajes)
+  const pesoConCamion = hayPeso ? soloConCamion(pesoViajes) : []
+  const resPeso = resumirViajes(pesoConCamion)
+  const pesoPorVehiculo = resumirPor(pesoConCamion, 'vehiculo_id')
+  const pesoPorDespacho = hayPeso ? Object.fromEntries(pesoViajes.map(v => [v.despacho_id, v])) : {}
+  const resPesoAnt = Array.isArray(pesoAnterior) ? resumirViajes(soloConCamion(pesoAnterior)) : null
+  // Texto de la carga de un viaje: "1.500 kg · 43%" (sin tipografías especiales: la fuente del PDF no las tiene)
+  const cargaViaje = (despachoId) => {
+    const f = pesoPorDespacho[despachoId]
+    if (!f) return '—'
+    const total = num(f.items_total)
+    const sin = num(f.items_sin_peso)
+    if (total > 0 && sin >= total) return 'sin peso'
+    const pct = usoPct(f)
+    const sobre = pct != null && pct > 100
+    return `${sin > 0 ? 'min. ' : ''}${textoKilos(f.peso_total_kg)}${pct != null ? ` · ${pct}%` : ''}${sobre ? ' SOBRE' : ''}`
+  }
   const fecha = (iso) => (iso ? new Date(iso).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', timeZone: 'America/Caracas' }) : '—')
 
   // Fletes por chofer local (misma tabla que la pantalla)
@@ -158,29 +179,54 @@ export async function generarFlotaChoferesPDF({
     ['Viajes sin camión registrado', `${num(sinCamion?.viajes)} (${fmtUsd(sinCamion?.flete_usd)})`, num(sinCamion?.viajes) > 0 ? 'Ver lista al final' : ''],
   ])
 
+  // Carga transportada y uso de la capacidad (totales en toneladas; kilos exactos entre paréntesis)
+  if (hayPeso) {
+    const compPeso = resPesoAnt ? `${variacion(resPeso.toneladas, resPesoAnt.toneladas).texto.replace('▲', '+').replace('▼', '-')} vs período anterior` : ''
+    const sinCobertura = resPeso.incompletos + resPeso.sinDatos
+    y = tabla(doc, y, 'Carga transportada y uso de la capacidad', [
+      { label: 'CONCEPTO', w: 70 },
+      { label: 'VALOR', w: 40, align: 'right' },
+      { label: 'DETALLE', w: CONTENT_W - 110 },
+    ], [
+      ['Carga transportada', textoToneladas(resPeso.toneladas * 1000), `${textoKilos(resPeso.toneladas * 1000)}${compPeso ? `  ${compPeso}` : ''}`],
+      ['Costo de flete por tonelada', resPeso.costoPorTonelada != null ? fmtUsd(resPeso.costoPorTonelada) : '—', 'Solo viajes con peso completo'],
+      ['Uso promedio de la capacidad', resPeso.usoPromedioPct != null ? `${resPeso.usoPromedioPct}%` : '—', `${resPeso.viajesConCapacidad} viaje(s) con capacidad cargada`],
+      ['Viajes sobrecargados', String(resPeso.sobrecargados), resPeso.sobrecargados > 0 ? 'Superaron la capacidad del camión' : ''],
+      [`Viajes con carga baja (<${CARGA_BAJA_PCT}%)`, String(resPeso.cargaBaja), resPeso.cargaBaja > 0 ? 'Oportunidad de agrupar entregas' : ''],
+      ['Cobertura del peso', `${resPeso.completos} de ${resPeso.viajes} viajes`, sinCobertura > 0 ? `${resPeso.incompletos} incompleto(s), ${resPeso.sinDatos} sin peso (antes de cargar los pesos no cuentan)` : 'Peso completo en todos los viajes'],
+    ])
+  }
+
   // Cuadro 1 · por camión
   y = tabla(doc, y, 'Cuadro 1 · Productividad por vehículo', [
-    { label: 'VEHÍCULO', w: 38 },
-    { label: 'PLACAS', w: 26 },
-    { label: 'VIAJES', w: 14, align: 'right' },
-    { label: '% TOTAL', w: 12, align: 'right' },
-    { label: dias ? `DÍAS/${dias}` : 'DÍAS', w: 14, align: 'right' },
-    { label: 'FLETES', w: 21, align: 'right' },
-    { label: 'CHOFERES', w: 20, align: 'right' },
-    { label: 'EMPRESA', w: 21, align: 'right' },
-    { label: 'ÚLTIMO VIAJE', w: CONTENT_W - 166 },
+    { label: 'VEHÍCULO', w: hayPeso ? 32 : 38 },
+    { label: 'PLACAS', w: hayPeso ? 20 : 26 },
+    { label: 'VIAJES', w: hayPeso ? 11 : 14, align: 'right' },
+    { label: '% TOTAL', w: hayPeso ? 11 : 12, align: 'right' },
+    { label: dias ? `DÍAS/${dias}` : 'DÍAS', w: hayPeso ? 12 : 14, align: 'right' },
+    ...(hayPeso ? [{ label: 'CARGA', w: 25, align: 'right' }] : []),
+    { label: 'FLETES', w: hayPeso ? 17 : 21, align: 'right' },
+    { label: 'CHOFERES', w: hayPeso ? 17 : 20, align: 'right' },
+    { label: 'EMPRESA', w: hayPeso ? 17 : 21, align: 'right' },
+    { label: 'ÚLTIMO VIAJE', w: CONTENT_W - (hayPeso ? 162 : 166) },
   ], porVehiculo.map(v => [
     `${nombreVehiculo(v)}${v.activo === false ? ' (inactivo)' : ''}`,
     [v.placa, v.placa_batea].filter(Boolean).join(' / '),
     viajesPdf(v),
     `${porcentaje(v.total_viajes, totV.viajes)}%`,
     String(num(v.dias_trabajados)),
+    ...(hayPeso ? [(() => {
+      const pv = pesoPorVehiculo[v.vehiculo_id]
+      if (!pv || pv.toneladas <= 0) return 'sin peso'
+      return `${textoToneladas(pv.toneladas * 1000)}${pv.usoPromedioPct != null ? ` · ${pv.usoPromedioPct}%` : ''}${pv.sobrecargados > 0 ? ' SOBRE' : ''}`
+    })()] : []),
     fmtUsd(v.total_flete_usd),
     fmtUsd(v.comision_choferes_usd),
     fmtUsd(v.empresa_usd),
     v.ultimo_viaje_en ? `${fecha(v.ultimo_viaje_en)} ${v.ultimo_chofer_nombre || ''}` : '—',
   ]), [
     'TOTAL', '', viajesPdf({ total_viajes: totV.viajes, viajes_estimados: totV.estimados }), '100%', '',
+    ...(hayPeso ? [textoToneladas(resPeso.toneladas * 1000)] : []),
     fmtUsd(totV.flete), fmtUsd(totChoferes), fmtUsd(totEmpresa), '',
   ])
 
@@ -230,15 +276,16 @@ export async function generarFlotaChoferesPDF({
 
   // Detalle viaje por viaje
   const columnasViaje = [
-    { label: 'FECHA', w: 15 },
-    { label: 'DESPACHO', w: 20 },
-    { label: 'CLIENTE', w: 36 },
-    { label: 'DESTINO', w: 33 },
-    { label: 'CHOFER', w: 26 },
-    { label: 'CAMIÓN', w: 16 },
+    { label: 'FECHA', w: hayPeso ? 14 : 15 },
+    { label: 'DESPACHO', w: hayPeso ? 18 : 20 },
+    { label: 'CLIENTE', w: hayPeso ? 21 : 36 },
+    { label: 'DESTINO', w: hayPeso ? 24 : 33 },
+    { label: 'CHOFER', w: hayPeso ? 20 : 26 },
+    { label: 'CAMIÓN', w: hayPeso ? 13 : 16 },
+    ...(hayPeso ? [{ label: 'CARGA', w: 33, align: 'right' }] : []),
     { label: 'FLETE', w: 14, align: 'right' },
     { label: 'CHOFER', w: 14, align: 'right' },
-    { label: 'EMPRESA', w: CONTENT_W - 174, align: 'right' },
+    { label: 'EMPRESA', w: CONTENT_W - (hayPeso ? 171 : 174), align: 'right' },
   ]
   const filaViaje = (v) => [
     fecha(v.fecha),
@@ -247,6 +294,7 @@ export async function generarFlotaChoferesPDF({
     [v.ciudad, v.estado_destino].filter(Boolean).join(', ') || '—',
     v.chofer_nombre || '—',
     v.vehiculo_nombre || 'Sin camión',
+    ...(hayPeso ? [cargaViaje(v.despacho_id)] : []),
     fmtUsd(v.flete_usd),
     fmtUsd(v.chofer_usd),
     fmtUsd(v.empresa_usd),

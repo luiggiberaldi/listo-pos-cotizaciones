@@ -11,6 +11,7 @@ import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { getComisionPctForItem } from '../../utils/comisionUtils'
 import { showToast } from './Toast'
+import { resumenCod } from '../../utils/codAbonos'
 
 function calcDescMonto(desc, totalLinea, cantidad) {
   if (!desc) return 0
@@ -309,7 +310,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
       for (const f of formasDisplay) {
         const m = Number(f.monto)
         if (!m || m <= 0) continue
-        if (f.metodo === 'Cobro a destino' && !f.cobro_destino_pagado) pendientePagoUsd += m
+        if (f.metodo === 'Cobro a destino' && !f.cobro_destino_pagado) pendientePagoUsd += resumenCod(f).falta
         else if (f.metodo === 'Cta por cobrar') pendientePagoUsd += m
       }
     }

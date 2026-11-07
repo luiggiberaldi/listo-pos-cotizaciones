@@ -450,7 +450,7 @@ function drawFooter(doc, config) {
  */
 export async function generarListaPreciosPDF({ productos, config = {}, opciones = {} }) {
   const { moneda = 'usd', tasa = 0, columnas = {}, formato = 'lista' } = opciones
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   let y = drawHeader(doc, null, config, moneda, tasa)
   drawWatermark(doc)

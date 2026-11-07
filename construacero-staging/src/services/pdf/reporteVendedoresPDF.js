@@ -37,7 +37,7 @@ function drawTableHeader(doc, cols, y) {
 }
 
 // ─── Función principal ─────────────────────────────────────────────────────────
-export async function generarReporteVendedoresPDF({ data, config = {}, periodo = {}, tipo = 'completo', vendedorId = null }) {
+export async function generarReporteVendedoresPDF({ data, config = {}, periodo = {}, tipo = 'completo', vendedorId = null, action = 'download' }) {
   let { porVendedor = [] } = data
 
   let listToUse = porVendedor
@@ -64,7 +64,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     ? ((localTotalVentas - localPrevTotalVentas) / localPrevTotalVentas) * 100
     : null
 
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = LOGO_LISTA_PRECIOS
 
   const originalAddPage = doc.addPage.bind(doc)
@@ -289,9 +289,23 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(7.5)
-      const labelName = v.nombre || '—'
-      const suffix = isAmber ? ' (E)' : ''
-      doc.text((labelName + suffix).substring(0, 22), MARGIN + 8, y + 5.2)
+      const baseNombre = (v.nombre || '—')
+      doc.text(baseNombre, MARGIN + 8, y + 5.2)
+      let curX = MARGIN + 8 + doc.getTextWidth(baseNombre)
+      if (v.codigo) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(6)
+        doc.setTextColor(110, 120, 135)
+        const cStr = ` [${v.codigo.toUpperCase()}]`
+        doc.text(cStr, curX, y + 5.2)
+        curX += doc.getTextWidth(cStr)
+      }
+      if (isAmber) {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6.5)
+        doc.setTextColor(234, 88, 12)
+        doc.text(' (E)', curX, y + 5.2)
+      }
 
       // Barra de progreso mini
       const barW = 35
@@ -413,8 +427,23 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     doc.setFontSize(10)
     doc.setTextColor(...C_WHITE)
 
-    const displayNombre = (v.nombre || 'Sin nombre') + (esExterno ? ' (E)' : '')
-    doc.text(displayNombre, MARGIN + 5, y + 7)
+    const baseName = (v.nombre || 'Sin nombre')
+    doc.text(baseName, MARGIN + 5, y + 7)
+    let curX = MARGIN + 5 + doc.getTextWidth(baseName)
+    if (v.codigo) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(240, 244, 250)
+      const cStr = ` [${v.codigo.toUpperCase()}]`
+      doc.text(cStr, curX, y + 7)
+      curX += doc.getTextWidth(cStr)
+    }
+    if (esExterno) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...C_WHITE)
+      doc.text(' (E)', curX, y + 7)
+    }
 
     if (esExterno) {
       doc.setFont('helvetica', 'bold')
@@ -467,15 +496,13 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
 
     // ── Cotizaciones desglose + Comisiones ────────────────────────────────────
     const col2W = CONTENT_W / 2 - 2
-    // Caja más alta si el vendedor tiene comisiones split por cliente ajeno
-    const bloquesH = (v.comisionSplit || 0) > 0 ? 43 : 38
 
     // Bloque izquierdo: Cotizaciones por estado
     doc.setFillColor(250, 251, 255)
-    doc.roundedRect(MARGIN, y, col2W, bloquesH, 1.5, 1.5, 'F')
+    doc.roundedRect(MARGIN, y, col2W, 38, 1.5, 1.5, 'F')
     doc.setDrawColor(235, 240, 248)
     doc.setLineWidth(0.2)
-    doc.roundedRect(MARGIN, y, col2W, bloquesH, 1.5, 1.5, 'D')
+    doc.roundedRect(MARGIN, y, col2W, 38, 1.5, 1.5, 'D')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
@@ -512,10 +539,11 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     // Bloque derecho: Comisiones
     const bx2 = MARGIN + col2W + 4
     doc.setFillColor(250, 251, 255)
-    doc.roundedRect(bx2, y, col2W, bloquesH, 1.5, 1.5, 'F')
+    const bloquesComH = (v.comisionSplit || 0) > 0 ? 35 : 30
+    doc.roundedRect(bx2, y, col2W, bloquesComH, 1.5, 1.5, 'F')
     doc.setDrawColor(235, 240, 248)
     doc.setLineWidth(0.2)
-    doc.roundedRect(bx2, y, col2W, bloquesH, 1.5, 1.5, 'D')
+    doc.roundedRect(bx2, y, col2W, bloquesComH, 1.5, 1.5, 'D')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
@@ -524,12 +552,10 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     const catPrincipal = config.comision_categoria_cabilla || 'Cabilla'
     const labelPrincipal = esExterno ? `${catPrincipal}/Cem` : catPrincipal
     const comData = [
-      { label: 'Total generado', value: fmtUsd(v.comisionTotal), color: C_DARK },
-      { label: 'Pagado',         value: fmtUsd(v.comisionPagada), color: C_EMERALD },
-      { label: 'Pendiente',      value: fmtUsd(v.comisionPendiente), color: C_AMBER },
-      { label: `${labelPrincipal} 2%`,     value: fmtUsd(v.comisionCabilla2 || 0), color: C_DARK },
-      { label: `${labelPrincipal} 3%`,     value: fmtUsd(v.comisionCabilla3 || 0), color: C_DARK },
-      { label: 'Otros productos',value: fmtUsd(v.comisionOtros || 0), color: C_DARK },
+      { label: 'Comisión generada', value: fmtUsd(v.comisionGenerada ?? v.comisionTotal ?? 0), color: C_EMERALD },
+      { label: `${labelPrincipal} 2%`, value: fmtUsd(v.comisionCabilla2 || 0), color: C_DARK },
+      { label: `${labelPrincipal} 3%`, value: fmtUsd(v.comisionCabilla3 || 0), color: C_DARK },
+      { label: 'Otros productos', value: fmtUsd(v.comisionOtros || 0), color: C_DARK },
     ]
     if ((v.comisionSplit || 0) > 0) {
       comData.push({ label: 'Cliente ajeno (split)', value: fmtUsd(v.comisionSplit), color: [124, 58, 237] })
@@ -545,7 +571,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       doc.setTextColor(c.color[0], c.color[1], c.color[2])
       doc.text(c.value, bx2 + col2W - 3, cy, { align: 'right' })
     })
-    y += bloquesH + 4
+    y += 34
 
     // ── Top Clientes + Top Productos ──────────────────────────────────────────
     const col3W = (CONTENT_W - 4) / 2
@@ -668,6 +694,9 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
     safeName = `Reporte_Vendedores_Internos_${periodo.from ?? ''}_${periodo.to ?? ''}.pdf`
   } else if (tipo === 'externos') {
     safeName = `Reporte_Vendedores_Externos_${periodo.from ?? ''}_${periodo.to ?? ''}.pdf`
+  }
+  if (action === 'return') {
+    return doc
   }
   doc.save(safeName)
 }

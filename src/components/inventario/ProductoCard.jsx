@@ -6,6 +6,7 @@ import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { fmtBs, usdToBs } from '../../utils/format'
 import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
+import ImgProducto from "./ImgProducto"
 
 function fmtUsd(n) {
   if (n == null) return '—'
@@ -110,7 +111,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
       <div className={`relative w-full h-16 sm:h-20 flex items-center justify-center overflow-hidden shrink-0 rounded-t-2xl ${(agotado || producto.activo === false) ? 'opacity-50 grayscale' : ''}`}
         style={{ background: producto.imagen_url ? '#f8fafc' : bg }}>
         {producto.imagen_url ? (
-          <img src={producto.imagen_url} alt={producto.nombre}
+          <ImgProducto src={producto.imagen_url} alt={producto.nombre}
             className="w-full h-full object-contain p-1" loading="lazy" />
         ) : (
           <Package size={24} style={{ color: fg, opacity: 0.7 }} />
