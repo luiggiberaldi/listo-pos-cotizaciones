@@ -2,6 +2,7 @@
 // Logger de errores que envía al backend para persistencia
 import supabase from '../services/supabase/client'
 import { apiUrl } from '../services/apiBase'
+import { getOperatorSessionHeaders } from '../services/operatorSession'
 
 let _logQueue = []
 let _flushTimer = null
@@ -19,16 +20,17 @@ async function flush() {
   const token = await getToken()
   if (!token) return // no logueado, descartar
 
+  const base = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const operador = getOperatorSessionHeaders()
   for (const entry of batch) {
     try {
-      await fetch(apiUrl('/api/logs'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(entry),
-      })
+      const body = JSON.stringify(entry)
+      // Con la sesión del PIN el log queda a nombre del operador (no de la cuenta compartida).
+      const res = await fetch(apiUrl('/api/logs'), { method: 'POST', headers: { ...base, ...operador }, body })
+      // Si la sesión del PIN venció, se reenvía sin ella para no perder el log.
+      if (res.status === 401 && operador['X-Operator-Session']) {
+        await fetch(apiUrl('/api/logs'), { method: 'POST', headers: base, body })
+      }
     } catch { /* silencioso */ }
   }
 }
