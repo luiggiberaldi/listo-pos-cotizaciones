@@ -37,6 +37,7 @@ export function corsHeaders(request) {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Operator-Id, X-Operator-Session, Idempotency-Key, X-Request-Id',
     'Access-Control-Max-Age': '86400',
+    'Access-Control-Expose-Headers': 'Server-Timing',
     'Vary': 'Origin',
   }
 }

@@ -1,6 +1,7 @@
 // api/lib/auth.js
 import { jsonError, isValidUuid } from './utils.js'
 import { resolveOperatorSession, SUPER_ADMIN_UUID } from './operatorSession.js'
+import { anotarTiempo } from './cronometro.js'
 
 export { SUPER_ADMIN_UUID }
 
@@ -31,7 +32,18 @@ function verifiedTokenExpiry(token) {
   }
 }
 
+// Cronometrada: 'auth' = verificación completa (cuenta + sesión del PIN); 'cuenta' = consulta al
+// servidor de autenticación (0 si estaba en la caché). Solo se mide, no cambia el resultado.
 export async function verifyAuth(request, env) {
+  const inicio = Date.now()
+  try {
+    return await verifyAuthSinCronometro(request, env)
+  } finally {
+    anotarTiempo(request, 'auth', Date.now() - inicio)
+  }
+}
+
+async function verifyAuthSinCronometro(request, env) {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader?.startsWith('Bearer ')) return null
   const token = authHeader.slice(7)
@@ -43,6 +55,7 @@ export async function verifyAuth(request, env) {
     userCache.delete(cacheKey)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 5000)
+    const inicioCuenta = Date.now()
     try {
       const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
         headers: {
@@ -68,6 +81,7 @@ export async function verifyAuth(request, env) {
       return null
     } finally {
       clearTimeout(timer)
+      anotarTiempo(request, 'cuenta', Date.now() - inicioCuenta)
     }
   }
 
@@ -88,7 +102,7 @@ export async function verifyAuth(request, env) {
   if (!tokenHeader) return operatorHeader ? null : user
 
   try {
-    const session = await resolveOperatorSession(env, tokenHeader, user.id)
+    const session = await resolveOperatorSession(env, tokenHeader, user.id, operatorHeader)
     if (!session || (operatorHeader && operatorHeader !== session.operator.id)) return null
     user.operator_id = session.operator.id
     user.operator_rol = session.operator.rol

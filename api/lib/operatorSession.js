@@ -73,12 +73,22 @@ export async function revokeOperatorSession(env, token, accountId) {
   })
 }
 
-export async function resolveOperatorSession(env, token, accountId) {
+const operatorQuery = (operatorId, accountId) =>
+  `usuarios?id=eq.${operatorId}&cuenta_id=eq.${accountId}&activo=eq.true&select=id,cuenta_id,activo,nombre,rol,color,markup_pct,comision_pct,comision_pct_cabilla,es_externo,pin_hash,pin_salt`
+
+// operatorIdHint (cabecera X-Operator-Id): permite pedir la sesión y el operador A LA VEZ (una ida y
+// vuelta menos a la base). Es solo una pista: la sesión guardada sigue mandando y todas las
+// comprobaciones de abajo se aplican igual; si la pista no coincide con la sesión, se rechaza.
+export async function resolveOperatorSession(env, token, accountId, operatorIdHint = null) {
   if (!TOKEN_RE.test(token || '') || !isValidUuid(accountId)) return null
   const hash = await sha256Hex(token)
   const now = new Date().toISOString()
-  const response = await sessionFetch(env,
-    `operator_sessions?token_hash=eq.${hash}&cuenta_id=eq.${accountId}&revoked_at=is.null&expires_at=gt.${encodeURIComponent(now)}&select=token_hash,cuenta_id,operator_id,credential_hash,virtual_developer,expires_at,revoked_at&limit=1`)
+  const usarPista = isValidUuid(operatorIdHint) && operatorIdHint !== SUPER_ADMIN_UUID
+  const [response, operadorAdelantado] = await Promise.all([
+    sessionFetch(env,
+      `operator_sessions?token_hash=eq.${hash}&cuenta_id=eq.${accountId}&revoked_at=is.null&expires_at=gt.${encodeURIComponent(now)}&select=token_hash,cuenta_id,operator_id,credential_hash,virtual_developer,expires_at,revoked_at&limit=1`),
+    usarPista ? sessionFetch(env, operatorQuery(operatorIdHint, accountId)).then(r => r.json()) : null,
+  ])
   const sessions = await response.json()
   if (!Array.isArray(sessions) || sessions.length !== 1) return null
   const session = sessions[0]
@@ -99,10 +109,11 @@ export async function resolveOperatorSession(env, token, accountId) {
     }
   }
   if (session.operator_id === SUPER_ADMIN_UUID) return null
+  if (usarPista && operatorIdHint !== session.operator_id) return null
 
-  const operatorResponse = await sessionFetch(env,
-    `usuarios?id=eq.${session.operator_id}&cuenta_id=eq.${accountId}&activo=eq.true&select=id,cuenta_id,activo,nombre,rol,color,markup_pct,comision_pct,comision_pct_cabilla,es_externo,pin_hash,pin_salt`)
-  const operators = await operatorResponse.json()
+  const operators = usarPista
+    ? operadorAdelantado
+    : await (await sessionFetch(env, operatorQuery(session.operator_id, accountId))).json()
   if (!Array.isArray(operators) || operators.length !== 1) return null
   const operator = operators[0]
   if (operator.id !== session.operator_id || operator.cuenta_id !== accountId || operator.activo !== true
