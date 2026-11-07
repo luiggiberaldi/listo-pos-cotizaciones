@@ -58,9 +58,10 @@ describe('ventasDiaPDF', () => {
     const { doc, filename } = generarVentasDiaPDF({ reporte, tasa, comprimir: false })
     expect(filename).toBe('Ventas_del_dia_2026-10-24.pdf')
     const texto = doc.output()
-    for (const t of ['SUBTOTALES', 'TOTAL VENDIDO', '813,76', 'Ana Rivero', 'CREADAS ESTE D', 'ENTREGADAS ESTE D', 'Pedro Pendiente', 'Rosa Retraso', 'Vicente Viernes', 'Pendiente de aprobar', 'Notas anuladas este d']) {
+    for (const t of ['SUBTOTALES', 'TOTAL VENDIDO', '813,76', 'Ana Rivero', 'CREADAS ESTE D', 'ENTREGADAS ESTE D', 'Pedro Pendiente', 'Rosa Retraso', 'Vicente Viernes', 'Pendiente de aprobar']) {
       expect(texto).toContain(t)
     }
+    expect(texto).not.toContain('Notas anuladas') // la línea de conteos se quitó (OP-2026-019)
     expect(texto).not.toContain('Leidys Serrado') // es del 26-10: no aparece en la hoja del 24
     if (process.env.GUARDAR_PDF) fs.writeFileSync('tmp/ventas-dia/ejemplo-24-10-2026.pdf', Buffer.from(doc.output('arraybuffer')))
   })
