@@ -24,3 +24,7 @@ A pedido del dueño, la zona sube **una línea más** (10 mm en total desde el o
 
 ## Actualización: ajuste final a línea y media
 El dueño pidió media línea más en lugar de una completa: la zona queda **7,5 mm** más arriba que al inicio (`sloganY` = `PAGE_H - 28.5`, `limitY` = `PAGE_H - 47.5`, solo hoja con membrete).
+
+## Publicado en producción (2026-11-07)
+El mismo cambio se llevó al archivo de producción `src/services/pdf/despachoPDF.js` (solo hoja con membrete). Comprobado con muestras: nota de 19 artículos cabe en una hoja sin choques; nota de 28 artículos pasa a 2.ª hoja con los totales, el chofer y el aviso al pie. Prueba nueva: `src/services/__tests__/despachoAvisoUnaLinea.test.js`.
+**Sin verificar:** una nota real impresa en el papel con membrete.
