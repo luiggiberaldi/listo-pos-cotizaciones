@@ -385,7 +385,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     const lineH = 3.6
     const ROW_H = Math.max(ROW_H_BASE, descLines.length * lineH + 1.2)
 
-    let limitY = PAGE_H - 40 // Margen de seguridad para el footer
+    let limitY = PAGE_H - (esMembrete ? 47.5 : 40) // Margen de seguridad para el footer (membrete: 5 mm más, porque la zona de totales subió)
     
     // BALANCEO INTELIGENTE: Si hay más de 20 items, cortamos antes en la Pág 1
     if (pageNum === 1 && itemsToRender.length > 20) {
@@ -514,7 +514,8 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
   // No forzar salto de página artificial, el limitY ya se encarga de dejar espacio
   y = y + 2
 
-  const sloganY = esMembrete ? PAGE_H - 21 : PAGE_H - 33
+  // Hoja con membrete: toda la zona de totales/chofer/aviso sube línea y media (7,5 mm)
+  const sloganY = esMembrete ? PAGE_H - 28.5 : PAGE_H - 33
 
   const totalOriginal = items.reduce((acc, it) => acc + (it.es_prestamo ? (Number(it.cantidad || 0) * Number(it.precio_unit_usd || 0)) : Number(it.total_linea_usd || 0)), 0)
   const total = totalOriginal * factor
@@ -715,12 +716,21 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(...C_DARK)
     if (esMembrete) {
-      // Hoja especial: más grande, en 2 líneas y separado una línea del cuadro del chofer
-      const size = 11
+      // Hoja especial: en UNA sola línea, lo más grande que quepa en el ancho (separado una línea del cuadro del chofer)
+      const aviso = 'LA MERCANCÍA DESPACHADA NO TIENE CAMBIO NI DEVOLUCIÓN. POR FAVOR REVISE SU PEDIDO ANTES DE RETIRARLO'
+      // Dentro de un recuadro de borde grueso (doble) para que resalte al imprimir en blanco y negro.
+      const boxY = avisoY + 2.5, boxH = 10
+      let size = 11
       doc.setFontSize(size)
-      const partes = ['LA MERCANCÍA DESPACHADA NO TIENE CAMBIO NI DEVOLUCIÓN.', 'POR FAVOR REVISE SU PEDIDO ANTES DE RETIRARLO']
-      const lineH = size * 0.3528 * 1.25
-      partes.forEach((t, k) => doc.text(t, PAGE_W / 2, avisoY + 3 + size * 0.3528 * 0.75 + k * lineH, { align: 'center' }))
+      while (doc.getTextWidth(aviso) > CONTENT_W - 8 && size > 6) {
+        size -= 0.25
+        doc.setFontSize(size)
+      }
+      doc.setDrawColor(0, 0, 0)
+      doc.setLineWidth(0.9); doc.rect(MARGIN, boxY, CONTENT_W, boxH)
+      doc.setLineWidth(0.25); doc.rect(MARGIN + 1.2, boxY + 1.2, CONTENT_W - 2.4, boxH - 2.4)
+      doc.setTextColor(0, 0, 0)
+      doc.text(aviso, PAGE_W / 2, boxY + boxH / 2 + size * 0.3528 * 0.35, { align: 'center' })
     } else {
       // Modo normal: una sola línea compacta (debajo va el lema impreso)
       const aviso = 'LA MERCANCÍA DESPACHADA NO TIENE CAMBIO NI DEVOLUCIÓN. POR FAVOR REVISE SU PEDIDO ANTES DE RETIRARLO'
