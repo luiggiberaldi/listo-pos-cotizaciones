@@ -46,6 +46,7 @@ import { handleDashboard } from './api/handlers/dashboard.js'
 import { handleResumenCobranza } from './api/handlers/cobranza.js'
 import { runAvisoCobranza } from './api/lib/cobranza.js'
 import { handleMisVentas } from './api/handlers/misVentas.js'
+import { conCronometro } from './api/lib/cronometro.js'
 import { handleListarVehiculos, handleCrearVehiculo, handleActualizarVehiculo, handleEliminarVehiculo, handleReporteFlotaChoferes, handleDetalleViajesFlota, handleReportePesoFlota } from './api/handlers/vehiculos.js'
 
 // Debe coincidir con el segundo cron de wrangler.toml (12:00 UTC = 8:00 a. m. en Venezuela).
@@ -56,7 +57,7 @@ function conWaitUntil(env, ctx) {
   return ctx && typeof ctx.waitUntil === 'function' ? { ...env, waitUntil: p => ctx.waitUntil(p) } : env;
 }
 
-export default {
+const worker = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
@@ -681,4 +682,7 @@ export default {
     );
   },
 };
+
+// Cronómetro (Server-Timing) en todas las rutas /api/: solo mide, no cambia respuestas.
+export default { ...worker, fetch: conCronometro(worker.fetch) };
 // Hot-reload trigger: fixed syntax in despachos.js

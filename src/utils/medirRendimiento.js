@@ -18,11 +18,28 @@ export function normalizarRuta(path) {
     .replace(/\/\d+(?=\/|$)/g, '/:id')
 }
 
-export function registrarLlamada(path, metodo, ms, estado) {
+// Lee la cabecera Server-Timing del Worker: app = tiempo total en el servidor, auth = verificación
+// de cuenta + PIN, cuenta = consulta al servidor de autenticación. Ignora las de otros proxies.
+export function leerServerTiming(valor) {
+  const out = {}
+  for (const parte of String(valor || '').split(',')) {
+    const m = /^\s*(app|auth|cuenta)\s*;(?:.*;)?\s*dur=([\d.]+)/i.exec(parte)
+    if (m && out[m[1]] === undefined) out[m[1]] = Math.round(Number(m[2]))
+  }
+  return out
+}
+
+export function registrarLlamada(path, metodo, ms, estado, serverTiming) {
   if (!Number.isFinite(ms)) return
   if (muestras.length >= MAX_MUESTRAS) muestras.shift()
-  muestras.push({ ruta: normalizarRuta(path), metodo: String(metodo || 'GET').toUpperCase(), ms: Math.round(ms), estado })
+  const st = leerServerTiming(serverTiming)
+  muestras.push({ ruta: normalizarRuta(path), metodo: String(metodo || 'GET').toUpperCase(), ms: Math.round(ms), estado, srv: st.app, auth: st.auth, cuenta: st.cuenta })
   iniciar()
+}
+
+const p50De = (lista, campo) => {
+  const v = lista.map(x => x[campo]).filter(Number.isFinite).sort((a, b) => a - b)
+  return v.length ? percentil(v, 0.5) : undefined
 }
 
 const percentil = (ordenados, p) => ordenados[Math.min(ordenados.length - 1, Math.floor(ordenados.length * p))]
@@ -37,7 +54,13 @@ export function resumir(lista) {
   return [...grupos.entries()]
     .map(([ruta, ms]) => {
       const t = ms.map(x => x.ms).sort((a, b) => a - b)
-      return { ruta, n: t.length, p50: percentil(t, 0.5), p95: percentil(t, 0.95), max: t[t.length - 1], errores: ms.filter(x => !(x.estado >= 200 && x.estado < 400)).length }
+      const r = { ruta, n: t.length, p50: percentil(t, 0.5), p95: percentil(t, 0.95), max: t[t.length - 1], errores: ms.filter(x => !(x.estado >= 200 && x.estado < 400)).length }
+      // Desglose (solo si el servidor lo envió): servidor, verificación de sesión y consulta de cuenta
+      const srv = p50De(ms, 'srv'), auth = p50De(ms, 'auth'), cuenta = p50De(ms, 'cuenta')
+      if (srv !== undefined) r.srv_p50 = srv
+      if (auth !== undefined) r.auth_p50 = auth
+      if (cuenta !== undefined) r.cuenta_p50 = cuenta
+      return r
     })
     .sort((a, b) => b.p95 - a.p95)
     .slice(0, MAX_RUTAS)

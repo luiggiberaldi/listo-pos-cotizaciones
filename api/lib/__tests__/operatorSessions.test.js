@@ -468,3 +468,78 @@ describe('operator authentication handlers', () => {
     expect(f.sessions.size).toBe(0)
   })
 })
+
+// Camino rápido: con X-Operator-Id la sesión y el operador se piden a la vez.
+// Debe aplicar exactamente las mismas comprobaciones que el camino secuencial.
+describe('operator session with X-Operator-Id hint (parallel lookup)', () => {
+  const restCalls = f => f.transport.mock.calls.map(([url]) => new URL(url).pathname).filter(p => p.startsWith('/rest/v1/'))
+
+  it('resolves the operator with the same result and asks for both rows', async () => {
+    const f = await fixture()
+    const issued = await f.session()
+    const result = await validateOperator(f.request({ token: issued.token, operatorId: SELLER }), f.env)
+    expect(result.error).toBeUndefined()
+    expect(result.operador).toMatchObject({ id: SELLER, cuenta_id: ACCOUNT, rol: 'vendedor' })
+    expect(JSON.stringify(result)).not.toMatch(/pin_hash|pin_salt|credential_hash/)
+    expect(restCalls(f).filter(p => p === '/rest/v1/usuarios')).toHaveLength(1)
+  })
+
+  it('rejects a hint that names another real operator of the same account', async () => {
+    const f = await fixture()
+    const issued = await f.session(SELLER)
+    expect(await verifyAuth(f.request({ token: issued.token, operatorId: SUPERVISOR }), f.env)).toBeNull()
+  })
+
+  it('rejects an unknown token even when the hinted operator exists', async () => {
+    const f = await fixture()
+    expect(await verifyAuth(f.request({ token: 'f'.repeat(64), operatorId: SELLER }), f.env)).toBeNull()
+  })
+
+  it.each([
+    ['another account', { cuenta_id: OTHER_ACCOUNT }],
+    ['another operator', { id: SUPERVISOR }],
+    ['inactive operator', { activo: false }],
+    ['changed PIN hash', { pin_hash: 'changed' }],
+    ['unknown role', { rol: 'invalid-role' }],
+  ])('rejects current operator rows with %s', async (_name, override) => {
+    const f = await fixture()
+    const issued = await f.session()
+    f.state.operatorResponse = [{ ...f.operators.get(SELLER), ...override }]
+    expect(await verifyAuth(f.request({ token: issued.token, operatorId: SELLER }), f.env)).toBeNull()
+  })
+
+  it.each([
+    ['revocation', { revoked_at: '2026-01-01T00:00:00Z' }],
+    ['expiration', { expires_at: '2000-01-01T00:00:00Z' }],
+    ['wrong account', { cuenta_id: OTHER_ACCOUNT }],
+  ])('rejects session rows with %s', async (_name, override) => {
+    const f = await fixture()
+    const issued = await f.session()
+    f.state.sessionResponse = [{ ...f.sessions.get(issued.id), ...override }]
+    expect(await verifyAuth(f.request({ token: issued.token, operatorId: SELLER }), f.env)).toBeNull()
+  })
+
+  it('enforces deactivation and demotion immediately', async () => {
+    const f = await fixture()
+    const issued = await f.session(SUPERVISOR)
+    const req = () => f.request({ token: issued.token, operatorId: SUPERVISOR })
+    expect((await validateOperator(req(), f.env, { requireSupervisor: true })).error).toBeUndefined()
+    f.operators.get(SUPERVISOR).rol = 'vendedor'
+    expect((await validateOperator(req(), f.env, { requireSupervisor: true })).error.status).toBe(403)
+    f.operators.get(SUPERVISOR).activo = false
+    expect((await validateOperator(req(), f.env)).error.status).toBe(401)
+  })
+
+  it('fails closed when the operator lookup storage fails', async () => {
+    const f = await fixture()
+    const issued = await f.session()
+    f.state.failPath = '/rest/v1/usuarios'
+    expect(await verifyAuth(f.request({ token: issued.token, operatorId: SELLER }), f.env)).toBeNull()
+  })
+
+  it('a virtual developer hint never prefetches a real operator row', async () => {
+    const f = await fixture()
+    expect(await verifyAuth(f.request({ token: 'f'.repeat(64), operatorId: SUPER_ADMIN_UUID }), f.env)).toBeNull()
+    expect(restCalls(f).filter(p => p === '/rest/v1/usuarios')).toHaveLength(0)
+  })
+})

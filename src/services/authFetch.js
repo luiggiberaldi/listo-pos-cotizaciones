@@ -28,7 +28,7 @@ export async function authFetch(path, options = {}) {
       headers.set('X-Operator-Session', operatorSession.token)
       const inicio = performance.now()
       const response = await fetch(apiUrl(path), { ...fetchOpts, headers, signal: controller.signal })
-      registrarLlamada(path, fetchOpts.method, performance.now() - inicio, response.status)
+      registrarLlamada(path, fetchOpts.method, performance.now() - inicio, response.status, response.headers?.get?.('Server-Timing'))
       assertOperatorSession(operatorSession)
       return guardOperatorResponse(response, operatorSession)
     } finally {
