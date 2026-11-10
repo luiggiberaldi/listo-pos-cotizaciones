@@ -2,6 +2,7 @@
 // Singleton del cliente Supabase — importar desde aquí en toda la app
 import { createClient } from '@supabase/supabase-js'
 import { requireOperatorSession, assertOperatorSession, guardOperatorResponse } from '../operatorSession'
+import { registrarLlamada, rutaBaseDatos } from '../../utils/medirRendimiento'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -39,7 +40,15 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         new DOMException('Tiempo de espera agotado (25s)', 'TimeoutError'),
       ), 25000)
       try {
+        const inicio = performance.now()
         const response = await fetch(url, { ...options, headers, signal: timeoutController.signal })
+        // Medición de las consultas directas a la base (solo tabla o función, método, tiempo y estado;
+        // nunca filtros ni datos). Un fallo al medir jamás debe afectar la consulta (OP-2026-021).
+        if (isRest) {
+          try {
+            registrarLlamada(rutaBaseDatos(requestUrl.pathname), options.method || request?.method, performance.now() - inicio, response.status)
+          } catch { /* medir es opcional */ }
+        }
         if (!operatorSession) return response
         assertOperatorSession(operatorSession)
         return guardOperatorResponse(response, operatorSession)

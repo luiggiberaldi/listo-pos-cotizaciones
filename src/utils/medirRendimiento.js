@@ -5,7 +5,7 @@ import { logClientError } from './errorLogger'
 
 const INTERVALO_MS = 5 * 60 * 1000
 const MAX_MUESTRAS = 500
-const MAX_RUTAS = 30
+const MAX_RUTAS = 50
 
 let muestras = []
 let iniciado = false
@@ -16,6 +16,12 @@ export function normalizarRuta(path) {
     .split('?')[0]
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id')
     .replace(/\/\d+(?=\/|$)/g, '/:id')
+}
+
+// Consultas directas a la base desde el navegador: /rest/v1/clientes -> db:clientes,
+// /rest/v1/rpc/buscar_productos -> db:rpc/buscar_productos. Solo el nombre: sin filtros ni ids.
+export function rutaBaseDatos(pathname) {
+  return `db:${normalizarRuta(pathname).replace(/^\/rest\/v1\//, '')}`
 }
 
 // Lee la cabecera Server-Timing del Worker: app = tiempo total en el servidor, auth = verificación
