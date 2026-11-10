@@ -102,14 +102,19 @@ Antes de publicar en producción hay que probar primero en **staging** (una copi
 
 ```json
 {
+  "headers": [
+    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://listo-pos-cotizaciones.luigistorelogistics.workers.dev/api/:path*" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ]
 }
 ```
 
-La primera regla envía todas las llamadas de `/api/` al Worker. La segunda hace que las rutas de la pantalla funcionen al recargar.
+`headers` permite que el navegador guarde un año los archivos de la app (sus nombres cambian en cada versión). La primera regla de `rewrites` envía todas las llamadas de `/api/` al Worker. La segunda hace que las rutas de la pantalla funcionen al recargar; no aplica a `/assets/`, para que un archivo de una versión vieja responda "no existe" en vez de la página de inicio.
+
+El Worker usa "ubicación inteligente" (`[placement] mode = "smart"` en `wrangler.toml`): Cloudflare lo ejecuta cerca de la base de datos. Ver `docs/operaciones/OP-2026-021_velocidad-cambios-bajo-riesgo.md`.
 
 ## Configuración local
 
