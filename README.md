@@ -111,6 +111,8 @@ Antes de publicar en producción hay que probar primero en **staging** (una copi
 
 La primera regla envía todas las llamadas de `/api/` al Worker. La segunda hace que las rutas de la pantalla funcionen al recargar.
 
+El Worker usa "ubicación inteligente" (`[placement] mode = "smart"` en `wrangler.toml`): Cloudflare lo ejecuta cerca de la base de datos. Ver `docs/operaciones/OP-2026-021_velocidad-cambios-bajo-riesgo.md`.
+
 ## Configuración local
 
 Estos pasos son para una computadora de desarrollo. **Nunca** conectar una copia local a la base de datos de producción.

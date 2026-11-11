@@ -7,6 +7,12 @@ workers_dev = true
 # 03:00 UTC: limpiezas nocturnas · 12:00 UTC (8 a. m. Venezuela): aviso de cobranza
 crons = ["0 3 * * *", "0 12 * * *"]
 
+# Ubicación inteligente (OP-2026-021): Cloudflare ejecuta el servidor cerca de la base
+# de datos (Supabase, Oregón) en vez de cerca del usuario, para acortar cada consulta.
+# Para deshacer: borrar este bloque y volver a publicar.
+[placement]
+mode = "smart"
+
 [assets]
 directory = "./dist/"
 binding = "ASSETS"

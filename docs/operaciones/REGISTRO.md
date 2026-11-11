@@ -39,6 +39,8 @@
 | OP-2026-017 | 2026-11-07 | Aviso de devoluciones en una sola línea (nota de entrega con membrete) | Publicado en producción 2026-11-07; falta ver una nota real impresa | Solicitudes #39 (staging) y #41 | [OP-2026-017_aviso-devoluciones-una-linea.md](OP-2026-017_aviso-devoluciones-una-linea.md) |
 | OP-2026-018 | 2026-11-07 | Aviso "Hay una versión nueva" adaptado al celular | Publicado en producción 2026-11-07; falta verlo en un celular real con sesión | Solicitud #42 (`133140d3`) | [OP-2026-018_aviso-version-nueva-responsivo.md](OP-2026-018_aviso-version-nueva-responsivo.md) |
 | OP-2026-019 | 2026-11-07 | Quitar la línea de conteos (anuladas y saltos) del reporte "Ventas del día" en pantalla y PDF | **Publicado en producción 2026-11-07** (commit `358bb324`); falta revisar la hoja real con Logística | Solicitud #46 | [OP-2026-019_quitar-linea-conteos.md](OP-2026-019_quitar-linea-conteos.md) |
+| OP-2026-020 | 2026-11-10 | Auditoría de velocidad de punta a punta (carga, cambio de pestañas, servidor y base de datos) | Revisión terminada; **no hubo cambios**. Las de riesgo bajo se aplicaron en OP-2026-021; el resto, pendiente de decisión | — | [OP-2026-020_auditoria-velocidad-e2e.md](OP-2026-020_auditoria-velocidad-e2e.md) |
+| OP-2026-021 | 2026-11-10 | Velocidad: cuatro cambios de riesgo bajo (reloj aparte, precarga de pantallas, medición de la base, servidor junto a la base). El quinto (archivos guardables en el navegador) se retiró antes de publicar | Ver documento (sección Publicación) | — | [OP-2026-021_velocidad-cambios-bajo-riesgo.md](OP-2026-021_velocidad-cambios-bajo-riesgo.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -54,7 +56,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-020**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-022**).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.

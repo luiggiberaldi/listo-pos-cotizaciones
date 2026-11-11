@@ -153,6 +153,34 @@ const NavItem = memo(function NavItem({ path, label, Icono, onClick, collapsed, 
   )
 })
 
+// ─── Reloj del encabezado ──────────────────────────────────────────────────────
+// Pieza aparte a propósito: su estado cambia cada segundo. Si viviera en AppLayout,
+// todo el marco (menú, encabezado, avisos) se redibujaría cada segundo (OP-2026-021).
+function formatFechaHora(date) {
+  const d = date.toLocaleDateString('es-VE', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+  const t = date.toLocaleTimeString('es-VE', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  })
+  const capitalized = d.charAt(0).toUpperCase() + d.slice(1)
+  return `${capitalized} · ${t.toLowerCase()}`
+}
+
+const RelojEncabezado = memo(function RelojEncabezado() {
+  const [time, setTime] = useState(() => new Date())
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  return formatFechaHora(time)
+})
+
 // ─── Layout principal ──────────────────────────────────────────────────────────
 export default function AppLayout() {
   const queryClient = useQueryClient()
@@ -161,28 +189,6 @@ export default function AppLayout() {
   const switchOut = useAuthStore(s => s.switchOut)
   const navigate = useNavigate()
   const { tasaBcv, tasaUsdt, tasaEuro } = useTasaCambio()
-  const [time, setTime] = useState(new Date())
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  const formatFechaHora = useCallback((date) => {
-    const d = date.toLocaleDateString('es-VE', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-    })
-    const t = date.toLocaleTimeString('es-VE', {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    })
-    const capitalized = d.charAt(0).toUpperCase() + d.slice(1)
-    return `${capitalized} · ${t.toLowerCase()}`
-  }, [])
-
   const [menuOpen, setMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth >= 768 && window.innerWidth < 1400)
 
@@ -349,7 +355,7 @@ export default function AppLayout() {
         <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white/50 text-xs font-semibold ml-4 select-none whitespace-nowrap">
           <Clock size={12} className="text-white/45" />
           <span className="text-[11px] font-bold text-white/75 tracking-wide">
-            {formatFechaHora(time)}
+            <RelojEncabezado />
           </span>
         </div>
 

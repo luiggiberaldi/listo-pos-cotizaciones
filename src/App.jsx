@@ -78,6 +78,34 @@ const TesterView        = lazyRetry(() => import('./views/TesterView'))
 const TesterFlowView    = lazyRetry(() => import('./views/TesterFlowView'))
 const TutorialView      = lazyRetry(() => import('./views/TutorialView'))
 
+// ─── Precarga de las pantallas más usadas (OP-2026-021) ──────────────────────
+// Al entrar con el PIN se descargan en segundo plano, de una en una y solo cuando
+// el navegador está libre, para que el primer cambio de pestaña no tenga que esperar.
+// Si falla (sin red, versión vieja) no pasa nada: la pantalla se pide al abrirla.
+const PRECARGA_COMUN = [
+  () => import('./views/DespachosView'),
+  () => import('./views/InventarioView'),
+]
+const PRECARGA_VENTAS = [
+  () => import('./views/CotizacionesView'),
+  () => import('./views/VentaRapidaView'),
+]
+let precargaHecha = false
+
+function precargarPantallas(rol) {
+  if (precargaHecha || typeof window === 'undefined') return
+  if (navigator.connection?.saveData) return // respeta el "ahorro de datos" del teléfono
+  precargaHecha = true
+  const cola = rol === 'logistica' ? [...PRECARGA_COMUN] : [...PRECARGA_VENTAS, ...PRECARGA_COMUN]
+  const enReposo = (fn) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 5000 }) : setTimeout(fn, 1500))
+  const siguiente = () => {
+    const cargar = cola.shift()
+    if (!cargar) return
+    cargar().catch(() => {}).finally(() => enReposo(siguiente))
+  }
+  enReposo(siguiente)
+}
+
 // ─── QueryClient — importado desde lib/queryClient.js ────────────────────────
 
 
@@ -310,6 +338,11 @@ function AppRoutes() {
     
     document.documentElement.classList.toggle('modo-accesible', isEnabled)
   }, [perfil?.cuenta_id])
+
+  // Precargar las pantallas principales una vez que hay un operador dentro
+  useEffect(() => {
+    if (perfil?.id) precargarPantallas(perfil.rol)
+  }, [perfil?.id, perfil?.rol])
 
   // Limpiar zoom legacy
   useEffect(() => {
