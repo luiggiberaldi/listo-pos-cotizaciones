@@ -1,79 +1,58 @@
 // src/services/pdf/transportistasPDF.js
 // Genera PDF profesional del Listado Detallado de Choferes / Transportistas — Construacero Carabobo
 import { jsPDF } from 'jspdf'
-import { cargarLogo } from './pdfLogo'
-import { WATERMARK_LOGO } from './watermarkBase64'
+import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
-  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
-  C_PRIMARY, C_DARK, C_WHITE, C_ACCENT, C_GRAY,
-  drawPremiumHeader
+  PAGE_H, MARGIN, CONTENT_W,
+  C_DARK,
+  drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter, drawWatermark
 } from './pdfShared'
 
-function checkPage(doc, y, needed = 30) {
-  if (y + needed > PAGE_H - 25) {
-    doc.addPage()
-    try {
-      const gState = new doc.GState({ opacity: 0.06 })
-      doc.setGState(gState)
-      doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-      doc.setGState(new doc.GState({ opacity: 1 }))
-    } catch (_) {}
-    return MARGIN + 10
-  }
-  return y
-}
-
-function drawHeader(doc, logoData, config) {
-  return drawPremiumHeader({
-    doc,
-    logoData,
-    config,
-    title: 'Base de Datos de Choferes / Equipos',
-    subtitle: `Generado: ${new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
-  })
-}
-
-function drawFooter(doc, config) {
-  const totalPages = doc.internal.getNumberOfPages()
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    let footName = config.nombre_negocio || 'Construacero Carabobo C.A.'
-    if (footName.trim().toUpperCase() === 'PRUEBA' || footName.trim() === '') footName = 'Construacero Carabobo C.A.'
-    doc.text(footName, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
-  }
+// Límite inferior: la página 1 tiene el pie grande (dirección y contacto); el resto, uno delgado.
+function limiteInferior(doc) {
+  return doc.internal.getCurrentPageInfo().pageNumber === 1 ? PAGE_H - 35 : PAGE_H - 14
 }
 
 export async function generarTransportistasPDF({ items = [], config = {}, action = 'download' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
-  const logoData = await cargarLogo(config.logo_url)
+  const logoData = LOGO_LISTA_PRECIOS
 
-  let y = drawHeader(doc, logoData, config)
+  // Cada página nueva lleva marca de agua y el encabezado simplificado (igual que los demás reportes).
+  const originalAddPage = doc.addPage.bind(doc)
+  doc.addPage = function (...args) {
+    originalAddPage(...args)
+    drawWatermark(doc)
+    drawSimplifiedHeader(doc, logoData, config, 'Base de Datos de Choferes (Cont.)', [255, 255, 255], [0, 0, 0])
+    return doc
+  }
 
-  // Watermark
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  let y = drawPremiumHeader({
+    doc,
+    logoData,
+    config,
+    title: 'Base de Datos de Choferes / Equipos',
+    subtitle: `Generado: ${new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+    customBgColor: [255, 255, 255],
+    customAccentColor: [0, 0, 0],
+    customTextColor: [0, 0, 0],
+    customSubtitleColor: [0, 0, 0],
+    customBorderColor: [0, 0, 0],
+    centerBusinessName: true,
+  })
+  drawWatermark(doc)
 
   // KPIs
   const totalChoferes = items.length
   const kpiBoxH = 12
   
-  doc.setFillColor(...C_PRIMARY)
-  doc.roundedRect(MARGIN + 1, y, CONTENT_W - 2, kpiBoxH, 2, 2, 'F')
+  // Caja clara con borde fino (ahorra tinta al imprimir)
+  doc.setFillColor(248, 250, 252)
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(MARGIN + 1, y, CONTENT_W - 2, kpiBoxH, 2, 2, 'FD')
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(6.5)
-  doc.setTextColor(...C_WHITE)
+  doc.setTextColor(...C_DARK)
   doc.text('Total Choferes / Equipos Registrados', MARGIN + 4, y + 4.5)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
@@ -107,8 +86,10 @@ export async function generarTransportistasPDF({ items = [], config = {}, action
   y = drawTableHeaders(y)
 
   items.forEach((item, idx) => {
-    y = checkPage(doc, y, 7)
-    if (y < MARGIN + 12) y = drawTableHeaders(y)
+    if (y + 7 > limiteInferior(doc)) {
+      doc.addPage()
+      y = drawTableHeaders(MARGIN + 8)
+    }
 
     if (idx % 2 === 0) {
       doc.setFillColor(252, 252, 253)
@@ -147,7 +128,7 @@ export async function generarTransportistasPDF({ items = [], config = {}, action
     y += 6
   })
 
-  drawFooter(doc, config)
+  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0])
 
   const filename = `Base_de_Datos_Choferes_${new Date().toISOString().slice(0, 10)}`
 
