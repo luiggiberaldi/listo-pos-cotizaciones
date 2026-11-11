@@ -1,6 +1,6 @@
 # OP-2026-022 — PDF de transportistas: encabezado y pie iguales a los demás reportes
 
-**Fecha:** 2026-11-10 · **Estado:** corregido en el código, **sin publicar** (falta tu visto bueno y la solicitud de cambio) · **Solicitud/commit:** pendiente
+**Fecha:** 2026-11-10 · **Estado:** **publicado en producción 2026-11-10** · **Solicitud/commit:** #50 (`489251d5`, unida en `ee0bd00e`)
 
 ## En resumen
 
@@ -39,5 +39,4 @@ Se generaron ambos PDF con datos de prueba (70 choferes y 60 viajes, para forzar
 
 ## Pendiente
 
-- Revisar el diseño con un PDF real y dar el visto bueno.
-- Crear la solicitud de cambio, publicarla y anotar aquí el número y el commit.
+- Revisar el diseño con un PDF real de producción (no se probó con datos reales ni impreso).
