@@ -1,6 +1,6 @@
 # OP-2026-021 — Velocidad: cambios de riesgo bajo
 
-**Fecha:** 10 de noviembre de 2026 · **Origen:** auditoría [OP-2026-020](OP-2026-020_auditoria-velocidad-e2e.md) · **Estado:** ver la sección "Publicación" al final.
+**Fecha:** 10 de noviembre de 2026 · **Origen:** auditoría [OP-2026-020](OP-2026-020_auditoria-velocidad-e2e.md) · **Estado:** publicado en producción el 10/11/2026 (solicitud #48); falta medir el efecto real.
 
 ---
 
@@ -79,4 +79,19 @@ A1 era permitir que el navegador guarde durante un año los archivos de la app. 
 
 ## Publicación
 
-*(Se completa al publicar.)*
+| Dato | Valor |
+|---|---|
+| Solicitud de cambio | [#48](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/48) |
+| Commit en la versión principal | `0485e0fc` |
+| Publicado | 10 de noviembre de 2026, por la noche (hora de Venezuela), con aprobación del dueño en el chat ("hazlo publica") |
+| Servidor (Cloudflare) | Publicación automática terminada sin errores |
+| Web (Vercel) | Sirve la versión nueva (contiene la precarga de pantallas) |
+
+**Comprobado en producción después de publicar:**
+- El sitio y el servidor responden.
+- El servidor rechaza una llamada sin sesión (respuesta 401), igual que antes.
+- La ubicación inteligente está activa: el servidor ya informa dónde se ejecutó (cabecera `Cf-Placement`). En las pruebas respondió desde Portland y Seattle, al lado de la base de datos (Oregón). Antes respondía desde Dallas.
+
+**Pendiente de verificar:**
+- Cuánto bajaron los tiempos reales con la ubicación inteligente. Cloudflare sigue ajustando la ubicación durante los primeros minutos u horas; se sabrá con las mediciones de dos o tres días. Lectura propuesta: viernes 13 de noviembre de 2026.
+- Que nadie del personal note algo raro en el reloj o al cambiar de pantalla en un teléfono real.
