@@ -1,6 +1,6 @@
 # OP-2026-024 — PDF: los textos largos ya no se recortan
 
-**Fecha:** 2026-11-10 · **Estado:** corregido en el código, **sin publicar** · **Solicitud/commit:** pendiente
+**Fecha:** 2026-11-10 · **Estado:** **publicado en producción 2026-11-10** · **Solicitud/commit:** #52 (`e78d8f6f`, unida en `6f119baa`)
 
 ## En resumen
 
