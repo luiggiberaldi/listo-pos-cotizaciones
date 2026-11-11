@@ -23,14 +23,6 @@ function viajesPdf(fila) {
   return est > 0 ? `${num(fila.total_viajes)} (${MARCA_PDF}${est})` : String(num(fila.total_viajes))
 }
 
-function cortar(doc, texto, ancho) {
-  const s = String(texto ?? '')
-  if (doc.getTextWidth(s) <= ancho) return s
-  let t = s
-  while (t.length > 1 && doc.getTextWidth(`${t}…`) > ancho) t = t.slice(0, -1)
-  return `${t}…`
-}
-
 // Texto corto del pie (el pie premium comparte la línea con "Página X de Y").
 const PIE_TEXTO = `${MARCA_PDF} = camión estimado · SOBRE = supera la capacidad · min. = peso incompleto`
 const NOTA_LEYENDA = `${MARCA_PDF} = viajes viejos con camión estimado por la ficha del chofer. Mercancía = total - flete - corte. SOBRE = supera la capacidad del camión; min. = peso incompleto.`
@@ -65,20 +57,25 @@ function tabla(doc, y, titulo, cols, filas, totales) {
   y = encabezado(y + 6)
 
   const fila = (valores, negrita = false) => {
-    if (y + 6 > limiteInferior(doc)) { y = encabezado(nuevaPagina()) }
+    doc.setFont('helvetica', negrita ? 'bold' : 'normal')
+    doc.setFontSize(6.5)
+    // Los textos largos se parten en varias líneas (nunca se recortan)
+    const celdas = cols.map((c, i) => doc.splitTextToSize(String(valores[i] ?? ''), c.w - 3))
+    const nLineas = Math.max(1, ...celdas.map(l => l.length))
+    const alto = Math.max(6, nLineas * 2.9 + 3)
+    if (y + alto > limiteInferior(doc)) { y = encabezado(nuevaPagina()) }
     doc.setFont('helvetica', negrita ? 'bold' : 'normal')
     doc.setFontSize(6.5)
     doc.setTextColor(...C_DARK)
     let x = MARGIN
     cols.forEach((c, i) => {
-      const txt = cortar(doc, valores[i], c.w - 3)
-      doc.text(txt, c.align === 'right' ? x + c.w - 1.5 : x + 1.5, y + 3.5, { align: c.align === 'right' ? 'right' : 'left' })
+      doc.text(celdas[i], c.align === 'right' ? x + c.w - 1.5 : x + 1.5, y + 3.5, { align: c.align === 'right' ? 'right' : 'left', lineHeightFactor: 1.15 })
       x += c.w
     })
     doc.setDrawColor(225, 230, 238)
     doc.setLineWidth(0.2)
-    doc.line(MARGIN, y + 5.5, MARGIN + CONTENT_W, y + 5.5)
-    y += 6
+    doc.line(MARGIN, y + alto - 0.5, MARGIN + CONTENT_W, y + alto - 0.5)
+    y += alto
   }
 
   if (filas.length === 0) {

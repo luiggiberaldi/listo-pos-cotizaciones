@@ -86,46 +86,46 @@ export async function generarTransportistasPDF({ items = [], config = {}, action
   y = drawTableHeaders(y)
 
   items.forEach((item, idx) => {
-    if (y + 7 > limiteInferior(doc)) {
+    const veh = item.vehiculo || ''
+    const col = item.color ? ` (${item.color})` : ''
+    const chuto = item.placa_chuto ? `C: ${item.placa_chuto}` : ''
+    const batea = item.placa_batea ? `B: ${item.placa_batea}` : ''
+    const placas = [chuto, batea].filter(Boolean).join(' | ')
+
+    // Los textos largos se parten en varias líneas (nunca se recortan)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    const nombreL = doc.splitTextToSize((item.nombre || '—').toUpperCase(), cols[0].w - 2)
+    doc.setFont('helvetica', 'normal')
+    const celdas = [
+      nombreL,
+      doc.splitTextToSize(item.rif || '—', cols[1].w - 2),
+      doc.splitTextToSize(`${veh}${col}` || '—', cols[2].w - 2),
+      doc.splitTextToSize(placas || '—', cols[3].w - 2),
+      doc.splitTextToSize(item.zona_cobertura || '—', cols[4].w - 2),
+      doc.splitTextToSize(item.capacidad || '—', cols[5].w - 2),
+    ]
+    const nLineas = Math.max(...celdas.map(l => l.length))
+    const alto = Math.max(6, nLineas * 2.9 + 3)
+
+    if (y + alto > limiteInferior(doc)) {
       doc.addPage()
       y = drawTableHeaders(MARGIN + 8)
     }
 
     if (idx % 2 === 0) {
       doc.setFillColor(252, 252, 253)
-      doc.rect(MARGIN, y - 1, CONTENT_W, 6, 'F')
+      doc.rect(MARGIN, y - 1, CONTENT_W, alto, 'F')
     }
 
-    doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.5)
     doc.setTextColor(...C_DARK)
+    celdas.forEach((lineas, i) => {
+      doc.setFont('helvetica', i === 0 ? 'bold' : 'normal')
+      doc.text(lineas, cols[i].x + 1, y + 3, { lineHeightFactor: 1.15 })
+    })
 
-    // Nombre
-    doc.setFont('helvetica', 'bold')
-    doc.text((item.nombre || '—').toUpperCase().substring(0, 24), cols[0].x + 1, y + 3)
-    doc.setFont('helvetica', 'normal')
-
-    // RIF/Cédula
-    doc.text(item.rif || '—', cols[1].x + 1, y + 3)
-
-    // Vehículo + Color
-    const veh = item.vehiculo || ''
-    const col = item.color ? ` (${item.color})` : ''
-    doc.text(`${veh}${col}`.substring(0, 22), cols[2].x + 1, y + 3)
-
-    // Placas
-    const chuto = item.placa_chuto ? `C: ${item.placa_chuto}` : ''
-    const batea = item.placa_batea ? `B: ${item.placa_batea}` : ''
-    const placas = [chuto, batea].filter(Boolean).join(' | ')
-    doc.text(placas || '—', cols[3].x + 1, y + 3)
-
-    // Cobertura
-    doc.text((item.zona_cobertura || '—').substring(0, 22), cols[4].x + 1, y + 3)
-
-    // Capacidad
-    doc.text((item.capacidad || '—').substring(0, 16), cols[5].x + 1, y + 3)
-
-    y += 6
+    y += alto
   })
 
   drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0])

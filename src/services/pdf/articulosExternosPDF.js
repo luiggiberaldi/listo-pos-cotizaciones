@@ -9,17 +9,6 @@ import {
   drawWatermark, drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter, checkPage,
 } from './pdfShared'
 
-// Función helper para truncar textos dinámicamente y evitar encabalgamientos
-function clipText(text, maxWidth, doc) {
-  const t = String(text || '').trim()
-  if (doc.getTextWidth(t) <= maxWidth) return t
-  let temp = t
-  while (temp.length > 0 && doc.getTextWidth(temp + '...') > maxWidth) {
-    temp = temp.slice(0, -1)
-  }
-  return temp.trim() + '...'
-}
-
 export async function generarArticulosExternosPDF({ items, rango, kpis, config = {}, action = 'download' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = LOGO_LISTA_PRECIOS
@@ -121,7 +110,16 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
   y += 9
 
   items.forEach((item, idx) => {
-    y = checkPage(doc, y, 9, (d) => {
+    // Los textos largos se parten en varias líneas (nunca se recortan)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.5)
+    const artLines = doc.splitTextToSize(String(item.articulo_nombre || ''), 40)
+    const cliLines = doc.splitTextToSize(`${item.cliente_nombre || ''} (${item.cliente_rif || ''})`, 48)
+    const aseLines = doc.splitTextToSize(String(item.asesor_nombre || ''), 20)
+    const nLines = Math.max(1, artLines.length, cliLines.length, aseLines.length)
+    const rowH = Math.max(7.5, nLines * 3 + 3.5)
+
+    y = checkPage(doc, y, rowH + 1.5, (d) => {
       d.setFillColor(240, 242, 245)
       d.rect(MARGIN, MARGIN + 15, CONTENT_W, 7, 'F')
       d.setFont('helvetica', 'bold')
@@ -140,7 +138,7 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
 
     if (idx % 2 === 0) {
       doc.setFillColor(252, 252, 253)
-      doc.rect(MARGIN, y - 1, CONTENT_W, 7.5, 'F')
+      doc.rect(MARGIN, y - 1, CONTENT_W, rowH, 'F')
     }
 
     doc.setFont('helvetica', 'normal')
@@ -152,11 +150,8 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
     doc.setFont('helvetica', 'bold')
     doc.text(String(item.despacho_numero || ''), colX.despacho, y + 4)
     doc.setFont('helvetica', 'normal')
-    
-    // Truncar dinámicamente el Artículo para que no invada la cantidad
-    const artText = clipText(item.articulo_nombre || '', 40, doc)
-    doc.text(artText, colX.articulo, y + 4)
-    
+    doc.text(artLines, colX.articulo, y + 4, { lineHeightFactor: 1.2 })
+
     // Formatear cantidad quitando decimales si es entero
     const formattedCant = Number(item.cantidad || 0) % 1 === 0 
       ? Number(item.cantidad || 0).toFixed(0) 
@@ -169,16 +164,10 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
     doc.text(fmtUsd(item.total_usd), colX.total, y + 4, { align: 'right' })
     doc.setFont('helvetica', 'normal')
 
-    // Truncar dinámicamente el Cliente para evitar choque con Asesor
-    const rawCliText = `${item.cliente_nombre || ''} (${item.cliente_rif || ''})`
-    const cliText = clipText(rawCliText, 48, doc)
-    doc.text(cliText, colX.cliente, y + 4)
+    doc.text(cliLines, colX.cliente, y + 4, { lineHeightFactor: 1.2 })
+    doc.text(aseLines, colX.asesor, y + 4, { lineHeightFactor: 1.2 })
 
-    // Truncar dinámicamente el Asesor
-    const aseText = clipText(item.asesor_nombre || '', 20, doc)
-    doc.text(aseText, colX.asesor, y + 4)
-
-    y += 7.5
+    y += rowH
   })
 
   drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0])
