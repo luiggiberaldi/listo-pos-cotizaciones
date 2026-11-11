@@ -6,11 +6,11 @@
 //    local y el detalle viaje por viaje (con los viajes sin camión). La fuente estándar del PDF no tiene el símbolo ≈, así que
 // los viajes estimados se marcan con "~" y se explica al pie (raíl R5).
 import { jsPDF } from 'jspdf'
-import { cargarLogo } from './pdfLogo'
+import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_H, MARGIN, CONTENT_W,
-  C_PRIMARY, C_DARK, C_WHITE, C_GRAY,
-  fmtUsd, drawPremiumHeader,
+  C_DARK, C_GRAY,
+  fmtUsd, drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter, drawWatermark,
 } from './pdfShared'
 import { num, totalesVehiculos, totalesChoferes, variacion, porcentaje, diasDelPeriodo, textoDestinos, repartoFlete } from '../../utils/flotaReporte'
 import { nombreVehiculo } from '../../utils/vehiculoImpreso'
@@ -31,30 +31,24 @@ function cortar(doc, texto, ancho) {
   return `${t}…`
 }
 
-function drawFooter(doc, config) {
-  const total = doc.internal.getNumberOfPages()
-  for (let p = 1; p <= total; p++) {
-    doc.setPage(p)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    doc.text((config && config.nombre_negocio) || 'Construacero Carabobo C.A.', MARGIN, PAGE_H - 10)
-    doc.text(`${MARCA_PDF} = viajes viejos con camión estimado por la ficha del chofer. Mercancía = total - flete - corte. SOBRE = supera la capacidad del camión; min. = peso incompleto.`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${total}`, MARGIN + CONTENT_W, PAGE_H - 10, { align: 'right' })
-  }
+// Texto corto del pie (el pie premium comparte la línea con "Página X de Y").
+const PIE_TEXTO = `${MARCA_PDF} = camión estimado · SOBRE = supera la capacidad · min. = peso incompleto`
+const NOTA_LEYENDA = `${MARCA_PDF} = viajes viejos con camión estimado por la ficha del chofer. Mercancía = total - flete - corte. SOBRE = supera la capacidad del camión; min. = peso incompleto.`
+
+// Límite inferior del contenido: la página 1 tiene el pie grande (dirección y contacto); el resto, uno delgado.
+function limiteInferior(doc) {
+  return doc.internal.getCurrentPageInfo().pageNumber === 1 ? PAGE_H - 35 : PAGE_H - 14
 }
 
 function tabla(doc, y, titulo, cols, filas, totales) {
-  const nuevaPagina = () => { doc.addPage(); return MARGIN + 6 }
+  const nuevaPagina = () => { doc.addPage(); return MARGIN + 8 }
   const encabezado = (yy) => {
-    doc.setFillColor(...C_PRIMARY)
+    // Gris muy claro con letras oscuras: ahorra tinta al imprimir
+    doc.setFillColor(241, 245, 249)
     doc.rect(MARGIN, yy, CONTENT_W, 7, 'F')
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
-    doc.setTextColor(...C_WHITE)
+    doc.setTextColor(...C_DARK)
     let x = MARGIN
     cols.forEach(c => {
       doc.text(c.label, c.align === 'right' ? x + c.w - 1.5 : x + 1.5, yy + 4.8, { align: c.align === 'right' ? 'right' : 'left' })
@@ -63,7 +57,7 @@ function tabla(doc, y, titulo, cols, filas, totales) {
     return yy + 8
   }
 
-  if (y > PAGE_H - 50) y = nuevaPagina()
+  if (y + 28 > limiteInferior(doc)) y = nuevaPagina()
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(...C_DARK)
@@ -71,7 +65,7 @@ function tabla(doc, y, titulo, cols, filas, totales) {
   y = encabezado(y + 6)
 
   const fila = (valores, negrita = false) => {
-    if (y > PAGE_H - 22) { y = encabezado(nuevaPagina()) }
+    if (y + 6 > limiteInferior(doc)) { y = encabezado(nuevaPagina()) }
     doc.setFont('helvetica', negrita ? 'bold' : 'normal')
     doc.setFontSize(6.5)
     doc.setTextColor(...C_DARK)
@@ -108,14 +102,32 @@ export async function generarFlotaChoferesPDF({
 }) {
   const detallado = modo === 'detallado'
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
-  const logoData = await cargarLogo(config.logo_url)
+  const logoData = LOGO_LISTA_PRECIOS
+  const tituloReporte = detallado ? 'Reporte de Transportistas · Detallado' : 'Reporte de Transportistas · Resumido'
+
+  // Cada página nueva lleva marca de agua y el encabezado simplificado (igual que los demás reportes).
+  const originalAddPage = doc.addPage.bind(doc)
+  doc.addPage = function (...args) {
+    originalAddPage(...args)
+    drawWatermark(doc)
+    drawSimplifiedHeader(doc, logoData, config, `${tituloReporte} (Cont.)`, [255, 255, 255], [0, 0, 0])
+    return doc
+  }
+
   let y = drawPremiumHeader({
     doc,
     logoData,
     config,
-    title: detallado ? 'Reporte de Transportistas · Detallado' : 'Reporte de Transportistas · Resumido',
+    title: tituloReporte,
     subtitle: `Período: ${desde || 'inicio'} a ${hasta || 'hoy'}`,
+    customBgColor: [255, 255, 255],
+    customAccentColor: [0, 0, 0],
+    customTextColor: [0, 0, 0],
+    customSubtitleColor: [0, 0, 0],
+    customBorderColor: [0, 0, 0],
+    centerBusinessName: true,
   })
+  drawWatermark(doc)
 
   const totV = totalesVehiculos(porVehiculo)
   const totChoferes = porVehiculo.reduce((s, v) => s + num(v.comision_choferes_usd), 0)
@@ -303,10 +315,17 @@ export async function generarFlotaChoferesPDF({
     y = tabla(doc, y, 'Detalle viaje por viaje (camiones de la empresa)', columnasViaje, detalle.map(filaViaje))
   }
   if (detallado && detalleSinCamion.length > 0) {
-    tabla(doc, y, 'Viajes de choferes locales sin camión registrado', columnasViaje, detalleSinCamion.map(filaViaje))
+    y = tabla(doc, y, 'Viajes de choferes locales sin camión registrado', columnasViaje, detalleSinCamion.map(filaViaje))
   }
 
-  drawFooter(doc, config)
+  // Leyenda completa al final del contenido
+  if (y + 8 > limiteInferior(doc)) { doc.addPage(); y = MARGIN + 8 }
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(6)
+  doc.setTextColor(...C_GRAY)
+  doc.text(doc.splitTextToSize(NOTA_LEYENDA, CONTENT_W), MARGIN, y)
+
+  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0], PIE_TEXTO)
   const nombre = `Reporte_Transportistas_${detallado ? 'Detallado' : 'Resumido'}_${desde || 'inicio'}_${hasta || 'hoy'}.pdf`
   if (action === 'print') {
     doc.autoPrint()

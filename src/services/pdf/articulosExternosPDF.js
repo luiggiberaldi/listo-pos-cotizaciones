@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf'
 import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
-  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_GRAY,
+  C_DARK, C_EMERALD, C_GRAY,
   fmtUsd, fmtFecha,
   drawWatermark, drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter, checkPage,
 } from './pdfShared'
@@ -60,22 +60,26 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
     : Number(kpis.cantidadTotal || 0).toFixed(2)
 
   const kpiData = [
-    { label: 'Total Ventas Externas', value: fmtUsd(kpis.totalVentas), color: C_PRIMARY },
-    { label: 'Cant. Total Vendida', value: formattedCantTotal, color: C_PRIMARY },
-    { label: 'Pedidos Afectados', value: String(kpis.pedidosUnicos), color: C_PRIMARY },
-    { label: 'Clientes Compradores', value: String(kpis.clientesUnicos), color: C_PRIMARY },
+    { label: 'Total Ventas Externas', value: fmtUsd(kpis.totalVentas) },
+    { label: 'Cant. Total Vendida', value: formattedCantTotal },
+    { label: 'Pedidos Afectados', value: String(kpis.pedidosUnicos) },
+    { label: 'Clientes Compradores', value: String(kpis.clientesUnicos) },
   ]
 
   kpiData.forEach((kpi, i) => {
     const bx = MARGIN + i * kpiBoxW
-    doc.setFillColor(kpi.color[0], kpi.color[1], kpi.color[2])
-    doc.roundedRect(bx + 1, y, kpiBoxW - 2, kpiBoxH, 2, 2, 'F')
+    // Caja clara con borde fino (ahorra tinta al imprimir)
+    doc.setFillColor(248, 250, 252)
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(bx + 1, y, kpiBoxW - 2, kpiBoxH, 2, 2, 'FD')
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.5)
-    doc.setTextColor(...C_WHITE)
+    doc.setTextColor(...C_GRAY)
     doc.text(kpi.label, bx + 4, y + 6)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(10.5)
+    doc.setTextColor(...C_DARK)
     doc.text(kpi.value, bx + 4, y + 13)
   })
   y += kpiBoxH + 8
