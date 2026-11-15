@@ -1,6 +1,6 @@
 # OP-2026-027 — Ventana de designar recortada y designado que "desaparece" de noche
 
-**Fecha:** 2026-11-14 (noche) · **Estado:** corregido en el código; pendiente de publicar
+**Fecha:** 2026-11-14 (noche) · **Estado:** **publicado en producción 2026-11-14** (solicitud #56, unión `b425e7ad`)
 
 ## En resumen
 
@@ -28,5 +28,5 @@ Después de publicar OP-2026-026, el dueño reportó dos cosas en *Comisiones �
 
 ## Pendiente
 
-- [ ] Publicar (solicitud de cambio y juntarla con `main`).
+- [x] Publicado: solicitud #56 juntada con `main` (commit `a42021a5`, unión `b425e7ad`). Vercel publicó y el archivo de la pantalla en la página real cambió a la versión nueva.
 - [ ] Que el jefe confirme que la ventana se ve completa y que Edgar aparece como designado.
