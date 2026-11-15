@@ -115,17 +115,30 @@ function PanelDesignacion({ perfil, vendedores }) {
     setDesignado(designaciones[fecha]?.designado_id || '')
   }, [fecha, designaciones])
 
-  const guardar = useCallback(async () => {
+  // Guardarrail (incidente 12-sep): confirmar explícitamente el sábado objetivo.
+  const [modalDesignar, setModalDesignar] = useState(false)
+  const fechaLegibleDesignar = useMemo(() => {
+    const [y, m, d] = (fecha || '').split('-').map(Number)
+    if (!y || !m || !d) return fecha
+    const str = new Date(y, m - 1, d, 12, 0, 0).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    return str.charAt(0).toUpperCase() + str.slice(1)
+  }, [fecha])
+  // Fecha local (Venezuela), no UTC: después de las 8 p. m. UTC ya sería "mañana".
+  const hoyLocal = useMemo(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }, [])
+  const designaParaHoy = fecha === hoyLocal
+
+  const guardar = useCallback(() => {
     if (!designado) {
       setMensaje({ tipo: 'error', texto: 'Selecciona el vendedor o supervisor designado.' })
       return
     }
-    // Guardarrail (incidente 12-sep): confirmar explícitamente el sábado objetivo.
-    const [y, m, d] = fecha.split('-').map(Number)
-    const fechaLegible = new Date(y, m - 1, d, 12, 0, 0).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-    const esHoy = fecha === getSabadoActualOFuturo()
-        const ok = window.confirm('Designar a ' + nombreElegido + ' para el ' + fechaLegible + '?\n\nEl split 0.5%/1.5% aplicará SOLO a los despachos creados ese día.')
-    if (!ok) return
+    setModalDesignar(true)
+  }, [designado])
+
+  const confirmarDesignar = useCallback(async () => {
     try {
       setGuardando(true)
       const headers = await getAuthHeaders()
@@ -137,13 +150,14 @@ function PanelDesignacion({ perfil, vendedores }) {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'Error al designar')
       setDesignaciones(prev => ({ ...prev, [fecha]: json.designacion }))
-      setMensaje({ tipo: 'ok', texto: `Designación guardada para ${fecha}. Aplica a los despachos creados ese día.` })
+      setMensaje({ tipo: 'ok', texto: `Listo: ${nombreElegido} quedó como designado del ${fechaLegibleDesignar}.` })
     } catch (e) {
       setMensaje({ tipo: 'error', texto: e.message || 'Error al designar' })
+      throw e
     } finally {
       setGuardando(false)
     }
-  }, [designado, fecha])
+  }, [designado, fecha, nombreElegido, fechaLegibleDesignar])
 
   const solicitarQuitar = useCallback((f, nombre) => {
     const fechaQuitar = f || fecha
@@ -283,6 +297,23 @@ function PanelDesignacion({ perfil, vendedores }) {
       {mensaje && (
         <p className={`text-xs font-bold ${mensaje.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>{mensaje.texto}</p>
       )}
+
+      <ConfirmModal
+        isOpen={modalDesignar}
+        onClose={() => setModalDesignar(false)}
+        onConfirm={confirmarDesignar}
+        title={`¿Designar a ${nombreElegido}?`}
+        message={`${nombreElegido} será el vendedor designado del ${fechaLegibleDesignar}.`}
+        details={
+          `Ese día, en las ventas a clientes de otros vendedores, ${nombreElegido} cobra 0,5 % y el dueño del cliente 1,5 %. En sus propios clientes cobra su comisión normal.` +
+          (designaParaHoy
+            ? ' Ojo: las ventas de hoy que ya se entregaron mantienen la comisión que tenían. Para que tomen esta designación hay que pedir que se recalculen.'
+            : '')
+        }
+        confirmText="Sí, designar"
+        cancelText="Cancelar"
+        variant="success"
+      />
 
       <ConfirmModal
         isOpen={modalQuitar.isOpen}
