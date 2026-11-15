@@ -44,6 +44,7 @@
 | OP-2026-022 | 2026-11-10 | PDF de transportistas (Reporte y Base de Datos de Choferes): encabezado y pie iguales a los demás reportes, más auditoría con propuestas | **Publicado en producción 2026-11-10** | Solicitud #50 (`489251d5`) | [OP-2026-022_pdf-transportistas-encabezado.md](OP-2026-022_pdf-transportistas-encabezado.md) |
 | OP-2026-024 | 2026-11-10 | PDF: textos largos ya no se recortan (Artículos Externos y transportistas); falta el resto de los PDF | **Publicado en producción 2026-11-10** | Solicitud #52 (`e78d8f6f`) | [OP-2026-024_pdf-sin-recortes.md](OP-2026-024_pdf-sin-recortes.md) |
 | OP-2026-026 | 2026-11-14 | Sábado sin designado: Edgar Ramírez no se marcó; 11 despachos con comisión normal | Edgar ya designado; **11 comisiones recalculadas en producción** (verificado, fotos antes/después guardadas fuera de git); mensaje de confirmación nuevo **publicado en producción 2026-11-14** | Solicitud #54 (`3b6c8ad4`, unión `ff999c2f`) | [OP-2026-026_designado-sabado-olvidado.md](OP-2026-026_designado-sabado-olvidado.md) |
+| OP-2026-027 | 2026-11-14 | Comisiones: ventana de designar recortada y designado que "desaparecía" de noche (fecha UTC) | Corregido en el código; **sin publicar** | — | [OP-2026-027_ventana-recortada-y-fecha-utc.md](OP-2026-027_ventana-recortada-y-fecha-utc.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -59,7 +60,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-027**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-028**).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.

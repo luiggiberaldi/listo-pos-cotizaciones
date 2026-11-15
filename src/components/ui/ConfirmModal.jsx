@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2, ShoppingCart, X, Loader2, CheckCircle } from 'lucide-react';
 import { showToast } from './Toast';
 
@@ -69,7 +70,9 @@ export default function ConfirmModal({
     }
   }
 
-  return (
+  // Portal a <body>: si un ancestro tiene backdrop-filter/transform, un "fixed"
+  // queda atrapado dentro de ese ancestro y la ventana se recorta (OP-2026-027).
+  return createPortal(
     <div
       className="fixed inset-0 z-[200] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 pb-[env(safe-area-inset-bottom)]"
       onClick={onClose}>
@@ -148,6 +151,7 @@ export default function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
