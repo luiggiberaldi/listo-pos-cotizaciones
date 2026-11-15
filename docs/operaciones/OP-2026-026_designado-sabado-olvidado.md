@@ -84,8 +84,9 @@ Fotos completas guardadas **solo en la computadora del dueño** (`docs/operacion
 
 - [x] El jefe marca la designación del 14-nov.
 - [x] Recálculo ejecutado y verificado.
-- [x] Cambio guardado en git: rama `fix/op-026-designado-sabado`, commit `3b6c8ad4` (subido a GitHub). Solicitud de cambio #54 abierta; **sin publicar todavía**.
-- [ ] Ver en pantalla la nueva ventana de confirmación y publicarla.
+- [x] Cambio guardado en git: rama `fix/op-026-designado-sabado`, commit `3b6c8ad4` (subido a GitHub). Solicitud de cambio #54 abierta.
+- [x] **Publicado en producción 2026-11-14**: solicitud #54 juntada con `main` (commit de unión `ff999c2f`). Vercel publicó y se comprobó que la página real ya trae el texto nuevo ("Sí, designar") y no el viejo ("aplicará SOLO").
+- [ ] Verlo en pantalla con un usuario jefe (no se hizo antes de publicar).
 - [ ] Decidir si se hace el aviso de sábado "Hoy no hay designado".
 - [ ] Ver la nueva ventana en pantalla y publicar el cambio.
 - [ ] Autorización para recalcular y ejecución, con la foto de antes y después anotada aquí.
