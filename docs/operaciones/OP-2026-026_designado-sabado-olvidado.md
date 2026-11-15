@@ -84,6 +84,7 @@ Fotos completas guardadas **solo en la computadora del dueño** (`docs/operacion
 
 - [x] El jefe marca la designación del 14-nov.
 - [x] Recálculo ejecutado y verificado.
+- [x] Cambio guardado en git: rama `fix/op-026-designado-sabado`, commit `3b6c8ad4` (subido a GitHub; **sin solicitud de cambio ni publicación todavía**).
 - [ ] Ver en pantalla la nueva ventana de confirmación y publicarla.
 - [ ] Decidir si se hace el aviso de sábado "Hoy no hay designado".
 - [ ] Ver la nueva ventana en pantalla y publicar el cambio.
