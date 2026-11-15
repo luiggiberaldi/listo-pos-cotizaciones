@@ -10,7 +10,7 @@ import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import useAuthStore from '../store/useAuthStore'
 import { fmtUsd, fmtBs } from '../utils/format'
-import { getCorteSemanalRange, getSabadoActualOFuturo } from '../utils/dateHelpers'
+import { getCorteSemanalRange, getSabadoActualOFuturo, getLocalISODate } from '../utils/dateHelpers'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
@@ -49,7 +49,9 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
 // ─── Panel de designación del vendedor del día (exclusivo para jefe) ─────────
 function PanelDesignacion({ perfil, vendedores }) {
   const esJefe = perfil?.rol === 'jefe'
-  const hoy = new Date().toISOString().slice(0, 10)
+  // Fecha local (Venezuela). Con toISOString() (UTC), desde las 8 p. m. ya era
+  // "mañana" y la designación del día desaparecía de la pantalla (OP-2026-027).
+  const hoy = getLocalISODate()
   // Default: sábado actual (si hoy es sábado) o el próximo — TZ-local, sin salto UTC.
   // (Fix 2026-09-13: el IIFE anterior con toISOString() registraba la designación
   //  en el sábado equivocado — incidente 12-sep, plan 2026-09-13-plan-sabados-split-fix.md)
@@ -123,12 +125,7 @@ function PanelDesignacion({ perfil, vendedores }) {
     const str = new Date(y, m - 1, d, 12, 0, 0).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     return str.charAt(0).toUpperCase() + str.slice(1)
   }, [fecha])
-  // Fecha local (Venezuela), no UTC: después de las 8 p. m. UTC ya sería "mañana".
-  const hoyLocal = useMemo(() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }, [])
-  const designaParaHoy = fecha === hoyLocal
+  const designaParaHoy = fecha === hoy
 
   const guardar = useCallback(() => {
     if (!designado) {
