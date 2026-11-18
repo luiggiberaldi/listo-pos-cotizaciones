@@ -29,104 +29,186 @@ function DarkBackground() {
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
       </svg>
-      <div className="absolute top-0 left-[35%] w-px h-full opacity-10"
-        style={{ background: 'linear-gradient(to bottom, transparent 0%, #B8860B 30%, #1B365D 70%, transparent 100%)' }} />
-      <div className="absolute top-0 left-[65%] w-px h-full opacity-5"
-        style={{ background: 'linear-gradient(to bottom, transparent 0%, #3b82f6 50%, transparent 100%)' }} />
+      {/* OP-2026-031: se quitaron dos líneas verticales decorativas (35 % y 65 %):
+          con el panel más ancho quedaban detrás y se veían "recortadas" a través del vidrio. */}
     </div>
   )
 }
 
 const ROL_ACCENT = {
-  supervisor:     { color: '#3b82f6', glow: 'rgba(59,130,246,0.35)', chip: 'rgba(59,130,246,0.15)', chipBorder: 'rgba(59,130,246,0.3)', label: 'Jefe de ventas' },
-  vendedor:       { color: '#14b8a6', glow: 'rgba(20,184,166,0.3)',  chip: 'rgba(20,184,166,0.12)', chipBorder: 'rgba(20,184,166,0.25)', label: 'Vendedor'   },
-  administracion: { color: '#CBD5E1', glow: 'rgba(203,213,225,0.45)', chip: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #475569 100%)', chipBorder: 'rgba(203,213,225,0.7)', chipText: '#1e293b', label: 'Administración' },
-  logistica:      { color: '#CBD5E1', glow: 'rgba(203,213,225,0.45)', chip: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #475569 100%)', chipBorder: 'rgba(203,213,225,0.7)', chipText: '#1e293b', label: 'Logística' },
-  vendedor_sin_comision: { color: '#14b8a6', glow: 'rgba(20,184,166,0.3)',  chip: 'rgba(20,184,166,0.12)', chipBorder: 'rgba(20,184,166,0.25)', label: 'Vendedor' },
+  supervisor:     { color: '#3b82f6', glow: 'rgba(59,130,246,0.35)', chip: 'rgba(59,130,246,0.22)', chipBorder: 'rgba(96,165,250,0.5)', chipText: '#bfdbfe', label: 'Jefe de ventas' },
+  vendedor:       { color: '#14b8a6', glow: 'rgba(20,184,166,0.3)',  chip: 'rgba(20,184,166,0.2)', chipBorder: 'rgba(45,212,191,0.45)', chipText: '#99f6e4', label: 'Vendedor' },
+  administracion: { color: '#CBD5E1', glow: 'rgba(203,213,225,0.45)', chip: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #475569 100%)', chipBorder: 'rgba(203,213,225,0.7)', chipText: '#0f172a', label: 'Administración', labelCorto: 'Admin.' },
+  logistica:      { color: '#CBD5E1', glow: 'rgba(203,213,225,0.45)', chip: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #475569 100%)', chipBorder: 'rgba(203,213,225,0.7)', chipText: '#0f172a', label: 'Logística' },
+  vendedor_sin_comision: { color: '#14b8a6', glow: 'rgba(20,184,166,0.3)',  chip: 'rgba(20,184,166,0.2)', chipBorder: 'rgba(45,212,191,0.45)', chipText: '#99f6e4', label: 'Vendedor' },
   jefe:           { color: '#B8860B', glow: 'rgba(184,134,11,0.5)',  chip: 'linear-gradient(135deg, #FFD700 0%, #B8860B 50%, #8B6914 100%)',  chipBorder: 'rgba(184,134,11,0.6)', chipText: '#451a03', label: 'Jefe' },
 }
 
-// ─── Tarjeta de usuario (Dark Premium) ───────────────────────────────────────
-function UserCard({ user, onClick, index }) {
-  const [hovered, setHovered] = React.useState(false)
+// Orden de la lista: por rol y, dentro de cada rol, alfabético (OP-2026-031).
+const ORDEN_ROL = { jefe: 0, administracion: 1, logistica: 2, supervisor: 3, vendedor: 4, vendedor_sin_comision: 4 }
+// Dos bloques separados por una línea fina: dirección/operación arriba y ventas abajo.
+const ROLES_DIRECCION = ['jefe', 'administracion', 'logistica']
 
-  const nombre = (user.nombre || 'Usuario')
+// Para buscar por la inicial: "Ángel" empieza por "a".
+const inicialNormalizada = nombre => formatearNombre(nombre).normalize('NFD').replace(/[̀-ͯ]/g, '').charAt(0).toLowerCase()
+
+// Último operador que entró en ESTE equipo, guardado por cuenta de negocio
+// (nunca se mezcla con otra cuenta). Solo guarda el id, nunca el PIN.
+const ultimoOperadorKey = accountId => `construacero_ultimo_operador_${accountId}`
+function leerUltimoOperador(accountId) {
+  if (!accountId) return null
+  try { return localStorage.getItem(ultimoOperadorKey(accountId)) } catch { return null }
+}
+function guardarUltimoOperador(accountId, operatorId) {
+  if (!accountId || !operatorId) return
+  try { localStorage.setItem(ultimoOperadorKey(accountId), operatorId) } catch { /* Storage no disponible. */ }
+}
+
+function formatearNombre(nombre) {
+  return (nombre || 'Usuario')
     .split(' ')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ')
+}
 
+function acentoDe(user) {
   const rol = user.rol || 'vendedor'
   const esVendedorExterno = ['vendedor', 'vendedor_sin_comision'].includes(rol) && (!!user.es_externo || (user.markup_pct != null && Number(user.markup_pct) > 0))
-  const acc = esVendedorExterno
+  return esVendedorExterno
     ? {
         color: '#D97706',
         glow: 'rgba(217,119,6,0.35)',
-        chip: 'rgba(217,119,6,0.15)',
-        chipBorder: 'rgba(217,119,6,0.3)',
+        chip: 'rgba(217,119,6,0.22)',
+        chipBorder: 'rgba(251,191,36,0.45)',
+        chipText: '#fde68a',
         label: 'Vendedor (E)'
       }
     : (ROL_ACCENT[rol] ?? ROL_ACCENT.vendedor)
+}
+
+function RolChip({ acc }) {
+  return (
+    <span
+      className="inline-block px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] min-[400px]:text-[10px] sm:text-[11px] font-bold uppercase tracking-normal sm:tracking-wide max-w-full whitespace-normal [overflow-wrap:normal] text-center leading-tight"
+      title={acc.label}
+      style={{ background: acc.chip, border: `1px solid ${acc.chipBorder}`, color: acc.chipText || acc.color }}
+    >
+      {acc.labelCorto || acc.label}
+    </span>
+  )
+}
+
+// ─── Tarjeta de usuario (Dark Premium, compacta) ─────────────────────────────
+// esUltimo: fue el último en entrar en este equipo → va primero con marco dorado.
+function UserCard({ user, onClick, index, esUltimo = false }) {
+  const [hovered, setHovered] = React.useState(false)
+  const nombre = formatearNombre(user.nombre)
+  const acc = acentoDe(user)
+  const borde = esUltimo
+    ? (hovered ? 'rgba(252,231,163,0.85)' : 'rgba(212,175,55,0.6)')
+    : (hovered ? acc.color + '60' : 'rgba(255,255,255,0.08)')
 
   return (
-    <div
+    <button
+      type="button"
       onClick={() => onClick(user)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="cursor-pointer outline-none h-full"
-      style={{ animation: `fadeSlideUp 0.5s ease forwards`, animationDelay: `${index * 0.07}s`, opacity: 0 }}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
+      aria-label={`Entrar como ${nombre}, ${acc.label}${esUltimo ? ' (último usuario en este equipo)' : ''}`}
+      title={esUltimo ? 'Último usuario que entró en este equipo' : undefined}
+      data-user-id={user.id}
+      className="cursor-pointer h-full w-full rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+      style={{ animation: `fadeSlideUp 0.5s ease forwards`, animationDelay: `${index * 0.04}s`, opacity: 0 }}
     >
       <div
-        className="relative flex flex-col items-center justify-center gap-2 sm:gap-3 px-3 sm:px-4 pt-4 sm:pt-6 pb-3 sm:pb-5 rounded-2xl transition-all duration-300 h-full"
+        className="relative flex flex-col items-center justify-start gap-1.5 sm:gap-2 [@media(max-height:700px)]:gap-1 px-1 sm:px-2 pt-2.5 pb-2 sm:pt-3 sm:pb-2.5 lg:pt-4 lg:pb-3 [@media(max-height:700px)]:pt-2 [@media(max-height:700px)]:pb-1.5 rounded-2xl transition-all duration-300 h-full"
         style={{
-          background: hovered ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)',
-          border: `1px solid ${hovered ? acc.color + '60' : 'rgba(255,255,255,0.08)'}`,
+          background: esUltimo
+            ? 'linear-gradient(160deg, rgba(184,134,11,0.18) 0%, rgba(255,255,255,0.04) 65%)'
+            : (hovered ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)'),
+          border: `1px solid ${borde}`,
           boxShadow: hovered
-            ? `0 0 0 1px ${acc.color}30, 0 20px 60px rgba(0,0,0,0.4), 0 0 30px ${acc.glow}`
-            : '0 8px 32px rgba(0,0,0,0.3)',
-          backdropFilter: 'blur(10px)',
-          transform: hovered ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
+            ? `0 0 0 1px ${acc.color}30, 0 16px 40px rgba(0,0,0,0.4), 0 0 24px ${acc.glow}`
+            : (esUltimo ? '0 6px 24px rgba(0,0,0,0.3), 0 0 18px rgba(184,134,11,0.18)' : '0 6px 24px rgba(0,0,0,0.3)'),
+          transform: hovered ? 'translateY(-3px) scale(1.02)' : 'translateY(0) scale(1)',
         }}
       >
         <div
           className="absolute top-0 left-[15%] right-[15%] h-px rounded-full transition-opacity duration-300"
           style={{
-            background: `linear-gradient(to right, transparent, ${acc.color}, transparent)`,
-            opacity: hovered ? 0.8 : 0.2,
+            background: `linear-gradient(to right, transparent, ${esUltimo ? '#D4AF37' : acc.color}, transparent)`,
+            opacity: hovered || esUltimo ? 0.8 : 0.2,
           }}
         />
+        {esUltimo && (
+          <span
+            className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 z-20 inline-flex items-center justify-center w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full text-[9px] sm:text-[10px] leading-none"
+            style={{ background: 'rgba(212,175,55,0.22)', color: '#FCE7A3', border: '1px solid rgba(212,175,55,0.45)' }}
+          >
+            ★
+          </span>
+        )}
         <div className="relative">
           <div
             className="absolute inset-0 rounded-2xl blur-xl transition-opacity duration-300"
             style={{ background: acc.glow, opacity: hovered ? 1 : 0.4, transform: 'scale(1.3)' }}
           />
-          <LoginAvatar user={user} className="relative z-10" />
+          <LoginAvatar user={user} size="md" className="relative z-10" />
         </div>
-        <div className="text-center space-y-1.5 sm:space-y-2 min-w-0 w-full">
+        <div className="flex flex-col items-center gap-1 min-w-0 w-full text-center">
+          {/* Mismo tamaño para todos los nombres; los largos bajan a 2 líneas. */}
           <p
-            className="font-black text-white leading-tight line-clamp-2 break-words w-full"
-            style={{
-              textShadow: '0 2px 10px rgba(0,0,0,0.5)',
-              fontSize: nombre.length > 14 ? '10px' : nombre.length > 10 ? '12px' : nombre.length > 7 ? '13px' : '14px',
-              letterSpacing: nombre.length > 12 ? '0' : undefined,
-              wordBreak: 'break-word',
-            }}>
+            className="font-black text-white text-[12px] sm:text-[13px] lg:text-sm leading-tight line-clamp-2 break-words w-full"
+            style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}
+            title={nombre}
+          >
             {nombre}
           </p>
-          <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-300 max-w-full text-center leading-tight"
-            style={{
-              background: acc.chip,
-              border: `1px solid ${acc.chipBorder}`,
-              color: acc.chipText || acc.color,
-              wordBreak: 'break-word',
-            }}
-          >
-            {acc.label}
-          </span>
+          <RolChip acc={acc} />
         </div>
       </div>
-    </div>
+    </button>
   )
+}
+
+// true cuando la pantalla mide al menos `px` de ancho (se actualiza al girar o redimensionar).
+function useMinWidth(px) {
+  const query = `(min-width: ${px}px)`
+  const [ok, setOk] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const onChange = () => setOk(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [query])
+  return ok
+}
+
+// Escribir una letra resalta a la primera persona cuyo nombre empieza por ella;
+// repetirla pasa a la siguiente con la misma inicial. Enter abre su PIN (OP-2026-031).
+function BuscarPorInicial({ lista, activo }) {
+  useEffect(() => {
+    if (!activo) return undefined
+    function onKey(e) {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return
+      const t = e.target
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      const letra = e.key.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+      if (!/^[a-zñ]$/.test(letra)) return
+      const coinciden = lista.filter(u => inicialNormalizada(u.nombre) === letra)
+      if (coinciden.length === 0) return
+      const actual = document.activeElement?.getAttribute?.('data-user-id')
+      const pos = coinciden.findIndex(u => u.id === actual)
+      const siguiente = coinciden[(pos + 1) % coinciden.length]
+      document.querySelector(`[data-user-id="${siguiente.id}"]`)?.focus()
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lista, activo])
+  return null
 }
 
 // ─── Botón de instalación PWA ─────────────────────────────────────────────────
@@ -552,6 +634,7 @@ function UserSelectStep({ onLogout }) {
     if (!seleccionado) return false
     const res = await switchOperator(seleccionado.id, pin)
     if (res.ok) {
+      guardarUltimoOperador(accountId, seleccionado.id)
       navigate('/', { replace: true })
     } else if (res.sessionExpired) {
       // Sesión principal de negocio expirada por inactividad → volver al login de email/clave
@@ -559,6 +642,33 @@ function UserSelectStep({ onLogout }) {
     }
     return res
   }
+
+  // Orden de la lista (OP-2026-031)
+  // Celular (< 640 px): bloques apilados con su título, 2 columnas cada uno.
+  const esCelular = !useMinWidth(640)
+  // PC (propuesta A): los dos bloques van lado a lado, cada uno con su título.
+  const ladoALado = useMinWidth(1024)
+  const ultimoId = leerUltimoOperador(accountId)
+  const ultimoUsuario = usuarios.find(u => u.id === ultimoId) || null
+  const ordenados = [...usuarios].sort((a, b) =>
+    ((ORDEN_ROL[a.rol] ?? 9) - (ORDEN_ROL[b.rol] ?? 9))
+    || formatearNombre(a.nombre).localeCompare(formatearNombre(b.nombre), 'es'))
+  // El último usuario de este equipo va primero, marcado en dorado.
+  // El último usuario de este equipo va primero dentro de su bloque, marcado en dorado.
+  const primeroElUltimo = arr => ultimoUsuario && arr.some(u => u.id === ultimoUsuario.id)
+    ? [ultimoUsuario, ...arr.filter(u => u.id !== ultimoUsuario.id)]
+    : arr
+  const bloques = [
+    primeroElUltimo(ordenados.filter(u => ROLES_DIRECCION.includes(u.rol))),
+    primeroElUltimo(ordenados.filter(u => !ROLES_DIRECCION.includes(u.rol))),
+  ].filter(b => b.length > 0)
+  const lista = bloques.flat()
+  const enFilasDe3 = bloque => !esCelular && bloque.length % 3 === 0 && bloque.length % 4 !== 0
+  const gridCols = 'grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-2.5 lg:gap-3'
+  // Filas que se reparten y centran: si la última fila no se llena, queda centrada
+  // en vez de dejar un hueco a la derecha. Ancho = (100% - huecos) / columnas.
+  const filaCentrada = 'flex flex-wrap justify-center gap-2 sm:gap-2.5 lg:gap-3'
+  const anchoTarjeta = 'w-[calc((100%-1rem)/3)] sm:w-[calc((100%-1.875rem)/4)] lg:w-[calc((100%-2.25rem)/4)]'
 
   return (
     <>
@@ -578,12 +688,31 @@ function UserSelectStep({ onLogout }) {
       `}</style>
 
       <DarkBackground />
+      <BuscarPorInicial lista={lista} activo={!seleccionado && !showSuperPin} />
 
-      <div className="relative z-10 min-h-[100dvh] w-full flex flex-col lg:flex-row items-center justify-center px-3 sm:px-6 lg:px-8 xl:px-12 py-6 sm:py-8 gap-5 sm:gap-8 lg:gap-8 xl:gap-14 overflow-x-hidden overflow-y-auto">
+      <div className="relative z-10 min-h-[100dvh] w-full flex flex-col lg:flex-row items-center justify-start lg:justify-center px-3 sm:px-6 lg:px-8 xl:px-12 pt-9 pb-16 sm:pt-10 sm:pb-16 lg:py-6 [@media(max-height:700px)]:pb-4 gap-3 sm:gap-5 lg:gap-8 xl:gap-12 overflow-x-hidden overflow-y-auto">
 
-        {/* ── LOGO + BRANDING ── */}
+        {/* ── LOGO COMPACTO (celular y tablet) ── */}
         <div
-          className="flex flex-col items-center gap-3 sm:gap-4 select-none lg:w-[220px] xl:w-[300px] shrink-0"
+          className="lg:hidden [@media(max-height:700px)]:hidden flex items-center gap-3 select-none shrink-0"
+          style={{ animation: 'logoReveal 0.8s ease forwards' }}
+        >
+          <img
+            src="/logo.png"
+            alt="Construacero Carabobo"
+            onClick={handleLogoTap}
+            className="h-10 sm:h-14 w-auto object-contain cursor-pointer"
+            style={{ filter: 'drop-shadow(0 0 18px rgba(184,134,11,0.35)) brightness(1.05)' }}
+            draggable={false}
+          />
+          <span className="text-[10px] sm:text-xs font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: '#B8860B' }}>
+            Sistema de Gestión
+          </span>
+        </div>
+
+        {/* ── LOGO + BRANDING (computadora) ── */}
+        <div
+          className="hidden lg:flex flex-col items-center gap-4 select-none lg:w-[200px] xl:w-[280px] shrink-0"
           style={{ animation: 'logoReveal 0.8s ease forwards' }}
         >
           <div className="relative flex items-center justify-center">
@@ -617,10 +746,12 @@ function UserSelectStep({ onLogout }) {
 
         {/* ── PANEL PRINCIPAL ── */}
         <div
-          className="w-full max-w-[calc(100vw-1.5rem)] sm:max-w-sm md:max-w-md lg:max-w-md xl:max-w-lg relative overflow-hidden rounded-2xl sm:rounded-3xl"
+          className="w-full max-w-[calc(100vw-1.5rem)] sm:max-w-lg md:max-w-xl lg:max-w-2xl xl:max-w-3xl relative overflow-hidden rounded-2xl sm:rounded-3xl"
           style={{
-            background: 'rgba(255,255,255,0.04)',
-            backdropFilter: 'blur(20px)',
+            // OP-2026-031: sin "vidrio esmerilado" (backdrop-filter). En algunas tarjetas
+            // gráficas Chrome lo dibuja por bloques y deja una costura vertical visible.
+            // El fondo ya es suave, así que un tono semitransparente se ve igual.
+            background: 'linear-gradient(160deg, rgba(30,41,59,0.55) 0%, rgba(15,23,42,0.45) 100%)',
             border: '1px solid rgba(255,255,255,0.08)',
             boxShadow: '0 25px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
             animation: 'fadeSlideUp 0.6s ease 0.2s forwards',
@@ -630,53 +761,60 @@ function UserSelectStep({ onLogout }) {
           <div className="absolute top-0 left-[10%] right-[10%] h-px"
             style={{ background: 'linear-gradient(to right, transparent, rgba(184,134,11,0.6), transparent)' }} />
           <div className="absolute top-0 right-0 w-64 h-64 -mr-20 -mt-20 rounded-full opacity-10 pointer-events-none"
-            style={{ background: 'radial-gradient(circle, #1B365D 0%, transparent 70%)', filter: 'blur(30px)' }} />
+            style={{ background: 'radial-gradient(circle, #1B365D 0%, transparent 70%)' }} />
           <div className="absolute bottom-0 left-0 w-48 h-48 -ml-16 -mb-16 rounded-full pointer-events-none"
-            style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', filter: 'blur(30px)', opacity: 0.06 }} />
+            style={{ background: 'radial-gradient(circle, #B8860B 0%, transparent 70%)', opacity: 0.06 }} />
 
-          <div className="relative z-10 p-4 sm:p-6 lg:p-6 xl:p-8">
+          <div className="relative z-10 p-3 sm:p-5 xl:p-6">
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-4 sm:mb-6 lg:mb-8">
+            <div className="flex items-start justify-between gap-2 mb-3 sm:mb-4">
               <div className="min-w-0">
                 <h1 className="text-base sm:text-lg md:text-xl font-black text-white tracking-tight">
                   ¿Quién está operando?
                 </h1>
-                <p className="text-[11px] sm:text-xs md:text-sm mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                  Selecciona tu usuario e ingresa tu PIN
+                <p className="text-[11px] sm:text-xs md:text-sm mt-0.5 [@media(max-height:700px)]:hidden" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  <span className="lg:hidden">Selecciona tu usuario e ingresa tu PIN</span>
+                  <span className="hidden lg:inline">Elige tu usuario o escribe su inicial</span>
                 </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0 ml-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
+                  type="button"
                   onClick={cargarUsuarios.bind(null, false)}
                   disabled={cargando}
-                  className="p-2 sm:p-2.5 rounded-xl transition-all disabled:opacity-40"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
+                  className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-                  title="Recargar usuarios"
+                  title="Volver a cargar la lista de usuarios"
+                  aria-label="Actualizar lista de usuarios"
                 >
                   <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} />
+                  <span className="hidden sm:inline">Actualizar</span>
                 </button>
                 <button
+                  type="button"
                   onClick={onLogout}
-                  className="p-2 sm:p-2.5 rounded-xl transition-all"
-                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'rgba(239,68,68,0.7)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = 'rgba(239,68,68,0.9)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = 'rgba(239,68,68,0.7)' }}
-                  title="Cerrar sesión"
+                  className="flex items-center gap-1.5 px-2.5 py-2 sm:px-3 rounded-xl text-xs font-semibold transition-all"
+                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: 'rgba(252,165,165,0.9)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = '#fecaca' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = 'rgba(252,165,165,0.9)' }}
+                  title="Cerrar la sesión de la empresa en este equipo (pedirá correo y clave de nuevo)"
+                  aria-label="Salir de la cuenta de la empresa"
                 >
                   <LogOut size={14} />
+                  <span>Salir</span>
                 </button>
               </div>
             </div>
 
             {/* Grid usuarios */}
             {cargando ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="flex flex-col items-center gap-2.5 sm:gap-3 py-4 sm:py-6 animate-pulse">
-                    <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl" style={{ background: 'rgba(255,255,255,0.08)' }} />
+              <div className={gridCols}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex flex-col items-center gap-2 py-3 sm:py-4 animate-pulse">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-2xl" style={{ background: 'rgba(255,255,255,0.08)' }} />
                     <div className="space-y-2 w-full px-2">
                       <div className="h-2.5 rounded w-3/4 mx-auto" style={{ background: 'rgba(255,255,255,0.08)' }} />
                       <div className="h-2 rounded w-1/2 mx-auto" style={{ background: 'rgba(255,255,255,0.05)' }} />
@@ -697,20 +835,72 @@ function UserSelectStep({ onLogout }) {
                 <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>Contacta al supervisor.</p>
               </div>
             ) : (
-              <div className={`grid gap-2.5 sm:gap-4 ${
-                usuarios.length === 1 ? 'grid-cols-1 max-w-[160px] sm:max-w-[180px] mx-auto' :
-                usuarios.length === 2 ? 'grid-cols-2 max-w-[320px] sm:max-w-[360px] mx-auto' :
-                'grid-cols-2 sm:grid-cols-3'
-              }`}>
-                {[...usuarios].sort((a, b) => {
-                  const orden = { jefe: 0, logistica: 1, administracion: 1, supervisor: 2, vendedor: 3 }
-                  return (orden[a.rol] ?? 4) - (orden[b.rol] ?? 4)
-                }).map((u, i) => (
-                  <div key={u.id} className="min-w-0">
-                    <UserCard user={u} onClick={seleccionarUsuario} index={i} />
-                  </div>
+              esCelular && bloques.length === 2 ? (
+                <div className="space-y-3">
+                  {bloques.map((bloque, b) => (
+                    <section key={b} aria-label={b === 0 ? 'Dirección y operaciones' : 'Ventas'}>
+                      <p className="text-[11px] font-bold uppercase tracking-wider mb-1.5 px-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                        {b === 0 ? 'Dirección y operaciones' : 'Ventas'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {bloque.map(u => (
+                          <div key={u.id} className="min-w-0">
+                            <UserCard user={u} onClick={seleccionarUsuario} index={lista.indexOf(u)} esUltimo={u.id === ultimoUsuario?.id} />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : ladoALado && bloques.length === 2 ? (
+                <div className="grid gap-4 xl:gap-5" style={{ gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 3fr)' }}>
+                  {bloques.map((bloque, b) => (
+                    <section
+                      key={b}
+                      aria-label={b === 0 ? 'Dirección y operaciones' : 'Ventas'}
+                      className={b === 1 ? 'pl-4 xl:pl-5' : ''}
+                      style={b === 1 ? { borderLeft: '1px solid rgba(255,255,255,0.08)' } : undefined}
+                    >
+                      <p className="text-[11px] font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                        {b === 0 ? 'Dirección y operaciones' : 'Ventas'}
+                      </p>
+                      <div className="grid gap-2.5 xl:gap-3" style={{ gridTemplateColumns: `repeat(${b === 0 ? 2 : 3}, minmax(0, 1fr))` }}>
+                        {bloque.map(u => (
+                          <div key={u.id} className="min-w-0">
+                            <UserCard user={u} onClick={seleccionarUsuario} index={lista.indexOf(u)} esUltimo={u.id === ultimoUsuario?.id} />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : (
+              <div>
+                {bloques.map((bloque, b) => (
+                  <React.Fragment key={b}>
+                    {b > 0 && (
+                      <div
+                        role="separator"
+                        className="h-px my-2.5 sm:my-3 [@media(max-height:700px)]:my-2 mx-2"
+                        style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.14), transparent)' }}
+                      />
+                    )}
+                    <div
+                      className={filaCentrada}
+                      // Tablet: si el bloque se reparte exacto en filas de 3 (y no de 4), va en
+                      // filas de 3 del mismo tamaño y centradas, para no dejar tarjetas sueltas.
+                      style={enFilasDe3(bloque) ? { width: 'calc(75% - 0.15625rem)', margin: '0 auto' } : undefined}
+                    >
+                      {bloque.map(u => (
+                        <div key={u.id} className={`min-w-0 ${enFilasDe3(bloque) ? 'w-[calc((100%-1.25rem)/3)]' : anchoTarjeta}`}>
+                          <UserCard user={u} onClick={seleccionarUsuario} index={lista.indexOf(u)} esUltimo={u.id === ultimoUsuario?.id} />
+                        </div>
+                      ))}
+                    </div>
+                  </React.Fragment>
                 ))}
               </div>
+              )
             )}
 
           </div>

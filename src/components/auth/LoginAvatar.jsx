@@ -32,7 +32,7 @@ function hexVariants(hex) {
 }
 
 export default function LoginAvatar({ user, size = 'lg', className = '' }) {
-  const inicial = (user?.nombre || 'U').charAt(0).toUpperCase()
+  const inicial = (user?.nombre || 'U').trim().charAt(0).toUpperCase() || 'U'
 
   const esPlateado = ['administracion', 'logistica'].includes(user?.rol)
   const esDorado = user?.rol === 'jefe'
@@ -67,7 +67,9 @@ export default function LoginAvatar({ user, size = 'lg', className = '' }) {
 
   const dim = size === 'lg'
     ? 'w-20 h-20 sm:w-[88px] sm:h-[88px] text-3xl sm:text-4xl'
-    : 'w-10 h-10 text-base'
+    : size === 'md'
+      ? 'w-11 h-11 sm:w-12 sm:h-12 lg:w-14 lg:h-14 [@media(max-height:700px)]:w-10 [@media(max-height:700px)]:h-10 text-lg sm:text-xl lg:text-2xl'
+      : 'w-10 h-10 text-base'
 
   return (
     <div
