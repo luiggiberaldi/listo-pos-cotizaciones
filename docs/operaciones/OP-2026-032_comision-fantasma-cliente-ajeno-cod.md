@@ -1,6 +1,6 @@
 # OP-2026-032 — Wendy Lozano aparece con comisión en una venta a un cliente de Niki (DES-04808)
 
-**Fecha:** 2026-11-18 · **Estado:** las 4 pantallas **corregidas y probadas en staging** (18-nov-2026), todo correcto; **sin guardar en el historial ni publicar en producción**
+**Fecha:** 2026-11-18 · **Estado:** las 4 pantallas **corregidas y probadas en staging** (18-nov-2026), todo correcto; **guardado en la rama `fix/op-032-comisiones-inventadas` (commit `cd5f964a`), solicitud de cambio [#58](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/58); falta revisar la vista previa y publicar**
 
 ## En resumen
 
