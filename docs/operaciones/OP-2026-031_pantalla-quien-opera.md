@@ -1,7 +1,7 @@
 # OP-2026-031 — Pantalla "¿Quién está operando?" más rápida y clara
 
 **Fecha:** 2026-11-17
-**Estado:** cambios hechos en el código (cuarta y quinta vuelta del 18-nov: PC con dos bloques lado a lado; celular y tablet sin tarjetas sueltas), **revisados en pantalla con datos de staging** (celular, tablet y computadora) y **sin publicar**. El 18-nov el dueño aprobó cómo se ve en celular, tablet y PC. Staging ya quedó restaurado.
+**Estado:** cambios hechos en el código (cuarta y quinta vuelta del 18-nov: PC con dos bloques lado a lado; celular y tablet sin tarjetas sueltas), **revisados en pantalla con datos de staging** (celular, tablet y computadora) y **PUBLICADO** el 18-nov-2026 con autorización del dueño: solicitud #60, commit b0420da9, unión 0dd6f193. Comprobado que la app en producción trae la pantalla nueva. El 18-nov el dueño aprobó cómo se ve en celular, tablet y PC. Staging ya quedó restaurado.
 
 ## En resumen
 
