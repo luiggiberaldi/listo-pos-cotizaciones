@@ -20,6 +20,10 @@ natural y espera que la IA haga todo el trabajo técnico.
 
 ## Reglas de explicación (obligatorias)
 
+0. **Siempre en español.** Todo lo que se le dice al usuario (mensajes, resúmenes,
+   preguntas, cuadros de cierre) y todos los documentos van en español, sin excepción,
+   aunque las herramientas o el código estén en inglés.
+
 1. **Lenguaje llano, sin jerga.** Nada de términos como "commit", "refactor", "RPC",
    "middleware", "async" sin explicarlos. Si un término técnico es inevitable, explicarlo
    con una analogía o una frase simple la primera vez que aparezca.

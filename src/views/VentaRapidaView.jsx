@@ -21,6 +21,7 @@ import { useVentaRapida } from '../hooks/useVentaRapida'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { calcComisionEstimada } from '../utils/comisionUtils'
+import { destinoComision, textoDestinoComision } from '../utils/destinoComision'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
 import VehiculoViajeSelect from '../components/vehiculos/VehiculoViajeSelect'
 import useClienteFresco from '../hooks/useClienteFresco'
@@ -429,6 +430,8 @@ export default function VentaRapidaView() {
   // Step 1: Cliente + Productos
   const [clienteId, setClienteId] = useState('')
   const clienteSeleccionado = clientes.find(c => c.id === clienteId)
+  // OP-2026-032: la comisión es del dueño del cliente; si no es del vendedor, no se le muestra un monto.
+  const textoComisionAjena = textoDestinoComision(destinoComision(clienteSeleccionado, perfil))
 
   const { data: saldoFavorOrigen } = useSaldoFavorOrigen(clienteId)
 
@@ -1138,6 +1141,7 @@ export default function VentaRapidaView() {
             pagoInmediatoCuadrado={pagoInmediatoCuadrado}
             propuestaCodCuadrado={propuestaCodCuadrado}
             comisionEstimada={comisionEstimada}
+            textoComisionAjena={textoComisionAjena}
             items={items}
             totalParaPago={totalParaPago}
             referenciaPago={referenciaPago}
@@ -2106,7 +2110,7 @@ function Step2Pago({
   propuestaCod, togglePropuestaCod, setMontoPropuestaCod, updatePropuestaCod, resetPropuestaCod,
   totalInmediato, totalPropuestaCod, montoCodRequerido,
   pagoInmediatoCuadrado, propuestaCodCuadrado,
-  totalParaPago, comisionEstimada, items = [],
+  totalParaPago, comisionEstimada, textoComisionAjena = null, items = [],
   referenciaPago, setReferenciaPago,
   transportistas, transportistaId, setTransportistaId,
   vehiculoViajeId, setVehiculoViajeId, fijarVehiculoFijo, setFijarVehiculoFijo, setVehiculoTocado,
@@ -2714,7 +2718,12 @@ function Step2Pago({
             </div>
           </div>
 
-          {comisionEstimada && comisionEstimada.monto > 0 && (
+          {textoComisionAjena && comisionEstimada && comisionEstimada.monto > 0 && (
+            <div className="mt-1 pt-2 border-t border-slate-100" data-testid="comision-ajena">
+              <span className="text-[11px] text-slate-500 font-semibold">{textoComisionAjena}</span>
+            </div>
+          )}
+          {!textoComisionAjena && comisionEstimada && comisionEstimada.monto > 0 && (
             <div className="mt-1 pt-2 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-emerald-600 font-semibold">
