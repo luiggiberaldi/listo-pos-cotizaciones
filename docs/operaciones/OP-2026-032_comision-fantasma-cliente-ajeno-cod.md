@@ -1,6 +1,6 @@
 # OP-2026-032 — Wendy Lozano aparece con comisión en una venta a un cliente de Niki (DES-04808)
 
-**Fecha:** 2026-11-18 · **Estado:** las 4 pantallas **corregidas y probadas en staging** (18-nov-2026), todo correcto; **guardado en la rama `fix/op-032-comisiones-inventadas` (commit `cd5f964a`), solicitud de cambio [#58](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/58); falta revisar la vista previa y publicar**
+**Fecha:** 2026-11-18 · **Estado:** **PUBLICADO en producción** el 18-nov-2026 — solicitud [#58](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/58), commit `cd5f964a`, unión `f33a97dc`. Verificado antes con datos reales (Reporte Vendedores = Reportes → Comisiones = $24,70).
 
 ## En resumen
 
@@ -284,3 +284,14 @@ Guion: `scripts/ensayo-op032-produccion.mjs` (usa una copia de solo lectura de v
 1. Guardar el cambio en su propia rama, **sin** los cambios de otros casos que hay en la carpeta.
 2. Al crear la solicitud de cambio, Vercel arma una **vista previa** con datos reales. Antes de aprobar, el jefe entra con su PIN y mira *Reporte Vendedores → Hoy*: debe dar el mismo total que *Reportes → Comisiones*.
 3. Publicar. Si algo se ve raro, se vuelve a la versión anterior desde Vercel en minutos; no hay datos que reparar.
+
+
+---
+
+## Publicación (18-nov-2026)
+
+- **Prueba final hecha por el dueño**, antes de publicar, con datos reales en una copia local de la versión nueva: *Reporte Vendedores → Hoy* = **$24,70** = *Reportes → Comisiones → Hoy*. Wendy Lozano en $0,00; Niki Ramírez visible con $5,19.
+- La vista previa de Vercel no sirvió para esa prueba: el servidor real solo acepta la dirección oficial y `localhost` (protección de seguridad), así que se usó una copia local (`localhost:5173`).
+- **Publicado** por autorización del dueño: solicitud #58 unida (`f33a97dc`); Vercel publicó la versión; comprobado que la app y `/api/ping` responden 200.
+- **Cómo deshacerlo si hiciera falta:** en Vercel, volver a la publicación anterior. Solo cambian pantallas, así que no hay datos que reparar.
+- **Pendiente para el negocio:** cuando se cobren los $36 de DES-04808, la comisión ($2,72) nacerá a nombre de Niki Ramírez.
