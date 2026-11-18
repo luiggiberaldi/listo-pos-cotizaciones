@@ -10,6 +10,7 @@ import useAuthStore from '../../store/useAuthStore'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { getComisionPctForItem } from '../../utils/comisionUtils'
+import { destinoComision } from '../../utils/destinoComision'
 import { showToast } from './Toast'
 import { resumenCod } from '../../utils/codAbonos'
 import { formatPeso, pesoLinea, comparaCapacidad } from '../../utils/pesoDespacho'
@@ -22,7 +23,7 @@ function calcDescMonto(desc, totalLinea, cantidad) {
   return Math.round(Math.min(v * Number(cantidad), totalLinea) * 10000) / 10000
 }
 
-function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil, mostrarPeso = false }) {
+function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil, comisionAplica = true, mostrarPeso = false }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -31,7 +32,9 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil, m
   const esExterno = item.origen === 'externo' || !item.producto_id || String(item.producto_id).startsWith('manual-') || String(item.codigo_snap).startsWith('EXT')
   const sinStock = !item.cotizacion_id && !esExterno && item.producto?.stock_actual != null && cant > Number(item.producto.stock_actual)
 
-  const showComision = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
+  // OP-2026-032: comisionAplica = false si el cliente no genera comisión (EMPRESA) o si
+  // un vendedor mira una venta cuyo cliente no es suyo (la comisión es del dueño).
+  const showComision = comisionAplica && tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
   // Usar el perfil del vendedor dueño del cliente (no el usuario logueado) para detectar es_externo
   const pct = showComision ? getComisionPctForItem(item, config, vendedorPerfil ?? null) : 0
 
@@ -95,7 +98,7 @@ function ItemRow({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil, m
   )
 }
 
-function ItemCard({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }) {
+function ItemCard({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil, comisionAplica = true }) {
   const cant     = Number(item.cantidad || 1)
   const precio   = Number(item.precio_unit_usd || 0)
   const total    = Number(item.total_linea_usd || cant * precio)
@@ -104,7 +107,9 @@ function ItemCard({ item, descuento, fmt, config, tipo, perfil, vendedorPerfil }
   const esExterno = item.origen === 'externo' || !item.producto_id || String(item.producto_id).startsWith('manual-') || String(item.codigo_snap).startsWith('EXT')
   const sinStock = !item.cotizacion_id && !esExterno && item.producto?.stock_actual != null && cant > Number(item.producto.stock_actual)
 
-  const showComision = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
+  // OP-2026-032: comisionAplica = false si el cliente no genera comisión (EMPRESA) o si
+  // un vendedor mira una venta cuyo cliente no es suyo (la comisión es del dueño).
+  const showComision = comisionAplica && tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador', 'vendedor'].includes(perfil?.rol)
   // Usar el perfil del vendedor dueño del cliente (no el usuario logueado) para detectar es_externo
   const pct = showComision ? getComisionPctForItem(item, config, vendedorPerfil ?? null) : 0
 
@@ -180,6 +185,10 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
     })))
   }
   const { perfil } = useAuthStore()
+  // OP-2026-032: la comisión es del dueño del cliente (regla de la base de datos).
+  const destinoCom = destinoComision(registro?.cliente, perfil)
+  const comisionAplica = destinoCom.tipo !== 'sin_comision' && !(perfil?.rol === 'vendedor' && destinoCom.tipo === 'ajeno')
+  const perfilComision = registro?.cliente?.vendedor ?? registro?.vendedor ?? null
   const { tasaBcv, tasaUsdt } = useTasaCambio()
   const { data: config = {} } = useConfigNegocio()
 
@@ -612,13 +621,13 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
                     </tr>
                   </thead>
                   <tbody>
-                    {itemsConFallback.map(it => <ItemRow key={it.id} mostrarPeso={!!pesoDet} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
+                    {itemsConFallback.map(it => <ItemRow key={it.id} mostrarPeso={!!pesoDet} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={perfilComision} comisionAplica={comisionAplica} />)}
                   </tbody>
                 </table>
               </div>
               {/* Mobile card layout */}
               <div className="sm:hidden">
-                {itemsConFallback.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={registro.vendedor} />)}
+                {itemsConFallback.map(it => <ItemCard key={it.id} item={it} descuento={descuentos[it.id]} fmt={fmt} config={config} tipo={tipo} perfil={perfil} vendedorPerfil={perfilComision} comisionAplica={comisionAplica} />)}
               </div>
             </>
           )}

@@ -6,8 +6,8 @@ import { fetchComisionesTodas } from './useComisiones'
 import { leerTodasLasPaginas } from '../utils/leerPaginas'
 import { agruparPor } from '../utils/agruparPor'
 import useAuthStore from '../store/useAuthStore'
-import { getComisionPctForItem, getNonCxcFraction, isDonationPayment, isLoanPayment } from '../utils/comisionUtils'
 import { shouldIncludeReporteVendedor } from '../utils/reporteVendedoresAccess'
+import { construirComisionesGuardadas } from '../utils/reporteVendedoresComisiones'
 
 export const REPORTE_VENDEDORES_KEY = ['reporte-vendedores']
 
@@ -83,7 +83,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       ]))
 
       // ── 3. Comisiones del período ────────────────────────────────────────
-      // Comisiones guardadas (todas las páginas). Si fallan, se estiman como antes.
+      // Comisiones guardadas (todas las páginas). Son la única fuente (OP-2026-032).
       const fetchComisiones = async (f, t) => {
         try {
           const res = await fetchComisionesTodas({ desde: f, hasta: t })
@@ -93,29 +93,11 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         }
       }
 
-      const fetchConfiguracion = async () => {
-        const { data } = await supabase
-          .from('configuracion_negocio')
-          .select('*')
-          .eq('id', 1)
-          .maybeSingle()
-        return data ?? {
-          comision_pct_cabilla: 0,
-          comision_pct_otros: 0,
-          comision_pct_externos: 3,
-          comision_categoria_cabilla: 'Cabilla'
-        }
-      }
-
-      const pComisiones = arrancar(() => Promise.all([
-        fetchComisiones(from, to),
-        fetchComisiones(prevFrom, prevTo),
-        fetchConfiguracion(),
-      ]))
+      const pComisiones = arrancar(() => fetchComisiones(from, to))
 
       const [despachos, prevDespachos] = await pDespachos
       const [cotizaciones, prevCotizaciones] = await pCotizaciones
-      const [comisionesRaw, prevComisionesRaw, config] = await pComisiones
+      const comisionesRaw = await pComisiones
 
       // Map cotizacion_id → asesor_id para vincular items con vendedor
       const cotToVendedor = Object.fromEntries(
@@ -218,33 +200,6 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         }
       })
 
-      // Fetch product categories
-      const allProductIds = [
-        ...new Set([
-          ...itemsFinales.map(i => i.producto_id)
-        ].filter(Boolean))
-      ]
-      const productCategories = {}
-      for (const it of ndItems) if (it.producto_id && it.producto?.categoria != null) productCategories[it.producto_id] = it.producto.categoria || ''
-      const idsSinCategoria = allProductIds.filter(id => !(id in productCategories))
-      if (idsSinCategoria.length > 0) {
-        // Lotes de 50 en paralelo (antes: await secuencial por lote)
-        const batches = []
-        for (let i = 0; i < idsSinCategoria.length; i += 50) batches.push(idsSinCategoria.slice(i, i + 50))
-        const results = await Promise.all(batches.map(batch =>
-          supabase
-            .from('productos')
-            .select('id, categoria')
-            .in('id', batch)
-        ))
-        for (const { data, error } of results) {
-          if (error) throw error
-          ;(data ?? []).forEach(p => {
-            productCategories[p.id] = p.categoria || ''
-          })
-        }
-      }
-
       // ── 5. Construir mapa por vendedor ────────────────────────────────────
       const ventaNeta = (d) => Number(d.venta_neta_usd || 0)
 
@@ -254,165 +209,8 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       let vendedoresInfo = {}
       ;(vData ?? []).forEach(v => { vendedoresInfo[v.id] = v })
 
-      const calcularComisionDespachoJS = (d, comList) => {
-        let esDonacion = false
-        const fp = Array.isArray(d.forma_pago) ? d.forma_pago : []
-        if (fp.some(f => f.metodo === 'Donación') || d.forma_pago === 'Donación' || isDonationPayment(d.forma_pago_cliente)) {
-          esDonacion = true
-        }
-
-        if (esDonacion || isLoanPayment(d.forma_pago_cliente || d.forma_pago)) {
-          return {
-            totalcomision: 0,
-            comisioncabilla: 0,
-            comisionotros: 0,
-            pctcabilla: 0,
-            pctotros: 0,
-            estado: 'generada'
-          }
-        }
-
-        const existing = comList.find(c => c.despachoid === d.despacho_id)
-        if (existing) {
-          return {
-            totalcomision: Number(existing.totalcomision || 0),
-            comisioncabilla: Number(existing.comisioncabilla || 0),
-            comisionotros: Number(existing.comisionotros || 0),
-            pctcabilla: Number(existing.pctcabilla || 0),
-            pctotros: Number(existing.pctotros || 0),
-            estado: existing.estado || 'pendiente'
-          }
-        }
-
-        if (d.estado !== 'entregada' && d.estado !== 'despachada') {
-          return null
-        }
-
-        const seller = vendedoresInfo[d.asesor_id || d.vendedor_id]
-        if (!seller) return null
-        const rol = seller.rol
-
-        if (rol === 'vendedor_sin_comision' && !seller.es_externo) {
-          return null
-        }
-        if (['jefe', 'logistica', 'administracion', 'desarrollador'].includes(rol)) {
-          return null
-        }
-
-        const dispatchItems = ndItems.filter(it => it.despacho_id === d.despacho_id)
-        let comisionCabilla = 0
-        let comisionOtros = 0
-
-        const processItem = (it, totalNeto) => {
-          const nameLower = (it.nombre_snap || '').toLowerCase().trim()
-          if (it.es_prestamo || nameLower.startsWith('corte')) return
-
-          const pct = getComisionPctForItem(
-            {
-              nombre_snap: it.nombre_snap,
-              producto_id: it.producto_id,
-              codigo_snap: it.codigo_snap,
-              origen: it.origen,
-              categoria: productCategories[it.producto_id] || ''
-            },
-            config,
-            seller
-          )
-
-          const comLinea = Math.round((totalNeto * pct / 100) * 100) / 100
-
-          // Determine if it belongs to cabilla or others
-          const catCabillaStr = (config.comision_categoria_cabilla || 'Cabilla').toLowerCase().trim()
-          const prodCat = (productCategories[it.producto_id] || '').toLowerCase().trim()
-          const es_externo = !!seller.es_externo
-          const esCementoVendedorExterno = es_externo && (prodCat === 'cemento' || nameLower.includes('cemento'))
-          const esCabilla = prodCat === catCabillaStr
-
-          if (esCabilla || esCementoVendedorExterno) {
-            comisionCabilla += comLinea
-          } else {
-            comisionOtros += comLinea
-          }
-        }
-
-        if (dispatchItems.length > 0) {
-          dispatchItems.forEach(it => {
-            processItem(it, Number(it.total_linea_usd || 0))
-          })
-        } else {
-          const cotItems = items.filter(it => it.cotizacion_id === d.cotizacion_id)
-          cotItems.forEach(it => {
-            const desc = despachoDescuentos.find(dd => dd.despacho_id === d.despacho_id && dd.cotizacion_item_id === it.id)
-            const descMonto = desc ? Number(desc.monto_usd || 0) : 0
-            const totalNeto = Math.max(Number(it.total_linea_usd || 0) - descMonto, 0)
-            processItem(it, totalNeto)
-          })
-        }
-
-        const paymentSplit = getNonCxcFraction(d)
-        const totalComision = Number(((comisionCabilla + comisionOtros) * paymentSplit.fraction).toFixed(2))
-        comisionCabilla = Number((comisionCabilla * paymentSplit.fraction).toFixed(2))
-        comisionOtros = Number((comisionOtros * paymentSplit.fraction).toFixed(2))
-        const pctCabilla = seller.es_externo
-          ? Number(config.comision_ext_pct_cabilla ?? 2)
-          : (seller.comision_pct_cabilla != null ? Number(seller.comision_pct_cabilla) : Number(config.comision_pct_cabilla ?? 2))
-        const pctOtros = seller.es_externo
-          ? Number(config.comision_ext_pct_otros ?? 3)
-          : (seller.comision_pct != null ? Number(seller.comision_pct) : Number(config.comision_pct_otros ?? 3))
-
-        return {
-          totalcomision: totalComision,
-          comisioncabilla: comisionCabilla,
-          comisionotros: comisionOtros,
-          pctcabilla: pctCabilla,
-          pctotros: pctOtros,
-          estado: 'generada'
-        }
-      }
-
-      // ── Split designado (sábados): filas reales del Worker una por beneficiario.
-      const construirComisionesDeDespachos = (listaDespachos, comisionesList) => {
-        const out = []
-        const comisionesPorDespacho = agruparPor(comisionesList, 'despachoid')
-        listaDespachos.forEach(d => {
-          const filas = comisionesPorDespacho.get(d.despacho_id) || []
-          if (filas.length > 0) {
-            filas.forEach(c => {
-              const seller = vendedoresInfo[c.vendedorid]
-                || vendedoresInfo[d.asesor_id || d.vendedor_id]
-              out.push({
-                totalcomision: Number(c.totalcomision || 0),
-                comisioncabilla: Number(c.comisioncabilla || 0),
-                comisionotros: Number(c.comisionotros || 0),
-                pctcabilla: Number(c.pctcabilla || 0),
-                pctotros: Number(c.pctotros || 0),
-                estado: c.estado || 'generada',
-                // v3: filas split llegan como 'designado' (0.5%) o 'cliente_ajeno_dueno' (1.5%)
-                es_split: typeof c.tipo === 'string' && (c.tipo.startsWith('cliente_ajeno') || c.tipo === 'designado'),
-                vendedorid: c.vendedorid || d.asesor_id || d.vendedor_id,
-                despachoid: d.despacho_id,
-                vendedor: seller
-              })
-            })
-            return
-          }
-          const calculated = calcularComisionDespachoJS(d, comisionesList)
-          if (calculated) {
-            const seller = vendedoresInfo[d.asesor_id || d.vendedor_id]
-            out.push({
-              ...calculated,
-              es_split: false,
-              vendedorid: d.asesor_id || d.vendedor_id,
-              despachoid: d.despacho_id,
-              vendedor: seller
-            })
-          }
-        })
-        return out
-      }
-
-      const comisiones = construirComisionesDeDespachos(despachos, comisionesRaw)
-      const prevComisiones = construirComisionesDeDespachos(prevDespachos, prevComisionesRaw)
+      // OP-2026-032: solo comisiones guardadas (las mismas que se pagan); sin estimaciones.
+      const comisiones = construirComisionesGuardadas(despachos, comisionesRaw, vendedoresInfo)
 
       const vendedorMap = {}
       const getOrCreate = (vid) => {

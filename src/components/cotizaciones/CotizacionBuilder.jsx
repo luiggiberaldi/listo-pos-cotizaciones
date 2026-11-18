@@ -28,6 +28,7 @@ import { mostrarAvisoSinPrecio } from '../../utils/avisoSinPrecio'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs, fmtTelefono } from '../../utils/format'
 import { showToast } from '../ui/Toast'
 import { calcComisionEstimada } from '../../utils/comisionUtils'
+import { destinoComision, textoDestinoComision } from '../../utils/destinoComision'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 
 import supabase from '../../services/supabase/client'
@@ -707,6 +708,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     () => calcComisionEstimada(items, config, perfil),
     [items, config, perfil]
   )
+  // OP-2026-032: la comisión es del dueño del cliente; si no es del vendedor, no se le muestra un monto.
+  const textoComisionAjena = textoDestinoComision(destinoComision(clienteSeleccionado, perfil))
 
   // Conversión visual según moneda seleccionada
   const factorBcv = tasaHook.tasaBcv?.precio > 0 && tasaHook.tasaUsdt?.precio > 0
@@ -1738,7 +1741,12 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                 )}
 
                 {/* Comisión estimada (solo vendedor) */}
-                {comisionEstimada.monto > 0 && (
+                {textoComisionAjena && comisionEstimada.monto > 0 && (
+                  <div className="mt-1 pt-2 border-t border-slate-50" data-testid="comision-ajena">
+                    <span className="text-[11px] text-slate-500 font-semibold">{textoComisionAjena}</span>
+                  </div>
+                )}
+                {!textoComisionAjena && comisionEstimada.monto > 0 && (
                   <div className="mt-1 pt-2 border-t border-slate-50">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] text-emerald-600 font-semibold">
