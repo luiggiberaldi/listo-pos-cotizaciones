@@ -159,9 +159,9 @@ const SINONIMOS = {
   // ═══════════════════════════════════════════════════════════════════════════
   // FRACCIONES Y MEDIDAS
   // ═══════════════════════════════════════════════════════════════════════════
-  'media':         ['1/2'],
-  'medio':         ['1/2'],
-  'cuarto':        ['1/4'],
+  'media':         ['1/2', '12mm', '12.7mm'],
+  'medio':         ['1/2', '12mm', '12.7mm'],
+  'cuarto':        ['1/4', '6mm'],
   'octavo':        ['1/8'],
   'mts':           ['metros', 'm'],
   'mm':            ['milimetros'],
@@ -768,33 +768,64 @@ export function normalizeText(text) {
   return t.replace(/\s+/g, ' ').trim()
 }
 
+// ─── Equivalencias comerciales pulgadas ↔ milímetros (acero/ferretería Venezuela) ─
+const FRACCION_A_MM = {
+  '1/4': ['6mm'],
+  '3/8': ['10mm', '9.5mm'],
+  '1/2': ['12mm', '12.7mm'],
+  '5/8': ['16mm'],
+  '3/4': ['20mm', '19mm'],
+  '7/8': ['22mm'],
+  '1"':  ['25mm'],
+}
+
+const MM_A_FRACCION = {
+  '6mm':    ['1/4', '1/4"'],
+  '9.5mm':  ['3/8', '3/8"'],
+  '10mm':   ['3/8', '3/8"'],
+  '12mm':   ['1/2', '1/2"'],
+  '12.7mm': ['1/2', '1/2"'],
+  '16mm':   ['5/8', '5/8"'],
+  '19mm':   ['3/4', '3/4"'],
+  '20mm':   ['3/4', '3/4"'],
+  '22mm':   ['7/8', '7/8"'],
+  '25mm':   ['1"', '1'],
+}
+
 // ─── Pre-procesar query: fracciones, de-plurizacion, calibre y limpieza ───────
 function preprocessQuery(query) {
   let q = normalizeText(query)
 
-  // Separar longitudes en metros acopladas con 'x' en perfiles
-  q = q.replace(/\b(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?\s*(?:mt|mts|m))\b/gi, '$1 $2')
+  // Unir fracciones escritas con espacios alrededor de la barra (ej: "1 / 2" -> "1/2")
+  q = q.replace(/(\d)\s*\/\s*(\d)/g, '$1/$2')
 
-  // Limpiar slashes que no corresponden a fracciones (ej: "7018/ " -> "7018 ")
-  q = q.replace(/(?<!\d)\/|\/(?!\d)/g, ' ')
+  // Normalizar fracciones compuestas con guion (ej: "1-1/2" -> "1 1/2", "4-1/2" -> "4 1/2")
+  q = q.replace(/\b(\d{1,2})-(\d+\/\d+)\b/g, '$1 $2')
 
-  // Normalizar calibres a un formato estándar 'cal XX' o el decimal limpio
+  // Separar longitudes en metros acopladas con 'x' en perfiles y cabillas (ej: "1/2x12mts" -> "1/2 12mts")
+  q = q.replace(/(\d+(?:\/\d+|\.\d+)?"?)\s*x\s*(\d+(?:\.\d+)?\s*(?:mt|mts|m))\b/gi, '$1 $2')
+
+  // Normalizar calibres a un formato estándar 'cal XX' o el decimal limpio (antes de limpiar slashes)
   q = q.replace(/\bcalibre\s+(\d+)\b/g, 'cal $1')
   q = q.replace(/\bcal\s+(\d+)\b/g, 'cal $1')
   q = q.replace(/\bc[/\s]+(\d+)\b/g, 'cal $1')
   q = q.replace(/\bc[/\s]+(0[.]\d+)\b/g, '$1') // c/0.90 -> 0.90
 
+  // Limpiar slashes sueltos (ej: "7018/ " -> "7018 ", "1/" -> "1 ")
+  // sin destruir fracciones ("1/2", "3/32") ni abreviaciones ("a/n", "c/rosc", "c/flanche")
+  q = q.replace(/(?<![a-z0-9])\/|\/(?![a-z0-9])/g, ' ')
+
   for (const [frase, reemplazo] of FRACCIONES_MULTI) {
     q = q.replace(new RegExp(frase, 'gi'), reemplazo)
   }
 
-  return q
+  return q.replace(/\s+/g, ' ').trim()
 }
 
 // ─── Tokenización inteligente ─────────────────────────────────────────────────
 function tokenize(q) {
-  // Primero detectar medidas compuestas como "1 1/2", "2 1/4" etc
-  const compoundPattern = /(\d+)\s+(\d+\/\d+)/g
+  // Primero detectar medidas compuestas de 1-2 dígitos como "1 1/2", "4 1/2" (no modelos como "6013 3/32")
+  const compoundPattern = /(?<!\d)(\d{1,2})\s+(\d+\/\d+)(?!\d)/g
   const compounds = []
   q = q.replace(compoundPattern, (match, whole, frac) => {
     const compound = `${whole} ${frac}`
@@ -838,17 +869,24 @@ export function expandToken(token) {
   }
 
   // 1.5. Manejo de comillas de pulgadas de forma opcional y bidireccional
-  if (token.endsWith('"')) {
-    const sinComillas = token.slice(0, -1)
+  const lowerTok = token.toLowerCase()
+  if (lowerTok.endsWith('"')) {
+    const sinComillas = lowerTok.slice(0, -1)
     variantes.add(sinComillas)
     // Expandir variantes de la versión limpia
     expandToken(sinComillas).forEach(v => variantes.add(v.toLowerCase()))
   } else {
     // Si es un número entero, decimal o fracción que representa pulgadas (ej: "1/2", "1 1/2", "1", "2")
-    if (/^\d+(?:\/\d+)?$/.test(token) || /^\d+\s+\d+\/\d+$/.test(token)) {
-      variantes.add(token + '"')
+    if (/^\d+(?:\/\d+)?$/.test(lowerTok) || /^\d+\s+\d+\/\d+$/.test(lowerTok)) {
+      variantes.add(lowerTok + '"')
     }
   }
+
+  // 1.6. Equivalencias comerciales pulgadas ↔ milímetros (ej: 1/2 ↔ 12mm, 3/8 ↔ 10mm)
+  const mmEquivs = FRACCION_A_MM[lowerTok]
+  if (mmEquivs) mmEquivs.forEach(m => variantes.add(m))
+  const fracEquivs = MM_A_FRACCION[lowerTok]
+  if (fracEquivs) fracEquivs.forEach(f => variantes.add(f))
 
   // Mapeo calibre -> mm
   if (token === '20') {
@@ -950,13 +988,13 @@ function parseSizeToDecimal(str) {
     const whole = parseInt(compoundMatch[1], 10);
     const num = parseInt(compoundMatch[2], 10);
     const den = parseInt(compoundMatch[3], 10);
-    return whole + (num / den);
+    return den === 0 ? 0 : whole + (num / den);
   }
   const fractionMatch = clean.match(/^(\d+)\/(\d+)$/);
   if (fractionMatch) {
     const num = parseInt(fractionMatch[1], 10);
     const den = parseInt(fractionMatch[2], 10);
-    return num / den;
+    return den === 0 ? 0 : num / den;
   }
   const val = parseFloat(clean);
   return isNaN(val) ? 0 : val;
@@ -968,69 +1006,93 @@ function parseSizeStructure(str) {
   return parts.map(part => parseSizeToDecimal(part.trim())).filter(val => val > 0);
 }
 
+const SIZE_ATOM_PATTERN = '(?:\\d{1,2}\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:\\.\\d+)?)'
+const SIZE_UNIT_PATTERN = '(?:"|\\bin\\b|\\bpulg\\b|\\bpulgadas?\\b)?'
+const INCH_SIZE_REGEX = new RegExp(
+  `(?<![/\\d])${SIZE_ATOM_PATTERN}${SIZE_UNIT_PATTERN}(?:x${SIZE_ATOM_PATTERN}${SIZE_UNIT_PATTERN})+(?![/\\d])|(?<!\\d)\\d{1,2}\\s+\\d+\\/\\d+(?!\\d)|(?<!\\d)\\d+\\/\\d+(?!\\d)|(?<![/\\d])\\d+(?:\\.\\d+)?${SIZE_UNIT_PATTERN}(?![/\\d])`,
+  'gi'
+)
+const X_DIM_ATOM_PATTERN = '(?:\\d{1,2}\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:\\.\\d+)?)(?:mm|mt|mts|m|")?'
+const X_DIM_REGEX = new RegExp(`(?<![/\\d])${X_DIM_ATOM_PATTERN}(?:x${X_DIM_ATOM_PATTERN})+(?![/\\d])`, 'gi')
+const X_DIM_EXACT_REGEX = new RegExp(`^${X_DIM_ATOM_PATTERN}(?:x${X_DIM_ATOM_PATTERN})+$`, 'i')
+
+function cleanXDimForCompare(dim) {
+  return dim
+    .replace(/(?:mm|mt|mts|m|")/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // Extrae tamaños en pulgadas o fracciones, limpiando otras unidades físicas (m, mm, kg)
 export function extractInchSizes(text) {
   let cleanText = normalizeText(text)
   cleanText = cleanText.replace(/\b(?:cal|calibre|c\/)\s*\d+(?:\.\d+)?\b/g, '')
   cleanText = cleanText.replace(/(?:^|[\s,;\-x])\d+(?:\.\d+)?\s*(?:mm|mt|mts|m|kg|kilos)\b/gi, '')
-  const matches = cleanText.match(/\b\d+(?:\.\d+)?(?:\"|in\b|pulg\b|pulgadas?\b)?x\d+(?:\.\d+)?(?:\"|in\b|pulg\b|pulgadas?\b)?|\d+\s+\d+\/\d+|\d+\/\d+|\b\d+(?:\.\d+)?(?:\"|in\b|pulg\b|pulgadas?\b)?/gi) || []
+  const matches = cleanText.match(INCH_SIZE_REGEX) || []
   const sizes = []
   for (const m of matches) {
-    let clean = m.replace(/["\s]|in\b|pulg\b|pulgadas?\b/i, ' ').trim();
-    if (!clean) continue;
-    clean = clean.replace(/\s+/g, ' ');
+    let clean = m.replace(/"/g, '').replace(/\bin\b|\bpulg\b|\bpulgadas?\b/gi, ' ').trim()
+    if (!clean) continue
+    clean = clean.replace(/\s+/g, ' ')
     if (clean.includes('x')) {
       const parts = clean.split('x').map(p => p.trim()).filter(part => {
-        const val = parseSizeToDecimal(part);
-        return isNaN(val) || val >= 1;
-      });
-      if (parts.length === 0) continue;
-      clean = parts.join('x');
+        if (part.includes('/')) return true
+        const val = parseSizeToDecimal(part)
+        return isNaN(val) || val >= 1
+      })
+      if (parts.length === 0) continue
+      clean = parts.join('x')
     }
-    const isFrac = clean.includes('/');
-    const hasPulgMarker = /"|\bin\b|\bpulg\b|\bpulgadas?\b/i.test(m);
-    const num = parseSizeToDecimal(clean);
+    const isFrac = clean.includes('/')
+    const hasPulgMarker = /"|\bin\b|\bpulg\b|\bpulgadas?\b/i.test(m)
+    const num = parseSizeToDecimal(clean)
     if (!clean.includes('x') && !isFrac && !isNaN(num) && num < 1) {
-      continue;
+      continue
     }
     if (isFrac || hasPulgMarker || clean.includes('x') || (!isNaN(num) && num > 0 && num < 10)) {
-      if (!sizes.includes(clean)) sizes.push(clean);
+      if (!sizes.includes(clean)) sizes.push(clean)
     }
   }
   return sizes
 }
 
 export function sizesConflict(qs, ps) {
-  const qStr = qs.toLowerCase().replace(/["\s]/g, '');
-  const pStr = ps.toLowerCase().replace(/["\s]/g, '');
-  
-  const qsHasX = qStr.includes('x');
-  const psHasX = pStr.includes('x');
-  
-  if (qsHasX !== psHasX) {
-    if (pStr.includes(qStr) || qStr.includes(pStr)) {
-      return true;
-    }
-    return false;
+  const qStr = qs.toLowerCase().replace(/["\s]/g, '')
+  const pStr = ps.toLowerCase().replace(/["\s]/g, '')
+
+  const qComponents = parseSizeStructure(qs)
+  const pComponents = parseSizeStructure(ps)
+
+  if (qComponents.length === 0 || pComponents.length === 0) return false
+
+  const qsHasX = qStr.includes('x')
+  const psHasX = pStr.includes('x')
+
+  if (!qsHasX && psHasX) {
+    const qVal = qComponents[0]
+    const matchesAny = pComponents.some(pVal => {
+      const maxVal = Math.max(qVal, pVal)
+      return maxVal > 0 && (Math.abs(qVal - pVal) / maxVal) <= 0.09
+    })
+    return !matchesAny
   }
-  
-  const qComponents = parseSizeStructure(qs);
-  const pComponents = parseSizeStructure(ps);
-  
-  if (qComponents.length === 0 || pComponents.length === 0) return false;
-  
+
+  if (qsHasX && !psHasX) {
+    return true
+  }
+
   // Compare up to the length of the shorter components list
-  const len = Math.min(qComponents.length, pComponents.length);
+  const len = Math.min(qComponents.length, pComponents.length)
   for (let i = 0; i < len; i++) {
-    const qVal = qComponents[i];
-    const pVal = pComponents[i];
-    const maxVal = Math.max(qVal, pVal);
+    const qVal = qComponents[i]
+    const pVal = pComponents[i]
+    const maxVal = Math.max(qVal, pVal)
     if (maxVal > 0) {
-      const pctDiff = Math.abs(qVal - pVal) / maxVal;
-      if (pctDiff > 0.09) return true;
+      const pctDiff = Math.abs(qVal - pVal) / maxVal
+      if (pctDiff > 0.09) return true
     }
   }
-  return false;
+  return false
 }
 
 // ─── Búsqueda con match exacto (includes) ────────────────────────────────────
@@ -1051,21 +1113,21 @@ export function smartMatchScore(text, searchTerms) {
   const queryDims = []
   searchTerms.forEach(variantes => {
     variantes.forEach(v => {
-      const match = v.match(/\b\d+(?:\.\d+)?(?:mm|mt|mts|m)?(?:x\d+(?:\.\d+)?(?:mm|mt|mts|m)?)+\b/gi)
+      const match = v.match(X_DIM_REGEX)
       if (match) {
         match.forEach(d => {
-          const cleanD = d.replace(/[^0-9.x]/gi, '')
-          if (!queryDims.includes(cleanD)) queryDims.push(cleanD)
+          const cleanD = cleanXDimForCompare(d)
+          if (cleanD && !queryDims.includes(cleanD)) queryDims.push(cleanD)
         })
       }
     })
   })
 
   if (queryDims.length > 0) {
-    const rawProductDims = normalized.match(/\b\d+(?:\.\d+)?(?:mm|mt|mts|m)?(?:x\d+(?:\.\d+)?(?:mm|mt|mts|m)?)+\b/gi) || []
-    const productDims = rawProductDims.map(d => d.replace(/[^0-9.x]/gi, ''))
+    const rawProductDims = normalized.match(X_DIM_REGEX) || []
+    const productDims = rawProductDims.map(cleanXDimForCompare).filter(Boolean)
     if (productDims.length > 0) {
-      const hasMatchingDim = queryDims.some(qd => 
+      const hasMatchingDim = queryDims.some(qd =>
         productDims.some(pd => !sizesConflict(qd, pd))
       )
       if (!hasMatchingDim) {
@@ -1125,18 +1187,35 @@ export function smartMatchScore(text, searchTerms) {
     const originalToken = variantes[0]
 
     for (const v of variantes) {
-      const isXDim = /^\d+(?:\.\d+)?(?:mm|mt|mts|m)?(?:x\d+(?:\.\d+)?(?:mm|mt|mts|m)?)+\b/i.test(v)
+      const isXDim = X_DIM_EXACT_REGEX.test(v)
       let isMatch = false
       if (isXDim) {
-        const cleanV = v.replace(/[^0-9.x]/gi, '')
-        const rawProductDims = normalized.match(/\b\d+(?:\.\d+)?(?:mm|mt|mts|m)?(?:x\d+(?:\.\d+)?(?:mm|mt|mts|m)?)+\b/gi) || []
-        const productDims = rawProductDims.map(d => d.replace(/[^0-9.x]/gi, ''))
+        const cleanV = cleanXDimForCompare(v)
+        const rawProductDims = normalized.match(X_DIM_REGEX) || []
+        const productDims = rawProductDims.map(cleanXDimForCompare).filter(Boolean)
         isMatch = productDims.some(pd => !sizesConflict(cleanV, pd))
       } else {
-        // Enforce word boundaries for numeric/caliber tokens to avoid substring matches like "20" inside "1200"
+        // Enforce word boundaries for numeric, metric-unit, and fractional tokens
         const isNumeric = /^\d+(?:\.\d+)?$/.test(v)
+        const metricMatch = v.match(/^(\d+(?:\.\d+)?)(mm|mt|mts|m|cm|kg)$/i)
+        const isSimpleFrac = /^\d+\/\d+"?$/.test(v)
         if (isNumeric) {
           const regex = new RegExp(`(?:^|[^0-9.])${v.replace(/[.]/g, '\\.')}(?:$|[^0-9.])`)
+          isMatch = regex.test(normalized)
+        } else if (metricMatch) {
+          const numEsc = metricMatch[1].replace(/[.]/g, '\\.')
+          const decOpt = metricMatch[1].includes('.') ? '' : '(?:\\.0+)?'
+          const unit = metricMatch[2].toLowerCase()
+          const regex = new RegExp(`(?:^|[^0-9.])${numEsc}${decOpt}${unit}(?:$|[^a-z0-9])`, 'i')
+          isMatch = regex.test(normalized)
+        } else if (isSimpleFrac) {
+          const esc = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const regex = new RegExp(`(?<!\\b\\d{1,2}\\s)(?<!\\d)${esc}(?!\\d)`, 'i')
+          isMatch = regex.test(normalized)
+        } else if (v !== originalToken && v.length <= 2 && /^[a-z]+$/i.test(v)) {
+          // Sinónimos cortos de 1-2 letras (ej: "an", "te", "m") solo como palabra completa,
+          // para no coincidir dentro de "rectangular" o "uniteca".
+          const regex = new RegExp(`(?:^|[^a-z0-9])${v}(?:$|[^a-z0-9])`, 'i')
           isMatch = regex.test(normalized)
         } else {
           isMatch = normalized.includes(v.toLowerCase())
@@ -1216,7 +1295,11 @@ export function matchByCode(producto, rawQuery) {
   if (codigo === q) return true
   if (codigo.startsWith(q) && q.length >= 2) return true
   if (q.length >= 2 && codigo.includes(q)) return true
-  
+
+  // Si la consulta contiene "/" (ej: "1/2", "1/4", "3/8", "2/0", "a/n"),
+  // no quitar la barra para buscar por código o "1/4" coincidirá con "CAB0114...".
+  if (q.includes('/')) return false
+
   const codLimpio = codigo.replace(/[^a-z0-9]/g, '')
   const qLimpio = q.replace(/[^a-z0-9]/g, '')
   if (qLimpio.length >= 2 && codLimpio.includes(qLimpio)) return true
