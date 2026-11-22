@@ -232,3 +232,7 @@ outputs/
 # Copias de seguridad y respaldos locales (nunca se suben)
 construacero-backups/
 .env.bak-wrangler
+
+# OP-2026-036: calendario mensual de sábados para vendedor designado
+!src/utils/__tests__/calendarioSabados.test.js
+!api/handlers/__tests__/designacionSabados.test.js

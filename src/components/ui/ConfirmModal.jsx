@@ -127,7 +127,7 @@ export default function ConfirmModal({
           )}
 
           {details && (
-            <p className="text-xs text-slate-400 text-center leading-relaxed mb-2">{details}</p>
+            <p className="text-xs text-slate-400 text-center leading-relaxed mb-2 whitespace-pre-line">{details}</p>
           )}
         </div>
 

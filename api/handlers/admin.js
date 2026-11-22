@@ -3,6 +3,7 @@ import { json, jsonError, corsHeaders, isValidUuid, isRateLimited } from '../lib
 import { verifyAuth, verifySupervisor, verifyAdminRole, verifyPrivileged, supaServiceHeaders, SUPER_ADMIN_UUID, validateOperator, invalidateOperatorCache } from '../lib/auth.js'
 import { hashPinPBKDF2, verifyPinPBKDF2, generateSalt } from '../lib/crypto.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
+import { getFechaCaracasISO, validarLoteDesignaciones } from '../../src/utils/calendarioSabados.js'
 
 export async function handleAdmin(request, env, url) {
   // Solo POST/PUT/DELETE
@@ -608,8 +609,115 @@ export async function handleDesignacion(request, env, url) {
   let body;
   try { body = await request.json(); } catch { body = {}; }
 
-  // POST: designar (upsert por cuenta+fecha)
+  // POST: designar (lote mensual de sábados OP-2026-036 o fecha individual)
   if (request.method === 'POST') {
+    const supaHeaders = supaServiceHeaders(env);
+
+    // ── Modo lote mensual de sábados (OP-2026-036) ──
+    if (Array.isArray(body?.cambios)) {
+      const validacion = validarLoteDesignaciones(body.cambios, { hoyISO: getFechaCaracasISO() });
+      if (!validacion.ok) {
+        return jsonError(validacion.error, 400, request);
+      }
+
+      const cambios = validacion.cambios;
+      const idsSolicitados = [...new Set(cambios.map(c => c.designado_id).filter(Boolean))];
+      const vendedoresPorId = new Map();
+
+      // Guardarraíl: pre-validar TODOS los vendedores antes de tocar ninguna fecha
+      if (idsSolicitados.length > 0) {
+        const disRes = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/usuarios?id=in.(${idsSolicitados.join(',')})&activo=eq.true&cuenta_id=eq.${user.id}&rol=in.(vendedor,supervisor)&es_externo=is.false&select=id,nombre,color,rol`,
+          { headers: supaHeaders }
+        );
+        if (!disRes.ok) return jsonError('Error al validar los vendedores designados', 500, request);
+        const dis = await disRes.json();
+        for (const u of (Array.isArray(dis) ? dis : [])) {
+          vendedoresPorId.set(u.id, u);
+        }
+        for (const id of idsSolicitados) {
+          if (!vendedoresPorId.has(id)) {
+            return jsonError('El designado debe ser un vendedor o supervisor activo (no externo) de esta cuenta', 400, request);
+          }
+        }
+      }
+
+      const actualizadas = [];
+      const eliminadas = [];
+
+      const paraAsignar = cambios.filter(c => Boolean(c.designado_id));
+      const paraQuitar = cambios.filter(c => !c.designado_id);
+
+      // 1) Upsert en un solo bloque atómico
+      if (paraAsignar.length > 0) {
+        const filasUpsert = paraAsignar.map(item => ({
+          cuenta_id: user.id,
+          fecha: item.fecha,
+          designado_id: item.designado_id,
+          creado_por: user.operator_id || user.id,
+        }));
+        const res = await fetch(`${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?on_conflict=cuenta_id,fecha`, {
+          method: 'POST',
+          headers: { ...supaHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify(filasUpsert),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          const msg = text.includes('DESIGNADO_INVALIDO')
+            ? 'El designado debe ser un vendedor o supervisor activo (no externo)'
+            : (text || `Error ${res.status} al guardar el calendario de sábados`);
+          return jsonError(msg, res.status, request);
+        }
+        const rows = await res.json();
+        for (const row of (Array.isArray(rows) ? rows : [])) {
+          const vendedor = vendedoresPorId.get(row.designado_id);
+          actualizadas.push({ ...row, designado: vendedor || null });
+          try {
+            await registrarAuditoria(env, supaHeaders, {
+              usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
+              categoria: 'COMISIONES', accion: 'DESIGNAR_VENDEDOR_DIA',
+              descripcion: `Designó a ${vendedor?.nombre || row.designado_id} como vendedor del día ${row.fecha}`,
+              entidadTipo: 'comision_designacion_diaria', entidadId: row?.id || row.fecha,
+              meta: { fecha: row.fecha, designado_id: row.designado_id, designado_nombre: vendedor?.nombre || null, rol_designado: vendedor?.rol || null, origen: 'calendario_mensual' },
+              ip: request.headers.get('CF-Connecting-IP') || null,
+            });
+          } catch { /* best-effort */ }
+        }
+      }
+
+      // 2) Borrado en un solo bloque atómico para sábados vaciados
+      if (paraQuitar.length > 0) {
+        const fechasQuitar = paraQuitar.map(item => item.fecha);
+        const res = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${user.id}&fecha=in.(${fechasQuitar.join(',')})`,
+          {
+            method: 'DELETE',
+            headers: { ...supaHeaders, Prefer: 'return=representation' },
+          }
+        );
+        if (!res.ok) {
+          return jsonError('Error al quitar las designaciones seleccionadas', res.status, request);
+        }
+        const rows = await res.json();
+        eliminadas.push(...fechasQuitar);
+        for (const row of (Array.isArray(rows) ? rows : [])) {
+          try {
+            await registrarAuditoria(env, supaHeaders, {
+              usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
+              categoria: 'COMISIONES', accion: 'QUITAR_DESIGNACION_DIA',
+              descripcion: `Quitó la designación del día ${row.fecha}`,
+              entidadTipo: 'comision_designacion_diaria', entidadId: row.id,
+              meta: { fecha: row.fecha, designado_id: row.designado_id, origen: 'calendario_mensual' },
+              ip: request.headers.get('CF-Connecting-IP') || null,
+            });
+          } catch { /* best-effort */ }
+        }
+      }
+
+      return json({ ok: true, actualizadas, eliminadas }, 200, request);
+    }
+
+    // ── Modo individual (compatibilidad) ──
     const { fecha, designado_id: designadoId } = body || {};
     if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
       return jsonError('fecha inválida (formato YYYY-MM-DD)', 400, request);
@@ -619,8 +727,8 @@ export async function handleDesignacion(request, env, url) {
     }
     // El designado debe ser vendedor o supervisor ACTIVO y NO EXTERNO de la misma cuenta (fix P0)
     const disRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${designadoId}&activo=eq.true&cuenta_id=eq.${user.id}&rol=in.(vendedor,supervisor)&es_externo=is.false&select=id,nombre,rol`,
-      { headers: supaServiceHeaders(env) }
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${designadoId}&activo=eq.true&cuenta_id=eq.${user.id}&rol=in.(vendedor,supervisor)&es_externo=is.false&select=id,nombre,color,rol`,
+      { headers: supaHeaders }
     );
     if (!disRes.ok) return jsonError('Error al validar el designado', 500, request);
     const dis = await disRes.json();
@@ -630,7 +738,7 @@ export async function handleDesignacion(request, env, url) {
 
     const res = await fetch(`${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?on_conflict=cuenta_id,fecha`, {
       method: 'POST',
-      headers: { ...supaServiceHeaders(env), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
+      headers: { ...supaHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify({
         cuenta_id: user.id,
         fecha,
@@ -648,7 +756,7 @@ export async function handleDesignacion(request, env, url) {
     const [row] = await res.json();
 
     try {
-      await registrarAuditoria(env, supaServiceHeaders(env), {
+      await registrarAuditoria(env, supaHeaders, {
         usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
         categoria: 'COMISIONES', accion: 'DESIGNAR_VENDEDOR_DIA',
         descripcion: `Designó a ${dis[0].nombre} como vendedor del día ${fecha}`,
@@ -658,7 +766,7 @@ export async function handleDesignacion(request, env, url) {
       });
     } catch { /* best-effort */ }
 
-    return json({ ok: true, designacion: row }, 200, request);
+    return json({ ok: true, designacion: { ...row, designado: dis[0] } }, 200, request);
   }
 
   // DELETE: quitar la designación de una fecha
@@ -666,6 +774,9 @@ export async function handleDesignacion(request, env, url) {
     const fecha = body?.fecha;
     if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
       return jsonError('fecha inválida (formato YYYY-MM-DD)', 400, request);
+    }
+    if (String(fecha) < getFechaCaracasISO()) {
+      return jsonError(`No se puede quitar la designación de una fecha pasada (${fecha})`, 400, request);
     }
     const res = await fetch(
       `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${user.id}&fecha=eq.${fecha}`,
