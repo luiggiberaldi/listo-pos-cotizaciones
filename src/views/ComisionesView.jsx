@@ -1,16 +1,27 @@
 // src/views/ComisionesView.jsx
 // Vista de comisiones para Jefes y Supervisores con paridad visual a Reportes
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import {
   DollarSign, Percent, FileText, Download, ChevronDown,
-  Star, Loader2, X, Users, Briefcase, Printer, UserCheck, Globe, ArrowUpCircle
+  Star, Loader2, X, Users, Briefcase, Printer, UserCheck, Globe, ArrowUpCircle,
+  Calendar, ChevronLeft, ChevronRight, Lock, AlertTriangle, CheckCircle2, RotateCcw
 } from 'lucide-react'
 import { useComisiones, useComisionesResumen } from '../hooks/useComisiones'
 import { useVendedores } from '../hooks/useClientes'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import useAuthStore from '../store/useAuthStore'
 import { fmtUsd, fmtBs } from '../utils/format'
-import { getCorteSemanalRange, getSabadoActualOFuturo, getLocalISODate } from '../utils/dateHelpers'
+import { getCorteSemanalRange } from '../utils/dateHelpers'
+import {
+  calcularCambiosCalendario,
+  contarTurnosPorVendedor,
+  desplazarMes,
+  detectarAlertaSabadoSemana,
+  getFechaCaracasISO,
+  obtenerRangoMesISO,
+  obtenerSabadoDeLaSemana,
+  obtenerSabadosDelMes,
+} from '../utils/calendarioSabados'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
@@ -46,286 +57,548 @@ function ResumenCard({ icon: Icon, label, value, sub, gradient, border }) {
   )
 }
 
-// ─── Panel de designación del vendedor del día (exclusivo para jefe) ─────────
+// ─── Calendario mensual de sábados para el vendedor designado (OP-2026-036) ──
 function PanelDesignacion({ perfil, vendedores }) {
   const esJefe = perfil?.rol === 'jefe'
-  // Fecha local (Venezuela). Con toISOString() (UTC), desde las 8 p. m. ya era
-  // "mañana" y la designación del día desaparecía de la pantalla (OP-2026-027).
-  const hoy = getLocalISODate()
-  // Default: sábado actual (si hoy es sábado) o el próximo — TZ-local, sin salto UTC.
-  // (Fix 2026-09-13: el IIFE anterior con toISOString() registraba la designación
-  //  en el sábado equivocado — incidente 12-sep, plan 2026-09-13-plan-sabados-split-fix.md)
-  const [fecha, setFecha] = useState(() => getSabadoActualOFuturo())
-  const [designado, setDesignado] = useState('')
+  // Fecha local de Venezuela (sin salto UTC después de las 8 p. m.)
+  const hoy = useMemo(() => getFechaCaracasISO(), [])
+  const sabadoSemanaISO = useMemo(() => obtenerSabadoDeLaSemana(hoy), [hoy])
+
+  // Mes inicial: el del sábado de esta semana (si ya pasaron todos los sábados
+  // del mes actual, abre directamente el mes siguiente).
+  const mesBase = useMemo(() => ({
+    anio: Number(sabadoSemanaISO.slice(0, 4)),
+    mes: Number(sabadoSemanaISO.slice(5, 7)),
+  }), [sabadoSemanaISO])
+
+  const [mesVista, setMesVista] = useState(() => mesBase)
   const [designaciones, setDesignaciones] = useState({})
+  const [borradores, setBorradores] = useState({})
   const [cargando, setCargando] = useState(false)
+  const [cargadoUnaVez, setCargadoUnaVez] = useState(false)
+  const [errorCarga, setErrorCarga] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState(null)
+  const [modalConfirmar, setModalConfirmar] = useState(false)
+  const reqIdRef = useRef(0)
+  const abortRef = useRef(null)
 
-  const [modalQuitar, setModalQuitar] = useState({ isOpen: false, fecha: '', nombre: '' })
-
+  // Guardarraíl: solo vendedores y supervisores activos y NO externos
   const elegibles = useMemo(() => {
     return (vendedores || []).filter(u => ['vendedor', 'supervisor'].includes(u.rol) && !u.es_externo)
   }, [vendedores])
 
-  const nombreElegido = useMemo(() => {
-    return (vendedores || []).find(u => u.id === designado)?.nombre || ''
-  }, [vendedores, designado])
+  const vendedoresPorId = useMemo(() => {
+    return Object.fromEntries((vendedores || []).map(u => [u.id, u]))
+  }, [vendedores])
 
-  const designadoDelDia = designaciones[fecha]
-  const esSabado = fecha ? new Date(`${fecha}T12:00:00`).getDay() === 6 : true
+  const rangoMes = useMemo(
+    () => obtenerRangoMesISO(mesVista.anio, mesVista.mes),
+    [mesVista.anio, mesVista.mes],
+  )
 
-  const proximos = useMemo(() => {
-    return Object.values(designaciones)
-      .filter(r => r?.fecha && r.designado)
-      .sort((a, b) => a.fecha.localeCompare(b.fecha))
-      .slice(0, 6)
-  }, [designaciones])
+  const sabadosMes = useMemo(
+    () => obtenerSabadosDelMes(mesVista.anio, mesVista.mes, hoy),
+    [mesVista.anio, mesVista.mes, hoy],
+  )
 
-  const fechaLegibleModal = useMemo(() => {
-    if (!modalQuitar.fecha) return ''
-    try {
-      const parts = modalQuitar.fecha.split('-').map(Number)
-      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-        const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0)
-        const str = d.toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-        return str.charAt(0).toUpperCase() + str.slice(1)
-      }
-    } catch {}
-    return modalQuitar.fecha
-  }, [modalQuitar.fecha])
+  // Límite de navegación: hasta 6 meses atrás (historial) y 3 meses hacia adelante
+  const offsetMeses = (mesVista.anio - mesBase.anio) * 12 + (mesVista.mes - mesBase.mes)
+  const puedeMesAnterior = offsetMeses > -6
+  const puedeMesSiguiente = offsetMeses < 3
 
   const cargarDesignaciones = useCallback(async () => {
     if (!esJefe) return
+    // Guardarraíl contra clics rápidos en ◀/▶: cancela la carga anterior e ignora respuestas viejas
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const myReqId = ++reqIdRef.current
+
     try {
       setCargando(true)
+      setErrorCarga(null)
       const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl(`/api/comisiones/designacion?desde=${hoy}`), { headers })
-      if (!res.ok) throw new Error('Error al cargar designaciones')
+      // Pedimos el mes visible + el sábado de esta semana (para que la alerta semanal siempre tenga el dato)
+      const desde = rangoMes.desde < hoy ? rangoMes.desde : hoy
+      const hasta = rangoMes.hasta > sabadoSemanaISO ? rangoMes.hasta : sabadoSemanaISO
+      const res = await fetch(
+        apiUrl(`/api/comisiones/designacion?desde=${desde}&hasta=${hasta}`),
+        { headers, signal: controller.signal },
+      )
+      if (!res.ok) throw new Error('No se pudo cargar el calendario de este mes. Revisa tu conexión.')
       const rows = await res.json()
-      setDesignaciones(Object.fromEntries((rows || []).map(r => [r.fecha, r])))
+      if (myReqId !== reqIdRef.current) return
+      setDesignaciones(prev => {
+        const next = { ...prev }
+        // Limpiamos el rango consultado y cargamos lo que devolvió la base
+        for (const k of Object.keys(next)) {
+          if (k >= desde && k <= hasta) delete next[k]
+        }
+        for (const r of (rows || [])) {
+          if (r?.fecha) next[r.fecha] = r
+        }
+        return next
+      })
+      setCargadoUnaVez(true)
     } catch (e) {
+      if (e?.name === 'AbortError' || myReqId !== reqIdRef.current) return
       console.error('Error cargando designaciones:', e)
+      setErrorCarga(e.message || 'No se pudo cargar el calendario de este mes.')
     } finally {
-      setCargando(false)
+      if (myReqId === reqIdRef.current) setCargando(false)
     }
-  }, [esJefe, hoy])
-
-  useEffect(() => { cargarDesignaciones() }, [cargarDesignaciones])
+  }, [esJefe, rangoMes.desde, rangoMes.hasta, hoy, sabadoSemanaISO])
 
   useEffect(() => {
-    setDesignado(designaciones[fecha]?.designado_id || '')
-  }, [fecha, designaciones])
+    cargarDesignaciones()
+    return () => { if (abortRef.current) abortRef.current.abort() }
+  }, [cargarDesignaciones])
 
-  // Guardarrail (incidente 12-sep): confirmar explícitamente el sábado objetivo.
-  const [modalDesignar, setModalDesignar] = useState(false)
-  const fechaLegibleDesignar = useMemo(() => {
-    const [y, m, d] = (fecha || '').split('-').map(Number)
-    if (!y || !m || !d) return fecha
-    const str = new Date(y, m - 1, d, 12, 0, 0).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-    return str.charAt(0).toUpperCase() + str.slice(1)
-  }, [fecha])
-  const designaParaHoy = fecha === hoy
+  const cambiosPendientes = useMemo(
+    () => calcularCambiosCalendario(sabadosMes, designaciones, borradores, vendedoresPorId),
+    [sabadosMes, designaciones, borradores, vendedoresPorId],
+  )
+  const tienePendientes = cambiosPendientes.length > 0
 
-  const guardar = useCallback(() => {
-    if (!designado) {
-      setMensaje({ tipo: 'error', texto: 'Selecciona el vendedor o supervisor designado.' })
-      return
+  const cambiarMes = useCallback((delta) => {
+    if (tienePendientes) return
+    setMesVista(prev => desplazarMes(prev.anio, prev.mes, delta))
+    setBorradores({})
+    setMensaje(null)
+  }, [tienePendientes])
+
+  const irAMes = useCallback((anio, mes) => {
+    if (tienePendientes) return
+    setMesVista({ anio, mes })
+    setBorradores({})
+    setMensaje(null)
+  }, [tienePendientes])
+
+  const turnosMes = useMemo(
+    () => contarTurnosPorVendedor(sabadosMes, designaciones, borradores, vendedoresPorId),
+    [sabadosMes, designaciones, borradores, vendedoresPorId],
+  )
+
+  const alertaSemana = useMemo(
+    () => detectarAlertaSabadoSemana(designaciones, hoy),
+    [designaciones, hoy],
+  )
+
+  const estadisticasMes = useMemo(() => {
+    const total = sabadosMes.length
+    let asignados = 0
+    for (const s of sabadosMes) {
+      const actualId = designaciones[s.fecha]?.designado_id || ''
+      const id = s.editable && Object.prototype.hasOwnProperty.call(borradores, s.fecha)
+        ? (borradores[s.fecha] || '')
+        : actualId
+      if (id) asignados++
     }
-    setModalDesignar(true)
-  }, [designado])
+    return { total, asignados, faltan: Math.max(total - asignados, 0) }
+  }, [sabadosMes, designaciones, borradores])
 
-  const confirmarDesignar = useCallback(async () => {
+  const seleccionarVendedorSabado = useCallback((fechaSabado, vendedorId) => {
+    setBorradores(prev => ({
+      ...prev,
+      [fechaSabado]: vendedorId || '',
+    }))
+    setMensaje(null)
+  }, [])
+
+  const deshacerCambios = useCallback(() => {
+    setBorradores({})
+    setMensaje(null)
+  }, [])
+
+  const abrirConfirmacion = useCallback(() => {
+    if (cambiosPendientes.length === 0 || guardando || cargando || errorCarga) return
+    setModalConfirmar(true)
+  }, [cambiosPendientes.length, guardando, cargando, errorCarga])
+
+  const confirmarGuardarMes = useCallback(async () => {
+    if (cambiosPendientes.length === 0 || errorCarga) return
     try {
       setGuardando(true)
       const headers = await getAuthHeaders()
+      const payload = {
+        cambios: cambiosPendientes.map(c => ({
+          fecha: c.fecha,
+          designado_id: c.nuevoId,
+        })),
+      }
       const res = await fetch(apiUrl('/api/comisiones/designacion'), {
         method: 'POST',
         headers,
-        body: JSON.stringify({ fecha, designado_id: designado })
+        body: JSON.stringify(payload),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || 'Error al designar')
-      setDesignaciones(prev => ({ ...prev, [fecha]: json.designacion }))
-      setMensaje({ tipo: 'ok', texto: `Listo: ${nombreElegido} quedó como designado del ${fechaLegibleDesignar}.` })
-    } catch (e) {
-      setMensaje({ tipo: 'error', texto: e.message || 'Error al designar' })
-      throw e
-    } finally {
-      setGuardando(false)
-    }
-  }, [designado, fecha, nombreElegido, fechaLegibleDesignar])
+      if (!res.ok) throw new Error(json.error || 'Error al guardar el calendario de sábados')
 
-  const solicitarQuitar = useCallback((f, nombre) => {
-    const fechaQuitar = f || fecha
-    const nombreDesignado = nombre || designaciones[fechaQuitar]?.designado?.nombre || nombreElegido || ''
-    setModalQuitar({
-      isOpen: true,
-      fecha: fechaQuitar,
-      nombre: nombreDesignado
-    })
-  }, [fecha, designaciones, nombreElegido])
-
-  const confirmarQuitar = useCallback(async () => {
-    const fechaQuitar = modalQuitar.fecha
-    if (!fechaQuitar) return
-    try {
-      setGuardando(true)
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl('/api/comisiones/designacion'), {
-        method: 'DELETE',
-        headers,
-        body: JSON.stringify({ fecha: fechaQuitar })
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || 'Error al quitar la designación')
       setDesignaciones(prev => {
         const next = { ...prev }
-        delete next[fechaQuitar]
+        for (const f of (json.eliminadas || [])) {
+          delete next[f]
+        }
+        for (const row of (json.actualizadas || [])) {
+          if (row?.fecha) {
+            next[row.fecha] = {
+              ...row,
+              designado: row.designado || vendedoresPorId[row.designado_id] || null,
+            }
+          }
+        }
         return next
       })
-      setMensaje({ tipo: 'ok', texto: `Designación de ${fechaQuitar} eliminada correctamente.` })
+      setBorradores({})
+      const n = cambiosPendientes.length
+      setMensaje({
+        tipo: 'ok',
+        texto: n === 1
+          ? `Listo: se guardó el cambio del ${cambiosPendientes[0].etiquetaLarga.toLowerCase()}.`
+          : `Listo: se guardaron los ${n} sábados modificados de ${rangoMes.etiqueta.toLowerCase()}.`,
+      })
     } catch (e) {
-      setMensaje({ tipo: 'error', texto: e.message || 'Error al quitar la designación' })
+      setMensaje({ tipo: 'error', texto: e.message || 'Error al guardar el calendario' })
+      // Resincronizar con la base real para no mostrar estado desfasado si falló a mitad
+      cargarDesignaciones()
       throw e
     } finally {
       setGuardando(false)
-      setModalQuitar({ isOpen: false, fecha: '', nombre: '' })
     }
-  }, [modalQuitar.fecha])
+  }, [cambiosPendientes, errorCarga, rangoMes.etiqueta, vendedoresPorId, cargarDesignaciones])
+
+  const resumenModal = useMemo(() => {
+    return cambiosPendientes.map(c => {
+      if (c.tipo === 'quitar') {
+        return `• ${c.etiquetaCorta}: Quitar designación${c.anteriorNombre ? ` (antes: ${c.anteriorNombre})` : ''}`
+      }
+      if (c.tipo === 'cambiar') {
+        return `• ${c.etiquetaCorta}: Cambiar de ${c.anteriorNombre || 'anterior'} a ${c.nuevoNombre}`
+      }
+      return `• ${c.etiquetaCorta}: Designar a ${c.nuevoNombre}`
+    }).join('\n')
+  }, [cambiosPendientes])
+
+  const incluyeCambioHoy = useMemo(
+    () => cambiosPendientes.some(c => c.esHoy),
+    [cambiosPendientes],
+  )
 
   if (!esJefe) return null
 
   return (
-    <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-emerald-200/80 p-4 space-y-3 shadow-sm">
+    <div
+      data-testid="calendario-sabados-panel"
+      className="bg-white/80 backdrop-blur-md rounded-2xl border border-emerald-200/80 p-4 space-y-3.5 shadow-sm"
+    >
+      {/* Encabezado y navegador de mes */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-emerald-100">
-            <Star size={14} className="text-emerald-600" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-emerald-100 shrink-0">
+            <Calendar size={16} className="text-emerald-700" />
           </div>
           <div>
-            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">Designado del día (sábado)</h3>
-            <p className="text-[10px] text-slate-500">Ese día, el designado cobra el 0.5% de las ventas de los demás; el dueño del cliente cobra su % normal. No aplica a externos ni jefes.</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">
+                Calendario de designados (sábados)
+              </h3>
+              <span
+                data-testid="calendario-estado-mes"
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                  estadisticasMes.faltan === 0
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}
+              >
+                {estadisticasMes.faltan === 0 ? (
+                  <>
+                    <CheckCircle2 size={11} />
+                    {estadisticasMes.asignados} de {estadisticasMes.total} sábados asignados
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle size={11} />
+                    {estadisticasMes.asignados} de {estadisticasMes.total} asignados (falta{estadisticasMes.faltan > 1 ? 'n' : ''} {estadisticasMes.faltan})
+                  </>
+                )}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Cada sábado el designado cobra 0,5 % y el dueño del cliente 1,5 %. Puedes dejar programado todo el mes de una sola vez.
+            </p>
           </div>
         </div>
-        {cargando && <Loader2 size={14} className="text-slate-400 animate-spin" />}
+
+        {/* Selector de mes ◀ Mes Año ▶ */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {(mesVista.anio !== mesBase.anio || mesVista.mes !== mesBase.mes) && (
+            <button
+              type="button"
+              onClick={() => irAMes(mesBase.anio, mesBase.mes)}
+              disabled={tienePendientes || cargando || guardando}
+              title={tienePendientes ? 'Guarda o deshaz tus cambios antes de cambiar de mes' : 'Volver al mes actual'}
+              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 disabled:opacity-40 transition-colors"
+            >
+              Mes actual
+            </button>
+          )}
+          <div className="inline-flex items-center bg-slate-50 border border-slate-200 rounded-xl p-0.5">
+            <button
+              type="button"
+              data-testid="calendario-mes-prev"
+              onClick={() => cambiarMes(-1)}
+              disabled={!puedeMesAnterior || tienePendientes || cargando || guardando}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-white hover:shadow-xs disabled:opacity-35 transition-all"
+              title={tienePendientes ? 'Guarda o deshaz tus cambios antes de cambiar de mes' : 'Mes anterior'}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span
+              data-testid="calendario-mes-titulo"
+              className="px-2.5 sm:px-3 text-xs font-black text-slate-800 min-w-[118px] sm:min-w-[128px] text-center select-none"
+            >
+              {rangoMes.etiqueta}
+            </span>
+            <button
+              type="button"
+              data-testid="calendario-mes-next"
+              onClick={() => cambiarMes(1)}
+              disabled={!puedeMesSiguiente || tienePendientes || cargando || guardando}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-white hover:shadow-xs disabled:opacity-35 transition-all"
+              title={tienePendientes ? 'Guarda o deshaz tus cambios antes de cambiar de mes' : 'Mes siguiente'}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          {cargando && <Loader2 size={14} className="text-slate-400 animate-spin ml-1" />}
+        </div>
       </div>
 
-      <div className="flex items-end gap-2.5 flex-wrap">
-        <div className="flex flex-col">
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Fecha</span>
-          <input
-            type="date"
-            value={fecha}
-            min={hoy}
-            onChange={e => { setFecha(e.target.value); setMensaje(null) }}
-            className="bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-300 h-[38px]"
-          />
-        </div>
-
-        <div className="flex flex-col w-64 min-w-[240px]">
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 ml-1">Designado</span>
-          <CustomSelect
-            options={elegibles.map(u => ({
-              value: u.id,
-              label: `${u.nombre} (${u.rol === 'supervisor' ? 'supervisor' : 'vendedor'})`
-            }))}
-            value={designado}
-            onChange={val => { setDesignado(val); setMensaje(null) }}
-            placeholder="Seleccionar asesor…"
-            searchable
-            clearable
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={guardar}
-          disabled={guardando || !designado}
-          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm active:scale-95 transition-all h-[38px]"
+      {/* Guardarraíl de red: si falló la carga del mes, avisar y ofrecer Reintentar */}
+      {errorCarga && (
+        <div
+          data-testid="calendario-error-carga"
+          className="flex items-center justify-between gap-2 flex-wrap bg-red-50 border border-red-200 text-red-800 rounded-xl px-3 py-2 text-xs"
         >
-          {guardando ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}
-          {designado && nombreElegido ? `Designar a ${nombreElegido}` : 'Designar'}
-        </button>
-
-        {designadoDelDia && (
+          <div className="flex items-center gap-2 font-bold">
+            <AlertTriangle size={15} className="text-red-600 shrink-0" />
+            <span>{errorCarga} No se puede guardar hasta cargar los datos actuales.</span>
+          </div>
           <button
             type="button"
-            onClick={() => solicitarQuitar(fecha, designadoDelDia.designado?.nombre || nombreElegido)}
-            disabled={guardando}
-            className="flex items-center gap-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-50 transition-all h-[38px]"
+            onClick={cargarDesignaciones}
+            disabled={cargando}
+            className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[11px] font-black transition-colors"
           >
-            <X size={13} /> Quitar
+            Reintentar
           </button>
-        )}
-      </div>
-
-      {!esSabado && (
-        <p className="text-[11px] font-bold text-amber-600">⚠️ {fecha} no es sábado. El split solo aplica los sábados; la designación se guarda igualmente.</p>
+        </div>
       )}
 
-      {designadoDelDia?.designado && (
-        <p className="text-xs text-slate-600">
-          <span className="font-bold text-emerald-700">Designado actual:</span>{' '}
-          {designadoDelDia.designado?.nombre || designadoDelDia.designado_id}
-          {designadoDelDia.designado?.rol ? ` · ${designadoDelDia.designado.rol}` : ''}
+      {/* Aviso si hay cambios sin guardar (explica por qué las flechas de mes esperan) */}
+      {tienePendientes && !errorCarga && (
+        <p data-testid="calendario-aviso-pendientes" className="text-[11px] font-bold text-amber-700">
+          Tienes {cambiosPendientes.length} {cambiosPendientes.length === 1 ? 'cambio sin guardar' : 'cambios sin guardar'} en {rangoMes.etiqueta}. Pulsa <strong>Guardar cambios</strong> o <strong>Deshacer</strong> antes de cambiar de mes.
         </p>
       )}
 
-      {proximos.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {proximos.map(r => (
-            <span key={r.fecha} className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full pl-2.5 pr-1.5 py-1 text-[10px] font-bold">
-              {r.fecha.slice(5)} · {r.designado?.nombre || r.designado_id}
-              <button
-                type="button"
-                onClick={() => solicitarQuitar(r.fecha, r.designado?.nombre)}
-                disabled={guardando}
-                className="hover:bg-emerald-200 rounded-full p-0.5 disabled:opacity-40"
-                title="Quitar designación"
-              >
-                <X size={10} />
-              </button>
-            </span>
-          ))}
+      {/* Guardarraíl preventivo: alerta solo tras terminar la primera carga (sin parpadeo falso) */}
+      {cargadoUnaVez && !errorCarga && alertaSemana.alerta && (
+        <div
+          data-testid="calendario-alerta-semana"
+          className="flex items-center justify-between gap-2 flex-wrap bg-amber-50 border border-amber-300/80 text-amber-900 rounded-xl px-3 py-2 text-xs"
+        >
+          <div className="flex items-center gap-2 font-bold">
+            <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+            <span>{alertaSemana.mensaje} Elígelo en su tarjeta y pulsa <strong>Guardar cambios</strong>.</span>
+          </div>
+          {(mesVista.anio !== alertaSemana.anio || mesVista.mes !== alertaSemana.mes) && !tienePendientes && (
+            <button
+              type="button"
+              onClick={() => irAMes(alertaSemana.anio, alertaSemana.mes)}
+              className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-black transition-colors"
+            >
+              Ir a ese sábado
+            </button>
+          )}
         </div>
       )}
 
+      {/* Grilla de los 4 o 5 sábados del mes */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        {sabadosMes.map(s => {
+          const actualRow = designaciones[s.fecha]
+          const actualId = actualRow?.designado_id || ''
+          const valorSeleccionado = s.editable && Object.prototype.hasOwnProperty.call(borradores, s.fecha)
+            ? (borradores[s.fecha] || '')
+            : actualId
+          const modificado = s.editable && valorSeleccionado !== actualId
+          const nombreGuardado =
+            actualRow?.designado?.nombre ||
+            vendedoresPorId[actualId]?.nombre ||
+            ''
+          const rolGuardado =
+            actualRow?.designado?.rol ||
+            vendedoresPorId[actualId]?.rol ||
+            ''
+
+          let badgeEstado = null
+          if (s.estado === 'hoy') {
+            badgeEstado = (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white">
+                <Star size={10} /> Hoy sábado
+              </span>
+            )
+          } else if (s.estado === 'proximo') {
+            badgeEstado = (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-200">
+                Próximo sábado
+              </span>
+            )
+          } else if (s.estado === 'pasado') {
+            badgeEstado = (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                <Lock size={10} /> Cerrado
+              </span>
+            )
+          }
+
+          return (
+            <div
+              key={s.fecha}
+              data-testid={`sabado-card-${s.fecha}`}
+              className={`rounded-xl border p-3 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                !s.editable
+                  ? 'bg-slate-50/80 border-slate-200/80 opacity-85'
+                  : modificado
+                    ? 'bg-amber-50/40 border-amber-300 ring-1 ring-amber-200'
+                    : valorSeleccionado
+                      ? 'bg-emerald-50/30 border-emerald-200/80'
+                      : 'bg-white border-slate-200'
+              }`}
+            >
+              <div className="flex flex-col gap-0.5 min-w-[140px]">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-black text-slate-800">{s.etiquetaCorta}</span>
+                  {badgeEstado}
+                  {modificado && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800">
+                      Sin guardar
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-500">
+                  {!s.editable
+                    ? (nombreGuardado ? 'Sábado cumplido' : 'Sin designado ese sábado')
+                    : (valorSeleccionado ? 'Designado elegido' : 'Pendiente de elegir')}
+                </span>
+              </div>
+
+              {/* Selector para sábados de hoy/futuros, o vista protegida para sábados pasados */}
+              <div className="w-full sm:w-64 sm:min-w-[230px]">
+                {!s.editable ? (
+                  <div className="h-[36px] px-3 rounded-xl bg-slate-100/80 border border-slate-200/80 flex items-center justify-between text-xs">
+                    {nombreGuardado ? (
+                      <span className="font-bold text-slate-700 truncate">
+                        {nombreGuardado}
+                        {rolGuardado ? <span className="text-slate-400 font-normal"> · {rolGuardado}</span> : ''}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 italic">Sin designado</span>
+                    )}
+                    <Lock size={12} className="text-slate-400 shrink-0 ml-2" />
+                  </div>
+                ) : (
+                  <CustomSelect
+                    options={elegibles.map(u => ({
+                      value: u.id,
+                      label: `${u.nombre} (${u.rol === 'supervisor' ? 'supervisor' : 'vendedor'})`,
+                    }))}
+                    value={valorSeleccionado}
+                    onChange={val => seleccionarVendedorSabado(s.fecha, val)}
+                    placeholder="Elegir vendedor…"
+                    disabled={cargando || guardando || Boolean(errorCarga)}
+                    searchable
+                    clearable
+                  />
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Pie del calendario: reparto de turnos del mes + botones Deshacer / Guardar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+        <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-600">
+          <span className="font-bold text-slate-500">Turnos en {rangoMes.etiqueta.toLowerCase()}:</span>
+          {turnosMes.length === 0 ? (
+            <span className="text-slate-400 italic">ningún sábado asignado todavía</span>
+          ) : (
+            turnosMes.map(t => (
+              <span
+                key={t.id}
+                className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-full px-2.5 py-0.5 text-[10px] font-bold"
+              >
+                {t.nombre}: {t.cantidad}
+              </span>
+            ))
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          {cambiosPendientes.length > 0 && (
+            <button
+              type="button"
+              data-testid="calendario-deshacer-btn"
+              onClick={deshacerCambios}
+              disabled={guardando}
+              className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-50 transition-all h-[36px]"
+            >
+              <RotateCcw size={13} />
+              Deshacer
+            </button>
+          )}
+          <button
+            type="button"
+            data-testid="calendario-guardar-btn"
+            onClick={abrirConfirmacion}
+            disabled={guardando || cargando || Boolean(errorCarga) || cambiosPendientes.length === 0}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-45 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm active:scale-95 transition-all h-[36px]"
+          >
+            {guardando ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}
+            {cambiosPendientes.length > 0
+              ? `Guardar cambios (${cambiosPendientes.length})`
+              : 'Guardar cambios del mes'}
+          </button>
+        </div>
+      </div>
+
       {mensaje && (
-        <p className={`text-xs font-bold ${mensaje.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>{mensaje.texto}</p>
+        <p
+          data-testid="calendario-mensaje"
+          className={`text-xs font-bold ${mensaje.tipo === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}
+        >
+          {mensaje.texto}
+        </p>
       )}
 
+      {/* Ventana de confirmación con resumen completo y guardarraíl de ventas de hoy */}
       <ConfirmModal
-        isOpen={modalDesignar}
-        onClose={() => setModalDesignar(false)}
-        onConfirm={confirmarDesignar}
-        title={`¿Designar a ${nombreElegido}?`}
-        message={`${nombreElegido} será el vendedor designado del ${fechaLegibleDesignar}.`}
+        isOpen={modalConfirmar}
+        onClose={() => setModalConfirmar(false)}
+        onConfirm={confirmarGuardarMes}
+        title={`¿Guardar sábados de ${rangoMes.etiqueta}?`}
+        message={resumenModal}
         details={
-          `Ese día, en las ventas a clientes de otros vendedores, ${nombreElegido} cobra 0,5 % y el dueño del cliente 1,5 %. En sus propios clientes cobra su comisión normal.` +
-          (designaParaHoy
-            ? ' Ojo: las ventas de hoy que ya se entregaron mantienen la comisión que tenían. Para que tomen esta designación hay que pedir que se recalculen.'
-            : '')
+          incluyeCambioHoy
+            ? '⚠️ Atención: uno de los cambios es para HOY sábado. Las ventas que ya se hayan entregado hoy mantienen su comisión anterior hasta que se recalculen.\n\nEn las ventas de los sábados asignados, el designado cobra 0,5 % y el dueño del cliente 1,5 %.'
+            : 'Cada sábado asignado repartirá la comisión: 0,5 % para el vendedor designado y 1,5 % para el dueño del cliente.'
         }
-        confirmText="Sí, designar"
-        cancelText="Cancelar"
-        variant="success"
-      />
-
-      <ConfirmModal
-        isOpen={modalQuitar.isOpen}
-        onClose={() => setModalQuitar({ isOpen: false, fecha: '', nombre: '' })}
-        onConfirm={confirmarQuitar}
-        title="¿Quitar designación de guardia?"
-        message={`¿Confirmas que deseas anular la designación para el ${fechaLegibleModal}?`}
-        details={
-          modalQuitar.nombre
-            ? `Asesor asignado: ${modalQuitar.nombre}. Los despachos de esta fecha no aplicarán el split del 0.5% y regresarán al esquema de comisiones habitual.`
-            : 'Los despachos registrados en esta fecha volverán al esquema habitual de comisiones sin split de guardia.'
-        }
-        confirmText="Quitar designación"
-        cancelText="Mantener designación"
-        variant="warning"
+        confirmText="Sí, guardar sábados"
+        cancelText="Volver"
+        variant={incluyeCambioHoy ? 'warning' : 'success'}
       />
     </div>
   )
