@@ -1,6 +1,6 @@
 # OP-2026-062 — Auditoría de Reportes → Crédito (cuentas por cobrar)
 
-**Fecha:** 2026-11-24 · **Estado:** auditoría terminada; arreglos preparados en la rama `claude/op-062-auditoria-reporte-cxc-2d1843`, **sin publicar** (falta la aprobación del dueño) · **Producción:** solo se leyó, no se cambió nada.
+**Fecha:** 2026-11-24 · **Estado:** auditoría terminada; arreglos en la [solicitud de cambio #70](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/70) (commit `822bc574`), aprobada por el dueño para prepararse, **sin publicar todavía** · **Producción:** solo se leyó, no se cambió nada.
 
 ## En resumen
 
@@ -111,7 +111,8 @@
 - ✅ Pruebas automáticas (`npx vitest run`): **1.207/1.207 en verde** (120 archivos; antes 1.204, más las 3 nuevas). En esta copia de trabajo no hay archivo `.env`, por eso se corrieron con valores de conexión de mentira: ninguna prueba se conecta a la base.
 - ✅ Compilación (`npm run build`): correcta.
 - ⏳ **No se probó en pantalla** (navegador) ni la impresión real.
-- ⏳ Sin commit, sin solicitud de cambio y sin publicar: falta la aprobación del dueño.
+- ✅ Cambios guardados (commit `822bc574`) y solicitud de cambio #70 abierta con la aprobación del dueño (2026-11-24).
+- ⏳ Sin publicar: falta unir la solicitud #70 y comprobar en pantalla.
 
 ## Qué se propone
 
