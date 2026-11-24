@@ -17,6 +17,7 @@ import _DespachoRow  from '../components/despachos/DespachoRow'
 import _EditDespachoModal from '../components/despachos/EditDespachoModal'
 import _DetalleModal from '../components/ui/DetalleModal'
 import _ConfirmModal from '../components/ui/ConfirmModal'
+import _DevolverAnularModal from '../components/despachos/DevolverAnularModal'
 import _EmptyState   from '../components/ui/EmptyState'
 import _Skeleton     from '../components/ui/Skeleton'
 import _PageHeader  from '../components/ui/PageHeader'
@@ -318,13 +319,16 @@ export default function DespachosView() {
     ? `DES-${String(despachoAAnular.cotizacion?.numero || despachoAAnular.numero).padStart(5, '0')}`
     : ''
 
-  async function confirmarAnular() {
+  // OP-2026-052 (N1): anular pide motivo y, si el despacho tiene pagos anotados, qué pasó con ese dinero.
+  async function confirmarAnular(_estado, motivo, decision) {
     if (!despachoAAnular) return
     await cambiarEstado.mutateAsync({
       despachoId: despachoAAnular.id,
       nuevoEstado: 'anulada',
       numeroCotizacion: despachoAAnular.cotizacion?.numero || despachoAAnular.numero,
       clienteNombre: despachoAAnular.cliente?.nombre,
+      motivoAnulacion: motivo,
+      ...(decision || {}),
     })
     setDespachoAAnular(null)
   }
@@ -466,7 +470,7 @@ export default function DespachosView() {
                 despacho={d}
                 stockCheckData={esPrivilegiado ? stockCheck : undefined}
                 stockCheckPending={esPrivilegiado && !stockCheck}
-                onCambiarEstado={(id, estado, motivoDev, motivoAnu) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre, vendedorId: d.vendedor_id, motivoDevolucion: motivoDev, motivoAnulacion: motivoAnu, ...(estado === 'entregada' ? { tasaBcv: tasaEfectiva } : {}) })}
+                onCambiarEstado={(id, estado, motivoDev, motivoAnu, decision) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre, vendedorId: d.vendedor_id, motivoDevolucion: motivoDev, motivoAnulacion: motivoAnu, ...(decision || {}), ...(estado === 'entregada' ? { tasaBcv: tasaEfectiva } : {}) })}
                 onAnular={setDespachoAAnular}
                 onReciclar={setDespachoAReciclar}
                 tasa={tasaEfectiva}
@@ -510,16 +514,26 @@ export default function DespachosView() {
         despacho={despachoEditar}
       />
 
-      {/* Confirm anular — con mensajes por rol */}
-      <_ConfirmModal
+      {/* Anular — OP-2026-052: motivo obligatorio y decisión sobre los pagos anotados */}
+      <_DevolverAnularModal
         isOpen={!!despachoAAnular}
         onClose={() => setDespachoAAnular(null)}
         onConfirm={confirmarAnular}
-        title={anularConfig.confirmTitle || '¿Anular despacho?'}
-        message={anularConfig.confirmMessage || 'Se restaurará el stock de los productos al inventario.'}
-        details={anularConfig.confirmDetails || 'Esta acción no se puede deshacer.'}
-        confirmText={anularConfig.confirmText || 'Sí, anular'}
-        variant={anularConfig.variant || 'danger'}
+        accion={despachoAAnular ? {
+          id: despachoAAnular.id,
+          estado: 'anulada',
+          isAnular: true,
+          actionConfig: {
+            confirmTitle: anularConfig.confirmTitle || '¿Anular despacho?',
+            confirmMessage: anularConfig.confirmMessage || 'Se restaurará el stock de los productos al inventario.',
+            confirmDetails: anularConfig.confirmDetails || 'Esta acción no se puede deshacer.',
+            confirmText: anularConfig.confirmText || 'Sí, anular',
+          },
+        } : null}
+        despachoNum={_anularNumDisplay}
+        despachoId={despachoAAnular?.id}
+        tieneDevoluciones={!!despachoAAnular?.tiene_devoluciones}
+        isLoading={cambiarEstado.isPending}
       />
 
       {/* Confirm reciclar — con mensajes por rol */}

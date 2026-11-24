@@ -1967,6 +1967,8 @@ function TabCredito() {
   const kpis = cxcData?.kpis || { totalDeuda: 0, numClientesConDeuda: 0, promedioDeuda: 0, diasMasAntiguo: 0, numCargos: 0 }
   const clientesConDeuda = cxcData?.clientesConDeuda || []
   const aging = cxcData?.aging || []
+  // OP-2026-042: clientes cuyos abonos superan sus cargos (antes no se veían)
+  const clientesPagadoDeMas = cxcData?.clientesPagadoDeMas || []
   const alertasVencimiento = cxcData?.alertasVencimiento || []
   const movimientosPeriodo = cxcData?.movimientosDelPeriodo || []
 
@@ -2175,6 +2177,37 @@ function TabCredito() {
 
       {vistaCredito === 'clientes' && (
         <>
+          {/* OP-2026-042 (falla G3): pagos de más que no corresponden a ninguna deuda */}
+          {clientesPagadoDeMas.length > 0 && (
+            <details className="bg-amber-50 border border-amber-200 rounded-xl sm:rounded-2xl overflow-hidden" data-testid="cxc-pagado-de-mas">
+              <summary className="px-4 py-3 cursor-pointer select-none flex items-center gap-2">
+                <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                <span className="text-xs sm:text-sm font-black text-amber-900">Pagos de más sin deuda</span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">{clientesPagadoDeMas.length}</span>
+                <span className="ml-auto text-xs sm:text-sm font-black text-amber-900">{fmtUsd(kpis.totalPagadoDeMas || 0)}</span>
+              </summary>
+              <div className="px-4 pb-3 space-y-2">
+                <p className="text-[11px] text-amber-800 leading-snug">
+                  Estos clientes tienen registrados más pagos que deudas. El sistema no lo muestra como deuda ni como saldo a favor,
+                  pero si vuelven a comprar a crédito, ese exceso se descontará solo de la nueva deuda. Revisa cada caso con administración.
+                </p>
+                <div className="divide-y divide-amber-100 bg-white rounded-lg border border-amber-100">
+                  {clientesPagadoDeMas.map(c => (
+                    <div key={c.id} className="flex items-center gap-3 px-3 py-2 text-xs">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-800 truncate">{c.nombre}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {c.vendedor?.nombre ? `${c.vendedor.nombre} · ` : ''}Deudas {fmtUsd(c.cargos)} · Pagos {fmtUsd(c.abonos)}
+                        </p>
+                      </div>
+                      <span className="font-black text-amber-700 shrink-0">{fmtUsd(c.pagadoDeMas)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </details>
+          )}
+
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">

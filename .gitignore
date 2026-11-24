@@ -236,3 +236,16 @@ construacero-backups/
 # OP-2026-036: calendario mensual de sábados para vendedor designado
 !src/utils/__tests__/calendarioSabados.test.js
 !api/handlers/__tests__/designacionSabados.test.js
+.tmp-op040/
+
+# OP-2026-059: pruebas del paso a producción de las mejoras de CxC (OP-2026-042 a 057)
+!src/utils/__tests__/cxcReparto.test.js
+!src/utils/__tests__/donacionDevolucion.test.js
+!src/utils/__tests__/formaPagoReglas.test.js
+!src/utils/__tests__/consistencia057.test.js
+!api/handlers/__tests__/abonoClaveUnica049.test.js
+!api/handlers/__tests__/cxcReparto042.test.js
+!api/handlers/__tests__/despachoPagos052.test.js
+!api/handlers/__tests__/edicionProfundaCxc053.test.js
+!api/handlers/__tests__/saldoFavorAtomico051.test.js
+!api/lib/__tests__/cxcUtilsFallo057.test.js

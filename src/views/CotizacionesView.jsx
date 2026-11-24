@@ -631,10 +631,10 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                         )}
 
                         {/* Opción de Referencia para Transferencia y Pago Móvil */}
-                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                           <div className="flex items-center gap-1.5 px-2 py-1 bg-teal-50 border border-teal-200 rounded-lg ml-2">
                             <span className="text-[10px] font-medium text-teal-700 whitespace-nowrap">
-                              Referencia (opcional):
+                              {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                             </span>
                             <input
                               type="text"
@@ -759,10 +759,10 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                                 </div>
                               </div>
                               {/* Opción de Referencia para Transferencia y Pago Móvil COD */}
-                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                                 <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 border border-rose-200 rounded-lg ml-2 mt-1">
                                   <span className="text-[10px] font-medium text-rose-700 whitespace-nowrap">
-                                    Referencia (opcional):
+                                    {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                                   </span>
                                   <input
                                     type="text"

@@ -135,6 +135,21 @@ npm run dev
 
 El servidor local (Worker) corre en `localhost:8787` (con `npm run dev:worker`).
 
+## Cuentas por Cobrar y despachos — cambios preparados para producción (OP-2026-059)
+
+> **Estado:** preparados y probados, **todavía no publicados**. Entran en vigor cuando se apliquen las migraciones 301 a 309 y se publique el código (ver [OP-2026-059](docs/operaciones/OP-2026-059_paso-a-produccion-cxc.md)).
+
+Cuando se publiquen, así funcionará:
+
+- **Abonos:** se guardan en un solo paso junto con su anotación de auditoría; un doble clic o reintento no duplica; si hay un abono igual en los últimos 15 minutos se pregunta "¿Es otro pago?"; si falla, sale un aviso rojo. El abono se puede enlazar a un despacho y el detalle de formas de pago debe sumar el monto.
+- **Saldo a favor** (cargar, devolver, cruzar): mismo control en un solo paso.
+- **Revertir un movimiento** pasa a ser **anular con motivo** (mínimo 10 caracteres); se guarda una copia completa en el archivo de movimientos borrados, visible en la ficha del cliente.
+- **Reabrir un despacho entregado** con pagos pide decidir: dejar el dinero en la cuenta o pasarlo a saldo a favor. **Anular un pendiente** con pagos anotados pide qué pasó con ese dinero (saldo a favor, otro despacho o no cobrado) y un motivo.
+- **Edición profunda:** artículos y cuenta del cliente en un solo paso; si quedan pagos sin deuda, pregunta qué hacer.
+- **Devoluciones:** usan el mismo reparto que la ficha (ven los pagos sueltos) y, si un abono manual ya cubría ese crédito, permiten anularlo en el mismo paso. Lo **donado** que se devuelve no da crédito, salvo autorización con motivo (administración, jefe o desarrollador).
+- **"Cruce"** exige decir contra qué se cruzó.
+- La ficha y el reporte de Crédito muestran los **pagos de más** que antes no se veían.
+
 ## Documentación interna
 
 - **[`REGISTRO.md`](docs/operaciones/REGISTRO.md)**: índice maestro de todos los casos, con número fijo (OP-2026-001 en adelante).

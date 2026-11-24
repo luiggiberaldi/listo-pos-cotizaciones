@@ -387,10 +387,13 @@ export function useActualizarEstadoDespacho() {
   const usuarioNombre = perfil?.nombre ?? 'usuario'
 
   return useMutation({
-    mutationFn: async ({ despachoId, nuevoEstado, numeroCotizacion, clienteNombre, vendedorId = null, motivoDevolucion = null, motivoAnulacion = null, tasaBcv = null }) => {
+    mutationFn: async ({ despachoId, nuevoEstado, numeroCotizacion, clienteNombre, vendedorId = null, motivoDevolucion = null, motivoAnulacion = null, tasaBcv = null, destinoPagos = null, destinoPagoAnotado = null }) => {
       const body = { despachoId, nuevoEstado }
       if (motivoDevolucion) body.motivo_devolucion = motivoDevolucion
       if (motivoAnulacion) body.motivo_anulacion = motivoAnulacion
+      // OP-2026-052: decisión sobre los pagos al reabrir (destinoPagos) o anular (destinoPagoAnotado)
+      if (destinoPagos) body.destinoPagos = destinoPagos
+      if (destinoPagoAnotado) body.destinoPagoAnotado = destinoPagoAnotado
       if (tasaBcv && Number(tasaBcv) > 0) body.tasaBcv = Number(tasaBcv)
 
       const res = await authFetch('/api/despachos/estado', {
@@ -399,8 +402,13 @@ export function useActualizarEstadoDespacho() {
         body: JSON.stringify(body),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al cambiar estado del despacho')
-      return { nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados: result.abonos_devolucion_anulados ?? null, creditoAnuladoUsd: result.credito_anulado_usd ?? null }
+      if (!res.ok) {
+        const e = new Error(result.error || 'Error al cambiar estado del despacho')
+        e.code = result.code || null
+        e.pagos = result.pagos || null
+        throw e
+      }
+      return { nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados: result.abonos_devolucion_anulados ?? null, creditoAnuladoUsd: result.credito_anulado_usd ?? null, pagosReabrir: result.pagos_reabrir ?? null, pagosAnular: result.pagos_anular ?? null }
     },
     // Optimistic update: reflect state change immediately in UI
     onMutate: async ({ despachoId, nuevoEstado }) => {
@@ -422,9 +430,18 @@ export function useActualizarEstadoDespacho() {
       if (context?.previousQueries) {
         context.previousQueries.forEach(([key, data]) => qc.setQueryData(key, data))
       }
-      showToast(error.message || 'Error al cambiar estado del despacho', 'error')
+      // La decisión sobre los pagos la muestra el propio modal (OP-2026-052)
+      if (error?.code !== 'DECISION_PAGOS_REQUERIDA') showToast(error.message || 'Error al cambiar estado del despacho', 'error')
     },
-    onSuccess: ({ nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados, creditoAnuladoUsd }) => {
+    onSuccess: ({ nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados, creditoAnuladoUsd, pagosReabrir, pagosAnular }) => {
+      if (pagosReabrir?.destino === 'saldo_favor' && Number(pagosReabrir.pasado_a_saldo_favor) > 0) {
+        showToast(`Despacho reabierto · $${Number(pagosReabrir.pasado_a_saldo_favor).toFixed(2)} pasados a saldo a favor del cliente`, 'success', 6000)
+      } else if (pagosReabrir?.destino === 'mantener') {
+        showToast('Despacho reabierto · los pagos siguen en la cuenta del cliente', 'success', 6000)
+      }
+      if (pagosAnular?.destino === 'saldo_favor') {
+        showToast(`Despacho anulado · $${Number(pagosAnular.total_anotado).toFixed(2)} pasados a saldo a favor del cliente`, 'success', 6000)
+      }
       // Reversión consciente de devoluciones (release 06): toast con el efecto exacto en CxC.
       if (['pendiente', 'anulada'].includes(nuevoEstado) && (abonosDevolucionAnulados > 0 || (creditoAnuladoUsd ?? 0) > 0)) {
         const partes = []
@@ -502,10 +519,11 @@ export function useEditarItemsDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, items, pagos }) => {
+    mutationFn: async ({ despachoId, items, pagos, destinoPagos = null }) => {
       console.group('[DEEP_EDIT][NETWORK_TRACE]')
       console.log('Request body at mutation boundary', { despachoId, itemCount: Array.isArray(items) ? items.length : null, items, pagos })
-      const body = JSON.stringify({ despachoId, items, pagos })
+      // OP-2026-053: destinoPagos ('mantener' | 'saldo_favor') cuando la edición deja pagos sin deuda
+      const body = JSON.stringify({ despachoId, items, pagos, ...(destinoPagos ? { destinoPagos } : {}) })
       console.log('Serialized request body', JSON.parse(body))
       const res = await authFetch('/api/despachos/editar-items', {
         method: 'POST',
@@ -513,11 +531,19 @@ export function useEditarItemsDespacho() {
         body,
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al editar ítems del despacho')
+      if (!res.ok) {
+        const e = new Error(result.error || 'Error al editar ítems del despacho')
+        e.code = result.code || null
+        e.pagos = result.pagos || null
+        throw e
+      }
       return result
     },
-    onSuccess: async () => {
-      showToast('Ítems del despacho actualizados con éxito', 'success', 5000)
+    onSuccess: async (result) => {
+      const pasado = Number(result?.cxc?.pasado_a_saldo_favor || 0)
+      showToast(pasado > 0
+        ? `Ítems del despacho actualizados · $${pasado.toFixed(2)} pasados a saldo a favor del cliente`
+        : 'Ítems del despacho actualizados con éxito', 'success', 5000)
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
@@ -526,7 +552,8 @@ export function useEditarItemsDespacho() {
       broadcastEntidad(['despachos', 'inventario', 'clientes', 'cuentas'])
     },
     onError: (error) => {
-      showToast(error.message || 'Error al editar ítems', 'error')
+      // La decisión sobre los pagos la pregunta el propio modal (OP-2026-053)
+      if (error?.code !== 'DECISION_PAGOS_REQUERIDA') showToast(error.message || 'Error al editar ítems', 'error')
     },
   })
 }
@@ -598,7 +625,10 @@ export function useDevolucionParcialDespacho() {
       pagosReembolso,
       reembolsoMetodo,
       reembolsoReferencia,
-      reembolsoMonto
+      reembolsoMonto,
+      anularAbonoId,
+      acreditarDonacion,
+      motivoAcreditarDonacion
     }) => {
       const res = await authFetch('/api/despachos/devolucion-parcial', {
         method: 'POST',
@@ -608,13 +638,17 @@ export function useDevolucionParcialDespacho() {
           items,
           motivo,
           generarReemplazo,
+          // OP-2026-054: autorización para dar crédito por mercancía donada
+          ...(acreditarDonacion ? { acreditarDonacion: true, motivoAcreditarDonacion } : {}),
           exchangeItems,
           pagosDiferencia: Array.isArray(pagosDiferencia) ? pagosDiferencia : [],
           destinoSaldo,
           pagosReembolso: Array.isArray(pagosReembolso) ? pagosReembolso : [],
           reembolsoMetodo,
           reembolsoReferencia,
-          reembolsoMonto
+          reembolsoMonto,
+          // OP-2026-042: abono manual que el operador confirmó que era esta devolución
+          anularAbonoId: anularAbonoId || null
         }),
       })
       const result = await res.json()
@@ -634,6 +668,7 @@ export function useDevolucionParcialDespacho() {
           if (abono > 0) partes.push(`deuda reducida $${abono.toFixed(2)}`)
           if (credito > 0) partes.push(`saldo a favor $${credito.toFixed(2)}`)
           if (reembolso > 0) partes.push(`reembolso en efectivo $${reembolso.toFixed(2)}`)
+          if (result?.abono_anulado) partes.push(`abono anulado $${Number(result.abono_anulado.monto_usd || 0).toFixed(2)}`)
           if (partes.length === 0) partes.push('sin efecto financiero')
         } else if (balance > 0) {
           partes.push(`cargo por diferencia $${balance.toFixed(2)}`)
