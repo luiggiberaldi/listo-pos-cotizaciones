@@ -1,6 +1,6 @@
 # OP-2026-062 — Auditoría de Reportes → Crédito (cuentas por cobrar)
 
-**Fecha:** 2026-11-24 · **Estado:** auditoría terminada; arreglos en la [solicitud de cambio #70](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/70) (commit `822bc574`), aprobada por el dueño para prepararse, **sin publicar todavía** · **Producción:** solo se leyó, no se cambió nada.
+**Fecha:** 2026-11-24 · **Estado:** auditoría terminada; arreglos en la [solicitud de cambio #70](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/70) (commit `822bc574`), **publicada en producción el 2026-11-24** con la aprobación del dueño (unión `8c4ed8ac`) · **Producción:** solo se leyó, no se cambió nada.
 
 ## En resumen
 
@@ -112,10 +112,13 @@
 - ✅ Compilación (`npm run build`): correcta.
 - ⏳ **No se probó en pantalla** (navegador) ni la impresión real.
 - ✅ Cambios guardados (commit `822bc574`) y solicitud de cambio #70 abierta con la aprobación del dueño (2026-11-24).
-- ⏳ Sin publicar: falta unir la solicitud #70 y comprobar en pantalla.
+- ✅ Publicado: solicitud #70 unida a la versión principal (`8c4ed8ac`); Vercel terminó de publicar.
+- ✅ Recalculado con los datos de producción justo después de publicar (ya con un cargo nuevo de hoy): Antigüedad = CxC al cierre = **$74.884,70**, 19 clientes con deuda y 36 alertas (36 vencidas).
+- ⏳ Falta verlo en pantalla. La captura que mandó el dueño justo después de unir la solicitud todavía mostraba la versión anterior: 39 alertas y Antigüedad $75.186,96 con el formato viejo. Hay que cerrar y volver a abrir la app para cargar la versión nueva.
+- Detalle visto en esa captura (falla N26): el título "Cuadre de movimientos · **$**01 nov. 2026" mostraba un "$" que sobraba antes de la fecha. Se quitó y se publicó con la solicitud que anota esta publicación, con la aprobación del dueño.
 
 ## Qué se propone
 
 1. Aprobar la publicación de los arreglos 1 a 5 (solo cambian lo que se ve en pantalla; no tocan la base de datos).
 2. Decidir los hallazgos 6 (resumen del período en el PDF) y 7 (recuadro "Pagos de más").
-3. Después de publicar, abrir Reportes → Crédito → Este mes y comprobar que Antigüedad dice **Total $72,399.70** y que aparecen **36 alertas**.
+3. Después de publicar, abrir Reportes → Crédito → Este mes y comprobar que el total de Antigüedad es igual a "CxC al cierre" y que hay 36 alertas (con los datos del 24-nov: **$74,884.70**).

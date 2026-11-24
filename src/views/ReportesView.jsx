@@ -2149,7 +2149,7 @@ function TabCredito() {
         <AgingBars aging={aging} />
 
         <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-950">
-        <div className="font-black uppercase tracking-wide text-[10px] text-indigo-700">Cuadre de movimientos · ${rangoLabel}</div>
+        <div className="font-black uppercase tracking-wide text-[10px] text-indigo-700">Cuadre de movimientos · {rangoLabel}</div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold">
           <span>Neto inicial {fmtUsd(kpis.saldoInicialNeto || 0)}</span><span>+</span>
           <span>cargos {fmtUsd(kpis.totalCargos || 0)}</span><span>−</span>
