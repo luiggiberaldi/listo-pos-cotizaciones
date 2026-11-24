@@ -3,6 +3,7 @@ import { verifyAuth, validateOperator, verifyAdminRole, SUPER_ADMIN_UUID } from 
 import { avisarDespacho } from '../lib/notificarPush.js';
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
+import { errorCruceSinExplicacion } from '../../src/utils/formaPagoReglas.js'
 
 function errorReglaFlete(errorText, request, mensajeFallback) {
   const text = String(errorText || '')
@@ -602,6 +603,9 @@ export async function handleVentaRapida(request, env) {
 
   if (!clienteId) return jsonError('Falta clienteId', 400, request);
   if (!items || !Array.isArray(items) || items.length === 0) return jsonError('Faltan items', 400, request);
+  // OP-2026-055 (N3): el Cruce debe decir contra qué se cruzó
+  const errCruceVenta = errorCruceSinExplicacion(formaPago) || errorCruceSinExplicacion(formaPagoCliente);
+  if (errCruceVenta) return jsonError(errCruceVenta, 400, request);
   if (transportistaId !== undefined && transportistaId !== null && transportistaId !== '' && !isValidUuid(transportistaId)) {
     return jsonError('transportistaId inválido', 400, request)
   }

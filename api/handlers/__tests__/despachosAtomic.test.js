@@ -98,7 +98,12 @@ function installFetch({ estado = 'despachada', rpcResults = [] } = {}) {
         finanzas_atomicas: true,
       }), { status: 200 })
     }
-    if (String(url).includes('/rpc/revertir_entrega_finanzas_idempotente')) {
+    // OP-2026-059: reabrir un entregado consulta primero el dinero en juego y luego usa
+    // reabrir_despacho_con_pagos (que dentro llama a revertir_entrega_finanzas_idempotente).
+    if (String(url).includes('/rpc/cxc_pagos_en_juego_despacho')) {
+      return new Response(JSON.stringify({ requiere_decision_reabrir: false, requiere_decision_anular: false, total_enlazado: 0, pagado_de_mas_nuevo: 0, total_anotado: 0 }), { status: 200 })
+    }
+    if (String(url).includes('/rpc/revertir_entrega_finanzas_idempotente') || String(url).includes('/rpc/reabrir_despacho_con_pagos')) {
       return new Response(JSON.stringify(results.shift() || {
         ok: true,
         nuevo_estado: 'pendiente',
@@ -210,7 +215,7 @@ describe('handleActualizarEstadoDespacho — P0-B', () => {
     expect(registrarAuditoria).toHaveBeenCalledTimes(1)
   })
 
-  it('revierte entrega mediante el wrapper financiero y no borra CxC/comisión desde REST', async () => {
+  it('revierte entrega mediante el wrapper financiero (reabrir con pagos, OP-2026-059) y no borra CxC/comisión desde REST', async () => {
     const { calls } = installFetch({
       estado: 'entregada',
       rpcResults: [{ ok: true, nuevo_estado: 'pendiente', lote_id: '99999999-9999-4999-8999-999999999999', movimientos: 1, finanzas_revertidas: true }],
@@ -230,9 +235,8 @@ describe('handleActualizarEstadoDespacho — P0-B', () => {
       inventario_atomico: true,
       finanzas_atomicas: true,
     })
-    const rpcCall = calls.find(call => call.url.includes('/rpc/revertir_entrega_finanzas_idempotente'))
+    const rpcCall = calls.find(call => call.url.includes('/rpc/reabrir_despacho_con_pagos'))
     expect(rpcCall.body).toMatchObject({
-      p_cuenta_id: cuentaId,
       p_despacho_id: despachoId,
       p_idempotency_key: idempotencyKey,
       p_nuevo_estado: 'pendiente',

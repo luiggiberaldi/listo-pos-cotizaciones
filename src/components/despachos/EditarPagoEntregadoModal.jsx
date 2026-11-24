@@ -224,6 +224,10 @@ export default function EditarPagoEntregadoModal({ isOpen, onClose, despacho }) 
         // Clave estable por operación: un reintento reutiliza la misma clave y el
         // servidor devuelve el abono ya registrado en vez de duplicarlo.
         idempotencyKey: abonoKey,
+        // OP-2026-049: el cuadre es una corrección deliberada y ya está protegido
+        // contra doble envío por su clave; no se le pide confirmar "posible duplicado".
+        confirmarDuplicado: true,
+        sinAvisoGlobal: true, // este modal ya muestra su propio aviso de error
       })
       queryClient.invalidateQueries({ queryKey: ['resumen-financiero'] })
       setCuadreListo('abono')

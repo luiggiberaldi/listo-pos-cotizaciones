@@ -565,10 +565,10 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                         </div>
                       )}
 
-                      {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                      {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                         <div className="flex items-center gap-2 pl-28">
                           <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
-                            Referencia (opcional):
+                            {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                           </span>
                           <input
                             type="text"
@@ -725,10 +725,10 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                                 <X size={15} />
                               </button>
                             </div>
-                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                               <div className="flex items-center gap-2 pl-28 mt-1">
                                 <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
-                                  Referencia (opcional):
+                                  {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                                 </span>
                                 <input
                                   type="text"

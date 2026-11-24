@@ -19,11 +19,11 @@ import { handlePush } from './api/handlers/push.js'
 import { handleLogFromClient, handleGetLogs, handleGetLogStats, handleDownloadLogs, handleAnalyzeLogs, handlePurgeLogs } from './api/handlers/logs.js'
 import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/handlers/audit.js'
 import { handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
-import { handleRegistrarAbono, handleRevertirAbono, handleRevertirCargoCxc, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
+import { handleRegistrarAbono, handleRevertirAbono, handleMovimientosBorradosCliente, handleRevertirCargoCxc, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleListarLotesPrecios, handleRestaurarLotePrecios, handleClearInventory, handlePdfTemp, handleActualizarProductoMetadatos, handleCrearProductoConKardex, handleActualizarProductoConKardex, handleBorrarProductoConKardex } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
-import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleEditarCodigosExternos, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho } from './api/handlers/despachos.js'
+import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleEditarCodigosExternos, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho, handlePreviewDevolucionCxc, handlePagosEnJuegoDespacho } from './api/handlers/despachos.js'
 import { handleResumenFinancieroDespacho, handleConciliarPagoCod } from './api/handlers/cod.js'
 
 import { handleDevTools } from './api/handlers/dev.js'
@@ -283,6 +283,15 @@ const worker = {
       return handleDevolucionParcialDespacho(request, env);
     }
 
+    // ── API OP-2026-042: vista previa del efecto de una devolución en CxC ──
+    if (url.pathname === '/api/despachos/devolucion-preview-cxc' && request.method === 'GET') {
+      return handlePreviewDevolucionCxc(request, env, url);
+    }
+    // ── API OP-2026-052: dinero en juego antes de reabrir o anular un despacho ──
+    if (url.pathname === '/api/despachos/pagos-en-juego' && request.method === 'GET') {
+      return handlePagosEnJuegoDespacho(request, env, url);
+    }
+
     // ── API: obtener descuentos de un despacho ────────────────────────────
     if (url.pathname.startsWith('/api/despachos/') && url.pathname.endsWith('/descuentos') && request.method === 'GET') {
       return handleObtenerDescuentos(request, env, url);
@@ -352,6 +361,10 @@ const worker = {
     // ── API: revertir abono CxC (bypass RLS) ──────────────────────────────
     if (url.pathname === '/api/cxc/revertir-abono' && request.method === 'POST') {
       return handleRevertirAbono(request, env);
+    }
+    // ── API OP-2026-055: movimientos anulados o borrados de un cliente ──
+    if (url.pathname === '/api/cxc/movimientos-borrados' && request.method === 'GET') {
+      return handleMovimientosBorradosCliente(request, env, url);
     }
 
     if (url.pathname === '/api/cxc/revertir-cargo' && request.method === 'POST') {

@@ -2422,10 +2422,10 @@ function Step2Pago({
                         )}
 
                         {/* Opción de Referencia para Transferencia y Pago Móvil */}
-                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                           <div className="flex items-center gap-2 px-3 py-1.5 bg-teal-50/50 border border-teal-200/50 rounded-lg ml-6">
                             <span className="text-[11px] font-semibold text-teal-700 whitespace-nowrap">
-                              Referencia (opcional):
+                              {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                             </span>
                             <input
                               type="text"
@@ -2554,10 +2554,10 @@ function Step2Pago({
                                 </button>
                               </div>
                               {/* Opción de Referencia para Transferencia y Pago Móvil (COD) */}
-                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                                 <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-50/50 border border-rose-200/50 rounded-lg ml-6 mt-1.5">
                                   <span className="text-[11px] font-semibold text-rose-700 whitespace-nowrap">
-                                    Referencia (opcional):
+                                    {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                                   </span>
                                   <input
                                     type="text"

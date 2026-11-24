@@ -104,6 +104,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
   }
 
     const [busqueda, setBusqueda] = useState('')
+    // OP-2026-053: pregunta "¿qué hacemos con ese dinero?" cuando la edición deja pagos sin deuda
+    const [decisionPagos, setDecisionPagos] = useState(null)
     const [cargandoItems, setCargandoItems] = useState(false)
     const [error, setError] = useState(null)
   
@@ -476,7 +478,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
       }
     }, [esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido, pagosInmediatosHayVuelto, vueltoComoSaldoFavor])
 
-    async function handleSave() {
+    async function handleSave(destinoPagos = null) {
       if (items.length === 0) {
         showToast('El despacho debe tener al menos un producto', 'error')
         return
@@ -549,16 +551,23 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
         const saveResult = await editarItems.mutateAsync({
           despachoId: despacho.id, 
           items: itemsApi, 
-          pagos: JSON.stringify(formasPagoFinales)
+          pagos: JSON.stringify(formasPagoFinales),
+          // OP-2026-053: decisión sobre pagos que quedarían sin deuda (solo si el servidor la pidió)
+          ...(typeof destinoPagos === 'string' ? { destinoPagos } : {}),
         })
+        setDecisionPagos(null)
         console.timeEnd('[DEEP_EDIT][SAVE_TRACE] HTTP request')
         console.log('D. Mutation result', { result: saveResult, sentItemCount: itemsApi.length })
         console.log('E. IMPORTANT: now query Supabase directly for this despacho and compare physical rows with payload')
         console.groupEnd()
         onSaved?.({ despachoId: despacho.id, items: itemsApi })
         onClose()
-      } catch {
-        // El hook ya muestra el toast
+      } catch (e) {
+        // OP-2026-053: si el cambio deja pagos del cliente sin deuda, se pregunta qué hacer
+        if (e?.code === 'DECISION_PAGOS_REQUERIDA') {
+          setDecisionPagos({ monto: Number(e?.pagos?.pagado_de_mas_nuevo || 0), mensaje: e.message })
+        }
+        // Los demás errores ya los muestra el hook con un mensaje
       }
     }
   
@@ -1054,10 +1063,10 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
                         )}
 
                         {/* Referencia para Transferencia y Pago Móvil */}
-                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(p.metodo) && (
+                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(p.metodo) && (
                           <div className="flex items-center gap-2 mt-1 pt-1 border-t border-slate-50">
                             <span className="text-[9px] font-bold text-slate-400 uppercase whitespace-nowrap">
-                              Referencia (opcional):
+                              {p.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                             </span>
                             <input
                               type="text"
@@ -1215,10 +1224,10 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
                                 </button>
                               )}
                             </div>
-                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(p.metodo) && (
+                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(p.metodo) && (
                               <div className="flex items-center gap-2 mt-1 pt-1 border-t border-rose-50">
                                 <span className="text-[9px] font-bold text-rose-400 uppercase">
-                                  Referencia (opcional):
+                                  {p.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                                 </span>
                                 <input
                                   type="text"
@@ -1314,7 +1323,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
                 Cancelar
               </button>
               <button
-                onClick={handleSave}
+                onClick={() => handleSave()}
+                data-testid="editar-items-guardar"
                 disabled={editarItems.isPending || items.length === 0 || !totales.estaCuadrado || !cxcVencimientoValido}
                 title={
                   !cxcVencimientoValido
@@ -1332,6 +1342,31 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
           </div>
         </div>
       </div>
+
+      {decisionPagos && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="edicion-decision-pagos">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-3">
+            <h3 className="text-base font-black text-slate-900">¿Qué hacemos con ese dinero?</h3>
+            <p className="text-sm text-slate-700">{decisionPagos.mensaje}</p>
+            <button type="button" data-testid="edicion-destino-mantener" disabled={editarItems.isPending}
+              onClick={() => handleSave('mantener')}
+              className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50 disabled:opacity-50">
+              <b className="text-sm text-slate-900">Dejarlo en la cuenta del cliente</b>
+              <span className="block text-xs text-slate-600">Los abonos no se borran. Se ven como “pagado de más” y se aplican solos a la próxima deuda del cliente.</span>
+            </button>
+            <button type="button" data-testid="edicion-destino-saldo-favor" disabled={editarItems.isPending}
+              onClick={() => handleSave('saldo_favor')}
+              className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50 disabled:opacity-50">
+              <b className="text-sm text-slate-900">Pasarlo a saldo a favor del cliente</b>
+              <span className="block text-xs text-slate-600">El cliente puede usarlo en otra compra o se le puede devolver.</span>
+            </button>
+            <button type="button" onClick={() => setDecisionPagos(null)} disabled={editarItems.isPending}
+              className="w-full py-2 text-sm font-bold text-slate-600 rounded-xl border border-slate-300 hover:bg-slate-50">
+              Cancelar (no guardar todavía)
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal editar externo */}
       <ModalEditarExterno

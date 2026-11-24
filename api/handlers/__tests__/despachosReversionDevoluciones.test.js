@@ -63,7 +63,7 @@ function dispatchRow() {
  * fetchMock con las rutas que consume handleActualizarEstadoDespacho para
  * entregada → pendiente (reversión vía RPC).
  */
-function installFetch({ abonos = [], rpcResult = null } = {}) {
+function installFetch({ abonos = [], rpcResult = null, juego = null, estado = null } = {}) {
   const calls = []
   const fetchMock = vi.fn(async (url, options = {}) => {
     const method = (options.method || 'GET').toUpperCase()
@@ -71,7 +71,7 @@ function installFetch({ abonos = [], rpcResult = null } = {}) {
     calls.push(call)
 
     if (String(url).includes('/notas_despacho?id=')) {
-      return new Response(JSON.stringify([dispatchRow()]), { status: 200 })
+      return new Response(JSON.stringify([estado ? { ...dispatchRow(), estado } : dispatchRow()]), { status: 200 })
     }
     if (String(url).includes('/comisiones?')) {
       return new Response(JSON.stringify([]), { status: 200 })
@@ -84,7 +84,11 @@ function installFetch({ abonos = [], rpcResult = null } = {}) {
       if (String(url).includes('tipo=eq.abono')) return new Response(JSON.stringify(abonos), { status: 200 })
       return new Response(JSON.stringify([]), { status: 200 })
     }
-    if (String(url).includes('/rpc/revertir_entrega_finanzas_idempotente')) {
+    // OP-2026-059: dinero en juego antes de reabrir (lo calcula la base)
+    if (String(url).includes('/rpc/cxc_pagos_en_juego_despacho')) {
+      return new Response(JSON.stringify(juego || { requiere_decision_reabrir: false, requiere_decision_anular: false, total_enlazado: 0, pagado_de_mas_nuevo: 0, total_anotado: 0 }), { status: 200 })
+    }
+    if (String(url).includes('/rpc/revertir_entrega_finanzas_idempotente') || String(url).includes('/rpc/reabrir_despacho_con_pagos')) {
       return new Response(JSON.stringify(rpcResult || {
         ok: true,
         despacho_id: despachoId,
@@ -130,7 +134,7 @@ describe('handleActualizarEstadoDespacho — reversión consciente de devolucion
     expect(result.status).toBe(200)
     expect(result.body).toMatchObject({ ok: true, nuevoEstado: 'pendiente', finanzas_atomicas: true })
 
-    const rpc = calls.find(c => c.url.includes('/rpc/revertir_entrega_finanzas_idempotente'))
+    const rpc = calls.find(c => c.url.includes('/rpc/reabrir_despacho_con_pagos'))
     expect(rpc).toBeTruthy()
     expect(rpc.body).toMatchObject({ p_despacho_id: despachoId, p_nuevo_estado: 'pendiente' })
 
@@ -142,12 +146,17 @@ describe('handleActualizarEstadoDespacho — reversión consciente de devolucion
     expect(patch.body).toEqual({ motivo_devolucion: 'Cliente ausente' })
   })
 
-  it('bloquea la reversión cuando existe un cobro real (forma de pago distinta de Devolución/Saldo a favor)', async () => {
+  // OP-2026-059 (G2): un ENTREGADO con cobros reales ya no se bloquea sin salida: el servidor pide
+  // la decisión sobre ese dinero y, con ella, reabre en una sola transacción sin borrar el pago.
+  const juegoConPago = { requiere_decision_reabrir: true, requiere_decision_anular: false, total_enlazado: 2, pagado_de_mas_nuevo: 0, total_anotado: 0 }
+
+  it('entregado con un cobro real: sin decisión responde 409 DECISION_PAGOS_REQUERIDA y no revierte', async () => {
     const { calls } = installFetch({
       abonos: [
         { id: 'cxc-ab-1', monto_usd: 1.9, forma_pago_abono: 'Devolución' },
         { id: 'cxc-ab-2', monto_usd: 2.0, forma_pago_abono: 'Efectivo $' },
       ],
+      juego: juegoConPago,
     })
 
     const response = await handleActualizarEstadoDespacho(post({
@@ -158,15 +167,38 @@ describe('handleActualizarEstadoDespacho — reversión consciente de devolucion
     }), ENV)
     const result = await bodyOf(response)
 
-    expect(result.status).toBe(400)
-    expect(result.body.error).toContain('cobros reales')
+    expect(result.status).toBe(409)
+    expect(result.body.code).toBe('DECISION_PAGOS_REQUERIDA')
     expect(result.body.error).toContain('$2.00')
+    expect(calls.some(c => c.url.includes('/rpc/reabrir_despacho_con_pagos'))).toBe(false)
     expect(calls.some(c => c.url.includes('/rpc/revertir_entrega_finanzas_idempotente'))).toBe(false)
   })
 
-  it('bloquea la reversión cuando el abono no tiene forma de pago (conservador)', async () => {
+  it('entregado con un cobro real y decisión "mantener": reabre con la función que cuida los pagos', async () => {
     const { calls } = installFetch({
       abonos: [{ id: 'cxc-ab-legacy', monto_usd: 5, forma_pago_abono: null }],
+      juego: juegoConPago,
+    })
+
+    const response = await handleActualizarEstadoDespacho(post({
+      despachoId,
+      nuevoEstado: 'pendiente',
+      motivo_devolucion: 'Cliente ausente',
+      destinoPagos: 'mantener',
+      idempotencyKey,
+    }), ENV)
+    const result = await bodyOf(response)
+
+    expect(result.status).toBe(200)
+    const rpc = calls.find(c => c.url.includes('/rpc/reabrir_despacho_con_pagos'))
+    expect(rpc.body).toMatchObject({ p_despacho_id: despachoId, p_destino_pagos: 'mantener', p_idempotency_key: idempotencyKey })
+    expect(calls.some(c => c.method === 'DELETE')).toBe(false)
+  })
+
+  it('despacho APROBADO (despachada) con cobro real: se mantiene el bloqueo de siempre', async () => {
+    const { calls } = installFetch({
+      abonos: [{ id: 'cxc-ab-2', monto_usd: 2.0, forma_pago_abono: 'Efectivo $' }],
+      estado: 'despachada',
     })
 
     const response = await handleActualizarEstadoDespacho(post({
@@ -179,6 +211,6 @@ describe('handleActualizarEstadoDespacho — reversión consciente de devolucion
 
     expect(result.status).toBe(400)
     expect(result.body.error).toContain('cobros reales')
-    expect(calls.some(c => c.url.includes('/rpc/revertir_entrega_finanzas_idempotente'))).toBe(false)
+    expect(calls.some(c => c.method === 'DELETE')).toBe(false)
   })
 })

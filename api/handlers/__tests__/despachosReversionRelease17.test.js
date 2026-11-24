@@ -86,7 +86,11 @@ function installFetch({ abonos = [], t4Response, reversaResponse, estado = 'desp
     if (String(url).includes('/notas_despacho?id=')) {
       return new Response(JSON.stringify([dispatchRow(estado)]), { status: 200 })
     }
-    if (String(url).includes('/rpc/revertir_entrega_finanzas_idempotente')) {
+    // OP-2026-059: un ENTREGADO consulta el dinero en juego y reabre con reabrir_despacho_con_pagos
+    if (String(url).includes('/rpc/cxc_pagos_en_juego_despacho')) {
+      return new Response(JSON.stringify({ requiere_decision_reabrir: false, requiere_decision_anular: false }), { status: 200 })
+    }
+    if (String(url).includes('/rpc/revertir_entrega_finanzas_idempotente') || String(url).includes('/rpc/reabrir_despacho_con_pagos')) {
       return new Response(JSON.stringify(reversaResponse.body), { status: reversaResponse.status })
     }
     if (String(url).includes('/comisiones?')) {
@@ -178,8 +182,9 @@ describe('handleActualizarEstadoDespacho — compatibilidad de rollout release 1
   })
 
   it('persiste el motivo cuando la reversión la resuelve la RPC atómica (entregada→pendiente)', async () => {
-    // entregada→pendiente pasa por revertir_entrega_finanzas_idempotente: esa
-    // ruta salta el PATCH de estado, así que el motivo exige su propio PATCH.
+    // entregada→pendiente pasa por reabrir_despacho_con_pagos (OP-2026-059), que dentro usa
+    // revertir_entrega_finanzas_idempotente: esa ruta salta el PATCH de estado, así que el
+    // motivo exige su propio PATCH.
     const { calls } = installFetch({
       estado: 'entregada',
       reversaResponse: { status: 200, body: { ok: true, nuevo_estado: 'pendiente' } },
@@ -196,7 +201,7 @@ describe('handleActualizarEstadoDespacho — compatibilidad de rollout release 1
     expect(result.status).toBe(200)
     expect(result.body).toMatchObject({ ok: true, nuevoEstado: 'pendiente' })
 
-    const rpc = calls.find(c => c.url.includes('/rpc/revertir_entrega_finanzas_idempotente'))
+    const rpc = calls.find(c => c.url.includes('/rpc/reabrir_despacho_con_pagos'))
     expect(rpc).toBeTruthy()
     expect(rpc.body).toMatchObject({ p_despacho_id: despachoId, p_nuevo_estado: 'pendiente' })
 

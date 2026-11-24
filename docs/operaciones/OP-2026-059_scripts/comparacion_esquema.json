@@ -1,0 +1,794 @@
+{
+ "prod": {
+  "funcs": [
+   {
+    "proname": "actualizar_estado_despacho",
+    "args": "p_despacho_id uuid, p_nuevo_estado text",
+    "h": "dc0f00dfd4bb3ccd8be94ce59a78769a"
+   },
+   {
+    "proname": "ajustar_finanzas_devolucion_atomica",
+    "args": "p_despacho_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_usuario_id uuid, p_usuario_nombre text",
+    "h": "d9e90758a7e5be8fe5167b0f00f51a44"
+   },
+   {
+    "proname": "anular_despacho_atomico",
+    "args": "p_despacho_id uuid, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text",
+    "h": "321bea6d8084626a66090e47c445a982"
+   },
+   {
+    "proname": "editar_despacho_profundidad",
+    "args": "p_despacho_id uuid, p_nuevos_items jsonb",
+    "h": "13f745c88363d34a540f1a9761e16e6d"
+   },
+   {
+    "proname": "editar_despacho_profundidad",
+    "args": "p_despacho_id uuid, p_nuevos_items jsonb, p_usuario_id uuid, p_usuario_nombre text, p_usuario_rol text",
+    "h": "1648ba53a1c0ccd3f7d3cdee9468b135"
+   },
+   {
+    "proname": "editar_despacho_profundidad",
+    "args": "p_despacho_id uuid, p_nuevos_items jsonb, p_usuario_id uuid, p_usuario_nombre text, p_usuario_rol text, p_forma_pago text",
+    "h": "60ef6e60c171f40ccc88c3cf626870a6"
+   },
+   {
+    "proname": "recalcularcomisiondespacho_238b",
+    "args": "p_despachoid uuid",
+    "h": "335dedffd848c129c752be179f64a640"
+   },
+   {
+    "proname": "registrar_cobro_diferencia_devolucion",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_usuario_id uuid, p_usuario_nombre text, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_pagos jsonb",
+    "h": "1c825de11e9c13fc00f00bfe4a094c6c"
+   },
+   {
+    "proname": "registrar_devolucion_parcial_atomica",
+    "args": "p_despacho_id uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_cotizacion_reemplazo_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric",
+    "h": "3b5f65935b8f6ecede16410fbe1fe3b8"
+   },
+   {
+    "proname": "registrar_devolucion_parcial_cobro_idempotente",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_idempotency_key uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_cotizacion_reemplazo_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_reemplazo jsonb, p_pagos_diferencia jsonb, p_destino_saldo text, p_pagos_reembolso jsonb",
+    "h": "f02d8a8f3b8607eb74b3150f63aa0b68"
+   },
+   {
+    "proname": "registrar_devolucion_parcial_idempotente",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_idempotency_key uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_cotizacion_reemplazo_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_reemplazo jsonb",
+    "h": "172c7ce9ac88799657930f37d17ac792"
+   },
+   {
+    "proname": "revertir_entrega_finanzas_atomica",
+    "args": "p_despacho_id uuid, p_nuevo_estado text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text",
+    "h": "efc97f23540e853a53eb7a65463a1ca2"
+   },
+   {
+    "proname": "revertir_entrega_finanzas_idempotente",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_idempotency_key uuid, p_nuevo_estado text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text",
+    "h": "7c3191d7432844beb69684d725dc5186"
+   },
+   {
+    "proname": "trg_recalcular_saldo_pendiente",
+    "args": "",
+    "h": "2ed0a1503b68f6148fc60082f0137006"
+   },
+   {
+    "proname": "trg_recalcular_saldo_pendiente_delete",
+    "args": "",
+    "h": "96d5dd52197a66da0a56092af90e289b"
+   },
+   {
+    "proname": "trg_recalcular_saldo_pendiente_proveedor",
+    "args": "",
+    "h": "4021aad5b003241e6f61ac4f4f0dacd7"
+   },
+   {
+    "proname": "validar_pagos_diferencia_devolucion",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_pagos jsonb",
+    "h": "28d5a59d82c30cc11ec201e07cd2ac1c"
+   }
+  ],
+  "enum": [
+   {
+    "enumlabel": "AUTH"
+   },
+   {
+    "enumlabel": "CLIENTE"
+   },
+   {
+    "enumlabel": "COTIZACION"
+   },
+   {
+    "enumlabel": "INVENTARIO"
+   },
+   {
+    "enumlabel": "TRANSPORTISTA"
+   },
+   {
+    "enumlabel": "USUARIO"
+   },
+   {
+    "enumlabel": "REASIGNACION"
+   },
+   {
+    "enumlabel": "CONFIGURACION"
+   },
+   {
+    "enumlabel": "SISTEMA"
+   },
+   {
+    "enumlabel": "FINANZAS"
+   }
+  ],
+  "cols": [
+   {
+    "column_name": "id",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "cliente_id",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "despacho_id",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "tipo",
+    "data_type": "text"
+   },
+   {
+    "column_name": "monto_usd",
+    "data_type": "numeric"
+   },
+   {
+    "column_name": "saldo_usd",
+    "data_type": "numeric"
+   },
+   {
+    "column_name": "forma_pago_abono",
+    "data_type": "text"
+   },
+   {
+    "column_name": "referencia",
+    "data_type": "text"
+   },
+   {
+    "column_name": "descripcion",
+    "data_type": "text"
+   },
+   {
+    "column_name": "registrado_por",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "creado_en",
+    "data_type": "timestamp with time zone"
+   },
+   {
+    "column_name": "cuenta_id",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "fecha_vencimiento",
+    "data_type": "date"
+   },
+   {
+    "column_name": "metodo_pago",
+    "data_type": "text"
+   }
+  ],
+  "tablas": [
+   {
+    "table_name": "auditoria"
+   },
+   {
+    "table_name": "clientes"
+   },
+   {
+    "table_name": "cuentas_por_cobrar"
+   },
+   {
+    "table_name": "notas_despacho"
+   }
+  ],
+  "vistas": [],
+  "triggers_cxc": [
+   {
+    "tgname": "trg_set_cuenta_id_cuentas_por_cobrar"
+   },
+   {
+    "tgname": "trg_sync_saldo_pendiente"
+   },
+   {
+    "tgname": "trg_sync_saldo_pendiente_delete"
+   }
+  ],
+  "indices_cxc": [
+   {
+    "indexname": "cuentas_por_cobrar_pkey"
+   },
+   {
+    "indexname": "idx_cuentas_por_cobrar_cuenta_id"
+   },
+   {
+    "indexname": "idx_cuentas_por_cobrar_registrado_por"
+   },
+   {
+    "indexname": "idx_cxc_cliente"
+   },
+   {
+    "indexname": "idx_cxc_despacho"
+   },
+   {
+    "indexname": "idx_cxc_fecha"
+   },
+   {
+    "indexname": "idx_cxc_metodo_pago"
+   },
+   {
+    "indexname": "idx_cxc_tipo"
+   }
+  ],
+  "politicas_cxc": [
+   {
+    "policyname": "auditoria_admin_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "auditoria_insert",
+    "cmd": "INSERT"
+   },
+   {
+    "policyname": "auditoria_jefe_all",
+    "cmd": "ALL"
+   },
+   {
+    "policyname": "auditoria_supervisor_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "cuentas_cobrar_admin_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "cuentas_por_cobrar_jefe_all",
+    "cmd": "ALL"
+   },
+   {
+    "policyname": "cxc_supervisor_all",
+    "cmd": "ALL"
+   },
+   {
+    "policyname": "cxc_vendedor_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "dashboard_scope_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "isolation_auditoria",
+    "cmd": "ALL"
+   },
+   {
+    "policyname": "isolation_cuentas_por_cobrar",
+    "cmd": "ALL"
+   }
+  ],
+  "cols_auditoria": [
+   {
+    "column_name": "id"
+   },
+   {
+    "column_name": "ts"
+   },
+   {
+    "column_name": "usuario_id"
+   },
+   {
+    "column_name": "usuario_nombre"
+   },
+   {
+    "column_name": "usuario_rol"
+   },
+   {
+    "column_name": "categoria"
+   },
+   {
+    "column_name": "accion"
+   },
+   {
+    "column_name": "descripcion"
+   },
+   {
+    "column_name": "entidad_tipo"
+   },
+   {
+    "column_name": "entidad_id"
+   },
+   {
+    "column_name": "meta"
+   },
+   {
+    "column_name": "ip_origen"
+   },
+   {
+    "column_name": "cuenta_id"
+   }
+  ],
+  "cols_despacho": [
+   {
+    "column_name": "cliente_factura_id"
+   },
+   {
+    "column_name": "forma_pago"
+   },
+   {
+    "column_name": "forma_pago_cliente"
+   },
+   {
+    "column_name": "motivo_anulacion"
+   },
+   {
+    "column_name": "tiene_devoluciones"
+   },
+   {
+    "column_name": "total_usd"
+   }
+  ]
+ },
+ "staging": {
+  "funcs": [
+   {
+    "proname": "actualizar_estado_despacho",
+    "args": "p_despacho_id uuid, p_nuevo_estado text",
+    "h": "dc0f00dfd4bb3ccd8be94ce59a78769a"
+   },
+   {
+    "proname": "ajustar_finanzas_devolucion_atomica",
+    "args": "p_despacho_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_usuario_id uuid, p_usuario_nombre text",
+    "h": "7eae3d2694abeab8863785126ed7ec14"
+   },
+   {
+    "proname": "anular_despacho_atomico",
+    "args": "p_despacho_id uuid, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text",
+    "h": "321bea6d8084626a66090e47c445a982"
+   },
+   {
+    "proname": "anular_despacho_con_pagos_staging",
+    "args": "p_despacho_id uuid, p_usuario_id uuid, p_usuario_nombre text, p_usuario_rol text, p_destino text, p_motivo text",
+    "h": "71b55a3a5a6f981bcc78ab35d3fad325"
+   },
+   {
+    "proname": "cxc_anular_movimiento_staging",
+    "args": "p_movimiento_id uuid, p_cuenta_id uuid, p_usuario_id uuid, p_usuario_nombre text, p_usuario_rol text, p_motivo text",
+    "h": "5be39e190459f93c5d4d3352f99969b8"
+   },
+   {
+    "proname": "cxc_es_pago_real",
+    "args": "p_metodo text",
+    "h": "541964b1c321f49eeb8f05faf85db2e9"
+   },
+   {
+    "proname": "cxc_num",
+    "args": "p text",
+    "h": "6b4f8b0c197bb15e359e8d3d2122a624"
+   },
+   {
+    "proname": "cxc_pagos_en_juego_despacho",
+    "args": "p_despacho_id uuid",
+    "h": "1c98e7aa1d8dc72aa5cd3dc3393fc815"
+   },
+   {
+    "proname": "cxc_pendiente_despacho",
+    "args": "p_cliente_id uuid, p_despacho_id uuid",
+    "h": "c22f2a242e979b179eee0c65d30a9f58"
+   },
+   {
+    "proname": "cxc_registrar_abono_atomico",
+    "args": "p_cliente_id uuid, p_monto numeric, p_forma_pago text, p_referencia text, p_descripcion text, p_despacho_id uuid, p_registrado_por uuid, p_usuario_nombre text, p_usuario_rol text, p_idempotency_key text, p_confirmar_duplicado boolean, p_ip text, p_meta jsonb",
+    "h": "20bd5d0931774a0a912671b4fe80f5ec"
+   },
+   {
+    "proname": "cxc_reparto_cliente",
+    "args": "p_cliente_id uuid",
+    "h": "d3e9973fa4743e1630edc7086a789d8e"
+   },
+   {
+    "proname": "cxc_restar_donacion_fp",
+    "args": "p_fp text, p_monto numeric",
+    "h": "d186ba0988a9dd442645d498c5a2cf56"
+   },
+   {
+    "proname": "cxc_saldo_favor_atomico",
+    "args": "p_operacion text, p_cliente_id uuid, p_monto numeric, p_forma_pago text, p_referencia text, p_descripcion text, p_registrado_por uuid, p_usuario_nombre text, p_usuario_rol text, p_idempotency_key text, p_confirmar_duplicado boolean, p_ip text",
+    "h": "de728dcd2316ed0efb76e830bc68c89f"
+   },
+   {
+    "proname": "devolucion_con_donacion_staging",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_idempotency_key uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_reemplazo jsonb, p_pagos_diferencia jsonb, p_destino_saldo text, p_pagos_reembolso jsonb, p_anular_abono_id uuid, p_usuario_rol text, p_total_devuelto_real numeric, p_valor_donado numeric, p_fraccion_donada numeric, p_acreditar_donacion boolean, p_motivo_donacion text",
+    "h": "51d8fce874e427bbcb1f3a36a292024e"
+   },
+   {
+    "proname": "editar_despacho_profundidad",
+    "args": "p_despacho_id uuid, p_nuevos_items jsonb",
+    "h": "13f745c88363d34a540f1a9761e16e6d"
+   },
+   {
+    "proname": "editar_despacho_profundidad",
+    "args": "p_despacho_id uuid, p_nuevos_items jsonb, p_usuario_id uuid, p_usuario_nombre text, p_usuario_rol text",
+    "h": "1648ba53a1c0ccd3f7d3cdee9468b135"
+   },
+   {
+    "proname": "editar_despacho_profundidad",
+    "args": "p_despacho_id uuid, p_nuevos_items jsonb, p_usuario_id uuid, p_usuario_nombre text, p_usuario_rol text, p_forma_pago text",
+    "h": "60ef6e60c171f40ccc88c3cf626870a6"
+   },
+   {
+    "proname": "editar_despacho_profundidad_con_cxc_staging",
+    "args": "p_despacho_id uuid, p_nuevos_items jsonb, p_usuario_id uuid, p_usuario_nombre text, p_usuario_rol text, p_forma_pago text, p_destino_pagos text",
+    "h": "bb4b2950a0281c0b15092e259efbd71e"
+   },
+   {
+    "proname": "reabrir_despacho_con_pagos_staging",
+    "args": "p_despacho_id uuid, p_nuevo_estado text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_rol text, p_usuario_color text, p_idempotency_key uuid, p_destino_pagos text, p_motivo text",
+    "h": "41418d6dff98c17b7b25dbf6a077861f"
+   },
+   {
+    "proname": "recalcularcomisiondespacho_238b",
+    "args": "p_despachoid uuid",
+    "h": "335dedffd848c129c752be179f64a640"
+   },
+   {
+    "proname": "registrar_cobro_diferencia_devolucion",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_usuario_id uuid, p_usuario_nombre text, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_pagos jsonb",
+    "h": "371b63828cbaa99907577de3e8aae1c1"
+   },
+   {
+    "proname": "registrar_devolucion_parcial_atomica",
+    "args": "p_despacho_id uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_cotizacion_reemplazo_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric",
+    "h": "3b5f65935b8f6ecede16410fbe1fe3b8"
+   },
+   {
+    "proname": "registrar_devolucion_parcial_atomica_staging",
+    "args": "p_despacho_id uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_cotizacion_reemplazo_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_idempotency_key uuid",
+    "h": "11a0c2962bbabab9c8ee438b5f205b19"
+   },
+   {
+    "proname": "registrar_devolucion_parcial_cobro_idempotente",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_idempotency_key uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_cotizacion_reemplazo_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_reemplazo jsonb, p_pagos_diferencia jsonb, p_destino_saldo text, p_pagos_reembolso jsonb, p_anular_abono_id uuid",
+    "h": "7ef8c9f37ba9befcfb01062cd77dc10a"
+   },
+   {
+    "proname": "registrar_devolucion_parcial_cobro_staging",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_idempotency_key uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_cotizacion_reemplazo_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_reemplazo jsonb, p_pagos_diferencia jsonb, p_destino_saldo text, p_pagos_reembolso jsonb, p_anular_abono_id uuid",
+    "h": "58c4c55715e296aef7c03e86fa75654f"
+   },
+   {
+    "proname": "registrar_devolucion_parcial_finanzas_atomica_staging",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_idempotency_key uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_cotizacion_reemplazo_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_reemplazo jsonb",
+    "h": "510362f228dde81d6f2812df6721c6fb"
+   },
+   {
+    "proname": "registrar_devolucion_parcial_idempotente",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_idempotency_key uuid, p_devoluciones jsonb, p_intercambios jsonb, p_motivo text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_cotizacion_reemplazo_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_reemplazo jsonb",
+    "h": "172c7ce9ac88799657930f37d17ac792"
+   },
+   {
+    "proname": "revertir_entrega_finanzas_atomica",
+    "args": "p_despacho_id uuid, p_nuevo_estado text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text",
+    "h": "eef1b3030f6998f2f3a55e7d5393f0bc"
+   },
+   {
+    "proname": "revertir_entrega_finanzas_atomica_staging",
+    "args": "p_despacho_id uuid, p_nuevo_estado text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text, p_idempotency_key uuid",
+    "h": "0de2075a3bbae0aad1dda6f6b58e7276"
+   },
+   {
+    "proname": "revertir_entrega_finanzas_idempotente",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_idempotency_key uuid, p_nuevo_estado text, p_usuario_id uuid, p_usuario_nombre text, p_usuario_color text",
+    "h": "7c3191d7432844beb69684d725dc5186"
+   },
+   {
+    "proname": "trg_archivar_cxc_borrado",
+    "args": "",
+    "h": "b2ddfddf48bcb36e8ee8dd4ad3dd43e3"
+   },
+   {
+    "proname": "trg_recalcular_saldo_pendiente",
+    "args": "",
+    "h": "8b301fee084e4fb7e70a875d86272213"
+   },
+   {
+    "proname": "trg_recalcular_saldo_pendiente_delete",
+    "args": "",
+    "h": "eda020c14770d7b0004352be768f80b8"
+   },
+   {
+    "proname": "trg_recalcular_saldo_pendiente_proveedor",
+    "args": "",
+    "h": "4021aad5b003241e6f61ac4f4f0dacd7"
+   },
+   {
+    "proname": "validar_pagos_diferencia_devolucion",
+    "args": "p_cuenta_id uuid, p_despacho_id uuid, p_total_devuelto_usd numeric, p_total_intercambio_usd numeric, p_pagos jsonb",
+    "h": "28d5a59d82c30cc11ec201e07cd2ac1c"
+   }
+  ],
+  "enum": [
+   {
+    "enumlabel": "AUTH"
+   },
+   {
+    "enumlabel": "CLIENTE"
+   },
+   {
+    "enumlabel": "COTIZACION"
+   },
+   {
+    "enumlabel": "INVENTARIO"
+   },
+   {
+    "enumlabel": "TRANSPORTISTA"
+   },
+   {
+    "enumlabel": "USUARIO"
+   },
+   {
+    "enumlabel": "REASIGNACION"
+   },
+   {
+    "enumlabel": "CONFIGURACION"
+   },
+   {
+    "enumlabel": "SISTEMA"
+   },
+   {
+    "enumlabel": "FINANZAS"
+   },
+   {
+    "enumlabel": "DESPACHO"
+   },
+   {
+    "enumlabel": "VEHICULO"
+   },
+   {
+    "enumlabel": "CONFIG"
+   },
+   {
+    "enumlabel": "COMISIONES"
+   }
+  ],
+  "cols": [
+   {
+    "column_name": "id",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "cliente_id",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "despacho_id",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "tipo",
+    "data_type": "text"
+   },
+   {
+    "column_name": "monto_usd",
+    "data_type": "numeric"
+   },
+   {
+    "column_name": "saldo_usd",
+    "data_type": "numeric"
+   },
+   {
+    "column_name": "forma_pago_abono",
+    "data_type": "text"
+   },
+   {
+    "column_name": "referencia",
+    "data_type": "text"
+   },
+   {
+    "column_name": "descripcion",
+    "data_type": "text"
+   },
+   {
+    "column_name": "registrado_por",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "creado_en",
+    "data_type": "timestamp with time zone"
+   },
+   {
+    "column_name": "cuenta_id",
+    "data_type": "uuid"
+   },
+   {
+    "column_name": "fecha_vencimiento",
+    "data_type": "date"
+   },
+   {
+    "column_name": "metodo_pago",
+    "data_type": "text"
+   },
+   {
+    "column_name": "idempotency_key",
+    "data_type": "text"
+   }
+  ],
+  "tablas": [
+   {
+    "table_name": "auditoria"
+   },
+   {
+    "table_name": "clientes"
+   },
+   {
+    "table_name": "cuentas_por_cobrar"
+   },
+   {
+    "table_name": "cxc_movimientos_borrados"
+   },
+   {
+    "table_name": "notas_despacho"
+   }
+  ],
+  "vistas": [
+   {
+    "table_name": "v_cxc_pagado_de_mas"
+   }
+  ],
+  "triggers_cxc": [
+   {
+    "tgname": "trg_archivar_cxc_borrado"
+   },
+   {
+    "tgname": "trg_set_cuenta_id_cuentas_por_cobrar"
+   },
+   {
+    "tgname": "trg_sync_saldo_pendiente"
+   },
+   {
+    "tgname": "trg_sync_saldo_pendiente_delete"
+   }
+  ],
+  "indices_cxc": [
+   {
+    "indexname": "cuentas_por_cobrar_pkey"
+   },
+   {
+    "indexname": "idx_cuentas_por_cobrar_cuenta_id"
+   },
+   {
+    "indexname": "idx_cxc_cliente"
+   },
+   {
+    "indexname": "idx_cxc_despacho"
+   },
+   {
+    "indexname": "idx_cxc_fecha"
+   },
+   {
+    "indexname": "idx_cxc_metodo_pago"
+   },
+   {
+    "indexname": "idx_cxc_tipo"
+   },
+   {
+    "indexname": "ux_cxc_cuenta_idempotency_key"
+   }
+  ],
+  "politicas_cxc": [
+   {
+    "policyname": "auditoria_admin_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "auditoria_insert",
+    "cmd": "INSERT"
+   },
+   {
+    "policyname": "auditoria_jefe_all",
+    "cmd": "ALL"
+   },
+   {
+    "policyname": "auditoria_supervisor_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "cuentas_cobrar_admin_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "cuentas_por_cobrar_jefe_all",
+    "cmd": "ALL"
+   },
+   {
+    "policyname": "cxc_supervisor_all",
+    "cmd": "ALL"
+   },
+   {
+    "policyname": "cxc_vendedor_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "dashboard_scope_select",
+    "cmd": "SELECT"
+   },
+   {
+    "policyname": "isolation_auditoria",
+    "cmd": "ALL"
+   },
+   {
+    "policyname": "isolation_cuentas_por_cobrar",
+    "cmd": "ALL"
+   }
+  ],
+  "cols_auditoria": [
+   {
+    "column_name": "id"
+   },
+   {
+    "column_name": "ts"
+   },
+   {
+    "column_name": "usuario_id"
+   },
+   {
+    "column_name": "usuario_nombre"
+   },
+   {
+    "column_name": "usuario_rol"
+   },
+   {
+    "column_name": "categoria"
+   },
+   {
+    "column_name": "accion"
+   },
+   {
+    "column_name": "descripcion"
+   },
+   {
+    "column_name": "entidad_tipo"
+   },
+   {
+    "column_name": "entidad_id"
+   },
+   {
+    "column_name": "meta"
+   },
+   {
+    "column_name": "ip_origen"
+   },
+   {
+    "column_name": "cuenta_id"
+   }
+  ],
+  "cols_despacho": [
+   {
+    "column_name": "cliente_factura_id"
+   },
+   {
+    "column_name": "forma_pago"
+   },
+   {
+    "column_name": "forma_pago_cliente"
+   },
+   {
+    "column_name": "motivo_anulacion"
+   },
+   {
+    "column_name": "tiene_devoluciones"
+   },
+   {
+    "column_name": "total_usd"
+   }
+  ]
+ }
+}

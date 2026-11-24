@@ -1787,12 +1787,14 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
         tieneDevoluciones={despacho.tiene_devoluciones}
         despachoId={despacho.id}
         onClose={() => setAccionPendiente(null)}
-        onConfirm={async (estadoDestino, motivo) => {
+        onConfirm={async (estadoDestino, motivo, decision) => {
           if (!accionPendiente) return
+          // OP-2026-052: `decision` lleva qué hacer con los pagos (si el despacho los tiene).
+          // Si el servidor responde con error, el modal lo muestra y queda abierto.
           if (accionPendiente.isDevolver) {
-            await onCambiarEstado(accionPendiente.id, estadoDestino, motivo, null)
+            await onCambiarEstado(accionPendiente.id, estadoDestino, motivo, null, decision)
           } else {
-            await onCambiarEstado(accionPendiente.id, estadoDestino, null, motivo)
+            await onCambiarEstado(accionPendiente.id, estadoDestino, null, motivo, decision)
           }
           setAccionPendiente(null)
         }}

@@ -7,15 +7,45 @@ import { authFetch } from '../services/authFetch'
 import useAuthStore from '../store/useAuthStore'
 import { CLIENTES_KEY } from './useClientes'
 import { showToast } from '../components/ui/Toast'
+import { repartirCxC, cargosPendientes, pagadoDeMas } from '../utils/cxcReparto'
+import { leerPaginado } from '../utils/leerPaginado'
 
 export const CXC_KEY = ['cuentas-cobrar']
+
+// ─── OP-2026-042: resumen completo de la cuenta de UN cliente ───────────────
+// Trae TODOS sus cargos y abonos (sin el tope de 100 del historial) para:
+//  - el selector "¿Qué despacho paga?" al registrar un abono
+//  - mostrar el "pagado de más" (abonos que no corresponden a ninguna deuda)
+export function useResumenCuentaCliente(clienteId) {
+  return useQuery({
+    queryKey: [...CXC_KEY, 'resumen-cliente', clienteId],
+    queryFn: async () => {
+      // OP-2026-057: por páginas (M7) y con metodo_pago para la regla de despachos con dos deudas (M3)
+      const movs = await leerPaginado(() => supabase
+        .from('cuentas_por_cobrar')
+        .select('id, tipo, monto_usd, despacho_id, metodo_pago, descripcion, creado_en, fecha_vencimiento, despacho:notas_despacho(numero)')
+        .eq('cliente_id', clienteId)
+        .in('tipo', ['cargo', 'abono'])
+        .order('creado_en', { ascending: true })
+        .order('id', { ascending: true }))
+      const numeroPorDespacho = Object.fromEntries(movs.filter(m => m.despacho_id).map(m => [m.despacho_id, m.despacho?.numero ?? null]))
+      return {
+        pendientes: cargosPendientes(movs).map(c => ({ ...c, numero: c.despacho_id ? numeroPorDespacho[c.despacho_id] : null })),
+        pagadoDeMas: pagadoDeMas(movs),
+      }
+    },
+    enabled: !!clienteId,
+    staleTime: 1000 * 60,
+  })
+}
 
 // ─── Historial CxC de un cliente ──────────────────────────────────────────
 export function useCuentasCobrar(clienteId) {
   return useQuery({
     queryKey: [...CXC_KEY, clienteId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // OP-2026-057 (M2): historial COMPLETO (antes se cortaba en los últimos 100 movimientos)
+      return leerPaginado(() => supabase
         .from('cuentas_por_cobrar')
         .select(`
           id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd,
@@ -24,10 +54,7 @@ export function useCuentasCobrar(clienteId) {
         `)
         .eq('cliente_id', clienteId)
         .order('creado_en', { ascending: false })
-        .limit(100)
-
-      if (error) throw error
-      return data ?? []
+        .order('id', { ascending: false }))
     },
     enabled: !!clienteId,
     staleTime: 1000 * 60 * 2,
@@ -69,12 +96,14 @@ export function useResumenCxC(rango) {
       if (clienteIds.length > 0) {
         for (let i = 0; i < clienteIds.length; i += 50) {
           const batch = clienteIds.slice(i, i + 50)
-          const { data } = await supabase
+          // OP-2026-057 (M7): por páginas, para no perder movimientos si un lote supera el máximo de la base
+          const data = await leerPaginado(() => supabase
             .from('cuentas_por_cobrar')
             .select('id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd, fecha_vencimiento, creado_en, metodo_pago, forma_pago_abono, descripcion, referencia')
             .in('tipo', ['cargo', 'abono'])
             .in('cliente_id', batch)
             .order('creado_en', { ascending: true })
+            .order('id', { ascending: true }))
           transacciones = transacciones.concat(data ?? [])
         }
       }
@@ -96,44 +125,9 @@ export function useResumenCxC(rango) {
 
       // FIFO para clientes originales (saldo global > 0)
       Object.keys(txsPorCliente).forEach(cid => {
-        const txs = txsPorCliente[cid]
-        const clientCargos = []
-        const clientAbonos = []
-
-        txs.forEach(t => {
-          if (t.tipo === 'cargo') {
-            clientCargos.push({ ...t, saldo_pendiente_cargo: Number(t.monto_usd || 0) })
-          } else if (t.tipo === 'abono') {
-            clientAbonos.push({ ...t, monto_restante: Number(t.monto_usd || 0) })
-          }
-        })
-
-        // Fase 1: Aplicar abonos vinculados a un despacho directo
-        clientAbonos.forEach(abono => {
-          if (abono.despacho_id) {
-            const cargo = clientCargos.find(c => c.despacho_id === abono.despacho_id)
-            if (cargo && cargo.saldo_pendiente_cargo > 0) {
-              const aplicar = Math.min(cargo.saldo_pendiente_cargo, abono.monto_restante)
-              cargo.saldo_pendiente_cargo = Math.round((cargo.saldo_pendiente_cargo - aplicar) * 10000) / 10000
-              abono.monto_restante = Math.round((abono.monto_restante - aplicar) * 10000) / 10000
-            }
-          }
-        })
-
-        // Fase 2: Aplicar abonos restantes en orden FIFO
-        clientAbonos.forEach(abono => {
-          if (abono.monto_restante > 0) {
-            for (let i = 0; i < clientCargos.length; i++) {
-              const cargo = clientCargos[i]
-              if (cargo.saldo_pendiente_cargo > 0) {
-                const aplicar = Math.min(cargo.saldo_pendiente_cargo, abono.monto_restante)
-                cargo.saldo_pendiente_cargo = Math.round((cargo.saldo_pendiente_cargo - aplicar) * 10000) / 10000
-                abono.monto_restante = Math.round((abono.monto_restante - aplicar) * 10000) / 10000
-                if (abono.monto_restante <= 0) break
-              }
-            }
-          }
-        })
+        // OP-2026-042: misma regla de reparto en todo el sistema (src/utils/cxcReparto.js).
+        // consumo_credito consume saldo a favor; nunca se aplica contra cargos CxC.
+        const { cargos: clientCargos, abonos: clientAbonos } = repartirCxC(txsPorCliente[cid])
 
         // Filtrar cargos: sin rango → solo pendientes; con rango → todos los del periodo
         cargosPendientesPorCliente[cid] = clientCargos
@@ -163,12 +157,13 @@ export function useResumenCxC(rango) {
       // (saldo global = 0, pero tuvieron cargos en el periodo)
       let clientesExtraIds = []
       if (rango?.from || rango?.to) {
-        const { data: cargosEnRango } = await supabase
+        const cargosEnRango = await leerPaginado(() => supabase
           .from('cuentas_por_cobrar')
           .select('cliente_id')
           .eq('tipo', 'cargo')
           .gte('creado_en', `${rango.from || '2000-01-01'}T00:00:00-04:00`)
           .lte('creado_en', `${rango.to || '2100-01-01'}T23:59:59-04:00`)
+          .order('id', { ascending: true }))
 
         const idsEnRango = [...new Set((cargosEnRango || []).map(r => r.cliente_id))]
         clientesExtraIds = idsEnRango.filter(id => !clienteIds.includes(id))
@@ -201,12 +196,13 @@ export function useResumenCxC(rango) {
       if (clientesExtraIds.length > 0) {
         for (let i = 0; i < clientesExtraIds.length; i += 50) {
           const batch = clientesExtraIds.slice(i, i + 50)
-          const { data: txExtra } = await supabase
+          const txExtra = await leerPaginado(() => supabase
             .from('cuentas_por_cobrar')
             .select('id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd, fecha_vencimiento, creado_en, metodo_pago, forma_pago_abono, descripcion, referencia')
             .in('tipo', ['cargo', 'abono'])
             .in('cliente_id', batch)
             .order('creado_en', { ascending: true })
+            .order('id', { ascending: true }))
 
           if (txExtra) {
             // Agrupar por cliente
@@ -217,44 +213,7 @@ export function useResumenCxC(rango) {
             })
 
             Object.keys(extraPorCliente).forEach(cid => {
-              const txs = extraPorCliente[cid]
-              const clientCargos = []
-              const clientAbonos = []
-
-              txs.forEach(t => {
-                if (t.tipo === 'cargo') {
-                  clientCargos.push({ ...t, saldo_pendiente_cargo: Number(t.monto_usd || 0) })
-                } else if (t.tipo === 'abono') {
-                  clientAbonos.push({ ...t, monto_restante: Number(t.monto_usd || 0) })
-                }
-              })
-
-              // FIFO fase 1: despacho directo
-              clientAbonos.forEach(abono => {
-                if (abono.despacho_id) {
-                  const cargo = clientCargos.find(c => c.despacho_id === abono.despacho_id)
-                  if (cargo && cargo.saldo_pendiente_cargo > 0) {
-                    const aplicar = Math.min(cargo.saldo_pendiente_cargo, abono.monto_restante)
-                    cargo.saldo_pendiente_cargo = Math.round((cargo.saldo_pendiente_cargo - aplicar) * 10000) / 10000
-                    abono.monto_restante = Math.round((abono.monto_restante - aplicar) * 10000) / 10000
-                  }
-                }
-              })
-
-              // FIFO fase 2: resto cronológico
-              clientAbonos.forEach(abono => {
-                if (abono.monto_restante > 0) {
-                  for (let j = 0; j < clientCargos.length; j++) {
-                    const cargo = clientCargos[j]
-                    if (cargo.saldo_pendiente_cargo > 0) {
-                      const aplicar = Math.min(cargo.saldo_pendiente_cargo, abono.monto_restante)
-                      cargo.saldo_pendiente_cargo = Math.round((cargo.saldo_pendiente_cargo - aplicar) * 10000) / 10000
-                      abono.monto_restante = Math.round((abono.monto_restante - aplicar) * 10000) / 10000
-                      if (abono.monto_restante <= 0) break
-                    }
-                  }
-                }
-              })
+              const { cargos: clientCargos, abonos: clientAbonos } = repartirCxC(extraPorCliente[cid])
 
               // Solo cargos del periodo (pagados y no pagados)
               cargosPendientesPorCliente[cid] = clientCargos
@@ -391,10 +350,29 @@ export function useResumenCxC(rango) {
       if (rango?.to) {
         abonosQuery = abonosQuery.lte('creado_en', `${rango.to}T23:59:59-04:00`)
       }
+      // OP-2026-057 (M7): con rango de fechas se leen todos por páginas; sin rango, los 50 más recientes
+      let abonosRaw
       if (!rango?.from && !rango?.to) {
-        abonosQuery = abonosQuery.limit(50)
+        abonosRaw = (await abonosQuery.limit(50)).data
+      } else {
+        const armar = () => {
+          let q = supabase
+            .from('cuentas_por_cobrar')
+            .select(`
+          id, cliente_id, despacho_id, tipo, monto_usd, saldo_usd,
+          forma_pago_abono, referencia, descripcion, creado_en, metodo_pago,
+          cliente:clientes(nombre),
+          despacho:notas_despacho(numero, cotizacion:cotizaciones(numero))
+        `)
+            .eq('tipo', 'abono')
+            .order('creado_en', { ascending: false })
+            .order('id', { ascending: false })
+          if (rango?.from) q = q.gte('creado_en', `${rango.from}T00:00:00-04:00`)
+          if (rango?.to) q = q.lte('creado_en', `${rango.to}T23:59:59-04:00`)
+          return q
+        }
+        abonosRaw = await leerPaginado(armar)
       }
-      const { data: abonosRaw } = await abonosQuery
 
       // Consultar saldo_a_favor global de clientes activos
       let querySaldoFavor = supabase
@@ -407,8 +385,45 @@ export function useResumenCxC(rango) {
       const totalSaldoFavorClientes = (clientesSaldoFavor || []).reduce((sum, c) => sum + Number(c.saldo_a_favor || 0), 0)
       const numClientesConSaldoFavor = (clientesSaldoFavor || []).length
 
+      // OP-2026-042 (falla G3): clientes con pagos de más. El saldo nunca baja
+      // de 0, así que estos montos no se veían en ningún lado. Si uno de estos
+      // clientes vuelve a comprar a crédito, el exceso se come esa deuda.
+      let clientesPagadoDeMas = []
+      try {
+        const { data: excesos, error: errExceso } = await supabase
+          .from('v_cxc_pagado_de_mas')
+          .select('cliente_id, cargos_usd, abonos_usd, pagado_de_mas_usd')
+          .order('pagado_de_mas_usd', { ascending: false })
+        if (errExceso) throw errExceso
+        const idsExceso = (excesos || []).map(e => e.cliente_id)
+        if (idsExceso.length > 0) {
+          let qCli = supabase
+            .from('clientes')
+            .select('id, nombre, vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre, color)')
+            .in('id', idsExceso)
+          if (!esPrivilegiado) qCli = qCli.eq('vendedor_id', perfil.id)
+          const { data: cliExceso } = await qCli
+          const porId = Object.fromEntries((cliExceso || []).map(c => [c.id, c]))
+          clientesPagadoDeMas = (excesos || [])
+            .filter(e => porId[e.cliente_id])
+            .map(e => ({
+              id: e.cliente_id,
+              nombre: porId[e.cliente_id].nombre,
+              vendedor: porId[e.cliente_id].vendedor,
+              cargos: Number(e.cargos_usd || 0),
+              abonos: Number(e.abonos_usd || 0),
+              pagadoDeMas: Number(e.pagado_de_mas_usd || 0),
+            }))
+        }
+      } catch (e) {
+        console.warn('[CxC] No se pudo leer pagados de más:', e?.message)
+      }
+      const totalPagadoDeMas = Math.round(clientesPagadoDeMas.reduce((s, c) => s + c.pagadoDeMas, 0) * 100) / 100
+
       return {
         kpis: {
+          totalPagadoDeMas,
+          numClientesPagadoDeMas: clientesPagadoDeMas.length,
           totalDeuda,
           totalOtorgado,
           totalCobrado,
@@ -420,6 +435,7 @@ export function useResumenCxC(rango) {
           numCargos: clientesConDeudaFiltrados.reduce((s, c) => s + (c.cargosActivos?.length || 0), 0),
         },
         clientesConDeuda: clientesConDeudaFiltrados,
+        clientesPagadoDeMas,
         aging,
         alertasVencimiento,
         abonos: abonosRaw || []
@@ -431,13 +447,55 @@ export function useResumenCxC(rango) {
   })
 }
 
+// ─── OP-2026-049 (N10): errores de guardado claros ───────────────────────────
+// Antes, si el servidor rechazaba o la conexión fallaba, la ficha no mostraba
+// nada (el error quedaba solo en la consola). Estas funciones convierten
+// cualquier fallo en un Error con mensaje en español, código y estado HTTP, y
+// avisan con un mensaje rojo. El aviso de "posible duplicado" (G4) no se muestra
+// como error: lo maneja el formulario con una confirmación.
+export const MSG_SIN_CONEXION = 'No hay conexión con el servidor. Revisa internet y vuelve a intentar.'
+
+export async function llamarApiCxc(ruta, opciones, porDefecto) {
+  let res
+  try {
+    res = await authFetch(ruta, opciones)
+  } catch {
+    const e = new Error(MSG_SIN_CONEXION)
+    e.code = 'SIN_CONEXION'
+    throw e
+  }
+  let result = null
+  try { result = await res.json() } catch { result = null }
+  if (!res.ok) {
+    const e = new Error(
+      result?.error
+        || (res.status === 401 || res.status === 403 ? 'Tu sesión venció. Vuelve a entrar con tu PIN.' : porDefecto)
+    )
+    e.status = res.status
+    e.code = result?.code || null
+    e.datos = result || null
+    throw e
+  }
+  return result
+}
+
+export function avisarErrorGuardado(prefijo) {
+  // vars.sinAvisoGlobal: la pantalla que llama ya muestra su propio aviso.
+  // vars.manejaDuplicado: la pantalla muestra la confirmación de "posible duplicado".
+  return (error, vars) => {
+    if (vars?.sinAvisoGlobal) return
+    if (error?.code === 'POSIBLE_DUPLICADO' && vars?.manejaDuplicado) return
+    showToast(`${prefijo}: ${error?.message || 'error desconocido'}`, 'error', 8000)
+  }
+}
+
 // ─── Registrar abono (pago del cliente, via Worker API) ─────────────────────
 export function useRegistrarAbono() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion, despachoId, idempotencyKey }) => {
-      const res = await authFetch('/api/cxc/abono', {
+    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion, despachoId, idempotencyKey, confirmarDuplicado }) => {
+      return llamarApiCxc('/api/cxc/abono', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -452,12 +510,10 @@ export function useRegistrarAbono() {
           referencia: referencia || null,
           descripcion: descripcion || 'Abono recibido',
           despachoId: despachoId || null,
-          ...(idempotencyKey ? { idempotencyKey } : {})
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+          ...(confirmarDuplicado ? { confirmarDuplicado: true } : {})
         }),
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al registrar abono')
-      return result
+      }, 'No se pudo registrar el abono')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CXC_KEY })
@@ -465,6 +521,7 @@ export function useRegistrarAbono() {
       qc.invalidateQueries({ queryKey: ['despachos'] })
       showToast('Abono registrado exitosamente', 'success')
     },
+    onError: avisarErrorGuardado('No se guardó el abono'),
   })
 }
 
@@ -473,21 +530,20 @@ export function useRevertirAbono() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ abonoId }) => {
-      const res = await authFetch('/api/cxc/revertir-abono', {
+    // OP-2026-055 (I3): anular exige motivo; la copia completa queda en el archivo de movimientos anulados
+    mutationFn: async ({ abonoId, motivo }) => {
+      return llamarApiCxc('/api/cxc/revertir-abono', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ abonoId }),
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al revertir abono')
-      return result
+        body: JSON.stringify({ abonoId, motivo }),
+      }, 'No se pudo anular el movimiento')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CXC_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY })
       qc.invalidateQueries({ queryKey: ['despachos'] })
-      showToast('Abono revertido exitosamente', 'success')
+      qc.invalidateQueries({ queryKey: ['cxc-movimientos-borrados'] })
+      showToast('Movimiento anulado. Queda guardado en "Movimientos anulados".', 'success')
     },
   })
 }
@@ -524,27 +580,31 @@ export function useRegistrarSaldoFavor() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion }) => {
-      const res = await authFetch('/api/cxc/saldo-favor', {
+    // OP-2026-051: huella por operación y confirmación de posible repetido
+    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion, idempotencyKey, confirmarDuplicado }) => {
+      return llamarApiCxc('/api/cxc/saldo-favor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey) } : {})
+        },
         body: JSON.stringify({
           clienteId,
           monto,
           formaPago: formaPago || null,
           referencia: referencia || null,
-          descripcion: descripcion || 'Saldo a favor registrado'
+          descripcion: descripcion || 'Saldo a favor registrado',
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+          ...(confirmarDuplicado ? { confirmarDuplicado: true } : {})
         }),
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al registrar saldo a favor')
-      return result
+      }, 'No se pudo registrar el saldo a favor')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CXC_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY })
       showToast('Saldo a favor registrado exitosamente', 'success')
     },
+    onError: avisarErrorGuardado('No se guardó el saldo a favor'),
   })
 }
 
@@ -553,27 +613,31 @@ export function useRegistrarDevolucionCredito() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion }) => {
-      const res = await authFetch('/api/cxc/devolucion-credito', {
+    // OP-2026-051: huella por operación y confirmación de posible repetido
+    mutationFn: async ({ clienteId, monto, formaPago, referencia, descripcion, idempotencyKey, confirmarDuplicado }) => {
+      return llamarApiCxc('/api/cxc/devolucion-credito', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey) } : {})
+        },
         body: JSON.stringify({
           clienteId,
           monto,
           formaPago,
           referencia: referencia || null,
-          descripcion: descripcion || 'Devolución de saldo a favor registrada'
+          descripcion: descripcion || 'Devolución de saldo a favor registrada',
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+          ...(confirmarDuplicado ? { confirmarDuplicado: true } : {})
         }),
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al registrar devolución de saldo a favor')
-      return result
+      }, 'No se pudo registrar la devolución de saldo a favor')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CXC_KEY })
       qc.invalidateQueries({ queryKey: CLIENTES_KEY })
       showToast('Devolución de saldo a favor registrada exitosamente', 'success')
     },
+    onError: avisarErrorGuardado('No se guardó la devolución de saldo'),
   })
 }
 
@@ -582,18 +646,20 @@ export function useCruzarSaldoFavor() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ clienteId, monto }) => {
-      const res = await authFetch('/api/cxc/cruzar-saldo-favor', {
+    // OP-2026-051: huella por operación (reintento o doble clic no duplican)
+    mutationFn: async ({ clienteId, monto, idempotencyKey }) => {
+      return llamarApiCxc('/api/cxc/cruzar-saldo-favor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey) } : {})
+        },
         body: JSON.stringify({
           clienteId,
-          monto
+          monto,
+          ...(idempotencyKey ? { idempotencyKey } : {})
         }),
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al cruzar saldo a favor')
-      return result
+      }, 'No se pudo cruzar el saldo a favor')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CXC_KEY })
@@ -601,6 +667,7 @@ export function useCruzarSaldoFavor() {
       qc.invalidateQueries({ queryKey: ['despachos'] })
       showToast('Saldo cruzado exitosamente', 'success')
     },
+    onError: avisarErrorGuardado('No se hizo el cruce'),
   })
 }
 

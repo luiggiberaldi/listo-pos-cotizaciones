@@ -5,6 +5,9 @@ import { registrarAuditoria } from '../lib/audit.js'
 import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 import { getCommissionablePaymentSplit, isDonationPayment } from '../../src/utils/comisionUtils.js'
 import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
+import { pendienteDeDespacho, pendienteSoloEnlazado, abonosQueCubrenDespacho, abonoAnulableEnDevolucion } from '../../src/utils/cxcReparto.js'
+import { valorDevolucionAcreditable } from '../../src/utils/donacionDevolucion.js'
+import { errorCruceSinExplicacion } from '../../src/utils/formaPagoReglas.js'
 
 function resolverIdempotencyKey(request, body) {
   const fromBody = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : ''
@@ -150,6 +153,9 @@ export async function handleCrearDespacho(request, env) {
   const corte = Number(corteUsd ?? 0);
   if (!cotizacionId) return jsonError('Falta cotizacionId', 400, request);
   if (!isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
+  // OP-2026-055 (N3): el Cruce debe decir contra qué se cruzó
+  const errCruceCrear = errorCruceSinExplicacion(formaPago);
+  if (errCruceCrear) return jsonError(errCruceCrear, 400, request);
 
   try {
     // 1+2. Fetch cotización + check existing despacho in parallel
@@ -403,6 +409,11 @@ export async function handleEditarPagoDespacho(request, env) {
   const despachos = await checkRes.json();
   if (!despachos.length) return jsonError('Despacho no encontrado', 404, request);
   const despacho = despachos[0];
+
+  // OP-2026-055 (N3): un Cruce nuevo o cambiado debe decir contra qué se cruzó (los viejos sin cambios se respetan)
+  const errCruceEditar = errorCruceSinExplicacion(formaPago, despacho.forma_pago) || errorCruceSinExplicacion(formaPagoCliente, despacho.forma_pago_cliente);
+  if (errCruceEditar) return jsonError(errCruceEditar, 400, request);
+
   // Solo la RPC atómica puede cambiar el estado financiero de un COD.
   if (formaPago !== undefined || formaPagoCliente !== undefined) {
     const rawAntes = despacho.forma_pago_cliente || despacho.forma_pago
@@ -865,12 +876,15 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
-    // Guardarrail: Bloquear si existen abonos REALES en CxC para este despacho.
+    // Guardarrail (solo despacho APROBADO 'despachada'): bloquear si existen abonos REALES en CxC.
+    // OP-2026-059: un despacho ENTREGADO ya no se bloquea: pasa por la decisión de pagos (abajo).
+    // Para 'despachada' se mantiene el bloqueo porque esa ruta borra los movimientos del despacho.
+    // Guardarrail original: Bloquear si existen abonos REALES en CxC para este despacho.
     // Los abonos 'Devolución' y 'Saldo a favor' son ajustes contables del propio
     // despacho (no entró dinero) y la RPC de reversión los anula dentro de su
     // transacción (release 06). El chequeo de reembolsos en efectivo
     // (REEMBOLSO_EFECTIVO_REGISTRADO) y de crédito consumido vive en la RPC.
-    if (['pendiente', 'anulada'].includes(nuevoEstado) && ['despachada', 'entregada'].includes(desp.estado)) {
+    if (['pendiente', 'anulada'].includes(nuevoEstado) && desp.estado === 'despachada') {
       if (rolOp !== 'desarrollador') {
         try {
           const abonosRes = await fetch(
@@ -892,6 +906,43 @@ export async function handleActualizarEstadoDespacho(request, env) {
           }
         } catch (abonoChkErr) {
           console.warn('[GUARDARRAIL] Error verificando abonos en CxC:', abonoChkErr?.message);
+        }
+      }
+    }
+
+    // OP-2026-052 (G2, N1): antes de reabrir un despacho entregado o anular uno pendiente se calcula
+    // qué dinero está en juego (pagos anotados, abonos enlazados y lo que quedaría "pagado de más").
+    // Si hay dinero en juego, el operador DEBE decidir qué pasa con él; nada se borra ni se esconde.
+    const esReabrirEntregada = desp.estado === 'entregada' && ['pendiente', 'despachada'].includes(nuevoEstado);
+    const esAnularPendiente = desp.estado === 'pendiente' && nuevoEstado === 'anulada';
+    const destinoPagos = typeof body.destinoPagos === 'string' ? body.destinoPagos : null;
+    const destinoPagoAnotado = typeof body.destinoPagoAnotado === 'string' ? body.destinoPagoAnotado : null;
+    let pagosEnJuego = null;
+    if (esReabrirEntregada || esAnularPendiente) {
+      const juegoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/cxc_pagos_en_juego_despacho`, {
+        method: 'POST', headers, body: JSON.stringify({ p_despacho_id: despachoId }),
+      });
+      if (!juegoRes.ok) return jsonError('No se pudo revisar los pagos del despacho. Vuelve a intentar.', 500, request);
+      pagosEnJuego = await juegoRes.json();
+      const fmt = (n) => `$${Number(n || 0).toFixed(2)}`;
+      if (esReabrirEntregada && pagosEnJuego?.requiere_decision_reabrir && !['mantener', 'saldo_favor'].includes(destinoPagos)) {
+        return json({
+          error: `Este despacho tiene pagos (${[
+            Number(pagosEnJuego.total_enlazado) > 0 ? `${fmt(pagosEnJuego.total_enlazado)} en abonos registrados a este despacho` : null,
+            Number(pagosEnJuego.pagado_de_mas_nuevo) > 0 ? `${fmt(pagosEnJuego.pagado_de_mas_nuevo)} que quedarían sin deuda al reabrirlo` : null,
+          ].filter(Boolean).join(' y ')}). Elige qué hacer con ese dinero antes de reabrirlo.`,
+          code: 'DECISION_PAGOS_REQUERIDA', pagos: pagosEnJuego,
+        }, 409, request);
+      }
+      if (esAnularPendiente && pagosEnJuego?.requiere_decision_anular) {
+        if (!['saldo_favor', 'otro_despacho', 'no_cobrado'].includes(destinoPagoAnotado)) {
+          return json({
+            error: `Este despacho tiene ${fmt(pagosEnJuego.total_anotado)} en pagos anotados. Elige qué pasó con ese dinero antes de anularlo.`,
+            code: 'DECISION_PAGOS_REQUERIDA', pagos: pagosEnJuego,
+          }, 409, request);
+        }
+        if (String(body.motivo_anulacion || '').trim().length < 10) {
+          return jsonError('Escribe el motivo de la anulación (mínimo 10 caracteres).', 400, request);
         }
       }
     }
@@ -950,23 +1001,46 @@ export async function handleActualizarEstadoDespacho(request, env) {
     const reversalCandidate = ['pendiente', 'despachada', 'anulada'].includes(nuevoEstado)
       && (desp.estado === 'entregada' || desp.estado === nuevoEstado)
     if (reversalCandidate) {
-      const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/revertir_entrega_finanzas_idempotente`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          p_cuenta_id: operador.cuenta_id,
-          p_despacho_id: despachoId,
-          p_idempotency_key: idempotencyKey,
-          p_nuevo_estado: nuevoEstado,
-          p_usuario_id: user.operator_id,
-          p_usuario_nombre: operador.nombre,
-          p_usuario_color: operador.color || null,
-        }),
-      })
+      // OP-2026-052 (G2): reabrir un ENTREGADO con la decisión sobre los pagos; desenlaza abonos reales
+      // (no los borra), pasa el sobrante a saldo a favor si se eligió, revierte (revertir_entrega_finanzas_
+      // idempotente, dentro de la misma transacción) y anota todo en la auditoría.
+      const usarReabrir = desp.estado === 'entregada'
+      const rpcRes = usarReabrir
+        ? await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/reabrir_despacho_con_pagos`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            p_despacho_id: despachoId,
+            p_nuevo_estado: nuevoEstado,
+            p_usuario_id: user.operator_id,
+            p_usuario_nombre: operador.nombre,
+            p_usuario_rol: operador.rol,
+            p_usuario_color: operador.color || null,
+            p_idempotency_key: idempotencyKey,
+            p_destino_pagos: destinoPagos,
+            p_motivo: body.motivo_devolucion || null,
+          }),
+        })
+        : await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/revertir_entrega_finanzas_idempotente`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            p_cuenta_id: operador.cuenta_id,
+            p_despacho_id: despachoId,
+            p_idempotency_key: idempotencyKey,
+            p_nuevo_estado: nuevoEstado,
+            p_usuario_id: user.operator_id,
+            p_usuario_nombre: operador.nombre,
+            p_usuario_color: operador.color || null,
+          }),
+        })
       const rpcText = await rpcRes.text()
       let result = null
       try { result = rpcText ? JSON.parse(rpcText) : null } catch { result = null }
       if (!rpcRes.ok) {
+        if (String(rpcText).includes('DECISION_PAGOS_REQUERIDA')) {
+          return json({ error: 'Este despacho tiene pagos. Elige qué hacer con ese dinero antes de reabrirlo.', code: 'DECISION_PAGOS_REQUERIDA', pagos: pagosEnJuego }, 409, request)
+        }
         return jsonError(`No se pudo revertir la entrega atómica: ${result?.message || rpcText || `HTTP ${rpcRes.status}`}`, 400, request)
       }
       if (!result?.ok) return jsonError('La RPC no confirmó la reversión atómica', 500, request)
@@ -1055,8 +1129,33 @@ export async function handleActualizarEstadoDespacho(request, env) {
       }
     }
 
+    // OP-2026-052 (N1): anular un pendiente con pagos anotados aplica la decisión (saldo a favor,
+    // otro despacho o no cobrado), cambia el estado y anota en la auditoría, todo en una transacción.
+    let anulacionConPagos = null;
+    if (esAnularPendiente && pagosEnJuego?.requiere_decision_anular) {
+      const anRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/anular_despacho_con_pagos`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          p_despacho_id: despachoId,
+          p_usuario_id: user.operator_id,
+          p_usuario_nombre: operador.nombre,
+          p_usuario_rol: operador.rol,
+          p_destino: destinoPagoAnotado,
+          p_motivo: String(body.motivo_anulacion || '').trim(),
+        }),
+      });
+      if (!anRes.ok) {
+        const t = await anRes.text();
+        if (t.includes('MOTIVO_REQUERIDO')) return jsonError('Escribe el motivo de la anulación (mínimo 10 caracteres).', 400, request);
+        if (t.includes('DECISION_PAGOS_REQUERIDA')) return json({ error: 'Elige qué pasó con los pagos anotados antes de anular.', code: 'DECISION_PAGOS_REQUERIDA', pagos: pagosEnJuego }, 409, request);
+        return jsonError(`No se pudo anular el despacho: ${t.slice(0, 200)}`, 400, request);
+      }
+      anulacionConPagos = await anRes.json();
+    }
+
     // 4. Actualizar estado
     const updateData = { estado: nuevoEstado };
+    if (esAnularPendiente && body.motivo_anulacion) updateData.motivo_anulacion = String(body.motivo_anulacion).trim();
     const ahora = new Date().toISOString();
     if (nuevoEstado === 'despachada') {
       updateData.despachada_en = ahora;
@@ -1433,6 +1532,9 @@ export async function handleActualizarEstadoDespacho(request, env) {
       // Release 06: contadores para el toast/UX de reversión consciente de devoluciones.
       abonos_devolucion_anulados: reversaAtomica?.abonos_devolucion_anulados ?? null,
       credito_anulado_usd: reversaAtomica?.credito_anulado_usd ?? null,
+      // OP-2026-052: qué pasó con los pagos al reabrir o anular
+      pagos_reabrir: reversaAtomica?.pagos ?? null,
+      pagos_anular: anulacionConPagos,
     }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al actualizar despacho', 500, request);
@@ -1641,11 +1743,20 @@ export async function handleEditarItemsDespacho(request, env) {
   catch { return jsonError('Body inválido', 400, request); }
 
   const { despachoId, items, pagos } = body;
+  // OP-2026-053: si la edición deja pagos del cliente sin deuda, el operador decide: 'mantener' | 'saldo_favor'
+  const destinoPagos = ['mantener', 'saldo_favor'].includes(body.destinoPagos) ? body.destinoPagos : null;
   // items: [{ producto_id, codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, descuento_pct, orden }]
   // pagos: string (JSON stringified array of payments)
 
   if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
   if (!Array.isArray(items) || items.length === 0) return jsonError('items no puede estar vacío', 400, request);
+  // OP-2026-055 (N3): un Cruce nuevo o cambiado debe decir contra qué se cruzó
+  if (pagos) {
+    const prevRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=forma_pago`, { headers });
+    const [prevFp] = prevRes.ok ? await prevRes.json() : [];
+    const errCruceItems = errorCruceSinExplicacion(pagos, prevFp?.forma_pago);
+    if (errCruceItems) return jsonError(errCruceItems, 400, request);
+  }
 
   // Rechazar duplicados comerciales antes de tocar Supabase. Dos líneas del
   // mismo producto solo son válidas si difieren en precio, descuento, origen o
@@ -1728,22 +1839,39 @@ export async function handleEditarItemsDespacho(request, env) {
       operadorRol: operador.rol,
       supabaseUrl: env.SUPABASE_URL
     })
-    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/editar_despacho_profundidad`, {
+    // OP-2026-053: la función edita los artículos (editar_despacho_profundidad) y ajusta SOLO los
+    // movimientos propios del despacho (cargos, consumo de saldo a favor y vuelto) en la MISMA
+    // transacción. No toca créditos de devolución ni abonos reales; si quedarían pagos sin deuda exige
+    // la decisión, y anota el antes y el después en la auditoría (EDICION_PROFUNDA_CXC).
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/editar_despacho_profundidad_con_cxc`, {
       method: 'POST',
-      headers: { ...headers, Prefer: 'return=minimal' },
+      headers,
       body: JSON.stringify({
         p_despacho_id:    despachoId,
         p_nuevos_items:   items,
         p_usuario_id:     operador.id,
         p_usuario_nombre: operador.nombre,
         p_usuario_rol:    operador.rol,
-        p_forma_pago:     pagos || null
+        p_forma_pago:     pagos || null,
+        p_destino_pagos:  destinoPagos,
       }),
     });
 
     if (!res.ok) {
       const err = await res.text();
       console.error('[DEEP_EDIT][WORKER_RPC_ERROR]', { status: res.status, body: err, despachoId })
+      const decision = err.match(/DECISION_PAGOS_REQUERIDA:([\d.]+)/);
+      if (decision) {
+        const monto = Number(decision[1]);
+        return json({
+          error: `Con este cambio, $${monto.toFixed(2)} que el cliente ya pagó quedarían sin deuda. Elige qué hacer con ese dinero.`,
+          code: 'DECISION_PAGOS_REQUERIDA', pagos: { pagado_de_mas_nuevo: monto },
+        }, 409, request);
+      }
+      const sinFavor = err.match(/SALDO_FAVOR_INSUFICIENTE:([\d.]+)/);
+      if (sinFavor) return jsonError(`El cliente solo tiene $${Number(sinFavor[1]).toFixed(2)} de saldo a favor disponible. Ajusta el pago con saldo a favor.`, 400, request);
+      const vueltoUsado = err.match(/VUELTO_YA_USADO:([\d.]+)/);
+      if (vueltoUsado) return jsonError(`El vuelto que quedó como saldo a favor ya se usó (disponible: $${Number(vueltoUsado[1]).toFixed(2)}). No se puede quitar o reducir.`, 400, request);
       let msg = 'Error al editar despacho';
       if (err.includes('STOCK_INSUFICIENTE')) msg = err.split(': ')[1] || err;
       if (err.includes('ESTADO_INVALIDO')) msg = 'El despacho no se puede editar en su estado actual';
@@ -1751,6 +1879,8 @@ export async function handleEditarItemsDespacho(request, env) {
     }
 
     console.log('[DEEP_EDIT][WORKER_AFTER_RPC]', { despachoId, status: res.status, sentItemCount: items.length })
+    let edicionCxc = null;
+    try { edicionCxc = await res.json(); } catch { edicionCxc = null; }
 
     // ── 2a-bis. Retirar el libro de devoluciones/intercambios ya absorbidos ────
     // Los ítems recién guardados son el consolidado (neto) del despacho. Si las
@@ -1764,236 +1894,7 @@ export async function handleEditarItemsDespacho(request, env) {
       ip,
     });
 
-    // ── 2b. Sincronizar Cuentas por Cobrar ────────────────────────────────────
-    // Release 17: la edición profunda admite 'pendiente' (sin efecto en stock) y
-    // 'despachada' (el RPC aplica el ± delta de inventario). Esta rama
-    // resincroniza CxC si la edición ocurre con el despacho ya aprobado.
-    try {
-      const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=estado,cliente_id,cliente_factura_id,cotizacion_id,total_usd,forma_pago,forma_pago_cliente`, { headers });
-      const despList = await dRes.json();
-      if (Array.isArray(despList) && despList.length > 0) {
-        const updatedDesp = despList[0];
-        
-        if (updatedDesp.estado === 'despachada') {
-          const fpRaw = updatedDesp.forma_pago_cliente || updatedDesp.forma_pago || '[]';
-          let itemsCargos = [];
-          let targetAbono = null;
-          try {
-            const fps = typeof fpRaw === 'string' ? JSON.parse(fpRaw) : fpRaw;
-            if (Array.isArray(fps)) {
-              const cxc = fps.find(f => f.metodo === 'Cta por cobrar');
-              const cod = fps.find(f => f.metodo === 'Cobro a destino');
-              const sf = fps.find(f => f.metodo === 'Saldo a Favor');
-              if (cxc && Number(cxc.monto) > 0) {
-                itemsCargos.push({
-                  monto: Number(cxc.monto),
-                  dias: cxc.diasVencimiento ? parseInt(cxc.diasVencimiento, 10) : null,
-                  metodo: 'cxc',
-                  desc: ' (Crédito)'
-                });
-              }
-              if (cod && Number(cod.monto) > 0) {
-                itemsCargos.push({
-                  monto: Number(cod.monto),
-                  dias: cod.diasVencimiento ? parseInt(cod.diasVencimiento, 10) : null,
-                  metodo: 'cod',
-                  desc: ' (COD)'
-                });
-              }
-              if (sf && Number(sf.monto) > 0) {
-                targetAbono = {
-                  monto: Number(sf.monto),
-                  origen: sf.forma_pago_origen || 'Crédito'
-                };
-              }
-            }
-          } catch {
-            if (fpRaw === 'Cta por cobrar' && Number(updatedDesp.total_usd) > 0) {
-              itemsCargos.push({
-                monto: Number(updatedDesp.total_usd),
-                dias: null,
-                metodo: 'cxc',
-                desc: ' (Crédito)'
-              });
-            }
-          }
-
-          // Buscar cargos y abonos existentes en CxC para este despacho
-          const cxcExistRes = await fetch(
-            `${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?despacho_id=eq.${despachoId}&select=id,monto_usd,cliente_id,tipo,metodo_pago,forma_pago_abono`,
-            { headers }
-          );
-          const cxcExist = await cxcExistRes.json();
-          const dbMovimientos = Array.isArray(cxcExist) ? cxcExist : [];
-
-          const cotRes = await fetch(
-            `${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${updatedDesp.cotizacion_id}&select=cliente_id,numero`,
-            { headers }
-          );
-          const [cot] = await cotRes.json();
-          const clienteCxCId = updatedDesp.cliente_factura_id || updatedDesp.cliente_id || (cot ? cot.cliente_id : null);
-
-          if (clienteCxCId) {
-            // Sincronizar cargos (tipo 'cargo')
-            const metodos = ['cxc', 'cod'];
-            const dbCargos = dbMovimientos.filter(m => m.tipo === 'cargo');
-            for (const met of metodos) {
-              const target = itemsCargos.find(it => it.metodo === met);
-              const existing = dbCargos.find(c => c.metodo_pago === met);
-
-              if (existing) {
-                if (!target) {
-                  // Si ya no existe este método de pago, eliminamos el cargo de CxC
-                  await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existing.id}`, {
-                    method: 'DELETE', headers,
-                  });
-                  console.log(`[CXC-DEEP-EDIT] Cargo CxC (${met}) eliminado en edición profunda por quedar en $0.`);
-                } else {
-                  // Si existe y cambió el monto, actualizamos
-                  const diff = target.monto - Number(existing.monto_usd);
-                  if (diff !== 0) {
-                    await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existing.id}`, {
-                      method: 'PATCH',
-                      headers: { ...headers, Prefer: 'return=minimal' },
-                      body: JSON.stringify({ monto_usd: Math.round(target.monto * 10000) / 10000 }),
-                    });
-                    console.log(`[CXC-DEEP-EDIT] Ajustado cargo (${met}) de despacho ${despachoId} a $${target.monto}.`);
-                  }
-                }
-              } else if (target) {
-                // Si no existía pero ahora sí requiere uno
-                let fecha_vencimiento = null;
-                if (target.dias && !isNaN(target.dias)) {
-                  const date = new Date();
-                  date.setDate(date.getDate() + target.dias);
-                  fecha_vencimiento = date.toISOString().split('T')[0];
-                }
-
-                await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-                  method: 'POST', headers,
-                  body: JSON.stringify({
-                    cliente_id: clienteCxCId,
-                    despacho_id: despachoId,
-                    tipo: 'cargo',
-                    monto_usd: target.monto,
-                    saldo_usd: target.monto,
-                    descripcion: `Orden de despacho #${cot ? cot.numero : despachoId}${target.desc} (Creado en edición profunda)`,
-                    registrado_por: user.operator_id,
-                    fecha_vencimiento: fecha_vencimiento,
-                    metodo_pago: target.metodo
-                  }),
-                });
-                console.log(`[CXC-DEEP-EDIT] Cargo CxC (${met}) creado en edición profunda por monto $${target.monto}.`);
-              }
-            }
-
-            // Sincronizar Abono Saldo a Favor
-            const existingAbono = dbMovimientos.find(m => m.tipo === 'consumo_credito' || (m.tipo === 'abono' && m.forma_pago_abono === 'Saldo a favor'));
-            if (existingAbono) {
-              if (!targetAbono) {
-                // Si ya no existe, eliminamos el abono
-                await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existingAbono.id}`, {
-                  method: 'DELETE', headers,
-                });
-                console.log(`[CXC-DEEP-EDIT] Abono Saldo a Favor eliminado en edición profunda.`);
-              } else {
-                // Si existe y cambió el monto, actualizamos
-                const diff = targetAbono.monto - Number(existingAbono.monto_usd);
-                if (diff !== 0) {
-                  await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existingAbono.id}`, {
-                    method: 'PATCH',
-                    headers: { ...headers, Prefer: 'return=minimal' },
-                    body: JSON.stringify({ monto_usd: Math.round(targetAbono.monto * 10000) / 10000 }),
-                  });
-                  console.log(`[CXC-DEEP-EDIT] Ajustado abono Saldo a Favor de despacho ${despachoId} a $${targetAbono.monto}.`);
-                }
-              }
-            } else if (targetAbono) {
-              // Si no existía pero ahora sí, lo creamos
-              const saldoRes = await fetch(
-                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente,saldo_a_favor`,
-                { headers }
-              );
-              const [clienteSaldo] = await saldoRes.json();
-              const saldoFavorActual = Number(clienteSaldo?.saldo_a_favor || 0);
-              const nuevoSaldoFavor = Math.max(0, saldoFavorActual - targetAbono.monto);
-
-              await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-                method: 'POST', headers,
-                body: JSON.stringify({
-                  cliente_id: clienteCxCId,
-                  despacho_id: despachoId,
-                  tipo: 'consumo_credito',
-                  monto_usd: targetAbono.monto,
-                  saldo_usd: nuevoSaldoFavor,
-                  forma_pago_abono: 'Saldo a favor',
-                  referencia: `Despacho #${cot ? cot.numero : despachoId}`,
-                  descripcion: `Pago con Saldo a Favor (${targetAbono.origen.toUpperCase()}) (Creado en edición profunda)`,
-                  registrado_por: user.operator_id
-                }),
-              });
-            }
-
-            // Sincronizar Crédito (tipo 'credito' - Vuelto/Excedente a Saldo a Favor)
-            const fps = typeof fpRaw === 'string' ? JSON.parse(fpRaw) : fpRaw;
-            const totalAsignado = Array.isArray(fps) ? fps.reduce((acc, f) => acc + (Number(f.monto) || 0), 0) : 0;
-            const excedente = totalAsignado - Number(updatedDesp.total_usd || 0);
-            const tieneVueltoAFavor = Array.isArray(fps) ? fps.some(f => f.vuelto_a_favor === true) : false;
-            const targetCreditoMonto = (excedente > 0.015 && tieneVueltoAFavor) ? excedente : 0;
-
-            const existingCredito = dbMovimientos.find(m => m.tipo === 'credito');
-            if (existingCredito) {
-              if (targetCreditoMonto <= 0.015) {
-                // Si ya no hay excedente o no se quiere vuelto a favor, eliminamos el crédito
-                await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existingCredito.id}`, {
-                  method: 'DELETE', headers,
-                });
-                console.log(`[CXC-DEEP-EDIT] Crédito (vuelto/excedente) eliminado en edición profunda.`);
-              } else {
-                // Si cambió el monto, actualizamos
-                const diff = targetCreditoMonto - Number(existingCredito.monto_usd);
-                if (diff !== 0) {
-                  await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?id=eq.${existingCredito.id}`, {
-                    method: 'PATCH',
-                    headers: { ...headers, Prefer: 'return=minimal' },
-                    body: JSON.stringify({ monto_usd: Math.round(targetCreditoMonto * 10000) / 10000 }),
-                  });
-                  console.log(`[CXC-DEEP-EDIT] Ajustado crédito (vuelto/excedente) a $${targetCreditoMonto}.`);
-                }
-              }
-            } else if (targetCreditoMonto > 0.015) {
-              // Si no existía pero ahora sí, lo creamos
-              const saldoRes = await fetch(
-                `${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteCxCId}&select=saldo_pendiente`,
-                { headers }
-              );
-              const [clienteSaldo] = await saldoRes.json();
-              const saldoActual = Number(clienteSaldo?.saldo_pendiente || 0);
-
-              await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-                method: 'POST', headers,
-                body: JSON.stringify({
-                  cliente_id: clienteCxCId,
-                  despacho_id: despachoId,
-                  tipo: 'credito',
-                  monto_usd: Math.round(targetCreditoMonto * 100) / 100,
-                  saldo_usd: saldoActual,
-                  referencia: `Despacho #${cot ? cot.numero : despachoId}`,
-                  descripcion: `Excedente de pago en Despacho #${cot ? cot.numero : despachoId} (Creado en edición profunda)`,
-                  registrado_por: user.operator_id
-                }),
-              });
-              console.log(`[CXC-DEEP-EDIT] Crédito (vuelto/excedente) creado en edición profunda.`);
-            }
-
-            // Al final recalculamos una sola vez el saldo
-            await recalcularSaldoPendienteCliente(clienteCxCId, env, headers);
-          }
-        }
-      }
-    } catch (cxcErr) {
-      console.error('[CXC-DEEP-EDIT] Error al sincronizar CxC en edición profunda:', cxcErr?.message);
-    }
+    // ── 2b. (OP-2026-053) La cuenta del cliente ya se ajustó dentro de la transacción de arriba.
 
 
     // Recalcular solo comisiones nuevas 238b; el histórico legacy queda intacto.
@@ -2019,7 +1920,7 @@ export async function handleEditarItemsDespacho(request, env) {
       }
     }
 
-    return json({ ok: true, devoluciones_retiradas: devolucionesRetiradas }, 200, request);
+    return json({ ok: true, devoluciones_retiradas: devolucionesRetiradas, cxc: edicionCxc }, 200, request);
   } catch (e) {
     console.error('[EDITAR_ITEMS] Error:', e);
     return jsonError(e.message || 'Error interno al procesar el cambio', 500, request);
@@ -2277,11 +2178,21 @@ export async function handleDevolucionParcialDespacho(request, env) {
     pagosReembolso,
     reembolsoMetodo,
     reembolsoReferencia,
-    reembolsoMonto
+    reembolsoMonto,
+    anularAbonoId,
+    acreditarDonacion,
+    motivoAcreditarDonacion
   } = body || {};
   const idempotencyKey = resolverIdempotencyKey(request, body);
 
   if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido o ausente', 400, request);
+  // OP-2026-042: abono manual que el operador confirma que era esta misma devolución
+  if (anularAbonoId != null && anularAbonoId !== '' && !isValidUuid(anularAbonoId)) {
+    return jsonError('anularAbonoId inválido', 400, request);
+  }
+  if (anularAbonoId && destinoSaldo === 'reembolso') {
+    return jsonError('Solo se puede anular un abono cuando el balance va a saldo a favor', 400, request);
+  }
   if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
   if (!Array.isArray(items) || items.length === 0) return jsonError('items debe ser un array no vacío', 400, request);
   if (!motivo || motivo.trim() === '') return jsonError('El motivo es requerido', 400, request);
@@ -2454,6 +2365,20 @@ export async function handleDevolucionParcialDespacho(request, env) {
 
     totalDevueltoUsd = Math.round(totalDevueltoUsd * 10000) / 10000;
 
+    // OP-2026-054 (N2): la parte DONADA de lo devuelto vuelve al inventario pero no da crédito ni
+    // reembolso. Solo administración/jefe/desarrollador pueden autorizar dar crédito, con motivo.
+    const autorizaDonacion = acreditarDonacion === true;
+    const donacion = valorDevolucionAcreditable(totalDevueltoUsd, desp.forma_pago_cliente || desp.forma_pago, { autorizado: autorizaDonacion });
+    if (autorizaDonacion && donacion.fraccion > 0) {
+      if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
+        return jsonError('Solo administración, jefe o desarrollador pueden autorizar crédito por mercancía donada', 403, request);
+      }
+      if (String(motivoAcreditarDonacion || '').trim().length < 10) {
+        return jsonError('Escribe por qué se da crédito por mercancía donada (mínimo 10 caracteres).', 400, request);
+      }
+    }
+    const totalAcreditableUsd = donacion.acreditable;
+
     // P0-C: la RPC neutral compone inventario, Kardex, documentos de
     // devolución, CxC, comisión y, si corresponde, la cotización de reemplazo.
     // La misma clave reserva el replay; no se deja una ruta REST alternativa.
@@ -2481,7 +2406,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
     // Cobro de la diferencia en intercambio (Opción A): el cliente puede pagar
     // parte o toda la diferencia con uno o varios métodos. Sin pagos, el
     // comportamiento es el histórico: el cargo completo queda como deuda.
-    const balanceNetoParaCobro = Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000;
+    const balanceNetoParaCobro = Math.round((totalIntercambioUsd - totalAcreditableUsd) * 10000) / 10000;
     let pagosDiferencia = null;
     let pagadoDiferenciaUsd = 0;
     if (Array.isArray(body.pagosDiferencia) && body.pagosDiferencia.length > 0) {
@@ -2522,7 +2447,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
     }
 
     // Validación temprana de pagos de reembolso (cuando el balance neto favorece al cliente)
-    const balanceNetoDevolucion = Math.round((totalIntercambioUsd - totalDevueltoUsd) * 10000) / 10000;
+    const balanceNetoDevolucion = Math.round((totalIntercambioUsd - totalAcreditableUsd) * 10000) / 10000;
     const METODOS_REEMBOLSO = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT'];
     const REFERENCIA_REQUERIDA_REEMBOLSO = ['Transf. / Pago Móvil', 'Zelle', 'USDT'];
     const pagosReembolsoLimpios = [];
@@ -2581,10 +2506,21 @@ export async function handleDevolucionParcialDespacho(request, env) {
       }
     }
 
-    const atomicRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/registrar_devolucion_parcial_cobro_idempotente`, {
+    // OP-2026-054: con mercancía donada, la devolución pasa por la función que además ajusta el total y la
+    // "Donación" del despacho y anota la regla en la auditoría (misma transacción).
+    const conDonacion = donacion.fraccion > 0;
+    const atomicRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${conDonacion ? 'devolucion_con_donacion' : 'registrar_devolucion_parcial_cobro_idempotente'}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
+        ...(conDonacion ? {
+          p_usuario_rol: operador.rol,
+          p_total_devuelto_real: totalDevueltoUsd,
+          p_valor_donado: donacion.donado,
+          p_fraccion_donada: donacion.fraccion,
+          p_acreditar_donacion: autorizaDonacion,
+          p_motivo_donacion: autorizaDonacion ? String(motivoAcreditarDonacion).trim() : null,
+        } : { p_cotizacion_reemplazo_id: null }),
         p_cuenta_id: operador.cuenta_id,
         p_despacho_id: despachoId,
         p_idempotency_key: idempotencyKey,
@@ -2594,8 +2530,7 @@ export async function handleDevolucionParcialDespacho(request, env) {
         p_usuario_id: user.operator_id,
         p_usuario_nombre: operador.nombre,
         p_usuario_color: operador.color || null,
-        p_cotizacion_reemplazo_id: null,
-        p_total_devuelto_usd: totalDevueltoUsd,
+        p_total_devuelto_usd: totalAcreditableUsd,
         p_total_intercambio_usd: totalIntercambioUsd,
         p_reemplazo: reemplazoPayload,
         p_pagos_diferencia: pagosDiferencia,
@@ -2605,6 +2540,8 @@ export async function handleDevolucionParcialDespacho(request, env) {
         p_pagos_reembolso: (balanceNetoDevolucion < 0 && destinoSaldo === 'reembolso' && pagosReembolsoLimpios.length > 0)
           ? pagosReembolsoLimpios
           : null,
+        // OP-2026-042: la RPC anula este abono en la misma transacción (o falla todo)
+        p_anular_abono_id: anularAbonoId || null,
       }),
     });
     const atomicText = await atomicRes.text();
@@ -2653,9 +2590,26 @@ export async function handleDevolucionParcialDespacho(request, env) {
           destino_saldo: balanceNetoDevolucion < 0 ? destinoSaldo : 'saldo_a_favor',
           pagos_reembolso: pagosReembolsoLimpios,
           total_reembolso_usd: totalReembolsoUsd,
+          // OP-2026-042: copia completa del abono anulado, para que no se pierda el rastro
+          abono_anulado: atomicResult.abono_anulado || null,
         },
         ip,
       });
+      if (atomicResult.abono_anulado) {
+        const an = atomicResult.abono_anulado;
+        await registrarAuditoria(env, headers, {
+          usuarioId: user.operator_id,
+          usuarioNombre: operador.nombre,
+          usuarioRol: operador.rol,
+          categoria: 'FINANZAS',
+          accion: 'ANULAR_ABONO_POR_DEVOLUCION',
+          descripcion: `Abono de $${Number(an.monto_usd).toFixed(2)} (${an.referencia || an.descripcion || 'sin referencia'}) anulado al registrar la devolución del despacho #${desp.numero}: el operador confirmó que era la misma devolución`,
+          entidadTipo: 'cliente',
+          entidadId: an.cliente_id,
+          meta: { despacho_id: despachoId, abono: an, idempotency_key: idempotencyKey },
+          ip,
+        });
+      }
     } catch (auditErr) {
       console.warn('[DEVOLUCION] Auditoría atómica no registrada:', auditErr?.message);
     }
@@ -2668,6 +2622,10 @@ export async function handleDevolucionParcialDespacho(request, env) {
         totalDevueltoUsd,
         totalIntercambioUsd,
         balanceNetoUsd: balanceNetoDevolucion,
+        // OP-2026-054: parte donada de lo devuelto que no dio crédito
+        totalAcreditableUsd,
+        valorDonadoSinCreditoUsd: donacion.donado,
+        fraccionDonada: donacion.fraccion,
         destinoSaldo: balanceNetoDevolucion < 0 ? destinoSaldo : 'saldo_a_favor',
         pagosReembolso: pagosReembolsoLimpios,
         reembolsoTotalUsd: totalReembolsoUsd,
@@ -3106,3 +3064,74 @@ export async function handleDevolucionParcialDespacho(request, env) {
   }
 }
 
+
+// ─── OP-2026-042: vista previa de cómo afecta una devolución a la deuda ──────
+// Calcula lo pendiente del despacho con el MISMO reparto que la pantalla de CxC
+// y la RPC (cxc_pendiente_despacho), y lista los abonos que ya lo cubren. Así la
+// pantalla puede avisar: "este crédito ya lo canceló tal abono; ¿era esta misma
+// devolución?". Solo lectura.
+export async function handlePreviewDevolucionCxc(request, env, url) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { operador, headers } = v;
+
+  if (!['administracion', 'logistica', 'desarrollador', 'jefe'].includes(operador.rol)) {
+    return jsonError('No tienes permiso para consultar esta devolución', 403, request);
+  }
+  const despachoId = url.searchParams.get('despachoId');
+  if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+
+  try {
+    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=id,numero,cliente_id,cliente_factura_id`, { headers });
+    const [desp] = dRes.ok ? await dRes.json() : [];
+    if (!desp) return jsonError('Despacho no encontrado', 404, request);
+    const clienteId = desp.cliente_factura_id || desp.cliente_id;
+    if (!clienteId) {
+      return json({ despachoId, clienteId: null, pendienteDespacho: 0, pendienteSoloEnlazado: 0, cargoDespacho: 0, abonosQueCubren: [] }, 200, request);
+    }
+
+    const movRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar?cliente_id=eq.${clienteId}&tipo=in.(cargo,abono)&select=id,tipo,monto_usd,despacho_id,metodo_pago,forma_pago_abono,referencia,descripcion,creado_en&order=creado_en.asc,id.asc&limit=10000`, { headers });
+    if (!movRes.ok) return jsonError('No se pudieron leer los movimientos del cliente', 500, request);
+    const movs = await movRes.json();
+
+    const cargoDespacho = Math.round(movs.filter(m => m.tipo === 'cargo' && m.despacho_id === despachoId)
+      .reduce((s, m) => s + Number(m.monto_usd || 0), 0) * 10000) / 10000;
+    const abonosQueCubren = abonosQueCubrenDespacho(movs, despachoId)
+      .filter(a => !a.enlazado)
+      .map(a => ({ ...a, anulable: abonoAnulableEnDevolucion(a, despachoId) }));
+
+    return json({
+      despachoId,
+      numero: desp.numero,
+      clienteId,
+      cargoDespacho,
+      pendienteDespacho: pendienteDeDespacho(movs, despachoId),
+      pendienteSoloEnlazado: pendienteSoloEnlazado(movs, despachoId),
+      abonosQueCubren,
+    }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al calcular la vista previa', 500, request);
+  }
+}
+
+// OP-2026-052 (G2, N1): qué dinero está en juego antes de reabrir o anular un despacho.
+// La pantalla lo muestra y pide la decisión antes de confirmar.
+export async function handlePagosEnJuegoDespacho(request, env, url) {
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { operador, headers } = v;
+  const despachoId = url.searchParams.get('despachoId');
+  if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
+  try {
+    const dRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&cuenta_id=eq.${operador.cuenta_id}&select=id`, { headers });
+    const [d] = dRes.ok ? await dRes.json() : [];
+    if (!d) return jsonError('Despacho no encontrado', 404, request);
+    const r = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/cxc_pagos_en_juego_despacho`, {
+      method: 'POST', headers, body: JSON.stringify({ p_despacho_id: despachoId }),
+    });
+    if (!r.ok) return jsonError('No se pudo revisar los pagos del despacho', 500, request);
+    return json(await r.json(), 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'No se pudo revisar los pagos del despacho', 500, request);
+  }
+}
