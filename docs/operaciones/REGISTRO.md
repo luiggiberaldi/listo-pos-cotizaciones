@@ -76,6 +76,7 @@
 | OP-2026-059 | 2026-11-24 | Preparar el paso a producción de los arreglos de CxC de staging (OP-042 y OP-049 a OP-057) | **Publicado en producción 2026-11-24**: migraciones 301-309 aplicadas (sumas de deudas y saldos a favor iguales al centavo; funciones solo para el servidor) y código publicado (Worker y Vercel en verde; rutas nuevas responden 401 sin sesión). Respaldo previo de funciones y tablas en el escritorio. Sin OP-025. Falta: pruebas en pantalla de administración (§4.3) y correcciones de datos D1-D5 | Solicitud #66 (`5a323d22`) | [OP-2026-059_paso-a-produccion-cxc.md](OP-2026-059_paso-a-produccion-cxc.md) |
 | OP-2026-060 | 2026-11-24 | 4 pagos ya hechos registrados sin afectar los reportes de hoy (Constructora Ew 2010 $850 Cruce, Yahveh $313,43 USDT, KIA 241 $64,50, Albert Ruiz $60,59) | **Corregido en producción 2026-11-24** con orden del dueño: los 4 clientes en $0, cada pago con su fecha real (0 abonos con fecha de hoy); deuda total $73.688,22 → $72.399,70; comisiones sin cambios. Falta confirmar el método del pago de KIA | — | [OP-2026-060_pagos-no-registrados-propuesta.md](OP-2026-060_pagos-no-registrados-propuesta.md) |
 | OP-2026-061 | 2026-11-24 | La deuda del cliente y su historial se actualizan solos en las pantallas abiertas, sin recargar | **Publicado en producción 2026-11-24**: aviso de cuentas por cobrar activado en la base (310; staging 309) y pantallas que se redibujan solas; staging probado (avisos recibidos), 1.204/1.204 pruebas y build correcto. Falta verlo en pantalla real con dos equipos | Solicitud #68 (`42e2cfc5`) | [OP-2026-061_clientes-al-instante.md](OP-2026-061_clientes-al-instante.md) |
+| OP-2026-062 | 2026-11-24 | Auditoría de Reportes → Crédito (CxC): Antigüedad sumaba $302,26 de más y había 3 alertas falsas (pago anotado antes que la nota); en períodos pasados faltaban clientes que pagaron después (septiembre −$739); Imprimir dejaba una pestaña en blanco | **Solicitud de cambio #70 abierta, sin publicar** (falta unirla a la versión principal): con datos reales Antigüedad = CxC al cierre $72.399,70 y 36 alertas (todas vencidas). Fallas N19–N25 (N24 y N25 solo propuestas). Falta probar en pantalla | Solicitud #70 (`822bc574`), sin publicar | [OP-2026-062_auditoria-reporte-credito.md](OP-2026-062_auditoria-reporte-credito.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -91,7 +92,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-062**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-063**).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.

@@ -76,7 +76,7 @@ function obtenerRiesgo(dias) {
   return { label: 'Crítico', color: [124, 58, 237] } // purple-600
 }
 
-export async function generarReporteCxCPDF({ data, config = {}, action = 'download', tipo = 'detallado', rango }) {
+export async function generarReporteCxCPDF({ data, config = {}, action = 'download', tipo = 'detallado', rango, printWindow = null }) {
   const { kpis = {}, clientesConDeuda = [], aging = [], abonos = [] } = data
 
   // Filtrar abonos según rango de fechas si se proporciona, sino mostrar hoy
@@ -599,7 +599,10 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
   if (action === 'print') {
     doc.autoPrint()
     const blob = doc.output('bloburl')
-    window.open(blob, '_blank')
+    // OP-2026-062: la pantalla ya abrió una ventana en el clic (para que el navegador
+    // no la bloquee); se usa esa en vez de abrir otra y dejar la primera en blanco.
+    if (printWindow && !printWindow.closed) printWindow.location.href = blob
+    else window.open(blob, '_blank')
   } else {
     doc.save(safeName)
   }

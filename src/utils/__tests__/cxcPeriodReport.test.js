@@ -174,4 +174,60 @@ describe('construirReportePeriodoCxC', () => {
   it('calcula el límite superior exclusivo a medianoche de Caracas del día siguiente', () => {
     expect(obtenerLimiteSuperiorCxC(rangoSeptiembre)).toBe('2026-10-01T00:00:00-04:00')
   })
+
+  // OP-2026-062: caso real (Osniel Coronel) — el pago quedó registrado horas antes
+  // que la nota que también pagaba. El sobrante no debe perderse.
+  it('aplica a cargos posteriores el sobrante de un abono registrado antes que el cargo', () => {
+    const clienteAlDia = { ...cliente, saldo_pendiente: 0 }
+    const reporte = construirReportePeriodoCxC({
+      clientes: [clienteAlDia],
+      transacciones: [
+        movimiento('cargo-a', 'cargo', 649.64, '2026-09-02T10:00:00-04:00', { fecha_vencimiento: '2026-09-17' }),
+        movimiento('abono-adelantado', 'abono', 951.56, '2026-09-03T12:45:00-04:00', { forma_pago_abono: 'Zelle' }),
+        movimiento('cargo-b', 'cargo', 301.92, '2026-09-03T16:52:00-04:00', { fecha_vencimiento: '2026-09-18' }),
+      ],
+      rango: rangoSeptiembre,
+      ahora: new Date('2026-10-05T12:00:00-04:00'),
+    })
+
+    expect(reporte.kpis.totalDeuda).toBe(0)
+    expect(reporte.aging.reduce((suma, tramo) => suma + tramo.totalUsd, 0)).toBe(0)
+    expect(reporte.aging.reduce((suma, tramo) => suma + tramo.count, 0)).toBe(0)
+    expect(reporte.alertasVencimiento).toHaveLength(0)
+  })
+
+  it('descuenta el saldo a favor previo de un cargo nuevo pequeño (sin deuda fantasma)', () => {
+    const clienteConFavor = { ...cliente, saldo_pendiente: 0 }
+    const reporte = construirReportePeriodoCxC({
+      clientes: [clienteConFavor],
+      transacciones: [
+        movimiento('favor-1', 'abono', 8.1, '2026-08-16T12:00:00-04:00', { forma_pago_abono: 'Saldo a favor' }),
+        movimiento('cargo-chico', 'cargo', 0.34, '2026-09-18T16:00:00-04:00', { fecha_vencimiento: '2026-09-26' }),
+      ],
+      rango: rangoSeptiembre,
+      ahora: new Date('2026-10-05T12:00:00-04:00'),
+    })
+
+    expect(reporte.kpis.saldoInicialNeto).toBe(-8.1)
+    expect(reporte.kpis.saldoFinalNeto).toBe(-7.76)
+    expect(reporte.kpis.totalDeuda).toBe(0)
+    expect(reporte.aging.reduce((suma, tramo) => suma + tramo.totalUsd, 0)).toBe(0)
+    expect(reporte.alertasVencimiento).toHaveLength(0)
+  })
+
+  it('la antigüedad de deuda suma lo mismo que la deuda al cierre con pagos parciales', () => {
+    const reporte = construirReportePeriodoCxC({
+      clientes: [{ ...cliente, saldo_pendiente: 70 }],
+      transacciones: [
+        movimiento('abono-previo', 'abono', 30, '2026-09-01T09:00:00-04:00', { forma_pago_abono: 'Efectivo $' }),
+        movimiento('cargo-1', 'cargo', 60, '2026-09-02T10:00:00-04:00'),
+        movimiento('cargo-2', 'cargo', 40, '2026-09-05T10:00:00-04:00'),
+      ],
+      rango: rangoSeptiembre,
+      ahora: new Date('2026-10-05T12:00:00-04:00'),
+    })
+
+    expect(reporte.kpis.totalDeuda).toBe(70)
+    expect(reporte.aging.reduce((suma, tramo) => suma + tramo.totalUsd, 0)).toBe(70)
+  })
 })

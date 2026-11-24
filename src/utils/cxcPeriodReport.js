@@ -192,11 +192,22 @@ function montoAbonoSinClasificar(abono) {
   return resumenAbono(abono).sinClasificar
 }
 
+// OP-2026-062: un abono puede quedar registrado ANTES que el cargo que paga
+// (pago adelantado o nota cargada minutos después). Ese sobrante se guarda como
+// crédito y se descuenta de los cargos siguientes; antes se perdía y el cargo
+// quedaba como deuda "fantasma" en Antigüedad y Alertas aunque el cliente debiera $0.
 function distribuirAbonos(movimientos) {
   const cargos = []
+  let creditoSinAplicar = 0
   movimientos.forEach(movimiento => {
     if (movimiento.tipo === 'cargo') {
-      cargos.push({ ...movimiento, saldo_pendiente_cargo: montoMovimiento(movimiento) })
+      let saldoCargo = montoMovimiento(movimiento)
+      if (creditoSinAplicar > TOLERANCIA_SALDO && saldoCargo > TOLERANCIA_SALDO) {
+        const aplicar = Math.min(saldoCargo, creditoSinAplicar)
+        saldoCargo = redondear4(saldoCargo - aplicar)
+        creditoSinAplicar = redondear4(creditoSinAplicar - aplicar)
+      }
+      cargos.push({ ...movimiento, saldo_pendiente_cargo: saldoCargo })
       return
     }
     if (movimiento.tipo !== 'abono') return
@@ -218,6 +229,7 @@ function distribuirAbonos(movimientos) {
       cargo.saldo_pendiente_cargo = redondear4(cargo.saldo_pendiente_cargo - aplicar)
       restante = redondear4(restante - aplicar)
     }
+    if (restante > TOLERANCIA_SALDO) creditoSinAplicar = redondear4(creditoSinAplicar + restante)
   })
 
   return cargos.map(cargo => ({
