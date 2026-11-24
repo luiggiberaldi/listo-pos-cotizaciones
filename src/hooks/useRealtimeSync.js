@@ -42,16 +42,22 @@ const ENTIDAD_KEYS = {
   cuentas:     [['cuentas-cobrar'], DASHBOARD_KEY],
 }
 
-const TABLAS_LAZY = [
-  { tabla: 'clientes',   keys: [CLIENTES_KEY],   debounceMs: 500 },
+const CXC_KEY          = ['cuentas-cobrar']
+
+export const TABLAS_LAZY = [
   { tabla: 'comisiones', keys: [COMISIONES_KEY], debounceMs: 500 },
   { tabla: 'usuarios',   keys: [USUARIOS_KEY],   debounceMs: 500 },
 ]
 
-const TABLAS_INMEDIATAS = [
+export const TABLAS_INMEDIATAS = [
   { tabla: 'configuracion_negocio', keys: [CONFIG_KEY],                    debounceMs: 500 },
   { tabla: 'cotizaciones',          keys: [COTIZACIONES_KEY],              debounceMs: 500 },
   { tabla: 'notas_despacho',        keys: [DESPACHOS_KEY, INVENTARIO_KEY], debounceMs: 500 },
+  // OP-2026-061: la deuda de un cliente y su historial se ven al instante en las pantallas abiertas,
+  // aunque el cambio venga de otra computadora o de una corrección hecha directo en la base.
+  // (Antes 'clientes' solo marcaba el dato como viejo y la pantalla seguía mostrando la deuda anterior.)
+  { tabla: 'clientes',              keys: [CLIENTES_KEY],                  debounceMs: 1000 },
+  { tabla: 'cuentas_por_cobrar',    keys: [CXC_KEY, CLIENTES_KEY],         debounceMs: 1000 },
 ]
 
 const RECONNECT_DELAY_MS = 3000
@@ -166,6 +172,9 @@ export function useRealtimeSync() {
         if (hiddenAt && Date.now() - hiddenAt < 3 * 60 * 1000) return
         qc.invalidateQueries({ queryKey: INVENTARIO_KEY, refetchType: 'active' })
         qc.invalidateQueries({ queryKey: DESPACHOS_KEY, refetchType: 'active' })
+        // OP-2026-061: también clientes y cuentas por cobrar al volver a la app
+        qc.invalidateQueries({ queryKey: CLIENTES_KEY, refetchType: 'active' })
+        qc.invalidateQueries({ queryKey: CXC_KEY, refetchType: 'active' })
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)

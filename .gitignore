@@ -249,3 +249,7 @@ construacero-backups/
 !api/handlers/__tests__/edicionProfundaCxc053.test.js
 !api/handlers/__tests__/saldoFavorAtomico051.test.js
 !api/lib/__tests__/cxcUtilsFallo057.test.js
+
+# OP-2026-061: pantallas de clientes al instante
+
+!src/utils/__tests__/realtimeSync061.test.js

@@ -109,3 +109,7 @@ scripts/*
 # Fix anti-congelamiento del PIN (watchdog del modal, portado desde el árbol principal)
 !src/components/auth/__tests__/
 !src/components/auth/__tests__/LoginPinModal.test.js
+
+# OP-2026-061: pantallas de clientes al instante
+
+!src/utils/__tests__/realtimeSync061.test.js
