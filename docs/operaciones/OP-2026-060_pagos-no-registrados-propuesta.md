@@ -1,10 +1,42 @@
-# OP-2026-060 — Propuesta: registrar 4 pagos ya hechos sin afectar los reportes de hoy
+# OP-2026-060 — 4 pagos ya hechos, registrados sin afectar los reportes de hoy (ejecutado)
 
-**Fecha:** 2026-11-24 · **Producción:** solo se leyó · **Cambios hechos:** ninguno
+**Fecha:** 2026-11-24 · **Producción:** corregido el 2026-11-24 con orden del dueño · **Cambios hechos:** 4 pagos registrados con su fecha real (ver "Lo que se hizo")
 **Pedido del dueño:** Constructora Ew 2010 (cruce $850), Inversiones y Suministro Yahveh ($313,43), KIA 241 ($64,50) y Albert Omar Ruiz ($60,59) ya pagaron; hay que corregirlo sin que cambien los reportes de hoy.
 **Antecedentes:** [OP-2026-039](OP-2026-039_clientes-reportados-como-pagados.md) y [OP-2026-047](OP-2026-047_abonos-no-registrados-y-pruebas-staging.md): el sistema suma bien; esos pagos **nunca se anotaron**.
 
 ## En resumen
+
+- **Hecho el 2026-11-24, con tu orden.** Los 4 clientes quedaron en **$0**. Cada pago se anotó con la fecha en que realmente se pagó, así que **el reporte de hoy no cambió**: siguió con 0 abonos con fecha de hoy.
+- La suma de todas las deudas bajó exactamente $1.288,52: de $73.688,22 a $72.399,70. Los saldos a favor no cambiaron ($674,15) y las comisiones tampoco.
+- Cada pago quedó en la auditoría como `CORRECCION_PAGO_NO_REGISTRADO` (4 anotaciones), a nombre del usuario ADMINISTRADOR y autorizado por el dueño.
+
+## Lo que se hizo
+
+| Cliente | Monto | Cómo se anotó | Fecha del pago | Guion |
+|---|---|---|---|---|
+| Constructora Ew 2010 | $850,00 | **Cruce**, en el despacho #3347. Contra qué: "Cruce autorizado por el dueño" | 21-sep (día del despacho) | [op060_ew_yahveh_ejecutado.sql](OP-2026-060_scripts/op060_ew_yahveh_ejecutado.sql) |
+| Inversiones y Suministro Yahveh | $313,43 | **USDT**, abono a la deuda ("pagó el viernes") | 20-nov, 4:30 p. m. (después del abono 41PRV) | el mismo |
+| Albert Omar Ruiz Avila | $60,59 | **Transf. / Pago Móvil**, resto del comprobante 261114 ("pago 2 deudas"), en el despacho #3262 | 29-sep (día del comprobante) | [op060_albert_ejecutado.sql](OP-2026-060_scripts/op060_albert_ejecutado.sql) |
+| KIA 241 | $64,50 | **Transf. / Pago Móvil**, diferencia del intercambio del despacho #3596. **El método no se informó**: se usó el mismo del resto del despacho | 02-oct (día del intercambio) | [op060_kia_ejecutado.sql](OP-2026-060_scripts/op060_kia_ejecutado.sql) |
+
+Cómo funcionó cada guion:
+- Antes de escribir, revisaba que la deuda siguiera igual.
+- Si al final el saldo no quedaba en $0, no se guardaba nada.
+- En el primer intento la base pidió indicar qué usuario registra el pago, y no se guardó nada. Se repitió con el usuario ADMINISTRADOR, que es el que registra los abonos.
+
+**Efecto en otros reportes, que es lo correcto:**
+- Los reportes del 21 y 29 de septiembre, del 2 de octubre y del 20 de noviembre ahora muestran estos pagos.
+- El Cruce de Ew **no** cuenta como dinero cobrado: aparece como "Cruce" en el gráfico de formas de pago.
+- El pago USDT de Yahveh sí suma a la cobranza del viernes 20-nov.
+
+**Cómo deshacer uno:** anularlo desde la ficha del cliente, con motivo. Desde OP-2026-059 queda guardado en el archivo de movimientos borrados y la deuda vuelve sola.
+
+**Ojo con las pantallas abiertas:** la app guarda en el equipo una copia de la lista de clientes para abrir más rápido. Como la corrección se hizo directo en la base, y no desde la ficha, las pantallas que ya estaban abiertas siguieron mostrando la deuda vieja: el dueño vio a Albert en $60,59 y a Yahveh en $313,43. La base ya decía $0 (comprobado de nuevo). Se arregla recargando la página (F5, o Ctrl+Shift+R si sigue igual). Si no, se actualiza sola en pocos minutos.
+
+**Pendiente:** confirmar con administración el método real del pago de KIA. Si no fue transferencia o pago móvil, se anula y se registra de nuevo con la misma fecha.
+
+## Propuesta original (antes de ejecutar)
+
 
 - Hoy (24-nov) las 4 deudas siguen en el sistema, exactas: $850,00 · $313,43 · $64,50 · $60,59.
 - **Propuesta:** anotar cada pago con la **fecha en que realmente se pagó**, no con la de hoy. Así los reportes de hoy no se mueven y los 4 clientes quedan en $0.
