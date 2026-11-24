@@ -1820,7 +1820,7 @@ function AgingBars({ aging }) {
           <Clock size={14} className="text-slate-500" />
           <h3 className="text-xs sm:text-sm font-black text-slate-800">Antigüedad de deuda</h3>
         </div>
-        <span className="text-[10px] text-slate-400 font-mono">Total: ${totalUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        <span className="text-[10px] text-slate-400 font-mono">Total: {fmtUsd(totalUsd)}</span>
       </div>
       <div className="p-4 space-y-4">
         {aging.map((a, i) => {
@@ -1837,7 +1837,7 @@ function AgingBars({ aging }) {
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-[10px] text-slate-400">{pctTotal.toFixed(0)}%</span>
                   <span className="text-xs font-bold text-slate-800">
-                    ${a.totalUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {fmtUsd(a.totalUsd)}
                   </span>
                 </div>
               </div>
@@ -2138,9 +2138,9 @@ function TabCredito() {
       {/* Resumen CxC para las fechas seleccionadas */}
       {vistaCredito === 'resumen' && <>
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard icon={DollarSign} label="Saldo inicial (deuda)" value={fmtUsd(kpis.saldoInicial || 0)} sub={`Neto: ${fmtUsd(kpis.saldoInicialNeto || 0)}`} gradient="linear-gradient(135deg, #1e3a5f, #1B365D)" border="rgba(255,255,255,0.07)" />
+        <KpiCard icon={DollarSign} label="Saldo inicial (deuda)" value={fmtUsd(kpis.saldoInicial || 0)} sub={kpis.saldoInicialCredito > 0 ? `Neto: ${fmtUsd(kpis.saldoInicialNeto || 0)} (resta ${fmtUsd(kpis.saldoInicialCredito)} a favor)` : `Neto: ${fmtUsd(kpis.saldoInicialNeto || 0)}`} gradient="linear-gradient(135deg, #1e3a5f, #1B365D)" border="rgba(255,255,255,0.07)" />
         <KpiCard icon={ArrowUpCircle} label="Cargos del período" value={fmtUsd(kpis.totalCargos || 0)} sub="Crédito generado en el rango" gradient="linear-gradient(135deg, #b45309, #92400e)" border="rgba(255,255,255,0.10)" />
-        <KpiCard icon={ArrowDownCircle} label="Abonos aplicados" value={fmtUsd(kpis.totalAbonos || 0)} sub={`Saldo a favor/cruces: ${fmtUsd(kpis.totalAbonosSaldoFavor || 0)}`} gradient="linear-gradient(135deg, #047857, #065f46)" border="rgba(255,255,255,0.10)" />
+        <KpiCard icon={ArrowDownCircle} label="Abonos aplicados" value={fmtUsd(kpis.totalAbonos || 0)} sub={`Saldo a favor/cruces: ${fmtUsd(kpis.totalAbonosSaldoFavor || 0)}${kpis.totalAbonosAjuste > 0 ? ` · Devoluciones: ${fmtUsd(kpis.totalAbonosAjuste)}` : ''}`} gradient="linear-gradient(135deg, #047857, #065f46)" border="rgba(255,255,255,0.10)" />
         <KpiCard icon={CheckCircle} label="Cobros en dinero" value={fmtUsd(kpis.totalCobrado || 0)} sub="Excluye cruces internos y devoluciones" gradient="linear-gradient(135deg, #059669, #047857)" border="rgba(255,255,255,0.10)" />
         <KpiCard icon={CreditCard} label="CxC al cierre" value={fmtUsd(totalCxC)} sub={`${kpis.numClientesConDeuda || 0} clientes con deuda`} gradient="linear-gradient(135deg, #991b1b, #b91c1c)" border="rgba(255,255,255,0.10)" />
           <KpiCard icon={DollarSign} label="Saldo a favor actual" value={fmtUsd(kpis.totalSaldoFavorClientes || 0)} sub="Saldo disponible hoy, no al corte" light />

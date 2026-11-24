@@ -50,9 +50,13 @@ export function useReportePeriodoCxC(rango) {
       })
       const clienteIds = clientes.map(c => c.id)
 
-      // 2) Clientes con movimiento (cargo o abono) dentro del rango, aunque hoy
-      //    deban $0: sin ellos el saldo inicial y la lista de movimientos del
+      // 2) Clientes con movimiento (cargo o abono) desde el inicio del rango, aunque
+      //    hoy deban $0: sin ellos el saldo inicial y la lista de movimientos del
       //    período quedarían incompletos (p. ej. quien pagó toda su deuda).
+      //    OP-2026-062: SIN tope superior. En un período pasado (Mes pasado, Ayer,
+      //    Corte viernes–jueves) un cliente que debía al corte y pagó DESPUÉS hoy
+      //    tiene saldo $0 y no tuvo movimientos dentro del rango; con el tope se
+      //    quedaba fuera y el "CxC al cierre" histórico salía más bajo.
       let clientesExtraIds = []
       if (rango?.from || rango?.to) {
         const movsEnRango = await leerTodasLasPaginas((desde, hasta) => supabase
@@ -60,7 +64,6 @@ export function useReportePeriodoCxC(rango) {
           .select('id, cliente_id')
           .in('tipo', ['cargo', 'abono'])
           .gte('creado_en', `${rango.from || '2000-01-01'}T00:00:00-04:00`)
-          .lte('creado_en', `${rango.to || '2100-01-01'}T23:59:59-04:00`)
           .order('id', { ascending: true })
           .range(desde, hasta))
         const yaIncluidos = new Set(clienteIds)
