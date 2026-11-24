@@ -135,9 +135,9 @@ npm run dev
 
 El servidor local (Worker) corre en `localhost:8787` (con `npm run dev:worker`).
 
-## Cuentas por Cobrar y despachos — cambios preparados para producción (OP-2026-059)
+## Cuentas por Cobrar y despachos — cambios publicados en producción (OP-2026-059)
 
-> **Estado:** preparados y probados, **todavía no publicados**. Entran en vigor cuando se apliquen las migraciones 301 a 309 y se publique el código (ver [OP-2026-059](docs/operaciones/OP-2026-059_paso-a-produccion-cxc.md)).
+> **Estado:** **publicados en producción el 2026-11-24** (migraciones 301 a 309 y código, solicitud #66; ver [OP-2026-059](docs/operaciones/OP-2026-059_paso-a-produccion-cxc.md)).
 
 Cuando se publiquen, así funcionará:
 
