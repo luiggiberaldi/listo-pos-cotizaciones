@@ -1,11 +1,11 @@
-# OP-2026-059 — Paso a producción de los arreglos de Cuentas por Cobrar (preparado, sin aplicar)
+# OP-2026-059 — Paso a producción de los arreglos de Cuentas por Cobrar (publicado 2026-11-24)
 
-**Fecha:** 2026-11-24 · **Producción:** solo se leyó (nada aplicado, nada escrito) · **Staging:** solo se usó para ensayos que se deshacen solos
+**Fecha:** 2026-11-24 · **Producción:** publicado el 2026-11-24 con aprobación del dueño (ver §10) · **Staging:** solo se usó para ensayos que se deshacen solos
 **Viene de:** [plan OP-2026-048](../plans/OP-2026-048_plan-arreglo-26-fallas-staging.md) y su cierre [OP-2026-058](OP-2026-058_prueba-final-y-reporte-clientes.md). Lleva a producción lo de [OP-042](OP-2026-042_arreglos-cxc-staging.md) y [OP-049](OP-2026-049_aviso-error-y-doble-clic-abonos-staging.md) a [OP-057](OP-2026-057_acceso-y-consistencia-staging.md).
 
 ## En resumen
 
-- **Todo está listo para pasar a producción, pero no se ha aplicado nada.** Falta tu aprobación.
+- **Publicado en producción el 2026-11-24** con tu aprobación: base de datos (migraciones 301-309) y código ([solicitud #66](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/66), commit `5a323d22`). Detalle y verificaciones en §10.
 - Se prepararon **9 cambios de base de datos** (migraciones 301 a 309), cada uno con su **reversa** (el archivo para deshacerlo), y se llevó el código al programa de producción. Las **1.230 pruebas automáticas pasan** y la app **se construye sin errores**.
 - **Hallazgo importante:** producción no es una copia exacta de staging. Las devoluciones de producción pasan por **otra función** que la que se arregló en staging. Si se hubieran copiado los archivos de staging tal cual, el arreglo de las devoluciones (G1) **no habría funcionado** en producción y se habría **pisado** el cálculo de comisiones que producción tiene más nuevo. Por eso las versiones de producción se escribieron partiendo de lo que **hoy** tiene producción.
 - **Ensayo sin riesgo:** las 9 migraciones de producción se probaron sobre staging dentro de una "caja" que se deshace sola al final. Funcionaron las 8 pruebas (devolución con abono confirmado, reabrir con pagos, abono sin duplicar, anular con motivo, saldo a favor, anular con pagos anotados, etc.). También se probaron las reversas: dejan producción **exactamente** como está hoy (comprobado con huellas digitales de cada función). Staging quedó igual que antes.
@@ -177,7 +177,7 @@ Ninguna se ejecutó. Se recomienda hacerlas **después** de publicar, porque as�
   - Se corrigió un detalle real: en la ventana de devolver/anular, las opciones de pago se rearmaban en cada redibujo de pantalla.
   - Quedan 3 avisos del mismo tipo que ya existen en el resto del programa. No cambian lo que hace la pantalla.
   - `cxc.js` pasó de 5 avisos a 0.
-- **Todavía no se subió nada a GitHub**: ni solicitud de cambio, ni unión a `main`, ni migraciones aplicadas. Eso espera tu aprobación (pasos 0 a 12 de §2).
+- Después se publicó con tu aprobación (§10).
 
 Al guardar el código hay que tener en cuenta:
 
@@ -188,7 +188,7 @@ Al guardar el código hay que tener en cuenta:
 
 ## 8. Qué queda pendiente o sin verificar
 
-- **Nada aplicado en producción** (ni base ni código). Sin número de solicitud de cambio ni commit todavía.
+- Publicado (§10). Faltan las pruebas en pantalla de administración con operaciones reales (§4.3).
 - Las pruebas en navegador real de staging (OP-049 a OP-057) se hicieron con el código de staging, no con esta versión de producción. Lo de producción se verificó con las 1.230 pruebas automáticas, la construcción y el ensayo de base de datos en staging. No se levantó la app de producción en un navegador.
 - Las 3 fallas nuevas de staging (N16, N17, N18) siguen abiertas **en staging**. Arreglarlas allá es un trabajo aparte.
 - Correcciones de datos D1 a D5: esperan tu decisión.
@@ -202,3 +202,26 @@ Al guardar el código hay que tener en cuenta:
 - [ ] Aviso a administración y logística de los cambios en pantalla (§4.3).
 - [ ] Decido sobre cada corrección de datos D1 a D5 (por separado).
 - [ ] **Borro la llave `sbp_…`:** entrar a supabase.com → mi cuenta (arriba a la derecha) → *Access Tokens* → buscar la llave que se pegó en el chat → *Revoke* (eliminar). Si no sabes cuál es, se pueden eliminar todas y crear una nueva cuando haga falta.
+
+## 10. Publicación en producción (2026-11-24)
+
+**En resumen:** publicado con tu aprobación ("Sí, publica"). Primero la base de datos, después el código, como dice §2. Todo salió bien y nada de lo que existía cambió.
+
+| Paso | Qué se hizo | Resultado |
+|---|---|---|
+| 0 | **Respaldo.** Supabase hace copias diarias; la última era del 23-nov. Además, a las 11:40 (hora UTC) se sacó una copia propia: las 236 funciones de la base, las 5 vistas, la lista de categorías y las tablas `cuentas_por_cobrar` (1.050), `clientes` (1.284), `notas_despacho` (2.827) y `comisiones` (1.765) | En `Desktop\respaldo-OP-2026-059-20261124-072047\base_produccion` (fuera del proyecto: tiene datos de clientes) |
+| — | Antes de aplicar se comprobó que producción no había cambiado desde la preparación | 19 de 19 funciones idénticas a las estudiadas |
+| 1-9 | Migraciones 301 a 309 aplicadas una por una con [`aplicar_migraciones_prod.py`](OP-2026-059_scripts/aplicar_migraciones_prod.py) | Las 9 sin errores |
+| 10 | Revisión de la base (§4.1) | Suma de deudas **$73.688,22** y de saldos a favor **$674,15**: iguales al centavo antes y después. La auditoría tiene 14 categorías. Columna `idempotency_key`, tabla `cxc_movimientos_borrados` y su disparador: presentes. Las 12 funciones revisadas solo las puede usar el servidor |
+| 11 | Código: [solicitud #66](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/66), unida a `main` (commit `5a323d22`) | Worker publicado en Cloudflare (verde). Vercel publicado (verde) |
+| 12 | Pruebas del servidor (§4.2) | La app y `/api/ping` responden 200. Las 3 rutas nuevas responden 401 sin sesión (antes de publicar daban 404). La pantalla publicada ya trae el código nuevo. Sin errores en la auditoría ni cambios de saldos en los primeros minutos |
+
+Notas:
+- El revisor automático "Kilo Code Review" marca fallo en 1 segundo en todas las solicitudes, incluidas las anteriores (#64). No tiene que ver con este cambio.
+- La tabla de historial de migraciones de Supabase no se usa en este proyecto (solo tiene 2 filas antiguas), así que no se anotó ahí. El registro oficial es [matriz-migraciones.md](matriz-migraciones.md).
+- **Cómo deshacer:** ver §3. Para el código, en Vercel "Instant Rollback" y en Cloudflare `wrangler rollback`. Para la base, las reversas en orden inverso (309 → 301).
+
+**Pendiente:**
+- Pruebas en pantalla de administración con operaciones reales del día (§4.3).
+- Correcciones de datos D1 a D5 y [OP-2026-060](OP-2026-060_pagos-no-registrados-propuesta.md) (los 4 pagos no registrados). Cada una necesita su aprobación.
+- Borrar la llave `sbp_…` en supabase.com. Ojo: los guiones de Claude usan esa llave para leer producción. Al borrarla, para futuras revisiones hará falta crear una nueva y ponerla en el archivo `.env` de tu PC (nunca en el chat).
