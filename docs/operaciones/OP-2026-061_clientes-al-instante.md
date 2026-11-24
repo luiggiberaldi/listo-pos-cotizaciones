@@ -40,7 +40,8 @@ Ninguno de los dos toca datos.
 
 ## Publicación
 
-Ver la fila del [registro](REGISTRO.md): número de solicitud de cambio y commit.
+- 2026-11-24: [solicitud #68](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/68), unida a `main` (commit `42e2cfc5`).
+- Servidor (Cloudflare) y página (Vercel) publicados, los dos en verde. La página en línea ya trae el aviso de cuentas por cobrar (comprobado en el archivo publicado) y responde 200.
 
 ## Pendiente
 
