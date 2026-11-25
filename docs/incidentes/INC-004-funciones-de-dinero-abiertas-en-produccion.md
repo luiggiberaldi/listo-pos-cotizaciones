@@ -2,7 +2,7 @@
 
 - **Detectado:** 2026-11-25, durante la revisión de producción **solo mirando** del plan [OP-2026-084](../plans/OP-2026-084_plan-testeo-completo-inventario.md) (sección 6). Origen del hallazgo: auditoría [OP-2026-076](../operaciones/OP-2026-076_auditoria-independiente-inventario-staging.md) (C1).
 - **Entorno:** **producción** (`oyfyuszgjwcepjpngclv`). No se cambió nada; solo se leyó.
-- **Estado:** 🔴 **Abierto**, a la espera de la autorización del dueño para el arreglo en producción.
+- **Estado:** 🟢 **Cerrado en producción el 2026-11-25** (autorizado por el dueño en el chat: "Sí, ciérralas ya"). Caso [OP-2026-085](../operaciones/REGISTRO.md).
 
 ## En resumen
 
@@ -43,8 +43,16 @@ GRANT EXECUTE ON FUNCTION public.registrar_pago_comision(uuid,uuid,uuid) TO serv
 
 Vuelta atrás: volver a dar `EXECUTE` a `PUBLIC`. Riesgo: muy bajo, porque ningún código las usa.
 
+## Arreglo aplicado (2026-11-25)
+
+- Migración `supabase/migrations/312_cerrar_rpcs_dinero_abiertas.sql` (vuelta atrás en `312_cerrar_rpcs_dinero_abiertas_rollback.sql`), aplicada en producción tal cual, dentro de una transacción.
+- **Verificación en vivo:**
+  - `registrar_cargo_cxc(uuid,uuid,numeric,text,uuid)` y `registrar_pago_comision(uuid,uuid,uuid)` quedaron con `anon=false`, `authenticated=false` y `service_role=true`; permisos `{postgres=X, service_role=X}`;
+  - una llamada sin sesión desde internet a `registrar_pago_comision` responde **HTTP 404**, es decir, ya no es visible;
+  - la versión protegida `registrar_cargo_cxc(uuid)` no se tocó.
+- Riesgo: ninguno conocido, porque el programa no usa esas funciones.
+
 ## Pendiente
 
-- Autorización del dueño para aplicar el arreglo en producción.
 - Revisión más fina (cruzar cada cargo y cada pago de comisión con la auditoría del sistema).
 - Avisar al dueño que no confíe en los respaldos descargados desde la app hasta arreglarlos; usar los respaldos completos de la base de datos.
