@@ -2,7 +2,7 @@
 
 - **Fecha de inicio:** 2026-11-25
 - **Entorno:** solo **staging** (`construacero-staging/` y base de pruebas `spupqgkdsgohxxfoxydl`). Producción no se toca en este caso.
-- **Carpeta de trabajo:** `construacero-op086`, rama `fix/op-086-inventario-staging`, creada desde `origin/main` (regla de OP-2026-083).
+- **Carpeta de trabajo:** `construacero-op086`, rama `fix/op-086-inventario-staging`, creada desde `origin/main` (regla de OP-2026-083). **Solicitud de cambio #84.**
 - **Planes que se ejecutan:** [OP-2026-078](../plans/OP-2026-078_plan-correccion-hallazgos-auditoria-inventario-staging.md) (correcciones) y [OP-2026-084](../plans/OP-2026-084_plan-testeo-completo-inventario.md) (pruebas). Aprobados por el dueño el 2026-11-25.
 - **Estado:** 🟡 Correcciones aplicadas en staging y pruebas automáticas y de base de datos en verde. Faltan la revisión visual en navegador, el ensayo de vuelta atrás y el visto bueno del dueño. Producción no se tocó en este caso.
 
