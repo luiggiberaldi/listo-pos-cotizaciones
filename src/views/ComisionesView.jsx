@@ -911,10 +911,10 @@ export default function ComisionesView() {
         </div>
 
         {/* Fila Inferior: Vendedor con CustomSelect, Switch Formato, Tasas y Exportación */}
-        <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between">
-          <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between min-w-0">
+          <div className="flex flex-wrap items-end gap-3 w-full md:w-auto min-w-0">
             {esPrivilegiado && (
-              <div className="w-56">
+              <div className="w-full sm:w-56 min-w-0">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">
                   Vendedor
                 </label>
@@ -931,7 +931,7 @@ export default function ComisionesView() {
               </div>
             )}
 
-            <div className="w-44">
+            <div className="w-full sm:w-44 min-w-0">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">
                 Formato Reporte
               </label>
@@ -962,13 +962,13 @@ export default function ComisionesView() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 ml-auto shrink-0 self-end">
+          <div className="w-full md:w-auto flex flex-wrap items-center gap-2 md:ml-auto min-w-0 self-end">
             {/* Selector de Tasa Euro / USDT */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shrink-0 h-9">
+            <div className="flex flex-wrap sm:flex-nowrap items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold min-h-9 w-full sm:w-auto min-w-0">
               <button
                 type="button"
                 onClick={() => setTipoTasaComision('euro')}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                className={`flex-1 sm:flex-none justify-center px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg transition-all flex items-center gap-1 min-w-0 ${
                   tipoTasaComision === 'euro'
                     ? 'bg-white text-indigo-700 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'
@@ -976,13 +976,14 @@ export default function ComisionesView() {
                 title="Calcular comisiones con tasa Euro Oficial BCV"
               >
                 <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
-                <span>Euro BCV:</span>
-                <b>{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
+                <span className="hidden sm:inline">Euro BCV:</span>
+                <span className="sm:hidden">Euro:</span>
+                <b className="truncate">{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
               </button>
               <button
                 type="button"
                 onClick={() => setTipoTasaComision('usdt')}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                className={`flex-1 sm:flex-none justify-center px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg transition-all flex items-center gap-1 min-w-0 ${
                   tipoTasaComision === 'usdt'
                     ? 'bg-white text-emerald-700 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'
@@ -991,21 +992,22 @@ export default function ComisionesView() {
               >
                 <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
                 <span>USDT:</span>
-                <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
+                <b className="truncate">{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
               </button>
             </div>
 
             {/* Menús desplegables de Imprimir y Descargar */}
-            <div className="flex items-center gap-1.5 relative shrink-0">
+            <div className="flex flex-wrap items-center gap-1.5 relative w-full sm:w-auto min-w-0">
               {/* Botón Imprimir */}
-              <div className="relative">
+              <div className="relative flex-1 sm:flex-none">
                 {filtroVendedor ? (
                   <button
                     onClick={() => exportarPDF('todos', 'imprimir')}
                     disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
+                    className="w-full sm:w-auto justify-center flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm min-h-9"
                   >
-                    <Printer size={12} className="text-slate-500" />
+                    <Printer size={13} className="text-slate-500 shrink-0" />
+                    <span className="sm:hidden">{exportando ? 'Generando...' : 'Imprimir'}</span>
                     <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
                   </button>
                 ) : (
@@ -1013,9 +1015,10 @@ export default function ComisionesView() {
                     <button
                       onClick={() => setShowPrintMenu(!showPrintMenu)}
                       disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
+                      className="w-full sm:w-auto justify-center flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm min-h-9"
                     >
-                      <Printer size={12} className="text-slate-500" />
+                      <Printer size={13} className="text-slate-500 shrink-0" />
+                      <span className="sm:hidden">{exportando ? 'Generando...' : 'Imprimir'}</span>
                       <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Imprimir PDF'}</span>
                       <ChevronDown size={12} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
                     </button>
@@ -1023,7 +1026,7 @@ export default function ComisionesView() {
                     {showPrintMenu && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
-                        <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="absolute left-0 sm:left-auto sm:right-0 mt-1 w-56 max-w-[calc(100vw-2rem)] rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
                           <button
                             onClick={() => { setShowPrintMenu(false); exportarPDF('todos', 'imprimir') }}
                             className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
@@ -1053,15 +1056,16 @@ export default function ComisionesView() {
               </div>
 
               {/* Botón Descargar */}
-              <div className="relative">
+              <div className="relative flex-1 sm:flex-none">
                 {filtroVendedor ? (
                   <button
                     onClick={() => exportarPDF('todos', 'descargar')}
                     disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
+                    className="w-full sm:w-auto justify-center flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md min-h-9"
                     style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                   >
-                    <Download size={12} />
+                    <Download size={13} className="shrink-0" />
+                    <span className="sm:hidden">{exportando ? 'Generando...' : 'Descargar'}</span>
                     <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
                   </button>
                 ) : (
@@ -1069,10 +1073,11 @@ export default function ComisionesView() {
                     <button
                       onClick={() => setShowExportMenu(!showExportMenu)}
                       disabled={exportando || comisiones.length === 0 || !tasaDisponible}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
+                      className="w-full sm:w-auto justify-center flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md min-h-9"
                       style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                     >
-                      <Download size={12} />
+                      <Download size={13} className="shrink-0" />
+                      <span className="sm:hidden">{exportando ? 'Generando...' : 'Descargar'}</span>
                       <span className="hidden sm:inline">{exportando ? 'Generando...' : 'Descargar PDF'}</span>
                       <ChevronDown size={12} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
                     </button>
@@ -1080,7 +1085,7 @@ export default function ComisionesView() {
                     {showExportMenu && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                        <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="absolute right-0 mt-1 w-56 max-w-[calc(100vw-2rem)] rounded-xl bg-white border border-slate-200 shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
                           <button
                             onClick={() => { setShowExportMenu(false); exportarPDF('todos', 'descargar') }}
                             className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"

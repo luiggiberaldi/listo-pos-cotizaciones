@@ -1501,7 +1501,7 @@ export default function TutorialView() {
               <span className="text-sm font-black text-white">{completedCount} de {totalCount} Módulos</span>
               <button 
                 onClick={handleResetProgress}
-                className="text-[9px] font-bold text-amber-400 hover:text-amber-300 block mt-0.5 hover:underline"
+                className="inline-flex items-center min-h-9 px-2 -ml-2 rounded-lg text-[10px] font-bold text-amber-400 hover:text-amber-300 mt-0.5 hover:underline"
               >
                 Restablecer progreso
               </button>
@@ -1673,7 +1673,7 @@ export default function TutorialView() {
                         {mod.steps.length} pasos
                       </span>
                       
-                      <button className={`text-[10px] font-black px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                      <button className={`text-[10px] font-black min-h-9 px-3.5 py-2 rounded-lg transition-all flex items-center gap-1 ${
                         isCompleted 
                           ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' 
                           : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/10'

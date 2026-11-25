@@ -4,13 +4,13 @@
 // — Supervisor: ve todos los clientes · Reasignar: solo administración/jefe/desarrollador
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
+import { Users, Plus, Search, RefreshCw, X, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useVendedores, useBorrarCliente, useActivarCliente } from '../hooks/useClientes'
 import { buscarClientes } from '../utils/clienteSearch'
+import { limpiarVistaListaGuardada } from '../utils/vistaCuadricula'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import ClienteCard       from '../components/clientes/ClienteCard'
-import ClienteRow        from '../components/clientes/ClienteRow'
 import ClienteForm       from '../components/clientes/ClienteForm'
 import ReasignacionModal from '../components/clientes/ReasignacionModal'
 import FichaClienteModal from '../components/clientes/FichaClienteModal'
@@ -118,12 +118,11 @@ export default function ClientesView() {
   const [filtroSaldoFavor, setFiltroSaldoFavor] = useState(false)
   const [filtroEstado, setFiltroEstado]     = useState('activos')
   const [verTodos, setVerTodos] = useState(false)
-  const [vistaMode, setVistaMode] = useState(() => {
-    const businessId = useAuthStore.getState().perfil?.cuenta_id
-    const key = businessId ? `clientes_vista-${businessId}` : 'clientes_vista'
-    return localStorage.getItem(key) || (window.innerWidth < 768 ? 'list' : 'grid')
-  })
   const [pagina, setPagina] = useState(1)
+
+  useEffect(() => {
+    limpiarVistaListaGuardada('clientes_vista', perfil?.cuenta_id)
+  }, [perfil?.cuenta_id])
 
   // Estados de modales
   const [modalFormOpen,    setModalFormOpen]    = useState(false)
@@ -250,13 +249,6 @@ export default function ClientesView() {
     setPagina(1)
   }
 
-  function cambiarVista(modo) {
-    setVistaMode(modo)
-    const businessId = perfil?.cuenta_id
-    const key = businessId ? `clientes_vista-${businessId}` : 'clientes_vista'
-    localStorage.setItem(key, modo)
-  }
-
   function abrirCrear() {
     setClienteEditando(null)
     setModalFormOpen(true)
@@ -338,31 +330,31 @@ export default function ClientesView() {
         title="Clientes"
         subtitle={isLoading ? 'Cargando...' : `${clientesFiltrados.length} cliente${clientesFiltrados.length !== 1 ? 's' : ''}`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             {(perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador') && (
               <>
                 <button 
                   onClick={() => exportarClientesPDF('print')} 
                   disabled={imprimiendoPDF || exportandoPDF || isLoading}
-                  className="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+                  className="flex items-center gap-1.5 sm:gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
-                  <Printer size={16} />
+                  <Printer size={15} />
                   {imprimiendoPDF ? 'Imprimiendo...' : 'Imprimir'}
                 </button>
                 <button 
                   onClick={() => exportarClientesPDF('download')} 
                   disabled={imprimiendoPDF || exportandoPDF || isLoading}
-                  className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+                  className="flex items-center gap-1.5 sm:gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
-                  <FileText size={16} />
+                  <FileText size={15} />
                   {exportandoPDF ? 'Generando...' : 'Descargar PDF'}
                 </button>
               </>
             )}
             {!esAdministracion && (
-              <button onClick={abrirCrear} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+              <button onClick={abrirCrear} className="flex items-center gap-1.5 sm:gap-2 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] whitespace-nowrap"
                 style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-                <Plus size={16} />Nuevo cliente
+                <Plus size={15} />Nuevo cliente
               </button>
             )}
           </div>
@@ -398,26 +390,6 @@ export default function ClientesView() {
         >
           <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
         </button>
-
-        {/* Toggle cuadrícula / lista */}
-        <div className="flex bg-slate-100 rounded-xl p-0.5">
-          <button
-            type="button"
-            onClick={() => cambiarVista('grid')}
-            title="Vista cuadrícula"
-            className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <LayoutGrid size={16} />
-          </button>
-          <button
-            type="button"
-            onClick={() => cambiarVista('list')}
-            title="Vista lista"
-            className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <List size={16} />
-          </button>
-        </div>
       </form>
 
       {/* Chip de búsqueda activa */}
@@ -591,39 +563,21 @@ export default function ClientesView() {
           onAction={limpiarFiltros}
         />
       ) : (
-        vistaMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-            {clientesPaginados.map(cliente => (
-              <ClienteCard
-                key={cliente.id}
-                cliente={cliente}
-                onEditar={abrirEditar}
-                onReasignar={abrirReasignar}
-                onCotizar={cotizarCliente}
-                onVerFicha={abrirFicha}
-                onBorrar={abrirBorrar}
-                onActivar={handleActivar}
-                onPromoverPersonal={puedePromover ? abrirPromocionPersonal : null}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {clientesPaginados.map(cliente => (
-              <ClienteRow
-                key={cliente.id}
-                cliente={cliente}
-                onEditar={abrirEditar}
-                onReasignar={abrirReasignar}
-                onCotizar={cotizarCliente}
-                onVerFicha={abrirFicha}
-                onBorrar={abrirBorrar}
-                onActivar={handleActivar}
-                onPromoverPersonal={puedePromover ? abrirPromocionPersonal : null}
-              />
-            ))}
-          </div>
-        )
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+          {clientesPaginados.map(cliente => (
+            <ClienteCard
+              key={cliente.id}
+              cliente={cliente}
+              onEditar={abrirEditar}
+              onReasignar={abrirReasignar}
+              onCotizar={cotizarCliente}
+              onVerFicha={abrirFicha}
+              onBorrar={abrirBorrar}
+              onActivar={handleActivar}
+              onPromoverPersonal={puedePromover ? abrirPromocionPersonal : null}
+            />
+          ))}
+        </div>
       )}
 
       {/* ── Paginación ───────────────────────────────────────────────────────── */}
