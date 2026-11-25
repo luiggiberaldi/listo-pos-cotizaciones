@@ -4,7 +4,7 @@
 - **Entorno:** solo **staging** (`construacero-staging/` y base de pruebas `spupqgkdsgohxxfoxydl`). Producción no se toca en este caso.
 - **Carpeta de trabajo:** `construacero-op086`, rama `fix/op-086-inventario-staging`, creada desde `origin/main` (regla de OP-2026-083).
 - **Planes que se ejecutan:** [OP-2026-078](../plans/OP-2026-078_plan-correccion-hallazgos-auditoria-inventario-staging.md) (correcciones) y [OP-2026-084](../plans/OP-2026-084_plan-testeo-completo-inventario.md) (pruebas). Aprobados por el dueño el 2026-11-25.
-- **Estado:** 🔧 En ejecución. Fases 1 y 2 terminadas.
+- **Estado:** 🔧 En ejecución. Fases 1, 2 y 5 terminadas.
 
 ---
 
@@ -46,9 +46,27 @@
   - `guarda_precios_ddl` es un vigilante interno de la base y no se puede llamar desde afuera.
 - **Hallazgo nuevo para la Fase 5:** `obtener_stock_productos`, `obtener_productos_vendedor`, `obtener_categorias_vendedor` y `buscar_productos_hibrido` leen el catálogo con permisos de dueño y **sin filtrar por empresa**.
 
+## Fase 5 — Cada empresa ve solo lo suyo (A4)
+
+**Corrección a la auditoría OP-2026-076:** el hallazgo A4 estaba **exagerado**. La auditoría miró solo las reglas que dan permiso y no las reglas de bloqueo ("restrictivas") que ya existían (`dashboard_scope_*`). Revisando con el respaldo de antes del cambio, casi todas las tablas ya estaban protegidas por empresa. La fuga real en staging era:
+- `inventario_movimientos` (Kardex): administración y supervisión podían leer el de otras empresas;
+- 4 funciones de catálogo con permisos de dueño que no filtraban por empresa: `obtener_stock_productos`, `obtener_productos_vendedor`, `obtener_categorias_vendedor`, `buscar_productos_hibrido`;
+- registros técnicos `system_logs` y `system_log_analysis`: no tienen columna de empresa y **quedan pendientes**.
+
+En **producción** (revisión solo lectura): casi todo protegido. Quedan abiertas `despacho_devoluciones` y `despacho_devolucion_intercambios` (regla "Permitir todo…") y los registros técnicos. Detalle en INC-004.
+
+Cambios: migración `317_staging_aislamiento_cuentas.sql` (reversa `…_rollback.sql`), **aplicada en staging**:
+1. Regla de bloqueo `aislamiento_cuenta` en 29 tablas. Las tablas hijas sin columna de empresa la heredan del cliente o del despacho; `comisiones` usa su columna `cuentaid`.
+2. Los usuarios sin sesión ya no pueden leer directo productos, Kardex, cobros, comisiones ni devoluciones.
+3. Las 3 funciones de catálogo filtran por la empresa de quien llama.
+4. `buscar_productos_hibrido` queda solo para el servidor, que siempre envía la empresa.
+
+**Verificado en vivo** (simulando la sesión de la empresa principal): `obtener_stock_productos` devuelve 11 productos (los propios) en vez de 458, y `obtener_productos_vendedor` devuelve 11. Ninguna fila tenía la empresa vacía, así que la regla no esconde datos que se deban ver.
+
 ## Pendiente
 
-- Fases 3 a 6 de OP-078 (seguridad, respaldo y restauración, facturar préstamo, separación entre empresas, detalles menores).
+- Registros técnicos sin columna de empresa (`system_logs`, `system_log_analysis`).
+- Fases 3, 4 y 6 de OP-078 (seguridad, respaldo y restauración, facturar préstamo, separación entre empresas, detalles menores).
 - Ejecución del plan de pruebas OP-084 y su informe.
 - Publicar el servidor de staging con esta versión.
 - Anotar las migraciones `301`–`315` en el registro de migraciones de la base de staging.
