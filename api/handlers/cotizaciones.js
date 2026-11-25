@@ -1,7 +1,7 @@
 import { json, jsonError, corsHeaders, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { verifyAuth, validateOperator, verifyAdminRole, SUPER_ADMIN_UUID } from '../lib/auth.js'
 import { avisarDespacho } from '../lib/notificarPush.js';
-import { registrarAuditoria, logToSystem } from '../lib/audit.js'
+import { registrarAuditoria } from '../lib/audit.js'
 import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
 import { errorCruceSinExplicacion } from '../../src/utils/formaPagoReglas.js'
 
@@ -67,8 +67,12 @@ export async function handleGuardarCotizacion(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { cotizacionId, headerData, items } = body;
+  const { cotizacionId, headerData, items, nuevoId } = body;
   if (!headerData || !items || !Array.isArray(items)) return jsonError('Faltan campos', 400, request);
+  // OP-2026-067: la pantalla le da a cada cotización nueva su identidad desde el
+  // primer intento; así un reintento (o el reenvío de una atrapada) no la duplica.
+  if (nuevoId != null && !isValidUuid(nuevoId)) return jsonError('nuevoId inválido', 400, request);
+  if (cotizacionId != null && !isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
 
   // Validate items
   for (let i = 0; i < items.length; i++) {
@@ -110,27 +114,55 @@ export async function handleGuardarCotizacion(request, env) {
   };
 
   let id = cotizacionId;
+  let esNueva = !cotizacionId;
+  const serviceRead = { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` };
 
   try {
+    if (!id && nuevoId) {
+      // OP-2026-067: ¿ya llegó un intento anterior de esta misma cotización?
+      const exRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${nuevoId}&select=id,vendedor_id,estado`, { headers: serviceRead });
+      if (!exRes.ok) return jsonError('Error al verificar cotización', 500, request);
+      const [previa] = await exRes.json();
+      if (previa) {
+        if (previa.vendedor_id !== headerData.vendedor_id) return jsonError('Ese identificador de cotización ya está en uso', 409, request);
+        // Ya enviada o procesada: no se toca ni se crea otra.
+        if (previa.estado !== 'borrador') return json({ id: previa.id, reintento: true }, 200, request);
+        // Borrador ya creado: se actualiza con lo último (camino de edición).
+        id = previa.id;
+        esNueva = false;
+      }
+    }
+
     if (!id) {
       // Create new cotización
       const res = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?select=id`, {
         method: 'POST',
         headers: { ...supaHeaders, Prefer: 'return=representation' },
-        body: JSON.stringify({ ...headerData, estado: 'borrador' }),
+        body: JSON.stringify({ ...headerData, ...(nuevoId ? { id: nuevoId } : {}), estado: 'borrador' }),
       });
       if (!res.ok) {
         const err = await res.text();
+        // Dos reintentos a la vez: el otro ya la creó.
+        if (nuevoId && res.status === 409) return json({ id: nuevoId, reintento: true }, 200, request);
         return jsonError(`Error al crear: ${err}`, 500, request);
       }
       const [row] = await res.json();
       id = row.id;
+
+      if (items.length > 0) {
+        const rows = items.map((it, idx) => ({ ...it, cotizacion_id: id, orden: idx }));
+        const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
+          method: 'POST', headers: supaHeaders, body: JSON.stringify(rows),
+        });
+        if (!insRes.ok) {
+          const err = await insRes.text();
+          return jsonError(`Error al insertar items: ${err}`, 500, request);
+        }
+      }
     } else {
       // Verify ownership + supervisor check in parallel
       const [checkRes, isSupervisor] = await Promise.all([
-        fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}&select=vendedor_id,estado`, {
-          headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
-        }),
+        fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}&select=vendedor_id,estado`, { headers: serviceRead }),
         verifyAdminRole(user.operator_id, env),
       ]);
       if (!checkRes.ok) return jsonError('Error al verificar cotización', 500, request);
@@ -141,43 +173,61 @@ export async function handleGuardarCotizacion(request, env) {
       }
       if (existing.estado !== 'borrador') return jsonError('Solo se pueden editar cotizaciones en borrador', 400, request);
 
-      // Update header + delete old items in parallel
-      const [updateRes] = await Promise.all([
-        fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}`, {
-          method: 'PATCH', headers: supaHeaders, body: JSON.stringify(headerData),
-        }),
-        fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${id}`, {
-          method: 'DELETE', headers: supaHeaders,
-        }),
-      ]);
+      // OP-2026-067 (N31): reemplazar productos sin perder nunca los anteriores.
+      // Orden: 1) anotar los renglones viejos, 2) cabecera, 3) insertar los nuevos,
+      // 4) recién entonces borrar los viejos. Si algo falla, la cotización conserva sus productos.
+      const oldRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${id}&select=id`, { headers: serviceRead });
+      if (!oldRes.ok) return jsonError('Error al leer los productos de la cotización', 500, request);
+      const oldIds = (await oldRes.json()).map(r => r.id);
+
+      const updateRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${id}`, {
+        method: 'PATCH', headers: supaHeaders, body: JSON.stringify(headerData),
+      });
       if (!updateRes.ok) {
         const err = await updateRes.text();
         return jsonError(`Error al actualizar: ${err}`, 500, request);
       }
-    }
 
-    // Insert items
-    if (items.length > 0) {
-      const rows = items.map((it, idx) => ({ ...it, cotizacion_id: id, orden: idx }));
-      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items`, {
-        method: 'POST',
-        headers: supaHeaders,
-        body: JSON.stringify(rows),
-      });
-      if (!res.ok) {
-        const err = await res.text();
-        return jsonError(`Error al insertar items: ${err}`, 500, request);
+      let newIds = [];
+      if (items.length > 0) {
+        const rows = items.map((it, idx) => ({ ...it, cotizacion_id: id, orden: idx }));
+        const insRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?select=id`, {
+          method: 'POST', headers: supaHeaders, body: JSON.stringify(rows),
+        });
+        if (!insRes.ok) {
+          const err = await insRes.text();
+          return jsonError(`Error al insertar items (los productos anteriores se conservan): ${err}`, 500, request);
+        }
+        newIds = (await insRes.json()).map(r => r.id);
+      }
+
+      if (oldIds.length > 0) {
+        const delRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?id=in.(${oldIds.join(',')})`, {
+          method: 'DELETE', headers: supaHeaders,
+        });
+        if (!delRes.ok) {
+          // Deshacer: quitar los recién insertados para no dejar productos repetidos.
+          if (newIds.length > 0) {
+            await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?id=in.(${newIds.join(',')})`, {
+              method: 'DELETE', headers: supaHeaders,
+            }).catch(() => {});
+          }
+          return jsonError('No se pudieron reemplazar los productos; la cotización quedó como estaba. Intenta de nuevo.', 500, request);
+        }
       }
     }
 
-    // Auditoría (fire-and-forget — no bloquear respuesta)
-    registrarAuditoria(env, supaHeaders, {
+    // OP-2026-067 (N29): la auditoría debe terminar aunque ya se haya respondido.
+    // Antes era "suelta" y la nube la cortaba al responder: nunca quedaba CREAR_COTIZACION.
+    const auditoria = registrarAuditoria(env, supaHeaders, {
       usuarioId: user.operator_id, usuarioNombre: user.operator_nombre || 'Operador', usuarioRol: user.operator_rol || 'vendedor',
-      categoria: 'COTIZACION', accion: cotizacionId ? 'EDITAR_COTIZACION' : 'CREAR_COTIZACION',
-      descripcion: cotizacionId ? `Cotización ${id} editada` : `Cotización ${id} creada`,
-      entidadTipo: 'cotizacion', entidadId: id, meta: { items_count: items.length, cliente_id: headerData.cliente_id },
+      categoria: 'COTIZACION', accion: esNueva ? 'CREAR_COTIZACION' : 'EDITAR_COTIZACION',
+      descripcion: esNueva ? `Cotización ${id} creada` : `Cotización ${id} editada`,
+      entidadTipo: 'cotizacion', entidadId: id, meta: { items_count: items.length, cliente_id: headerData.cliente_id, total_usd: headerData.total_usd ?? null },
       ip: request.headers.get('CF-Connecting-IP') || null,
     }).catch(() => {});
+    if (typeof env.waitUntil === 'function') env.waitUntil(auditoria);
+    else await auditoria;
 
     return new Response(JSON.stringify({ id }), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
@@ -849,99 +899,5 @@ export async function handleVentaRapida(request, env) {
   }
 }
 
-// ── runCleanupCotizaciones (Cron Job diario de limpieza) ──
-export async function runCleanupCotizaciones(env) {
-  const now = new Date();
-  
-  // Calcular fechas límite usando el tiempo actual del servidor
-  const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  
-  const supaHeaders = {
-    apikey: env.SUPABASE_SERVICE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-    Prefer: 'return=representation'
-  };
-
-  const results = {
-    success: true,
-    anuladas: 0,
-    eliminadas: 0,
-    errors: []
-  };
-
-  try {
-    // 1. ANULAR: Cotizaciones > 15 días en estado 'borrador' o 'enviada'
-    const cancelRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/cotizaciones?creado_en=lt.${fifteenDaysAgo}&estado=in.(borrador,enviada)`,
-      {
-        method: 'PATCH',
-        headers: supaHeaders,
-        body: JSON.stringify({
-          estado: 'anulada',
-          actualizado_en: now.toISOString()
-        })
-      }
-    );
-
-    if (!cancelRes.ok) {
-      const errText = await cancelRes.text();
-      results.errors.push(`Error al anular cotizaciones: ${errText}`);
-      console.error('[CRON CLEANUP] Error al anular:', errText);
-    } else {
-      const cancelledRows = await cancelRes.json();
-      results.anuladas = Array.isArray(cancelledRows) ? cancelledRows.length : 0;
-    }
-
-    // 2. ELIMINAR: Cotizaciones > 30 días en estados inactivos o no confirmados
-    // NOTA: 'aceptada' NUNCA se elimina para proteger integridad referencial (notas_despacho, comisiones, etc)
-    const deleteRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/cotizaciones?creado_en=lt.${thirtyDaysAgo}&estado=in.(borrador,enviada,rechazada,anulada,vencida)`,
-      {
-        method: 'DELETE',
-        headers: supaHeaders
-      }
-    );
-
-    if (!deleteRes.ok) {
-      const errText = await deleteRes.text();
-      results.errors.push(`Error al eliminar cotizaciones: ${errText}`);
-      console.error('[CRON CLEANUP] Error al eliminar:', errText);
-    } else {
-      const deletedRows = await deleteRes.json();
-      results.eliminadas = Array.isArray(deletedRows) ? deletedRows.length : 0;
-    }
-
-    // 3. Registrar Log en el sistema
-    await logToSystem(env, {
-      nivel: results.errors.length > 0 ? 'warning' : 'info',
-      origen: 'worker-cron',
-      categoria: 'SISTEMA',
-      mensaje: `Limpieza automática de cotizaciones completada. Anuladas (>15 días): ${results.anuladas}. Eliminadas (>30 días): ${results.eliminadas}.`,
-      meta: {
-        cutoff_15_days: fifteenDaysAgo,
-        cutoff_30_days: thirtyDaysAgo,
-        anuladas_count: results.anuladas,
-        eliminadas_count: results.eliminadas,
-        errors: results.errors
-      }
-    });
-
-  } catch (err) {
-    results.success = false;
-    results.errors.push(err.message);
-    console.error('[CRON CLEANUP ERROR]:', err.message);
-    
-    await logToSystem(env, {
-      nivel: 'error',
-      origen: 'worker-cron',
-      categoria: 'SISTEMA',
-      mensaje: `Error fatal en la limpieza automática de cotizaciones: ${err.message}`,
-      stack: err.stack?.slice(0, 3000),
-      meta: { error: err.message }
-    });
-  }
-
-  return results;
-}
+// ── Limpieza nocturna: ver api/lib/limpiezaCotizaciones.js (OP-2026-067, opción B) ──
+export { runCleanupCotizaciones } from '../lib/limpiezaCotizaciones.js'

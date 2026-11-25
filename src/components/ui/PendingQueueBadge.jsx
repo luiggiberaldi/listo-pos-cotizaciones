@@ -7,6 +7,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { AlertTriangle, RefreshCw, Trash2, X, CloudOff } from 'lucide-react'
 import { useMutationQueue } from '../../hooks/useMutationQueue'
 
+// OP-2026-067: la cola guarda ventas rápidas y cotizaciones; nombrar cada una por lo que es.
+function nombreItem(item) {
+  return item?.type === 'GUARDAR_COTIZACION' ? 'Cotización pendiente' : 'Venta Rápida'
+}
+
 export default function PendingQueueBadge() {
   const { pending, failed, syncing, retry, discard, sync, refresh } = useMutationQueue()
   const [open, setOpen] = useState(false)
@@ -30,7 +35,7 @@ export default function PendingQueueBadge() {
       {/* Badge compacto */}
       <button
         onClick={() => setOpen(true)}
-        title={`${pending} venta${pending !== 1 ? 's' : ''} pendiente${pending !== 1 ? 's' : ''} de sincronizar`}
+        title={`${pending} pendiente${pending !== 1 ? 's' : ''} de subir al sistema`}
         className={`relative flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold transition-all ${
           failed.length > 0
             ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse'
@@ -50,7 +55,7 @@ export default function PendingQueueBadge() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
               <div className="flex items-center gap-2">
                 <CloudOff size={16} className="text-amber-400" />
-                <span className="text-sm font-semibold text-white">Cola de ventas offline</span>
+                <span className="text-sm font-semibold text-white">Pendientes de subir al sistema</span>
               </div>
               <div className="flex items-center gap-2">
                 {pending > 0 && (
@@ -73,10 +78,10 @@ export default function PendingQueueBadge() {
             {pending > 0 && (
               <div className="px-4 py-3 border-b border-slate-800">
                 <p className="text-xs text-amber-300 font-medium mb-1">
-                  {pending} venta{pending !== 1 ? 's' : ''} esperando conexión
+                  {pending} pendiente{pending !== 1 ? 's' : ''} guardada{pending !== 1 ? 's' : ''} solo en este equipo
                 </p>
                 <p className="text-xs text-slate-400">
-                  Se enviarán automáticamente al reconectar. El stock se descontará al sincronizar.
+                  Todavía no están en el sistema. Se subirán solas con conexión; las cotizaciones, como borrador, cuando entre con su PIN el vendedor que las hizo (después hay que abrirlas y pulsar Enviar). El stock se descontará al subirlas.
                 </p>
               </div>
             )}
@@ -85,13 +90,13 @@ export default function PendingQueueBadge() {
             {failed.length > 0 && (
               <div className="px-4 py-3">
                 <p className="text-xs text-rose-300 font-medium mb-2">
-                  {failed.length} venta{failed.length !== 1 ? 's' : ''} con error
+                  {failed.length} pendiente{failed.length !== 1 ? 's' : ''} con error
                 </p>
                 <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
                   {failed.map((item) => (
                     <div key={item.id} className="flex items-start justify-between gap-2 bg-rose-950/30 border border-rose-800/30 rounded-lg p-2.5">
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-white font-medium truncate">Venta Rápida</p>
+                        <p className="text-xs text-white font-medium truncate">{nombreItem(item)}</p>
                         <p className="text-xs text-rose-300 truncate">{item.error || 'Error desconocido'}</p>
                         <p className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString('es-VE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</p>
                       </div>
@@ -104,7 +109,10 @@ export default function PendingQueueBadge() {
                           <RefreshCw size={12} />
                         </button>
                         <button
-                          onClick={() => discard(item.id)}
+                          onClick={() => {
+                            // Descartar borra la única copia: pedir confirmación.
+                            if (window.confirm(`¿Descartar esta ${nombreItem(item).toLowerCase()}? Solo existe en este equipo y se perderá para siempre.`)) discard(item.id)
+                          }}
                           title="Descartar"
                           className="p-1.5 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 rounded-lg transition-all"
                         >

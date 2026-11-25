@@ -34,6 +34,9 @@ async function processMutationQueueInSW() {
   let failed = 0
 
   for (const item of items) {
+    // OP-2026-067: las cotizaciones las sube la pantalla, que sí tiene el PIN del vendedor.
+    // Aquí no se puede leer el PIN y el servidor las rechazaría (gastando intentos).
+    if (item.type === 'GUARDAR_COTIZACION') continue
     try {
       // Leer JWT del IndexedDB de Supabase (clave estándar de supabase-js)
       const sbKey = Object.keys(self).find((k) => k.startsWith('sb-')) ||
@@ -66,27 +69,6 @@ async function processMutationQueueInSW() {
         done++
       }
 
-      if (item.type === 'GUARDAR_COTIZACION') {
-        const payload = { ...item.payload }
-        if (payload.cotizacionId?.startsWith?.('local_')) payload.cotizacionId = null
-
-        const res = await fetch('/api/cotizaciones/guardar', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify(payload),
-        })
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          throw new Error(data.error || `HTTP ${res.status}`)
-        }
-
-        await del(item.id)
-        done++
-      }
     } catch (err) {
       const attempts = (item.attempts || 0) + 1
       await set(item.id, {
