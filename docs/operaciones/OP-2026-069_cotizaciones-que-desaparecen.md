@@ -154,3 +154,7 @@ Las 4 cotizaciones de prueba quedaron en staging con la nota interna "PRUEBA OP-
 - **Descartar una pendiente** no deja copia en la auditoría: sin conexión no se puede escribir en el servidor. Se puso una confirmación clara.
 - **Las cotizaciones atrapadas desde antes del arreglo** no tienen identidad propia. Si alguna sí había llegado al servidor, podría subirse dos veces (riesgo bajo: en producción no hay borradores recientes).
 - **N40** (ventas rápidas sin conexión) queda abierta.
+
+## Publicación (2026-11-24)
+
+Solicitud #72 unida a main (commit `2f847c2e`); servidor desplegado con éxito y Vercel "Ready". Ruta de guardar sin sesión responde 401. **Sin verificar aún:** prueba "sin conexión" en un teléfono real y la primera limpieza nocturna en producción.
