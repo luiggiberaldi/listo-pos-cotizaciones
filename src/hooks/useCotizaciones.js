@@ -5,7 +5,7 @@ import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
-import { getOperatorSessionHeaders } from '../services/operatorSession'
+import { getOperatorSessionHeaders, getOperatorSession } from '../services/operatorSession'
 import { calcTotales } from '../utils/calcTotales'
 import { round2 } from '../utils/dinero'
 import {
@@ -295,13 +295,21 @@ export function useCotizacion(id) {
 
 // ─── Guardar borrador (crear o actualizar) ────────────────────────────────────
 // Si cotizacionId es null → crea nueva. Si tiene ID → actualiza.
-// Si no hay red → encola en IDB y devuelve un ID local temporal (local_XXXX)
+// OP-2026-069: una cotización nueva viaja con su propia identidad (nuevoId) desde el
+// primer intento, para que un reintento o el reenvío desde el equipo no la duplique.
+// Solo si NO hay internet se guarda en el equipo (cola) con un ID local temporal (local_XXXX).
+// Con internet, si el servidor tarda o falla, se avisa el error y el borrador sigue en pantalla.
+export const TIEMPO_ESPERA_GUARDAR_MS = 20000
 export function useGuardarBorrador() {
   const qc = useQueryClient()
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
 
   return useMutation({
-    mutationFn: async ({ cotizacionId = null, campos, items }) => {
+    // OP-2026-069: sin conexión, la herramienta de la pantalla pausaba el guardado en silencio
+    // (botón "pensando" sin aviso). Con "always" corre igual y, sin red, la cotización
+    // queda PENDIENTE en el equipo con aviso claro y se sube sola al volver la conexión.
+    networkMode: 'always',
+    mutationFn: async ({ cotizacionId = null, nuevoId = null, campos, items }) => {
       // Calcular totales
       const { subtotal, descuentoUsd, totalUsd } = calcTotales(
         items, campos.descuentoGlobalPct, campos.costoEnvioUsd, campos.corteUsd
@@ -336,17 +344,23 @@ export function useGuardarBorrador() {
         origen:          it.productoId ? (it.origen || 'inventario') : 'externo', // Fix: usar productoId (camelCase)
       }))
 
-      const payload = { cotizacionId, headerData, items: itemRows }
+      // Un ID local_ (pendiente en el equipo) no existe en el servidor: se sube como nueva,
+      // con la misma identidad (nuevoId), así no se duplica con la copia pendiente.
+      const idServidor = String(cotizacionId || '').startsWith('local_') ? null : cotizacionId
+      const payload = { cotizacionId: idServidor, headerData, items: itemRows }
+      if (!idServidor && nuevoId) payload.nuevoId = nuevoId
 
       // ─── Intento online ────────────────────────────────────────────────────
       let res, data
+      // Con internet se exige el PIN vigente (si venció, se avisa "Vuelve a introducir tu PIN").
+      // Sin internet no hace falta: la cola espera el PIN para subirla.
+      const headers = navigator.onLine ? await getAuthHeaders() : null
       try {
         if (!navigator.onLine) throw new TypeError('Offline')
 
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 8000)
+        const timeoutId = setTimeout(() => controller.abort(), TIEMPO_ESPERA_GUARDAR_MS)
 
-        const headers = await getAuthHeaders()
         console.log('payload cotizacion (hook)', payload)
         res = await fetch(apiUrl('/api/cotizaciones/guardar'), {
           method: 'POST',
@@ -356,7 +370,7 @@ export function useGuardarBorrador() {
         })
         clearTimeout(timeoutId)
 
-        // Si el servidor está caído (500+), tratamos como si estuviera offline
+        // Servidor con falla (500+): se avisa como error (ya no se guarda a escondidas en el equipo)
         if (res.status >= 500) throw new Error('Error de servidor (5xx)')
 
         data = await res.json()
@@ -364,9 +378,14 @@ export function useGuardarBorrador() {
           console.error('[BACKEND ERROR 400]:', data)
         }
       } catch (err) {
-        // Error de red, timeout, o server caído → encolar en IDB con ID local temporal
+        // Con internet: NO fingir que se guardó. Se avisa y el borrador sigue en pantalla.
+        if (navigator.onLine) {
+          throw new Error('No se pudo guardar la cotización: el servidor tardó demasiado o tuvo un problema. Tu cotización sigue aquí; pulsa de nuevo para reintentar.')
+        }
+        // Sin internet → guardar en el equipo (cola) con ID local temporal
         const localId = cotizacionId ?? `local_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-        await enqueue('GUARDAR_COTIZACION', { ...payload, cotizacionId: localId })
+        // Se anota quién la hizo: solo se subirá cuando entre esa persona con su PIN.
+        await enqueue('GUARDAR_COTIZACION', { ...payload, cotizacionId: localId, _operadorId: getOperatorSession()?.operatorId || perfil?.id || null })
 
         if ('serviceWorker' in navigator) {
           // No usamos await aquí porque en desarrollo (localhost) si el SW no está activo,
@@ -387,7 +406,7 @@ export function useGuardarBorrador() {
     onSuccess: async ({ id, _queued, localId }) => {
       if (_queued) {
         showToast(
-          '📋 Sin conexión — cotización guardada localmente. Se sincronizará al reconectar.',
+          '📋 Sin conexión — la cotización quedó PENDIENTE en este equipo. Todavía no está en el sistema: se subirá sola como borrador al volver la conexión; después ábrela y envíala.',
           'warning',
           7000,
         )
