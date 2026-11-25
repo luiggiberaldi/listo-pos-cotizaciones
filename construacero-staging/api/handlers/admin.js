@@ -289,13 +289,55 @@ export async function handleBackup(request, env) {
 
   const errors = [];
 
-  async function fetchTable(tabla, query = '') {
-    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}?limit=100000&cuenta_id=eq.${user.id}${query}`, { headers: h });
-    if (!res.ok) {
-      errors.push(`Error al leer ${tabla}: ${res.status}`);
-      return [];
+  // OP-2026-086 (C2): el servidor de datos entrega como máximo 1000 filas por consulta. Se lee
+  // página por página y se compara contra el conteo real de la base; si no cuadra, el respaldo se
+  // marca como incompleto en vez de salir "bien" con datos faltantes.
+  const PAGINA = 1000;
+  function conOrdenEstable(query) {
+    if (/(^|&)order=/.test(query)) return query.replace(/(^|&)order=([^&]*)/, (m, pre, ord) => (/(^|,)id\./.test(ord) ? m : `${pre}order=${ord},id.asc`));
+    return `${query}&order=id.asc`;
+  }
+  async function leerPaginado(tabla, filtro, query = '', { maximo = Infinity, ordenarPorId = true } = {}) {
+    const q = ordenarPorId ? conOrdenEstable(query) : query;
+    const filas = [];
+    let total = null;
+    for (let offset = 0; offset < maximo; offset += PAGINA) {
+      const limite = Math.min(PAGINA, maximo - offset);
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}?${filtro}${q}&limit=${limite}&offset=${offset}`, {
+        headers: offset === 0 ? { ...h, Prefer: 'count=exact' } : h,
+      });
+      if (!res.ok) {
+        errors.push(`Error al leer ${tabla}: ${res.status}`);
+        return filas;
+      }
+      if (offset === 0) {
+        const rango = res.headers.get('content-range') || '';
+        const t = Number(rango.split('/')[1]);
+        total = Number.isFinite(t) ? t : null;
+      }
+      const pagina = await res.json();
+      filas.push(...pagina);
+      if (pagina.length < limite) break;
     }
-    return res.json();
+    const esperado = total === null ? null : Math.min(total, maximo);
+    if (esperado !== null && filas.length !== esperado) {
+      errors.push(`${tabla}: se leyeron ${filas.length} de ${esperado} filas`);
+    }
+    conteos[tabla] = (conteos[tabla] || 0) + filas.length;
+    return filas;
+  }
+  const conteos = {};
+
+  async function fetchTable(tabla, query = '') {
+    // auditoria: se conservan solo las 5000 más recientes (decisión previa del respaldo).
+    if (tabla === 'auditoria') {
+      return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query.replace(/&limit=\d+/, ''), { maximo: 5000 });
+    }
+    // configuracion_negocio: una fila por empresa.
+    if (tabla === 'configuracion_negocio') return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query, { ordenarPorId: false });
+    // inventario_operaciones no tiene columna id (su llave es empresa + clave única).
+    if (tabla === 'inventario_operaciones') return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query.includes('order=') ? `${query},idempotency_key.asc` : '&order=idempotency_key.asc', { ordenarPorId: false });
+    return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query);
   }
 
   async function fetchChildTableByIds(tabla, col, ids, order = '') {
@@ -304,15 +346,7 @@ export async function handleBackup(request, env) {
     const rows = [];
     for (let i = 0; i < cleanIds.length; i += 150) {
       const chunk = cleanIds.slice(i, i + 150);
-      const res = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/${tabla}?limit=100000&${col}=in.(${chunk.join(',')})${order}`,
-        { headers: h }
-      );
-      if (!res.ok) {
-        errors.push(`Error al leer ${tabla}: ${res.status}`);
-        return rows;
-      }
-      rows.push(...(await res.json()));
+      rows.push(...(await leerPaginado(tabla, `${col}=in.(${chunk.join(',')})`, order)));
     }
     return rows;
   }
@@ -372,10 +406,11 @@ export async function handleBackup(request, env) {
   const negocio = configuracion_negocio?.[0]?.nombre_negocio || 'sistema';
 
   const backup = {
-    version: '1.1',
+    version: '1.2',
     generado_en: new Date().toISOString(),
     negocio,
     errores: errors.length > 0 ? errors : undefined,
+    completo: errors.length === 0,
     tablas: {
       productos,
       clientes,
@@ -459,101 +494,41 @@ export async function handleRestore(request, env) {
     return jsonError(`Backup incompleto: faltan tablas ${missingTables.join(', ')}`, 400, request);
   }
 
-  const h = {
-    apikey: env.SUPABASE_SERVICE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-    Prefer: 'resolution=merge-duplicates',
-  };
-
-  // Tablas a restaurar en orden (respetando FK)
+  // OP-2026-086 (A1/B3): la restauración ocurre en UNA transacción de la base
+  // (restaurar_respaldo_atomico): todo o nada, sin chocar con el disparador de préstamos,
+  // conservando los números originales y rechazando filas de otra empresa.
+  if (backup.completo === false || (Array.isArray(backup.errores) && backup.errores.length > 0)) {
+    return jsonError(`Este respaldo está marcado como incompleto (${(backup.errores || []).join('; ')}). No se restaura para no mezclar datos parciales.`, 400, request);
+  }
   const TABLAS_RESTORE = [
-    'configuracion_negocio',
-    'transportistas',
-    'productos',
-    'clientes',
-    'cotizaciones',
-    'cotizacion_items',
-    'notas_despacho',
-    'notas_despacho_items',
-    'cliente_prestamos',
-    'despacho_devoluciones',
-    'despacho_devolucion_intercambios',
-    'cuentas_por_cobrar',
-    'comisiones',
-    'inventario_movimientos',
-    'inventario_operaciones',
+    'configuracion_negocio', 'transportistas', 'productos', 'clientes', 'cotizaciones',
+    'cotizacion_items', 'notas_despacho', 'notas_despacho_items', 'cliente_prestamos',
+    'despacho_devoluciones', 'despacho_devolucion_intercambios', 'cuentas_por_cobrar',
+    'comisiones', 'inventario_movimientos', 'inventario_operaciones',
   ];
-  // Tablas hijas que heredan el tenant por FK y no tienen columna cuenta_id
-  const SIN_CUENTA_ID = new Set([
-    'cliente_prestamos',
-    'despacho_devoluciones',
-    'despacho_devolucion_intercambios',
-  ]);
-  // Columnas GENERATED ALWAYS AS IDENTITY que PostgreSQL rechaza en INSERT directo
-  const COLUMNAS_IDENTIDAD_ALWAYS = {
-    cotizaciones: ['numero'],
-    inventario_movimientos: ['numero'],
-  };
+  const tablas = {};
+  for (const t of TABLAS_RESTORE) if (Array.isArray(backup.tablas[t])) tablas[t] = backup.tablas[t];
 
-  const resumen = {};
-  const errores = [];
-
-  for (const tabla of TABLAS_RESTORE) {
-    const filas = backup.tablas[tabla];
-    if (!Array.isArray(filas) || filas.length === 0) {
-      resumen[tabla] = 0;
-      continue;
-    }
-
-    const omitCols = COLUMNAS_IDENTIDAD_ALWAYS[tabla] || [];
-    const injectCuenta = !SIN_CUENTA_ID.has(tabla);
-
-    // Upsert en lotes de 500
-    let restaurados = 0;
-    for (let i = 0; i < filas.length; i += 500) {
-      const lote = filas.slice(i, i + 500).map((fila) => {
-        const clean = injectCuenta ? { ...fila, cuenta_id: user.id } : { ...fila };
-        for (const col of omitCols) delete clean[col];
-        return clean;
-      });
-      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}`, {
-        method: 'POST',
-        headers: h,
-        body: JSON.stringify(lote),
-      });
-      if (res.ok) {
-        restaurados += lote.length;
-      } else {
-        const errText = await res.text().catch(() => 'unknown');
-        errores.push(`${tabla} lote ${i}-${i + lote.length}: ${errText}`);
-      }
-    }
-    resumen[tabla] = restaurados;
-  }
-
-  // Un restore inserta números explícitos y no avanza las secuencias usadas por
-  // los RPCs. Repararlas al final evita colisiones en la siguiente operación.
-  let secuencias = null;
-  const sequenceRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/sync_sequences_after_restore`, {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/restaurar_respaldo_atomico`, {
     method: 'POST',
-    headers: h,
-    body: '{}',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_cuenta_id: user.id, p_tablas: tablas }),
   });
-  if (sequenceRes.ok) {
-    secuencias = await sequenceRes.json().catch(() => null);
-  } else {
-    const errText = await sequenceRes.text().catch(() => 'unknown');
-    errores.push(`secuencias: ${errText}`);
+  const text = await res.text();
+  let r = null;
+  try { r = text ? JSON.parse(text) : null; } catch { r = null; }
+  if (!res.ok || !r?.ok) {
+    const msg = r?.message || text || `HTTP ${res.status}`;
+    if (msg.includes('RESPALDO_CON_FILAS_DE_OTRA_EMPRESA')) {
+      return jsonError('El respaldo contiene datos de otra empresa. No se restauró nada.', 409, request);
+    }
+    return jsonError(`No se restauró nada (la operación se deshizo completa): ${msg}`, 400, request);
   }
-
-  return json({
-    ok: errores.length === 0,
-    resumen,
-    secuencias: secuencias || undefined,
-    errores: errores.length > 0 ? errores : undefined,
-    advertencia: errores.length > 0 ? `Restore parcial: ${errores.length} lote(s) fallaron` : undefined,
-  }, 200, request);
+  return json({ ok: true, resumen: r.resumen, secuencias: r.secuencias }, 200, request);
 }
 
 async function getExistingColumns(env, cuentaId) {

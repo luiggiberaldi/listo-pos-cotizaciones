@@ -4,7 +4,7 @@
 - **Entorno:** solo **staging** (`construacero-staging/` y base de pruebas `spupqgkdsgohxxfoxydl`). Producción no se toca en este caso.
 - **Carpeta de trabajo:** `construacero-op086`, rama `fix/op-086-inventario-staging`, creada desde `origin/main` (regla de OP-2026-083).
 - **Planes que se ejecutan:** [OP-2026-078](../plans/OP-2026-078_plan-correccion-hallazgos-auditoria-inventario-staging.md) (correcciones) y [OP-2026-084](../plans/OP-2026-084_plan-testeo-completo-inventario.md) (pruebas). Aprobados por el dueño el 2026-11-25.
-- **Estado:** 🔧 En ejecución. Fases 1, 2, 4, 5 y 6 terminadas; falta la Fase 3 (respaldo/restauración) y correr el plan de pruebas.
+- **Estado:** 🔧 En ejecución. Fases 1 a 6 terminadas en código y base de staging; falta publicar el servidor y la página de staging y correr el plan de pruebas.
 
 ---
 
@@ -102,6 +102,27 @@ Cambios: migración `317_staging_aislamiento_cuentas.sql` (reversa `…_rollback
 | B2 · Conteo tras conflicto | Si otra persona movió el stock mientras se contaba, la ventana trae el stock actual, muestra qué cambió y deja volver a guardar sin cerrarla | `MovimientoLoteModal.jsx` | Revisión en navegador pendiente |
 
 Pruebas automáticas: 64 archivos y 552 pruebas OK (se agregaron pruebas de comportamiento y se ajustó una prueba de texto). Compilación OK.
+
+## Fase 3 — Respaldo completo y restauración segura (C2, A1, B3)
+
+- **Respaldo** (`admin.js`, `handleBackup`, versión `1.2`):
+  - lee cada tabla página por página (de 1000 en 1000) con orden estable, también en las tablas hijas;
+  - compara lo leído con el conteo real de la base; si no cuadra, el archivo sale con `completo: false` y la lista de lo que falta;
+  - la pantalla de Configuración avisa en rojo si el respaldo salió incompleto.
+- **Restauración** (función nueva `restaurar_respaldo_atomico`, migración `322_staging_restaurar_respaldo_atomico.sql`, aplicada en staging):
+  - un solo paso, todo o nada;
+  - apaga durante la carga los disparadores propios de cada tabla (incluido el que creaba préstamos en cero); las llaves foráneas siguen activas;
+  - conserva los números originales y al final avanza los contadores;
+  - fuerza la empresa de quien restaura y rechaza filas de otra empresa, incluidas las tablas hijas;
+  - el servidor se niega a restaurar un respaldo marcado como incompleto;
+  - el aviso de confirmación explica que es todo o nada y que lo creado después del respaldo se conserva.
+- **Prueba en la base real** (dentro de una transacción que se deshizo al final): se quitaron los 4 artículos y 2 préstamos de un despacho y se restauraron desde un respaldo con 2 unidades ya devueltas. Volvieron los 4 artículos y los 2 préstamos **con lo devuelto intacto** ("devuelto parcial"), y los disparadores quedaron encendidos. Restaurar ese mismo respaldo como otra empresa → **rechazado**.
+- **Pruebas automáticas nuevas:**
+  - respaldo de 2350 filas completo;
+  - respaldo incompleto marcado como tal;
+  - restauración en una sola llamada sin escrituras sueltas;
+  - restauración que rechaza un respaldo incompleto o de otra empresa (409).
+- **Sin verificar todavía:** restaurar un respaldo del tamaño de producción (unos 20 MB) en una sola llamada. Se probará con el respaldo completo de staging en el bloque 8 del plan de pruebas.
 
 ## Pendiente
 

@@ -878,8 +878,12 @@ export default function ConfiguracionView() {
   async function handleBackup() {
     setBackupMsg(null)
     try {
-      const filename = await adminAPI.downloadBackup()
-      setBackupMsg({ tipo: 'ok', texto: `Descargado: ${filename}` })
+      const { filename, incompleto } = await adminAPI.downloadBackup()
+      if (incompleto) {
+        setBackupMsg({ tipo: 'error', texto: `Descargado ${filename}, pero está INCOMPLETO (${incompleto}). No lo uses para restaurar; vuelve a intentarlo.` })
+      } else {
+        setBackupMsg({ tipo: 'ok', texto: `Descargado: ${filename} (completo)` })
+      }
     } catch (err) {
       setBackupMsg({ tipo: 'error', texto: err.message || 'Error al generar backup' })
     } finally { setBackupLoading(false) }
@@ -1105,7 +1109,7 @@ export default function ConfiguracionView() {
                   <div>
                     <p className="text-sm font-semibold text-amber-800">¿Confirmar restauración?</p>
                     <p className="text-xs text-amber-700 mt-0.5">
-                      Sobreescribirá los datos existentes con <strong>{confirmRestore.name}</strong>. No se puede deshacer.
+                      Los registros de <strong>{confirmRestore.name}</strong> reemplazarán a los que tengan el mismo identificador; lo creado después de ese respaldo se conserva. Se hace todo o nada: si algo falla, no se cambia nada. Descarga un respaldo actual antes de continuar.
                     </p>
                   </div>
                 </div>

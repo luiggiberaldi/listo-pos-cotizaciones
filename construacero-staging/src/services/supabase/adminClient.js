@@ -53,7 +53,14 @@ export const adminAPI = {
     a.click()
     URL.revokeObjectURL(url)
 
-    return filename
+    // OP-2026-086 (C2): avisar si el servidor marcó el respaldo como incompleto.
+    let incompleto = null
+    try {
+      const contenido = JSON.parse(await blob.text())
+      if (contenido?.completo === false) incompleto = (contenido.errores || []).join('; ') || 'faltan filas'
+    } catch { /* si no se pudo leer, no se avisa */ }
+
+    return { filename, incompleto }
   },
 
   async clearInventory() {

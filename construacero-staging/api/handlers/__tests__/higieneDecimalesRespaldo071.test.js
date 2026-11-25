@@ -63,38 +63,81 @@ describe('OP-2026-071 Fase 4 (N33 historial, N34 4 decimales y consolidación, N
     expect(json.tablas).toHaveProperty('despacho_devolucion_intercambios')
   })
 
-  it('N32: handleRestore restaura tablas de inventario/préstamos/devoluciones sin inyectar cuenta_id inexistente', async () => {
-    const posted = []
-    vi.stubGlobal('fetch', vi.fn(async (url, opts) => {
-      if (opts?.method === 'POST' && !url.includes('/rpc/')) {
-        posted.push({ table: url.split('/rest/v1/')[1], body: JSON.parse(opts.body) })
+  it('C2 (OP-086): handleBackup lee por páginas y trae TODAS las filas aunque superen 1000', async () => {
+    const TOTAL = 2350
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      if (url.includes('/rest/v1/inventario_movimientos')) {
+        const offset = Number(new URL(url).searchParams.get('offset') || 0)
+        const limit = Number(new URL(url).searchParams.get('limit') || 1000)
+        const n = Math.max(0, Math.min(limit, TOTAL - offset))
+        const filas = Array.from({ length: n }, (_, k) => ({ id: `m${offset + k}` }))
+        return new Response(JSON.stringify(filas), { status: 200, headers: { 'content-range': `${offset}-${offset + n - 1}/${TOTAL}` } })
       }
-      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-range': '*/0' } })
     }))
+    const res = await handleBackup(new Request('https://staging.erp.test/api/admin/backup'), ENV)
+    const json = await res.json()
+    expect(json.tablas.inventario_movimientos).toHaveLength(TOTAL)
+    expect(new Set(json.tablas.inventario_movimientos.map(r => r.id)).size).toBe(TOTAL)
+    expect(json.completo).toBe(true)
+    expect(json.version).toBe('1.2')
+  })
 
+  it('C2 (OP-086): si la base dice que hay más filas de las que se leyeron, el respaldo queda marcado incompleto', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      if (url.includes('/rest/v1/productos')) {
+        return new Response(JSON.stringify([{ id: 'p1' }]), { status: 200, headers: { 'content-range': '0-0/5' } })
+      }
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-range': '*/0' } })
+    }))
+    const res = await handleBackup(new Request('https://staging.erp.test/api/admin/backup'), ENV)
+    const json = await res.json()
+    expect(json.completo).toBe(false)
+    expect(json.errores.join(' ')).toMatch(/productos: se leyeron 1 de 5/)
+  })
+
+  it('A1 (OP-086): handleRestore usa UNA sola transacción en la base, con la empresa de quien restaura', async () => {
+    const calls = []
+    vi.stubGlobal('fetch', vi.fn(async (url, opts) => {
+      calls.push({ url, body: opts?.body ? JSON.parse(opts.body) : null })
+      return new Response(JSON.stringify({ ok: true, resumen: { productos: 1 } }), { status: 200 })
+    }))
     const req = new Request('https://staging.erp.test/api/admin/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        completo: true,
         tablas: {
           productos: [{ id: PROD_ID, nombre: 'P1' }],
-          notas_despacho: [{ id: 'd1', numero: 1 }],
-          notas_despacho_items: [{ id: 'di1', despacho_id: 'd1' }],
-          cliente_prestamos: [{ id: 'cp1', cliente_id: 'c1', despacho_id: 'd1' }],
-          despacho_devoluciones: [{ id: 'dd1', despacho_id: 'd1' }],
-          despacho_devolucion_intercambios: [{ id: 'di2', despacho_id: 'd1' }],
-          inventario_movimientos: [{ id: 'im1', producto_id: PROD_ID }],
+          cliente_prestamos: [{ id: 'cp1', cliente_id: 'c1', despacho_id: 'd1', cantidad_devuelta: 2 }],
+          usuarios: [{ id: 'u1' }],
         },
       }),
     })
     const res = await handleRestore(req, ENV)
     expect(res.status).toBe(200)
-    const cpPost = posted.find(p => p.table === 'cliente_prestamos')
-    const ddPost = posted.find(p => p.table === 'despacho_devoluciones')
-    const imPost = posted.find(p => p.table === 'inventario_movimientos')
-    expect(cpPost?.body?.[0]).not.toHaveProperty('cuenta_id')
-    expect(ddPost?.body?.[0]).not.toHaveProperty('cuenta_id')
-    expect(imPost?.body?.[0]?.cuenta_id).toBe(CUENTA_ID)
+    const escrituras = calls.filter(c => !c.url.includes('/rpc/restaurar_respaldo_atomico') && c.body)
+    expect(escrituras).toHaveLength(0)
+    const rpc = calls.find(c => c.url.includes('/rpc/restaurar_respaldo_atomico'))
+    expect(rpc.body.p_cuenta_id).toBe(CUENTA_ID)
+    expect(rpc.body.p_tablas.cliente_prestamos[0].cantidad_devuelta).toBe(2)
+    expect(rpc.body.p_tablas).not.toHaveProperty('usuarios')
+  })
+
+  it('A1 (OP-086): handleRestore se niega a restaurar un respaldo marcado incompleto y reporta 409 si trae otra empresa', async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ message: 'RESPALDO_CON_FILAS_DE_OTRA_EMPRESA: 1 filas en productos' }), { status: 400 }))
+    vi.stubGlobal('fetch', f)
+    const incompleto = await handleRestore(new Request('https://x/api/admin/restore', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completo: false, errores: ['productos: se leyeron 1 de 5 filas'], tablas: { productos: [] } }),
+    }), ENV)
+    expect(incompleto.status).toBe(400)
+    expect(f).not.toHaveBeenCalled()
+    const ajeno = await handleRestore(new Request('https://x/api/admin/restore', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tablas: { productos: [{ id: PROD_ID }] } }),
+    }), ENV)
+    expect(ajeno.status).toBe(409)
   })
 
   it('N32: detectarCargasRecientesSimilares alerta carga repetida en 24h y consolidarFilasImportacionCsv suma duplicados por código', () => {
