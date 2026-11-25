@@ -6,7 +6,7 @@ export default function PageHeader({ icon: Icon, title, subtitle, action }) {
       style={{ borderBottom: '1px solid #e2e8f0' }}
     >
       {/* Izquierda: barra accent + icono + título */}
-      <div className="flex items-center gap-3.5">
+      <div className="flex items-center gap-3.5 min-w-0">
         {/* Barra vertical gold-navy */}
         <div className="w-1 self-stretch rounded-full shrink-0"
           style={{ background: 'linear-gradient(180deg, #B8860B 0%, #1B365D 100%)', minHeight: '36px' }} />
@@ -22,7 +22,7 @@ export default function PageHeader({ icon: Icon, title, subtitle, action }) {
         </div>
 
         {/* Texto */}
-        <div>
+        <div className="min-w-0">
           <h1 className="text-lg font-black text-slate-800 leading-tight tracking-tight">{title}</h1>
           {subtitle && (
             <p className="text-xs font-medium text-slate-400 mt-0.5">{subtitle}</p>
@@ -32,7 +32,7 @@ export default function PageHeader({ icon: Icon, title, subtitle, action }) {
 
       {/* Derecha: acción */}
       {action && (
-        <div className="shrink-0 pl-5 sm:pl-0">
+        <div className="w-full sm:w-auto sm:shrink-0 min-w-0">
           {action}
         </div>
       )}

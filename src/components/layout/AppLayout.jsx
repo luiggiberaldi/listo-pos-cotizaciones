@@ -687,7 +687,8 @@ export default function AppLayout() {
       <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 flex flex-col">
         <div className="w-full flex flex-col flex-1 min-h-0">
           <Outlet />
-          <div className="h-20 shrink-0 md:hidden" />
+          {/* Espacio final en móvil: mayor en Inicio, donde están los botones flotantes (OP-2026-080) */}
+          <div className={`${location.pathname === '/' ? 'h-36' : 'h-24'} shrink-0 md:hidden`} />
         </div>
       </main>
 

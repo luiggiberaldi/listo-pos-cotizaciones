@@ -107,10 +107,10 @@ export default function BuzonFAB() {
 
   return (
     <>
-      {/* Botón Flotante (FAB) */}
+      {/* Botón Flotante (FAB) — izquierda en móvil para no apilarse sobre QuickQuoteFAB */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed z-[90] bottom-36 right-4 md:bottom-6 md:right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all hover:scale-105 group"
+        className="fixed z-[90] bottom-20 left-4 md:left-auto md:bottom-6 md:right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all hover:scale-105 group"
         style={{
           background: 'linear-gradient(135deg, #1B365D 0%, #B8860B 100%)',
           boxShadow: '0 6px 24px rgba(27,54,93,0.4)',

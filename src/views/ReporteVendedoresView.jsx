@@ -401,7 +401,7 @@ export default function ReporteVendedoresView() {
               </button>
               
               {exportMenuOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 p-1.5 z-30 animate-in fade-in duration-100">
+                <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-56 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 p-1.5 z-30 animate-in fade-in duration-100">
                   <button
                     onClick={() => { handleExportPDF('general'); setExportMenuOpen(false) }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left"
@@ -426,7 +426,7 @@ export default function ReporteVendedoresView() {
                 </div>
               )}
             </div>
-            <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+            <button onClick={() => refetch()} className="p-2 min-h-9 min-w-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
               <RefreshCw size={14} className={isLoading || isFetching ? 'animate-spin' : ''} />
             </button>
           </div>
@@ -434,12 +434,12 @@ export default function ReporteVendedoresView() {
       />
 
       {/* Selector de período */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+      <div className="flex flex-wrap gap-2 pb-1">
         {PERIODOS.map(p => (
           <button
             key={p.key}
             onClick={() => { setPeriodo(p.key); setExpandedId(null) }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border ${
+            className={`px-3.5 py-1.5 min-h-9 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border ${
               periodo === p.key
                 ? 'bg-indigo-500 text-white border-indigo-500'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'

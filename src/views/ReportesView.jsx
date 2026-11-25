@@ -156,7 +156,7 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = fals
           </div>
         </div>
         <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-slate-900 relative z-10 truncate">{value}</p>
-        {sub && <p className="text-[11px] sm:text-xs relative z-10 truncate text-slate-400">{sub}</p>}
+        {sub && <p className="text-[11px] sm:text-xs relative z-10 leading-snug line-clamp-2 text-slate-400">{sub}</p>}
       </div>
     )
   }
@@ -175,7 +175,7 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = fals
         </div>
       </div>
       <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-white relative z-10 truncate">{value}</p>
-      {sub && <p className="text-[11px] sm:text-xs relative z-10 truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
+      {sub && <p className="text-[11px] sm:text-xs relative z-10 leading-snug line-clamp-2" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
     </div>
   )
 }
@@ -1335,11 +1335,11 @@ function TabComisiones({ configNeg }) {
           </div>
 
           {/* Fila Inferior: Otros Filtros y Acciones */}
-          <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between">
+          <div className="flex flex-wrap items-end gap-3 border-t border-slate-50 pt-3 w-full justify-between min-w-0">
             {/* Grupo de Filtros */}
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-wrap items-end gap-3 w-full md:w-auto min-w-0">
               {esAdmin && (
-                <div className="w-52">
+                <div className="w-full sm:w-52 min-w-0">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Vendedor</label>
                   <CustomSelect
                     options={[
@@ -1353,7 +1353,7 @@ function TabComisiones({ configNeg }) {
                 </div>
               )}
 
-              <div className="w-44">
+              <div className="w-full sm:w-44 min-w-0">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Formato Reporte</label>
                 <div className="flex p-0.5 bg-slate-100/80 rounded-xl h-9">
                   <button
@@ -1371,31 +1371,32 @@ function TabComisiones({ configNeg }) {
             </div>
 
             {/* Grupo de Acciones y Selector de Tasa Euro / USDT */}
-            <div className="flex flex-wrap items-center gap-2.5 ml-auto shrink-0 self-end">
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shrink-0 h-9">
+            <div className="w-full md:w-auto flex flex-wrap items-center gap-2 md:ml-auto min-w-0 self-end">
+              <div className="flex flex-wrap sm:flex-nowrap items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold min-h-9 w-full sm:w-auto min-w-0">
                 <button
                   type="button"
                   onClick={() => setTipoTasaComision('euro')}
-                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 sm:flex-none justify-center px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg transition-all flex items-center gap-1 min-w-0 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Calcular comisiones con tasa Euro Oficial BCV"
                 >
                   <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
-                  <span>Euro BCV:</span>
-                  <b>{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
+                  <span className="hidden sm:inline">Euro BCV:</span>
+                  <span className="sm:hidden">Euro:</span>
+                  <b className="truncate">{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
                 </button>
                 <button
                   type="button"
                   onClick={() => setTipoTasaComision('usdt')}
-                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 sm:flex-none justify-center px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg transition-all flex items-center gap-1 min-w-0 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Calcular comisiones con tasa USDT (Binance P2P)"
                 >
                   <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
                   <span>USDT:</span>
-                  <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
+                  <b className="truncate">{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
                 </button>
               </div>
 
-              <div className="flex items-center gap-1.5 relative shrink-0">
+              <div className="flex flex-wrap items-center gap-1.5 relative w-full sm:w-auto min-w-0">
                 {/* BOTÓN IMPRIMIR PDF */}
                 <div className="relative">
                   {filtroVendedor ? (

@@ -2,7 +2,7 @@
 // Vista principal de notas de despacho
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, PackageCheck, RefreshCw as _RefreshCw, Filter as _Filter, LayoutGrid as _LayoutGrid, List as _List, FileDown as _FileDown, ChevronDown as _ChevronDown, Search as _Search, X as _X } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw as _RefreshCw, Filter as _Filter, FileDown as _FileDown, ChevronDown as _ChevronDown, Search as _Search, X as _X } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho, useStockCheckDespachos } from '../hooks/useDespachos'
@@ -10,12 +10,10 @@ import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useVendedores } from '../hooks/useClientes'
 import { getDespachoAction } from '../utils/despachoActions'
 import { getFiltrosDespacho } from '../utils/estadoLabels'
+import { limpiarVistaListaGuardada } from '../utils/vistaCuadricula'
 import _VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import _ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
 import _DespachoCard from '../components/despachos/DespachoCard'
-import _DespachoRow  from '../components/despachos/DespachoRow'
-import _EditDespachoModal from '../components/despachos/EditDespachoModal'
-import _DetalleModal from '../components/ui/DetalleModal'
 import _ConfirmModal from '../components/ui/ConfirmModal'
 import _DevolverAnularModal from '../components/despachos/DevolverAnularModal'
 import _EmptyState   from '../components/ui/EmptyState'
@@ -158,15 +156,12 @@ export default function DespachosView() {
   const [debouncedBusqueda, setDebouncedBusqueda] = useState('')
   const [verTodos, setVerTodos] = useState(false)
   const [pagina, setPagina] = useState(1)
-  const [vistaMode, setVistaMode] = useState(() => {
-    const businessId = useAuthStore.getState().perfil?.cuenta_id
-    const key = businessId ? `despachos_vista-${businessId}` : 'despachos_vista'
-    return localStorage.getItem(key) || 'grid'
-  })
   const [despachoAAnular, setDespachoAAnular] = useState(null)
   const [despachoAReciclar, setDespachoAReciclar] = useState(null)
-  const [despachoDetalle, setDespachoDetalle] = useState(null)
-  const [despachoEditar, setDespachoEditar] = useState(null)
+
+  useEffect(() => {
+    limpiarVistaListaGuardada('despachos_vista', perfil?.cuenta_id)
+  }, [perfil?.cuenta_id])
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -410,26 +405,6 @@ export default function DespachosView() {
             </div>
           ) /* esAdministracion */}
           <div className="flex items-center gap-1.5 ml-auto shrink-0">
-            <div className="flex bg-slate-100 rounded-xl p-0.5">
-              <button type="button" onClick={() => {
-                setVistaMode('grid')
-                const businessId = perfil?.cuenta_id
-                const key = businessId ? `despachos_vista-${businessId}` : 'despachos_vista'
-                localStorage.setItem(key, 'grid')
-              }} title="Vista cuadrícula"
-                className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                <_LayoutGrid size={16} />
-              </button>
-              <button type="button" onClick={() => {
-                setVistaMode('list')
-                const businessId = perfil?.cuenta_id
-                const key = businessId ? `despachos_vista-${businessId}` : 'despachos_vista'
-                localStorage.setItem(key, 'list')
-              }} title="Vista lista"
-                className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                <_List size={16} />
-              </button>
-            </div>
             <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
               <_RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             </button>
@@ -462,57 +437,27 @@ export default function DespachosView() {
         />
       ) : (
         <>
-        {vistaMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-            {despachosPaginados.map(d => (
-              <_DespachoCard
-                key={d.id}
-                despacho={d}
-                stockCheckData={esPrivilegiado ? stockCheck : undefined}
-                stockCheckPending={esPrivilegiado && !stockCheck}
-                onCambiarEstado={(id, estado, motivoDev, motivoAnu, decision) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre, vendedorId: d.vendedor_id, motivoDevolucion: motivoDev, motivoAnulacion: motivoAnu, ...(decision || {}), ...(estado === 'entregada' ? { tasaBcv: tasaEfectiva } : {}) })}
-                onAnular={setDespachoAAnular}
-                onReciclar={setDespachoAReciclar}
-                tasa={tasaEfectiva}
-                config={config}
-                estadoCambiando={cambiarEstado.isPending}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {despachosPaginados.map(d => (
-              <_DespachoRow
-                key={d.id}
-                despacho={d}
-                onVer={setDespachoDetalle}
-                onEditar={setDespachoEditar}
-                tasa={tasaEfectiva}
-              />
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+          {despachosPaginados.map(d => (
+            <_DespachoCard
+              key={d.id}
+              despacho={d}
+              stockCheckData={esPrivilegiado ? stockCheck : undefined}
+              stockCheckPending={esPrivilegiado && !stockCheck}
+              onCambiarEstado={(id, estado, motivoDev, motivoAnu, decision) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre, vendedorId: d.vendedor_id, motivoDevolucion: motivoDev, motivoAnulacion: motivoAnu, ...(decision || {}), ...(estado === 'entregada' ? { tasaBcv: tasaEfectiva } : {}) })}
+              onAnular={setDespachoAAnular}
+              onReciclar={setDespachoAReciclar}
+              tasa={tasaEfectiva}
+              config={config}
+              estadoCambiando={cambiarEstado.isPending}
+            />
+          ))}
+        </div>
         {totalPaginas > 1 && (
           <_Pagination paginaActual={pagina} totalPaginas={totalPaginas} onCambiarPagina={setPagina} />
         )}
         </>
       )}
-
-      {/* Detalle modal para vista lista */}
-      <_DetalleModal
-        isOpen={!!despachoDetalle}
-        onClose={() => setDespachoDetalle(null)}
-        tipo="despacho"
-        registro={despachoDetalle}
-        tasa={tasaEfectiva}
-      />
-
-      {/* Edit modal para vista lista */}
-      <_EditDespachoModal
-        isOpen={!!despachoEditar}
-        onClose={() => setDespachoEditar(null)}
-        despacho={despachoEditar}
-      />
 
       {/* Anular — OP-2026-052: motivo obligatorio y decisión sobre los pagos anotados */}
       <_DevolverAnularModal

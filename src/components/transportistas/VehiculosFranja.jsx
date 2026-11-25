@@ -111,7 +111,7 @@ function VehiculoModalForm({ vehiculo = null, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-[calc(100vw-1.5rem)] sm:max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center">
             <Truck size={18} className="text-amber-600" />
@@ -297,17 +297,17 @@ export default function VehiculosFranja({ resaltarId = null }) {
             {isLoading ? 'Cargando...' : `${vehiculos.filter(v => v.activo !== false).length} activo(s) · ${vehiculos.length} en total`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0 w-full sm:w-auto">
           <button
             onClick={() => setVerInactivos(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-9 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
           >
             {verInactivos ? <EyeOff size={13} /> : <Eye size={13} />}
             {verInactivos ? 'Ocultar inactivos' : 'Ver inactivos'}
           </button>
           <button
             onClick={() => refetch()}
-            className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+            className="p-2 min-h-9 min-w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
             title="Actualizar"
           >
             <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
@@ -315,7 +315,7 @@ export default function VehiculosFranja({ resaltarId = null }) {
           {puedeGestionar && (
             <button
               onClick={() => setModalVehiculo({})}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-white text-xs font-bold shadow-md active:scale-[0.98] transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 min-h-9 rounded-xl text-white text-xs font-bold shadow-md active:scale-[0.98] transition-all whitespace-nowrap"
               style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}
             >
               <Plus size={13} /> Nuevo Vehículo
