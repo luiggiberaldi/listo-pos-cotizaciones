@@ -89,6 +89,6 @@
 ## Pendiente / sin verificar
 
 - Visto bueno del dueño tras su propia prueba en el navegador.
-- Guardar (commit), subir y abrir la solicitud de cambio: **solo después** de esa revisión.
-- Número de solicitud y commit: se anotarán al publicar.
+- Guardado (commit `95474733`), subido y abierta la **solicitud de cambio #77** (https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/77) tras el visto bueno del dueño a su prueba en navegador (2026-11-25).
+- **Pendiente:** mirar la vista previa de Vercel en el teléfono (usa datos reales: solo mirar) y el visto bueno final para unir a `main`. Al unir se anotará el commit de la unión y la verificación en producción (paso 11).
 - Relacionado: [OP-2026-077](../operaciones/OP-2026-077_fixeo-responsividad-movil-staging.md), [OP-2026-079](../operaciones/OP-2026-079_solo-vista-cuadricula-staging.md), [plan OP-2026-074](OP-2026-074_plan-fixeo-responsividad-movil.md), [auditoría OP-2026-081](../operaciones/OP-2026-081_auditoria-plan-080.md).
