@@ -162,17 +162,17 @@ export default function MisVentasView() {
     <div className="space-y-4 p-3 sm:p-4 md:p-5 lg:p-6">
       <PageHeader icon={BarChart3} title="Mis ventas" subtitle="Todo lo que vendiste, a detalle, en el período que elijas"
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             <button type="button" onClick={() => exportar('pdf')} disabled={!data || sinDatos || isPlaceholderData || generando !== null}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 min-h-9 text-xs font-bold text-slate-700 disabled:opacity-50 whitespace-nowrap">
               {generando === 'pdf' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Descargar PDF
             </button>
             <button type="button" onClick={() => exportar('imprimir')} disabled={!data || sinDatos || isPlaceholderData || generando !== null}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 min-h-9 text-xs font-bold text-slate-700 disabled:opacity-50 whitespace-nowrap">
               {generando === 'imprimir' ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Imprimir
             </button>
             <button type="button" onClick={() => exportar('whatsapp')} disabled={!data || sinDatos || isPlaceholderData || generando !== null}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 min-h-9 text-xs font-bold text-white disabled:opacity-50 whitespace-nowrap">
               {generando === 'whatsapp' ? <Loader2 size={14} className="animate-spin" /> : <MessageCircle size={14} />} Enviar por WhatsApp
             </button>
           </div>

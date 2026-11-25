@@ -487,21 +487,31 @@ class StagingE2ERunner {
     await check(this.config.frontendOrigin, 'Proxy Vite staging :5174')
   }
 
-  async stockCommitted() {
-    const rows = await this.db(this.supabase.rpc('obtener_stock_comprometido'), 'obtener_stock_comprometido')
-    const row = (rows || []).find(item => item.producto_id === this.data.productoId)
-    return row ? Number(row.total_comprometido) : 0
+  async productStock(productId = this.data.productoId) {
+    const row = await this.db(this.supabase.from('productos').select('stock_actual').eq('id', productId).single(), 'consultar stock de producto')
+    return Number(row?.stock_actual || 0)
   }
 
   async productRpc(product) {
-    const result = await this.db(this.supabase.rpc('crear_producto_con_kardex_staging', {
-      p_codigo: product.codigo, p_nombre: product.nombre, p_descripcion: null, p_categoria: product.categoria,
-      p_unidad: product.unidad, p_precio_usd: product.precio_usd, p_precio_2: product.precio_2 ?? null,
-      p_precio_3: product.precio_3 ?? null, p_costo_usd: product.costo_usd, p_stock_actual: product.stock_inicial,
-      p_stock_minimo: product.stock_minimo, p_imagen_url: null, p_precio1_porcentaje: null,
-      p_precio2_porcentaje: null, p_precio3_porcentaje: null,
-    }), `crear_producto_con_kardex(${product.codigo})`)
-    return typeof result === 'object' ? result.id : result
+    const result = await this.api('/api/productos/crear', 'POST', {
+      codigo: product.codigo,
+      nombre: product.nombre,
+      descripcion: null,
+      categoria: product.categoria,
+      unidad: product.unidad,
+      precio_usd: product.precio_usd,
+      precio_2: product.precio_2 ?? null,
+      precio_3: product.precio_3 ?? null,
+      costo_usd: product.costo_usd,
+      stock_actual: product.stock_inicial,
+      stock_minimo: product.stock_minimo,
+      imagen_url: null,
+      precio1_porcentaje: null,
+      precio2_porcentaje: null,
+      precio3_porcentaje: null,
+      idempotencyKey: crypto.randomUUID(),
+    })
+    return result?.id
   }
 
   async cleanCotizacion(cotizacionId, label) {
@@ -595,8 +605,10 @@ class StagingE2ERunner {
 
   async cleanProduct(productId, label) {
     if (!productId) return
-    const { error } = await this.supabase.rpc('borrar_producto_con_kardex_staging', { p_producto_id: productId })
-    if (error) throw new Error(`limpiar ${label}: ${error.message}`)
+    await this.api('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+      productoIds: [productId],
+      idempotencyKey: crypto.randomUUID(),
+    })
     this.log(`DELETE ${label} + movimientos ✓`, 'OK')
   }
 
@@ -746,26 +758,32 @@ class StagingE2ERunner {
     }
     // El jefe fixture NO se elimina: es la persona de lectura RLS del Tester y
     // se reutiliza entre corridas (igual que los vendedores de la provisión).
-    const cotizaciones = [d.cotizacionDesdeDespachoId, d.ventaRapidaCotizacionId, d.cotizacionVersionId, d.cotizacionRecicladaId, d.cotizacion2Id, d.cotizacionId]
+    const cotizaciones = [d.loanCotizacionId, d.cotizacionDesdeDespachoId, d.ventaRapidaCotizacionId, d.cotizacionVersionId, d.cotizacionRecicladaId, d.cotizacion2Id, d.cotizacionId]
     const unique = [...new Set(cotizaciones.filter(Boolean))]
     for (const cotId of unique) await this.cleanCotizacion(cotId, `cotización ${id8(cotId)}`)
     if (d.prestamoId) {
-      await this.db(this.supabase.from('cliente_prestamos').delete().eq('id', d.prestamoId), 'limpiar préstamo E2E')
+      await this.api('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        prestamoIds: [d.prestamoId],
+        idempotencyKey: crypto.randomUUID(),
+      })
     }
     await this.cleanProduct(d.producto2Id, 'producto 2')
     await this.cleanProduct(d.productoId, 'producto 1')
     if (d.loteId) {
-      await this.db(this.supabase.from('inventario_movimientos').delete().eq('lote_id', d.loteId), 'limpiar movimientos lote')
+      await this.api('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        loteIds: [d.loteId],
+        idempotencyKey: crypto.randomUUID(),
+      })
     }
     if (d.transportistaTestId) {
       await this.db(this.supabase.from('transportistas').update({ activo: false }).eq('id', d.transportistaTestId).eq('cuenta_id', this.user.id), 'desactivar transportista E2E')
     }
     if (d.clienteId) {
-      await this.db(this.supabase.from('cliente_prestamos').delete().eq('cliente_id', d.clienteId), 'limpiar préstamos E2E')
       await this.db(this.supabase.from('seguimiento_operativo').delete().eq('cliente_id', d.clienteId), 'limpiar seguimientos E2E')
-      await this.db(this.supabase.from('reasignaciones_clientes').delete().eq('cliente_id', d.clienteId), 'limpiar reasignaciones E2E')
-      await this.db(this.supabase.from('cuentas_por_cobrar').delete().eq('cliente_id', d.clienteId).eq('cuenta_id', this.user.id), 'limpiar CxC E2E')
-      await this.db(this.supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', d.clienteId).eq('cuenta_id', this.user.id), 'desactivar cliente E2E')
+      await this.api('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        clienteIds: [d.clienteId],
+        idempotencyKey: crypto.randomUUID(),
+      })
     }
   }
 
@@ -795,11 +813,11 @@ class StagingE2ERunner {
       for (const quote of residualQuotes || []) {
         await this.cleanCotizacion(quote.id, `residual ${id8(quote.id)}`)
       }
-      await this.db(this.supabase.from('cliente_prestamos').delete().eq('cliente_id', client.id), 'limpiar préstamos residuales')
       await this.db(this.supabase.from('seguimiento_operativo').delete().eq('cliente_id', client.id), 'limpiar seguimientos residuales')
-      await this.db(this.supabase.from('reasignaciones_clientes').delete().eq('cliente_id', client.id), 'limpiar reasignaciones residuales')
-      await this.db(this.supabase.from('cuentas_por_cobrar').delete().eq('cliente_id', client.id).eq('cuenta_id', this.user.id), 'limpiar CxC residuales')
-      await this.db(this.supabase.from('clientes').update({ saldo_pendiente: 0, activo: false }).eq('id', client.id).eq('cuenta_id', this.user.id), 'desactivar cliente residual')
+      await this.api('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        clienteIds: [client.id],
+        idempotencyKey: crypto.randomUUID(),
+      })
     }
     await this.db(this.supabase.from('transportistas').update({ activo: false }).eq('nombre', TEST.transportista.nombre).eq('cuenta_id', this.user.id), 'desactivar transportistas residuales')
     // Usuarios fixture del split v3 que pudieron quedar de corridas
@@ -905,26 +923,26 @@ class StagingE2ERunner {
       create_draft: () => this.createDraft(),
       assert_draft: async () => { const c = await dbSingle('cotizaciones', 'numero,estado,subtotal_usd,descuento_usd,descuento_global_pct,costo_envio_usd,total_usd,cliente_id,vendedor_id', d.cotizacionId); d.cotizacionNumero = c.numero; assert(c.estado === 'borrador', 'borrador', c.estado, 'cotización.estado'); assert(Number(c.subtotal_usd) === 250 && Number(c.total_usd) === 260, '$250/$260', `${c.subtotal_usd}/$${c.total_usd}`, 'totales cotización'); assert(c.cliente_id === d.clienteId, d.clienteId, c.cliente_id, 'cotización.cliente_id'); assert(c.vendedor_id === this.salesperson.id, this.operator.id, c.vendedor_id, 'cotización.vendedor_id') },
       assert_items: async () => { const rows = await this.db(this.supabase.from('cotizacion_items').select('producto_id,cantidad,precio_unit_usd,total_linea_usd,codigo_snap').eq('cotizacion_id', d.cotizacionId), 'items cotización'); assert(rows?.length === 1, 1, rows?.length, 'items cotización'); const item = rows[0]; assert(Number(item.cantidad) === 10 && Number(item.precio_unit_usd) === 25 && Number(item.total_linea_usd) === 250, '10×25=$250', item, 'item cotización'); assert(item.producto_id === d.productoId, d.productoId, item.producto_id, 'item.producto_id') },
-      assert_stock_comprometido_pre: async () => assert(await this.stockCommitted() === 0, 0, await this.stockCommitted(), 'stock comprometido borrador'),
+      assert_stock_comprometido_pre: async () => assert(await this.productStock() === 100, 100, await this.productStock(), 'stock sin cambios borrador'),
       send_quote: async () => { await this.api('/api/cotizaciones/enviar', 'POST', { cotizacionId: d.cotizacionId, tasaBcv: 100 }, this.salesperson.id) },
       assert_sent: async () => { const c = await dbSingle('cotizaciones', 'estado,enviada_en', d.cotizacionId); assert(c.estado === 'enviada', 'enviada', c.estado, 'cotización enviada'); assert(!!c.enviada_en, 'no null', c.enviada_en, 'enviada_en') },
       accept_quote: async () => { await this.db(this.supabase.from('cotizaciones').update({ estado: 'aceptada' }).eq('id', d.cotizacionId), 'aceptar cotización') },
       assert_accepted: async () => { const c = await dbSingle('cotizaciones', 'estado', d.cotizacionId); assert(c.estado === 'aceptada', 'aceptada', c.estado, 'cotización aceptada') },
-      assert_stock_comprometido_aceptada: async () => assert(await this.stockCommitted() === 0, 0, await this.stockCommitted(), 'stock comprometido aceptada'),
+      assert_stock_comprometido_aceptada: async () => assert(await this.productStock() === 100, 100, await this.productStock(), 'stock sin cambios aceptada'),
       create_despacho: async () => { const result = await this.api('/api/despachos/crear', 'POST', { cotizacionId: d.cotizacionId, formaPago: 'Cta por cobrar', transportistaId: null, fleteUsd: 10 }, this.salesperson.id); d.despachoId = result.id; d.despachoNumero = result.numero },
       assert_despacho: async () => { const des = await dbSingle('notas_despacho', 'estado,total_usd,forma_pago,cotizacion_id,cliente_id', d.despachoId); assert(des.estado === 'pendiente', 'pendiente', des.estado, 'despacho.estado'); assert(Number(des.total_usd) === 260, 260, des.total_usd, 'despacho.total_usd'); assert(des.forma_pago === 'Cta por cobrar', 'Cta por cobrar', des.forma_pago, 'despacho.forma_pago'); assert(des.cotizacion_id === d.cotizacionId && des.cliente_id === d.clienteId, 'IDs correctos', des, 'despacho referencias') },
       assert_stock_post: () => assertStock(100, 'stock pendiente'),
       assert_kardex_egreso: async () => { const rows = await this.db(this.supabase.from('inventario_movimientos').select('tipo').eq('producto_id', d.productoId), 'kardex pendiente'); assert(!(rows || []).some(row => row.tipo === 'egreso'), 0, rows?.filter(row => row.tipo === 'egreso').length, 'egreso antes de entrega') },
-      assert_stock_comprometido_post: async () => assert(await this.stockCommitted() === 0, 0, await this.stockCommitted(), 'stock comprometido pendiente'),
+      assert_stock_comprometido_post: async () => assert(await this.productStock() === 100, 100, await this.productStock(), 'stock intacto pendiente'),
       assert_cxc_cargo: async () => { const rows = await this.db(this.supabase.from('cuentas_por_cobrar').select('id').eq('despacho_id', d.despachoId).eq('tipo', 'cargo'), 'CxC pendiente'); assert(rows?.length === 0, 0, rows?.length, 'CxC antes de aprobar') },
       apply_descuento: async () => { const item = await this.db(this.supabase.from('cotizacion_items').select('id').eq('cotizacion_id', d.cotizacionId).single(), 'item para descuento'); d.cotizacionItemId = item.id; d.descuentoTotal = 20; await this.api('/api/despachos/descuentos', 'POST', { despachoId: d.despachoId, descuentos: [{ cotizacionItemId: item.id, tipo: 'monto_unitario', valor: 2 }] }) },
       assert_descuento: async () => { const des = await dbSingle('notas_despacho', 'descuento_total_usd', d.despachoId); assert(Number(des.descuento_total_usd) === 20, 20, des.descuento_total_usd, 'descuento_total_usd'); const rows = await this.api(`/api/despachos/${d.despachoId}/descuentos`); assert(rows?.length === 1, 1, rows?.length, 'descuentos registrados'); assert(rows[0].cotizacion_item_id === d.cotizacionItemId && rows[0].tipo === 'monto_unitario' && Number(rows[0].monto_usd) === 20, 'descuento $20', rows[0], 'descuento persistido'); },
       mark_dispatched: async () => { await this.api('/api/despachos/estado', 'POST', { despachoId: d.despachoId, nuevoEstado: 'despachada' }) },
       assert_dispatched: async () => { const des = await dbSingle('notas_despacho', 'estado,despachada_en', d.despachoId); assert(des.estado === 'despachada', 'despachada', des.estado, 'despacho aprobado'); assert(!!des.despachada_en, 'no null', des.despachada_en, 'despachada_en') },
-      assert_stock_comprometido_aprobado: async () => { const committed = await this.stockCommitted(); assert(committed === 10, 10, committed, 'stock comprometido aprobado'); const cxc = await this.db(this.supabase.from('cuentas_por_cobrar').select('monto_usd').eq('despacho_id', d.despachoId).eq('tipo', 'cargo'), 'CxC aprobado'); assert(cxc?.length === 1, 1, cxc?.length, 'cargo CxC'); assert(Number(cxc[0].monto_usd) === 240, 240, cxc[0].monto_usd, 'cargo CxC neto'); const client = await dbSingle('clientes', 'saldo_pendiente', d.clienteId); assert(Number(client.saldo_pendiente) === 240, 240, client.saldo_pendiente, 'saldo CxC aprobado') },
+      assert_stock_comprometido_aprobado: async () => { const stockAprobado = await this.productStock(); assert(stockAprobado === 90, 90, stockAprobado, 'egreso al aprobar despacho'); const cxc = await this.db(this.supabase.from('cuentas_por_cobrar').select('monto_usd').eq('despacho_id', d.despachoId).eq('tipo', 'cargo'), 'CxC aprobado'); assert(cxc?.length === 1, 1, cxc?.length, 'cargo CxC'); assert(Number(cxc[0].monto_usd) === 240, 240, cxc[0].monto_usd, 'cargo CxC neto'); const client = await dbSingle('clientes', 'saldo_pendiente', d.clienteId); assert(Number(client.saldo_pendiente) === 240, 240, client.saldo_pendiente, 'saldo CxC aprobado') },
       mark_delivered: async () => { await this.api('/api/despachos/estado', 'POST', { despachoId: d.despachoId, nuevoEstado: 'entregada' }) },
       assert_delivered: async () => { const des = await dbSingle('notas_despacho', 'estado,entregada_en', d.despachoId); assert(des.estado === 'entregada', 'entregada', des.estado, 'despacho entregado'); assert(!!des.entregada_en, 'no null', des.entregada_en, 'entregada_en') },
-      assert_stock_comprometido_entregado: async () => assert(await this.stockCommitted() === 0, 0, await this.stockCommitted(), 'stock comprometido entregado'),
+      assert_stock_comprometido_entregado: async () => assert(await this.productStock() === 90, 90, await this.productStock(), 'entrega sin doble descuento'),
       assert_commission: async () => {
         const config = await this.db(this.supabase.from('configuracion_negocio').select('comision_pct_cabilla,comision_pct_otros,comision_categoria_cabilla').eq('cuenta_id', this.user.id).limit(1).maybeSingle(), 'config comisión')
         const rows = await this.db(this.supabase.from('comisiones').select('*').eq('despachoid', d.despachoId), 'comisión')
@@ -1066,17 +1084,17 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
   f.create_draft = () => this.createDraft()
   f.assert_draft = async () => { const c = await dbSingle('cotizaciones', 'numero,estado,subtotal_usd,descuento_usd,descuento_global_pct,costo_envio_usd,total_usd,cliente_id,vendedor_id', d.cotizacionId); d.cotizacionNumero = c.numero; assert(c.estado === 'borrador' && Number(c.subtotal_usd) === 250 && Number(c.descuento_usd) === 0 && Number(c.descuento_global_pct) === 0 && Number(c.costo_envio_usd) === 10 && Number(c.total_usd) === 260 && c.cliente_id === d.clienteId && c.vendedor_id === this.salesperson.id, 'cotización $260', c, 'cotización borrador') }
   f.assert_items = async () => { const rows = await this.db(this.supabase.from('cotizacion_items').select('producto_id,cantidad,precio_unit_usd,total_linea_usd,codigo_snap').eq('cotizacion_id', d.cotizacionId), 'items cotización'); assert(rows?.length === 1 && rows[0].producto_id === d.productoId && Number(rows[0].cantidad) === 10 && Number(rows[0].precio_unit_usd) === 25 && Number(rows[0].total_linea_usd) === 250, 'item 10×$25', rows, 'items cotización') }
-  f.assert_stock_comprometido_pre = async () => { const n = await this.stockCommitted(); assert(n === 0, 0, n, 'comprometido borrador') }
+  f.assert_stock_comprometido_pre = async () => { const n = await this.productStock(); assert(n === 100, 100, n, 'stock sin cambios en borrador') }
   f.send_quote = async () => { await this.api('/api/cotizaciones/enviar', 'POST', { cotizacionId: d.cotizacionId, tasaBcv: 100 }, this.salesperson.id) }
   f.assert_sent = async () => { const c = await dbSingle('cotizaciones', 'estado,enviada_en', d.cotizacionId); assert(c.estado === 'enviada' && !!c.enviada_en, 'enviada', c, 'cotización enviada') }
   f.accept_quote = async () => { await this.db(this.supabase.from('cotizaciones').update({ estado: 'aceptada' }).eq('id', d.cotizacionId), 'aceptar cotización') }
   f.assert_accepted = async () => { const c = await dbSingle('cotizaciones', 'estado', d.cotizacionId); assert(c.estado === 'aceptada', 'aceptada', c.estado, 'cotización aceptada') }
-  f.assert_stock_comprometido_aceptada = async () => { const n = await this.stockCommitted(); assert(n === 0, 0, n, 'comprometido aceptada') }
+  f.assert_stock_comprometido_aceptada = async () => { const n = await this.productStock(); assert(n === 100, 100, n, 'stock sin cambios tras aceptar') }
   f.create_despacho = async () => { const r = await this.api('/api/despachos/crear', 'POST', { cotizacionId: d.cotizacionId, formaPago: 'Cta por cobrar', transportistaId: null, fleteUsd: 10 }, this.salesperson.id); d.despachoId = r.id; d.despachoNumero = r.numero }
   f.assert_despacho = async () => { const row = await dbSingle('notas_despacho', 'estado,total_usd,forma_pago,cotizacion_id,cliente_id', d.despachoId); assert(row.estado === 'pendiente' && Number(row.total_usd) === 260 && row.forma_pago === 'Cta por cobrar' && row.cotizacion_id === d.cotizacionId && row.cliente_id === d.clienteId, 'despacho pendiente $260', row, 'despacho') }
   f.assert_stock_post = () => assertStock(100, 'stock pendiente')
   f.assert_kardex_egreso = async () => { const rows = await this.db(this.supabase.from('inventario_movimientos').select('tipo').eq('producto_id', d.productoId), 'kardex pendiente'); assert(!(rows || []).some(row => row.tipo === 'egreso'), 0, rows, 'sin egreso antes de aprobar') }
-  f.assert_stock_comprometido_post = async () => { const n = await this.stockCommitted(); assert(n === 0, 0, n, 'comprometido pendiente') }
+  f.assert_stock_comprometido_post = async () => { const n = await this.productStock(); assert(n === 100, 100, n, 'stock intacto con despacho pendiente') }
   f.assert_cxc_cargo = async () => { const rows = await this.db(this.supabase.from('cuentas_por_cobrar').select('id').eq('despacho_id', d.despachoId).eq('tipo', 'cargo'), 'CxC pendiente'); assert(!rows?.length, 0, rows?.length, 'CxC pendiente') }
   f.apply_descuento = async () => { const item = await this.db(this.supabase.from('cotizacion_items').select('id').eq('cotizacion_id', d.cotizacionId).single(), 'item descuento'); d.cotizacionItemId = item.id; d.descuentoTotal = 20; await this.api('/api/despachos/descuentos', 'POST', { despachoId: d.despachoId, descuentos: [{ cotizacionItemId: item.id, tipo: 'monto_unitario', valor: 2 }] }) }
   f.assert_descuento = async () => { const row = await dbSingle('notas_despacho', 'descuento_total_usd', d.despachoId); assert(Number(row.descuento_total_usd) === 20, 20, row.descuento_total_usd, 'descuento total'); const rows = await this.api(`/api/despachos/${d.despachoId}/descuentos`); assert(rows?.length === 1 && rows[0].cotizacion_item_id === d.cotizacionItemId && Number(rows[0].monto_usd) === 20, 'descuento persistido', rows, 'descuento') }
@@ -1092,7 +1110,7 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     const movements = await this.db(this.supabase.from('inventario_movimientos').select('tipo,cantidad,motivo_tipo').eq('lote_id', d.egresoLoteId), 'Kardex egreso al aprobar')
     assert(movements?.length === 1 && movements[0].tipo === 'egreso' && Number(movements[0].cantidad) === 10 && movements[0].motivo_tipo === 'venta', 1, movements, 'un egreso al aprobar')
   }
-  f.assert_stock_comprometido_aprobado = async () => { const n = await this.stockCommitted(); assert(n === 10, 10, n, 'comprometido aprobado'); const cxc = await this.db(this.supabase.from('cuentas_por_cobrar').select('monto_usd').eq('despacho_id', d.despachoId).eq('tipo', 'cargo'), 'CxC aprobado'); assert(cxc?.length === 1 && Number(cxc[0].monto_usd) === 240, '$240', cxc, 'CxC neto'); const client = await dbSingle('clientes', 'saldo_pendiente', d.clienteId); assert(Number(client.saldo_pendiente) === 240, 240, client.saldo_pendiente, 'saldo aprobado') }
+  f.assert_stock_comprometido_aprobado = async () => { const stockAprobado = await this.productStock(); assert(stockAprobado === 90, 90, stockAprobado, 'egreso al aprobar despacho'); const cxc = await this.db(this.supabase.from('cuentas_por_cobrar').select('monto_usd').eq('despacho_id', d.despachoId).eq('tipo', 'cargo'), 'CxC aprobado'); assert(cxc?.length === 1 && Number(cxc[0].monto_usd) === 240, '$240', cxc, 'CxC neto'); const client = await dbSingle('clientes', 'saldo_pendiente', d.clienteId); assert(Number(client.saldo_pendiente) === 240, 240, client.saldo_pendiente, 'saldo aprobado') }
   f.mark_delivered = async () => {
     // La prueba de fecha efectiva necesita una ventana cronológica real entre
     // aprobación y entrega; la RPC exige al menos un segundo de margen en
@@ -1118,7 +1136,7 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     assert(cxc?.length === 1, 1, cxc?.length, 'sin CxC duplicada por replay de entrega')
     assert(commissions?.length === 1, 1, commissions?.length, 'sin comisión duplicada por replay de entrega')
   }
-  f.assert_stock_comprometido_entregado = async () => { const n = await this.stockCommitted(); assert(n === 0, 0, n, 'comprometido entregado') }
+  f.assert_stock_comprometido_entregado = async () => { const n = await this.productStock(); assert(n === 90, 90, n, 'entrega sin doble descuento') }
   f.register_partial_return = async () => {
     const item = await this.db(this.supabase.from('notas_despacho_items').select('id,producto_id,precio_unit_usd,descuento_pct').eq('despacho_id', d.despachoId).eq('producto_id', d.productoId).single(), 'item devolución parcial')
     d.partialReturnQuantity = 1
@@ -1489,17 +1507,36 @@ StagingE2ERunner.prototype.execute = async function executeDeterministic() {
     assert(rows.some(row => row.producto_id === d.producto2Id && row.tipo === 'ingreso' && Number(row.cantidad) === 3 && Number(row.stock_anterior) === 55 && Number(row.stock_nuevo) === 58 && row.motivo_tipo === 'transferencia'), rows, 'ingreso transformación')
   }
   f.return_loan = async () => {
-    const loan = await this.db(this.supabase.from('cliente_prestamos').insert({
-      cliente_id: d.clienteId,
-      producto_id: d.producto2Id,
-      cantidad_prestada: 3,
-      cantidad_devuelta: 0,
-      cantidad_facturada: 0,
-      estado: 'pendiente',
-    }).select('id').single(), 'crear préstamo E2E')
+    const loanOrder = await this.api('/api/ventas-rapidas/crear', 'POST', {
+      clienteId: d.clienteId,
+      transportistaId: d.transportistaTestId,
+      fleteUsd: 0,
+      formaPago: 'Efectivo $',
+      formaPagoCliente: '',
+      notas: 'Préstamo E2E determinista',
+      items: [{ productoId: d.producto2Id, cantidad: 3, precioUnitUsd: 40, es_prestamo: true }],
+      descuentoGlobalPct: 0,
+      costoEnvioUsd: 0,
+      tasaBcv: 100,
+    }, this.salesperson.id)
+    d.loanDespachoId = loanOrder.id
+    d.loanCotizacionId = loanOrder.cotizacionId
+    await this.api('/api/despachos/estado', 'POST', {
+      despachoId: d.loanDespachoId,
+      nuevoEstado: 'despachada',
+      idempotencyKey: crypto.randomUUID(),
+    })
+    const loan = await this.db(
+      this.supabase.from('cliente_prestamos').select('id').eq('despacho_id', d.loanDespachoId).single(),
+      'consultar préstamo generado al aprobar despacho',
+    )
     d.prestamoId = loan.id
     d.loanStartingStock = Number((await dbSingle('productos', 'stock_actual', d.producto2Id)).stock_actual)
-    await this.api('/api/clientes/prestamos/devolver', 'POST', { prestamoId: d.prestamoId, cantidad: 1 })
+    await this.api('/api/clientes/prestamos/devolver', 'POST', {
+      prestamoId: d.prestamoId,
+      cantidad: 1,
+      idempotencyKey: crypto.randomUUID(),
+    })
   }
   f.assert_loan_return = async () => {
     const product = await dbSingle('productos', 'stock_actual', d.producto2Id)

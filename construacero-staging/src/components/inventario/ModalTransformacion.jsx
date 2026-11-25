@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Modal } from '../ui/Modal'
 import CustomSelect from '../ui/CustomSelect'
 import { showToast } from '../ui/Toast'
 import { authFetch } from '../../services/authFetch'
 import { ArrowDown, ArrowLeftRight } from 'lucide-react'
+import { crearGeneradorClaveIdempotente } from '../../utils/idempotencyKey'
 
 export default function ModalTransformacion({ isOpen, onClose, productos = [], cuentaId, onSuccess }) {
   const [origenId, setOrigenId] = useState('')
@@ -12,6 +13,8 @@ export default function ModalTransformacion({ isOpen, onClose, productos = [], c
   const [destinoCantidad, setDestinoCantidad] = useState('')
   const [motivo, setMotivo] = useState('')
   const [loading, setLoading] = useState(false)
+  const claveGenRef = useRef(null)
+  if (!claveGenRef.current) claveGenRef.current = crearGeneradorClaveIdempotente()
 
   // Resetear estados al cerrar
   useEffect(() => {
@@ -22,6 +25,7 @@ export default function ModalTransformacion({ isOpen, onClose, productos = [], c
       setDestinoCantidad('')
       setMotivo('')
       setLoading(false)
+      claveGenRef.current.reiniciar()
     }
   }, [isOpen])
 
@@ -60,21 +64,26 @@ export default function ModalTransformacion({ isOpen, onClose, productos = [], c
     }
 
     setLoading(true)
+    const payload = {
+      origen: { producto_id: origenId, cantidad: Number(origenCantidad) },
+      destino: { producto_id: destinoId, cantidad: Number(destinoCantidad) },
+      motivo: motivo.trim(),
+    }
+    const idempotencyKey = claveGenRef.current.resolver(payload)
     try {
       const res = await authFetch('/api/inventario/transformacion', {
         method: 'POST',
-        body: JSON.stringify({
-          origen: { producto_id: origenId, cantidad: Number(origenCantidad) },
-          destino: { producto_id: destinoId, cantidad: Number(destinoCantidad) },
-          motivo: motivo.trim()
-        })
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ ...payload, idempotencyKey }),
       })
 
       const data = await res.json()
       if (!res.ok) {
+        if ([400, 403, 404, 409].includes(res.status)) claveGenRef.current.limpiar(payload)
         showToast(data.error || 'Error al aplicar transformación', 'error')
         return
       }
+      claveGenRef.current.limpiar(payload)
 
       showToast(`Transformación aplicada. ${data.origen.nombre} → ${data.destino.nombre}`, 'success')
       if (onSuccess) onSuccess()

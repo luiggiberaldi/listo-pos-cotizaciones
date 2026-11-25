@@ -110,6 +110,21 @@ scripts/*
 !src/components/auth/__tests__/
 !src/components/auth/__tests__/LoginPinModal.test.js
 
-# OP-2026-061: pantallas de clientes al instante
+# OP-2026-030: pruebas y verificación de la creación de usuarios
+!api/handlers/__tests__/crearUsuario.test.js
+!src/utils/__tests__/usuarioValidacion.test.js
+!scripts/verify-op030-usuarios-staging.mjs
 
+# OP-2026-036: calendario mensual de sábados para vendedor designado
+!src/utils/__tests__/calendarioSabados.test.js
+!api/handlers/__tests__/designacionSabados.test.js
+!scripts/verify-op036-calendario-sabados-staging.mjs
+
+# OP-2026-061: pantallas de clientes al instante
 !src/utils/__tests__/realtimeSync061.test.js
+
+# OP-2026-071/086: pruebas de inventario en staging
+!api/handlers/__tests__/fichaYConteoKardex071.test.js
+!api/handlers/__tests__/prestamosYDevoluciones071.test.js
+!api/handlers/__tests__/seguridadIdempotencia071.test.js
+!api/handlers/__tests__/higieneDecimalesRespaldo071.test.js

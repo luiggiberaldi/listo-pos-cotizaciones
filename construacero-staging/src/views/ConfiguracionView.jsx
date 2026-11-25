@@ -952,7 +952,7 @@ export default function ConfiguracionView() {
       />
 
       {/* Tabs */}
-      <div className="flex overflow-x-auto gap-1 bg-slate-100 p-1 rounded-2xl scrollbar-hide">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1 bg-slate-100 p-1 rounded-2xl min-w-0">
         {TABS.filter(t => !t.roles || t.roles.includes(perfil?.rol)).map(t => {
           const Icon = t.icon
           const active = tab === t.id
@@ -960,7 +960,7 @@ export default function ConfiguracionView() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`relative flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all sm:flex-1 justify-center overflow-hidden ${
+              className={`relative flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2.5 min-h-10 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all sm:flex-auto justify-center min-w-0 ${
                 active ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
@@ -968,12 +968,12 @@ export default function ConfiguracionView() {
                 <span className="absolute bottom-0 left-[20%] right-[20%] h-0.5 rounded-full"
                   style={{ background: 'linear-gradient(to right, #1B365D, #B8860B)' }} />
               )}
-              <span className={`flex items-center justify-center w-5 h-5 rounded-md transition-all ${
+              <span className={`flex items-center justify-center w-5 h-5 rounded-md transition-all shrink-0 ${
                 active ? 'text-[#1B365D]' : ''
               }`}>
                 <Icon size={14} />
               </span>
-              <span className="inline sm:inline">{t.label}</span>
+              <span>{t.label}</span>
             </button>
           )
         })}

@@ -10,7 +10,6 @@ import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
  * @param {boolean} props.agregado - Si ya está en la cesta
  * @param {number|null} props.cantidad - Cantidad en cesta (si agregado)
  * @param {number} props.tasa - Tasa BCV
- * @param {number} props.comprometido - Stock comprometido
  * @param {function} props.onAgregar - Callback al hacer click (producto no agregado)
  * @param {function} props.onMas - Callback para incrementar cantidad
  * @param {function} props.onMenos - Callback para decrementar cantidad (o eliminar si qty=1)
@@ -21,7 +20,6 @@ export default function ProductCard({
   agregado,
   cantidad,
   tasa = 0,
-  comprometido = 0,
   onAgregar,
   onMas,
   onMenos,
@@ -32,7 +30,6 @@ export default function ProductCard({
   const stock = Number(p.stock_actual) || 0
   const sinStock = stock <= 0
   // El precio 0 es un precio válido ($0.00): se muestra tal cual y no bloquea.
-  const disponibleReal = stock - comprometido
   const tieneMultiprecios = p.precio_2 != null || p.precio_3 != null
 
   return (
@@ -40,9 +37,7 @@ export default function ProductCard({
       className={`relative bg-white rounded-xl border px-1.5 py-1.5 flex flex-col items-center text-center transition-all active:scale-95 ${
         agregado
           ? 'border-emerald-300 bg-emerald-50/50 shadow-sm shadow-emerald-100/80'
-          : disponibleReal <= 0 && comprometido > 0
-            ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100/80'
-            : 'border-slate-200 hover:border-primary/50'
+          : 'border-slate-200 hover:border-primary/50'
       }`}
       onClick={() => !agregado && onAgregar?.(p)}
     >
@@ -82,10 +77,9 @@ export default function ProductCard({
       {/* Stock badge */}
       <p className={`text-[8px] font-medium mt-0.5 ${
         sinStock ? 'text-red-500' :
-        disponibleReal <= 0 && comprometido > 0 ? 'text-amber-600' :
         stock <= (p.stock_minimo || 5) ? 'text-amber-500' : 'text-emerald-500'
       }`}>
-        {sinStock ? 'Agotado' : comprometido > 0 ? `${stock} (${comprometido} comp.)` : `${stock} disp.`}
+        {sinStock ? 'Agotado' : `${stock} disp.`}
       </p>
 
       {/* Stepper inline */}

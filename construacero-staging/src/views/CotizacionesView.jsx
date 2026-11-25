@@ -3,7 +3,7 @@
 // El builder reemplaza la lista in-page (sin navegación adicional)
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, LayoutGrid, List, ChevronDown, Truck, Receipt, MessageSquare, Filter, Search, Clock } from 'lucide-react'
+import { FileText, Plus, RefreshCw, AlertTriangle, PackageCheck, Loader2, X, AlertCircle, ChevronDown, Truck, Receipt, MessageSquare, Filter, Search, Clock } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import supabase from '../services/supabase/client'
 import { useTasaCambio } from '../hooks/useTasaCambio'
@@ -12,9 +12,8 @@ import { useCrearDespacho, useActualizarEstadoDespacho } from '../hooks/useDespa
 import VehiculoViajeSelect from '../components/vehiculos/VehiculoViajeSelect'
 import { useCotizacion } from '../hooks/useCotizaciones'
 import { useClientes } from '../hooks/useClientes'
+import { limpiarVistaListaGuardada } from '../utils/vistaCuadricula'
 import CotizacionCard    from '../components/cotizaciones/CotizacionCard'
-import CotizacionRow     from '../components/cotizaciones/CotizacionRow'
-import DetalleModal      from '../components/ui/DetalleModal'
 import CotizacionBuilder from '../components/cotizaciones/CotizacionBuilder'
 // CotizacionRapida desactivada temporalmente
 // import CotizacionRapida  from '../components/cotizaciones/CotizacionRapida'
@@ -654,10 +653,10 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                         )}
 
                         {/* Opción de Referencia para Transferencia y Pago Móvil */}
-                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                           <div className="flex items-center gap-1.5 px-2 py-1 bg-teal-50 border border-teal-200 rounded-lg ml-2">
                             <span className="text-[10px] font-medium text-teal-700 whitespace-nowrap">
-                              Referencia (opcional):
+                              {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                             </span>
                             <input
                               type="text"
@@ -782,10 +781,10 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                                 </div>
                               </div>
                               {/* Opción de Referencia para Transferencia y Pago Móvil COD */}
-                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                                 <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 border border-rose-200 rounded-lg ml-2 mt-1">
                                   <span className="text-[10px] font-medium text-rose-700 whitespace-nowrap">
-                                    Referencia (opcional):
+                                    {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                                   </span>
                                   <input
                                     type="text"
@@ -1082,15 +1081,13 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
   const [busquedaGlobal, setBusquedaGlobal] = useState('')
   const [verTodos, setVerTodos] = useState(false)
   const [pagina, setPagina] = useState(1)
-  const [vistaMode, setVistaMode] = useState(() => {
-    const businessId = useAuthStore.getState().perfil?.cuenta_id
-    const key = businessId ? `cotizaciones_vista-${businessId}` : 'cotizaciones_vista'
-    return localStorage.getItem(key) || 'grid'
-  })
   const [cotizacionAAnular, setCotizacionAAnular] = useState(null)
   const [cotizacionADespachar, setCotizacionADespachar] = useState(null)
   const [cotizacionAReciclar, setCotizacionAReciclar] = useState(null)
-  const [cotizacionDetalle, setCotizacionDetalle] = useState(null)
+
+  useEffect(() => {
+    limpiarVistaListaGuardada('cotizaciones_vista', perfil?.cuenta_id)
+  }, [perfil?.cuenta_id])
 
   // Abrir modal de despacho cuando viene del builder
   useEffect(() => {
@@ -1324,26 +1321,6 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex bg-slate-100 rounded-xl p-0.5">
-            <button type="button" onClick={() => {
-              setVistaMode('grid')
-              const businessId = perfil?.cuenta_id
-              const key = businessId ? `cotizaciones_vista-${businessId}` : 'cotizaciones_vista'
-              localStorage.setItem(key, 'grid')
-            }} title="Vista cuadrícula"
-              className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-              <LayoutGrid size={16} />
-            </button>
-            <button type="button" onClick={() => {
-              setVistaMode('list')
-              const businessId = perfil?.cuenta_id
-              const key = businessId ? `cotizaciones_vista-${businessId}` : 'cotizaciones_vista'
-              localStorage.setItem(key, 'list')
-            }} title="Vista lista"
-              className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-              <List size={16} />
-            </button>
-          </div>
           <button onClick={() => refetch()} title="Recargar" className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
             <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
           </button>
@@ -1380,49 +1357,26 @@ function ListaCotizaciones({ onNueva, onEditar, despacharCotizacion }) {
         />
       ) : (
         <>
-        {vistaMode === 'grid' ? (
-          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-            {cotizacionesPaginadas.map(c => (
-              <CotizacionCard
-                key={c.id}
-                cotizacion={c}
-                onEditar={handleEditar}
-                onAnular={setCotizacionAAnular}
-                onCambiarEstado={handleCambiarEstado}
-                onDespachar={setCotizacionADespachar}
-                onReciclar={abrirReciclar}
-                onCambiarEstadoDespacho={handleCambiarEstadoDespacho}
-                tasa={tasaEfectiva}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {cotizacionesPaginadas.map(c => (
-              <CotizacionRow
-                key={c.id}
-                cotizacion={c}
-                onEditar={handleEditar}
-                onVer={setCotizacionDetalle}
-                tasa={tasaEfectiva}
-              />
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+          {cotizacionesPaginadas.map(c => (
+            <CotizacionCard
+              key={c.id}
+              cotizacion={c}
+              onEditar={handleEditar}
+              onAnular={setCotizacionAAnular}
+              onCambiarEstado={handleCambiarEstado}
+              onDespachar={setCotizacionADespachar}
+              onReciclar={abrirReciclar}
+              onCambiarEstadoDespacho={handleCambiarEstadoDespacho}
+              tasa={tasaEfectiva}
+            />
+          ))}
+        </div>
         {totalPaginas > 1 && (
           <Pagination paginaActual={pagina} totalPaginas={totalPaginas} onCambiarPagina={setPagina} />
         )}
         </>
       )}
-
-      {/* Detalle modal para vista lista */}
-      <DetalleModal
-        isOpen={!!cotizacionDetalle}
-        onClose={() => setCotizacionDetalle(null)}
-        tipo="cotizacion"
-        registro={cotizacionDetalle}
-        tasa={tasaEfectiva}
-      />
 
       {/* Confirm anular — mensaje diferente según rol */}
       <ConfirmModal

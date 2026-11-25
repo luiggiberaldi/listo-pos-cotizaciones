@@ -172,7 +172,7 @@ const TUTORIAL_MODULES = [
     steps: [
       {
         title: 'Consulta de Precios y Stock',
-        desc: 'Accede al módulo de Inventario para consultar rápidamente los precios de cualquier material (precio de lista, al mayor o en bolívares según la tasa del día) y verificar el stock disponible (tanto la cantidad en almacén como el stock comprometido en despachos pendientes).',
+        desc: 'Accede al módulo de Inventario para consultar rápidamente los precios de cualquier material (precio de lista, al mayor o en bolívares según la tasa del día) y verificar el stock físico disponible en almacén.',
         tip: 'Usa la barra de búsqueda superior para filtrar productos por nombre o código.',
         mockupType: 'inv_consulta'
       },
@@ -1413,13 +1413,9 @@ export default function TutorialView() {
                   <span className="text-slate-400">Precio al Mayor:</span>
                   <span className="font-extrabold text-slate-950">$9.02</span>
                 </div>
-                <div className="flex justify-between border-b border-slate-50 pb-1">
+                <div className="flex justify-between">
                   <span className="text-slate-400">Stock Físico:</span>
                   <span className="font-bold text-emerald-600">420 piezas</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Comprometido:</span>
-                  <span className="font-bold text-amber-500">10 piezas</span>
                 </div>
               </div>
 
@@ -1501,7 +1497,7 @@ export default function TutorialView() {
               <span className="text-sm font-black text-white">{completedCount} de {totalCount} Módulos</span>
               <button 
                 onClick={handleResetProgress}
-                className="text-[9px] font-bold text-amber-400 hover:text-amber-300 block mt-0.5 hover:underline"
+                className="inline-flex items-center min-h-9 px-2 -ml-2 rounded-lg text-[10px] font-bold text-amber-400 hover:text-amber-300 mt-0.5 hover:underline"
               >
                 Restablecer progreso
               </button>
@@ -1673,7 +1669,7 @@ export default function TutorialView() {
                         {mod.steps.length} pasos
                       </span>
                       
-                      <button className={`text-[10px] font-black px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                      <button className={`text-[10px] font-black min-h-9 px-3.5 py-2 rounded-lg transition-all flex items-center gap-1 ${
                         isCompleted 
                           ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' 
                           : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/10'

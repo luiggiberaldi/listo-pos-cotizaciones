@@ -2,7 +2,7 @@
 // Vista principal de notas de despacho
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, PackageCheck, RefreshCw, Filter, LayoutGrid, List, FileDown, ChevronDown, Search, X } from 'lucide-react'
+import { Package, PackageCheck, RefreshCw, Filter, FileDown, ChevronDown, Search, X } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useTasaCambio } from '../hooks/useTasaCambio'
 import { useDespachos, useActualizarEstadoDespacho, useReciclarDespacho, useStockCheckDespachos } from '../hooks/useDespachos'
@@ -10,13 +10,12 @@ import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import { useVendedores } from '../hooks/useClientes'
 import { getDespachoAction } from '../utils/despachoActions'
 import { getFiltrosDespacho } from '../utils/estadoLabels'
+import { limpiarVistaListaGuardada } from '../utils/vistaCuadricula'
 import VendedorFilterPill from '../components/ui/VendedorFilterPill'
 import ToggleVistaPersonal from '../components/ui/ToggleVistaPersonal'
 import DespachoCard from '../components/despachos/DespachoCard'
-import DespachoRow  from '../components/despachos/DespachoRow'
-import EditDespachoModal from '../components/despachos/EditDespachoModal'
-import DetalleModal from '../components/ui/DetalleModal'
 import ConfirmModal from '../components/ui/ConfirmModal'
+import DevolverAnularModal from '../components/despachos/DevolverAnularModal'
 import EmptyState   from '../components/ui/EmptyState'
 import Skeleton     from '../components/ui/Skeleton'
 import PageHeader  from '../components/ui/PageHeader'
@@ -146,15 +145,12 @@ export default function DespachosView() {
   const [debouncedBusqueda, setDebouncedBusqueda] = useState('')
   const [verTodos, setVerTodos] = useState(false)
   const [pagina, setPagina] = useState(1)
-  const [vistaMode, setVistaMode] = useState(() => {
-    const businessId = useAuthStore.getState().perfil?.cuenta_id
-    const key = businessId ? `despachos_vista-${businessId}` : 'despachos_vista'
-    return localStorage.getItem(key) || 'grid'
-  })
   const [despachoAAnular, setDespachoAAnular] = useState(null)
   const [despachoAReciclar, setDespachoAReciclar] = useState(null)
-  const [despachoDetalle, setDespachoDetalle] = useState(null)
-  const [despachoEditar, setDespachoEditar] = useState(null)
+
+  useEffect(() => {
+    limpiarVistaListaGuardada('despachos_vista', perfil?.cuenta_id)
+  }, [perfil?.cuenta_id])
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -305,13 +301,16 @@ export default function DespachosView() {
     ? `DES-${String(despachoAAnular.cotizacion?.numero || despachoAAnular.numero).padStart(5, '0')}`
     : ''
 
-  async function confirmarAnular() {
+  // OP-2026-052 (N1): anular pide motivo y, si el despacho tiene pagos anotados, qué pasó con ese dinero.
+  async function confirmarAnular(_estado, motivo, decision) {
     if (!despachoAAnular) return
     await cambiarEstado.mutateAsync({
       despachoId: despachoAAnular.id,
       nuevoEstado: 'anulada',
       numeroCotizacion: despachoAAnular.cotizacion?.numero || despachoAAnular.numero,
       clienteNombre: despachoAAnular.cliente?.nombre,
+      motivoAnulacion: motivo,
+      ...(decision || {}),
     })
     setDespachoAAnular(null)
   }
@@ -393,27 +392,7 @@ export default function DespachosView() {
             </div>
           ) /* esAdministracion */}
           <div className="flex items-center gap-1.5 ml-auto shrink-0">
-            <div className="flex bg-slate-100 rounded-xl p-0.5">
-              <button type="button" onClick={() => {
-                setVistaMode('grid')
-                const businessId = perfil?.cuenta_id
-                const key = businessId ? `despachos_vista-${businessId}` : 'despachos_vista'
-                localStorage.setItem(key, 'grid')
-              }} title="Vista cuadrícula"
-                className={`p-2 rounded-lg transition-colors ${vistaMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                <LayoutGrid size={16} />
-              </button>
-              <button type="button" onClick={() => {
-                setVistaMode('list')
-                const businessId = perfil?.cuenta_id
-                const key = businessId ? `despachos_vista-${businessId}` : 'despachos_vista'
-                localStorage.setItem(key, 'list')
-              }} title="Vista lista"
-                className={`p-2 rounded-lg transition-colors ${vistaMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                <List size={16} />
-              </button>
-            </div>
-            <button onClick={() => refetch()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
+            <button onClick={() => refetch()} title="Actualizar" className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors">
               <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             </button>
           </div>
@@ -445,68 +424,48 @@ export default function DespachosView() {
         />
       ) : (
         <>
-        {vistaMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-            {despachosPaginados.map(d => (
-              <DespachoCard
-                key={d.id}
-                despacho={d}
-                stockCheckData={esPrivilegiado ? stockCheck : undefined}
-                stockCheckPending={esPrivilegiado && !stockCheck}
-                onCambiarEstado={(id, estado, motivoDev, motivoAnu) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre, vendedorId: d.vendedor_id, motivoDevolucion: motivoDev, motivoAnulacion: motivoAnu, ...(estado === 'entregada' ? { tasaBcv: tasaEfectiva } : {}) })}
-                onAnular={setDespachoAAnular}
-                onReciclar={setDespachoAReciclar}
-                tasa={tasaEfectiva}
-                config={config}
-                estadoCambiando={cambiarEstado.isPending}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {despachosPaginados.map(d => (
-              <DespachoRow
-                key={d.id}
-                despacho={d}
-                onVer={setDespachoDetalle}
-                onEditar={setDespachoEditar}
-                tasa={tasaEfectiva}
-              />
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+          {despachosPaginados.map(d => (
+            <DespachoCard
+              key={d.id}
+              despacho={d}
+              stockCheckData={esPrivilegiado ? stockCheck : undefined}
+              stockCheckPending={esPrivilegiado && !stockCheck}
+              onCambiarEstado={(id, estado, motivoDev, motivoAnu, decision) => cambiarEstado.mutateAsync({ despachoId: id, nuevoEstado: estado, numeroCotizacion: d.cotizacion?.numero || d.numero, clienteNombre: d.cliente?.nombre, vendedorId: d.vendedor_id, motivoDevolucion: motivoDev, motivoAnulacion: motivoAnu, ...(decision || {}), ...(estado === 'entregada' ? { tasaBcv: tasaEfectiva } : {}) })}
+              onAnular={setDespachoAAnular}
+              onReciclar={setDespachoAReciclar}
+              tasa={tasaEfectiva}
+              config={config}
+              estadoCambiando={cambiarEstado.isPending}
+            />
+          ))}
+        </div>
         {totalPaginas > 1 && (
           <Pagination paginaActual={pagina} totalPaginas={totalPaginas} onCambiarPagina={setPagina} />
         )}
         </>
       )}
 
-      {/* Detalle modal para vista lista */}
-      <DetalleModal
-        isOpen={!!despachoDetalle}
-        onClose={() => setDespachoDetalle(null)}
-        tipo="despacho"
-        registro={despachoDetalle}
-        tasa={tasaEfectiva}
-      />
-
-      {/* Edit modal para vista lista */}
-      <EditDespachoModal
-        isOpen={!!despachoEditar}
-        onClose={() => setDespachoEditar(null)}
-        despacho={despachoEditar}
-      />
-
-      {/* Confirm anular — con mensajes por rol */}
-      <ConfirmModal
+      {/* Anular — OP-2026-052: motivo obligatorio y decisión sobre los pagos anotados */}
+      <DevolverAnularModal
         isOpen={!!despachoAAnular}
         onClose={() => setDespachoAAnular(null)}
         onConfirm={confirmarAnular}
-        title={anularConfig.confirmTitle || '¿Anular despacho?'}
-        message={anularConfig.confirmMessage || 'Se restaurará el stock de los productos al inventario.'}
-        details={anularConfig.confirmDetails || 'Esta acción no se puede deshacer.'}
-        confirmText={anularConfig.confirmText || 'Sí, anular'}
-        variant={anularConfig.variant || 'danger'}
+        accion={despachoAAnular ? {
+          id: despachoAAnular.id,
+          estado: 'anulada',
+          isAnular: true,
+          actionConfig: {
+            confirmTitle: anularConfig.confirmTitle || '¿Anular despacho?',
+            confirmMessage: anularConfig.confirmMessage || 'Se restaurará el stock de los productos al inventario.',
+            confirmDetails: anularConfig.confirmDetails || 'Esta acción no se puede deshacer.',
+            confirmText: anularConfig.confirmText || 'Sí, anular',
+          },
+        } : null}
+        despachoNum={anularNumDisplay}
+        despachoId={despachoAAnular?.id}
+        tieneDevoluciones={!!despachoAAnular?.tiene_devoluciones}
+        isLoading={cambiarEstado.isPending}
       />
 
       {/* Confirm reciclar — con mensajes por rol */}

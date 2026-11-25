@@ -2,7 +2,15 @@
 
 Este directorio es el entorno de validación aislado de Construacero. Apunta al proyecto Supabase de staging `spupqgkdsgohxxfoxydl`; no debe configurarse con credenciales de producción.
 
-## Última validación registrada — 2026-08-17
+## Última validación registrada — 2026-11-24 (plan OP-2026-048, cierre OP-2026-058)
+
+- Tests unitarios: **476/476** en **52 archivos**; build correcto.
+- Suites contra el servidor local de staging: `op047`, `op051`, `op052`, `op053`, `op054`, `op055`, `op057` (75 casos) + comparación de cifras sin diferencias.
+- Navegador real (Chromium): `op049` a `op056` y `verify-op042` (73 casos), todo en verde.
+- Migraciones aplicadas solo en staging: **301 a 308** (cada una con su `_rollback`). Producción sin cambios.
+- Guion completo: `../.tmp-op040/op058_prueba_final.sh`. Informe: `docs/operaciones/OP-2026-058_prueba-final-y-reporte-clientes.md`.
+
+## Validación anterior — 2026-08-17
 
 - Worker local `:8789` y proxy Vite `:5174`: **HTTP 200** en `/api/ping`, ambos identificados como `spupqgkdsgohxxfoxydl`.
 - Tests unitarios: **227/227** en **25 archivos**.
@@ -14,6 +22,75 @@ Este directorio es el entorno de validación aislado de Construacero. Apunta al 
 - No se modificó ni desplegó producción.
 
 La evidencia corresponde al runner CLI `npm run test:e2e:staging`. La vista interactiva `TesterFlowView` mantiene una lista histórica independiente de 70 pasos; no fue la fuente del log de cierre.
+
+## Cuentas por Cobrar — pagos de más, selector de despacho y devoluciones (OP-2026-042, 2026-11-23)
+
+- **Una sola regla de reparto** ("qué despacho está pagado"): abonos enlazados primero y luego los sueltos, del cargo más viejo al más nuevo. Vive en `src/utils/cxcReparto.js` (pantallas y Worker) y en la función SQL `cxc_reparto_cliente` (devoluciones). Si se cambia una, hay que cambiar la otra; la prueba `cxcReparto.test.js` documenta la regla.
+- **Ficha del cliente:** aviso "Pagado de más: $X" cuando los abonos superan los cargos; selector "¿Qué despacho paga?" al registrar un abono; con método "Cruce" es obligatorio escribir contra qué se cruzó.
+- **Reporte → Crédito:** sección "Pagos de más sin deuda" (vista `v_cxc_pagado_de_mas`).
+- **Devolución parcial:** usa `GET /api/despachos/devolucion-preview-cxc` para saber lo pendiente real del despacho. Si un abono manual ya cubrió el crédito, avisa y permite anularlo en la misma operación (`anularAbonoId` → `p_anular_abono_id`); queda auditoría `ANULAR_ABONO_POR_DEVOLUCION` con copia del abono.
+- Migración: `supabase/migrations/300_staging_cxc_reparto_devoluciones.sql` (+ `_rollback`). Prueba en navegador: `scripts/verify-op042-cxc-staging.mjs`. Informe: `docs/operaciones/OP-2026-042_arreglos-cxc-staging.md`.
+
+## Cuentas por Cobrar — aviso de error y abonos sin duplicar (OP-2026-049, 2026-11-23)
+
+- **Errores visibles:** abono, saldo a favor, devolución de saldo y cruce muestran un aviso rojo dentro del formulario (`AvisoNoGuardado`) y un mensaje rojo arriba si el servidor responde con error o no hay conexión. Lo escrito se conserva. Las llamadas pasan por `llamarApiCxc` en `src/hooks/useCuentasCobrar.js`.
+- **Doble clic:** los formularios no envían dos veces mientras guardan (`useEnvioUnico`).
+- **Huella única por abono:** cada abono de la ficha manda `idempotencyKey` (también en la cabecera `Idempotency-Key`). La base guarda la huella en `cuentas_por_cobrar.idempotency_key` con índice único `ux_cxc_cuenta_idempotency_key`; un reintento con la misma huella devuelve el abono ya guardado.
+- **"¿Es otro pago?":** `POST /api/cxc/abono` responde 409 `POSIBLE_DUPLICADO` si el cliente tiene un abono del mismo monto en los últimos 15 minutos, salvo que llegue `confirmarDuplicado: true`.
+- Migración: `supabase/migrations/301_staging_cxc_abono_clave_unica.sql` (+ `_rollback`). Prueba en navegador: `scripts/op049-abonos-pantalla.mjs`. Informe: `docs/operaciones/OP-2026-049_aviso-error-y-doble-clic-abonos-staging.md`.
+
+## Cuentas por Cobrar — abono en un solo paso y auditoría completa (OP-2026-050, 2026-11-23)
+
+- **Abono atómico:** `POST /api/cxc/abono` guarda con la función `cxc_registrar_abono_atomico` (migración 302). Bloquea la fila del cliente (turno por cliente), revisa huella, posible repetido y deuda, inserta el abono y su anotación `REGISTRAR_ABONO` en la misma transacción. El Worker ya no inserta abonos por REST.
+- **Validaciones del servidor:** monto numérico y mayor que cero, redondeado a centavos (`leerMontoAbono`); si `formaPago` es una lista, sus montos deben sumar el abono con ±$0,01 (`validarDetallePago`). Errores en español; deuda superada → 400 `MONTO_SUPERA_DEUDA`.
+- **Auditoría:** todo rechazo de abono se anota como `ABONO_RECHAZADO`; revertir abono guarda la copia completa de la fila; el cargo COD autogenerado se anota como `AUTOGENERAR_CARGO_COD`. `registrarAuditoria` (`api/lib/audit.js`) guarda de nuevo como `SISTEMA` cualquier anotación que la base rechace, con `meta.categoria_original` y `meta.auditoria_rechazo`.
+- **Categorías de auditoría** aceptadas por la base: además de las anteriores, `DESPACHO`, `VEHICULO`, `CONFIG` y `COMISIONES` (antes se rechazaban en silencio).
+- Prueba completa: `scripts/op047-abonos-api.mjs` (20 casos). Informe: `docs/operaciones/OP-2026-050_abonos-un-solo-paso-y-auditoria-completa.md`.
+
+## Cuentas por Cobrar — saldo a favor en un solo paso (OP-2026-051, 2026-11-23)
+
+- `POST /api/cxc/saldo-favor`, `/api/cxc/devolucion-credito` y `/api/cxc/cruzar-saldo-favor` pasan por `movimientoSaldoFavor` (en `api/handlers/cxc.js`) y la función `cxc_saldo_favor_atomico` (migración 303): turno por cliente (bloqueo de la fila), huella `idempotencyKey`, aviso 409 `POSIBLE_DUPLICADO` en carga y devolución (mismo monto en 15 min, salvo `confirmarDuplicado: true`), control de saldo a favor y deuda, y anotación de auditoría en la misma transacción.
+- Rechazos anotados: `SALDO_FAVOR_RECHAZADO`, `DEVOLUCION_SALDO_RECHAZADA`, `CRUCE_SALDO_FAVOR_RECHAZADO`. Errores: 400 `MONTO_SUPERA_SALDO_FAVOR` / `MONTO_SUPERA_DEUDA`, con mensaje en español.
+- Ficha: `useClaveOperacion` y `AvisoPosibleRepetido` en "Cargar Crédito" y "Devolver Crédito"; huella en "Cruzar Saldo".
+- Pruebas: `scripts/op051-saldo-favor-api.mjs` (12 casos) y `scripts/op051-saldo-favor-pantalla.mjs`. Informe: `docs/operaciones/OP-2026-051_saldo-favor-un-solo-paso-staging.md`.
+
+## Despachos — reabrir y anular sin perder pagos (OP-2026-052, 2026-11-24)
+
+- `GET /api/despachos/pagos-en-juego?despachoId=` → `cxc_pagos_en_juego_despacho`: pagos anotados de dinero real, abonos enlazados y "pagado de más" que aparecería al quitar la deuda.
+- `POST /api/despachos/estado`: reabrir un entregado con dinero en juego exige `destinoPagos` (`mantener` | `saldo_favor`); anular un pendiente con pagos anotados exige `destinoPagoAnotado` (`saldo_favor` | `otro_despacho` | `no_cobrado`) y `motivo_anulacion` de 10 caracteres o más. Si falta la decisión, responde 409 `DECISION_PAGOS_REQUERIDA` con `pagos`.
+- Reabrir usa `reabrir_despacho_con_pagos_staging` (desenlaza abonos reales, reclasifica el sobrante a saldo a favor si se elige, llama a `revertir_entrega_finanzas_atomica_staging` y anota `REABRIR_DESPACHO_PAGOS`). Anular usa `anular_despacho_con_pagos_staging` (anota `ANULAR_DESPACHO_PAGOS`). Migración 304.
+- `DevolverAnularModal` consulta los pagos en juego y pide la decisión; anular desde la lista de despachos usa el mismo modal.
+- El abono ya no crea un cargo COD "auto-sanado" (M6): si el despacho no tiene deuda, se rechaza.
+- Pruebas: `scripts/op052-reabrir-anular-api.mjs` (14 casos) y `scripts/op052-reabrir-anular-pantalla.mjs` (6). Informe: `docs/operaciones/OP-2026-052_reabrir-anular-sin-perder-pagos-staging.md`.
+
+## Despachos — edición profunda con la cuenta del cliente en un solo paso (OP-2026-053, 2026-11-24)
+
+- `POST /api/despachos/editar-items` llama a `editar_despacho_profundidad_con_cxc_staging` (migración 305): edita los artículos y, si el despacho está aprobado, ajusta solo los movimientos propios (cargos `cxc`/`cod`, consumo "Pago con Saldo a Favor…", crédito "Excedente de pago en Despacho…") en la misma transacción. Créditos de devolución o intercambio y abonos reales no se tocan.
+- Si quedan pagos sin deuda, responde 409 `DECISION_PAGOS_REQUERIDA` (`pagos.pagado_de_mas_nuevo`); se reenvía con `destinoPagos` (`mantener` | `saldo_favor`). Errores: `SALDO_FAVOR_INSUFICIENTE`, `VUELTO_YA_USADO`. Auditoría: `EDICION_PROFUNDA_CXC` con antes y después.
+- `EditarItemsDespachoModal` muestra la pregunta "¿Qué hacemos con ese dinero?". Se quitó el ajuste viejo por pasos sueltos.
+- Pruebas: `scripts/op053-edicion-profunda-api.mjs` (7) y `scripts/op053-edicion-profunda-pantalla.mjs` (4). Informe: `docs/operaciones/OP-2026-053_edicion-profunda-sin-perder-pagos-staging.md`.
+
+## Devoluciones — lo donado no da crédito (OP-2026-054, 2026-11-24)
+
+- Regla única en `src/utils/donacionDevolucion.js` (pantalla y Worker): fracción donada = monto "Donación" ÷ total de la forma de pago; esa parte de lo devuelto no da crédito ni reembolso.
+- `POST /api/despachos/devolucion-parcial` pasa a la RPC solo la parte acreditable; con donación usa `devolucion_con_donacion_staging` (migración 306), que además baja el total y la "Donación" del despacho y anota `DEVOLUCION_DONACION_SIN_CREDITO` / `DEVOLUCION_DONACION_ACREDITADA`.
+- Para acreditar todo: `acreditarDonacion: true` + `motivoAcreditarDonacion` (10 caracteres o más), solo administración, jefe o desarrollador.
+- Pruebas: `scripts/op054-devolucion-donacion-api.mjs` (8) y `scripts/op054-devolucion-donacion-pantalla.mjs` (6). Informe: `docs/operaciones/OP-2026-054_devolucion-donado-sin-credito-staging.md`.
+
+## Cuentas por Cobrar — nada se borra sin rastro (OP-2026-055, 2026-11-24)
+
+- Disparador `trg_archivar_cxc_borrado` (migración 307): todo DELETE en `cuentas_por_cobrar` copia la fila completa en `cxc_movimientos_borrados` (motivo, operador y origen, leídos de `cxc.motivo`/`cxc.usuario_id`/`cxc.usuario_nombre`/`cxc.origen` o de la consulta). Las limpiezas con `session_replication_role = replica` no copian.
+- `POST /api/cxc/revertir-abono` exige `motivo` (10 caracteres o más) y usa `cxc_anular_movimiento_staging`; bloquea movimientos de devolución. `GET /api/cxc/movimientos-borrados?clienteId=` alimenta "Movimientos anulados" en la ficha.
+- Regla del Cruce en despachos (`src/utils/formaPagoReglas.js`): referencia de 5 caracteres o más al crear, editar pago, editar ítems y en la venta rápida; un Cruce viejo sin cambios se respeta.
+- Pruebas: `scripts/op055-sin-rastro-api.mjs` (10) y `scripts/op055-sin-rastro-pantalla.mjs` (5). Informe: `docs/operaciones/OP-2026-055_nada-se-borra-sin-rastro-staging.md`.
+
+## Cuentas por Cobrar — consistencia (OP-2026-057, 2026-11-24)
+
+- Lecturas de la cartera por páginas con `src/utils/leerPaginado.js` (historial de la ficha, resumen y reporte); el historial ya no se corta en 100.
+- Saldo por línea del historial calculado al mostrar (`src/utils/cxcSaldos.js`, misma fórmula que el disparador).
+- Regla de reparto con despachos de dos deudas (crédito / cobro a destino) en `src/utils/cxcReparto.js` y `cxc_reparto_cliente` (migración 308).
+- Fallos de `recalcularSaldoPendienteCliente` se anotan como `RECALCULO_SALDO_FALLIDO` (auditoría, SISTEMA).
+- Pruebas: `scripts/op057-acceso-vendedor.mjs`, `scripts/op057-comparacion-reparto.mjs` (con `op057_comparacion_datos.py`) y `scripts/op056-historial-pantalla.mjs`. Informe: `docs/operaciones/OP-2026-057_acceso-y-consistencia-staging.md`.
 
 ## Tasas oficiales BCV — corrección 2026-08-18
 

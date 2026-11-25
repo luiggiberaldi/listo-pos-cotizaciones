@@ -908,13 +908,17 @@ export async function handleFacturarPrestamo(request, env) {
   if (isNaN(cant) || cant <= 0) return jsonError('Cantidad a facturar inválida', 400, request);
 
   try {
-    // 1. Obtener registro de préstamo actual
+    // 1. Obtener registro de préstamo actual (validando tenant)
     const lpRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}&select=*,producto:productos(id,precio_usd,nombre,unidad),despacho:notas_despacho(numero)`,
+      `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}&select=*,producto:productos(id,precio_usd,nombre,unidad),despacho:notas_despacho(numero,cuenta_id),cliente:clientes(id,cuenta_id)`,
       { headers }
     );
     const [prestamo] = await lpRes.json();
     if (!prestamo) return jsonError('Préstamo no encontrado', 404, request);
+    const tenantId = prestamo.despacho?.cuenta_id ?? prestamo.cliente?.cuenta_id;
+    if (tenantId && tenantId !== operador.cuenta_id) {
+      return jsonError('Préstamo no encontrado', 404, request);
+    }
 
     const cantPrestada = Number(prestamo.cantidad_prestada);
     const cantDevuelta = Number(prestamo.cantidad_devuelta || 0);
