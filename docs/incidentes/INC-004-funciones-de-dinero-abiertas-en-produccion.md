@@ -50,6 +50,7 @@ Vuelta atrás: volver a dar `EXECUTE` a `PUBLIC`. Riesgo: muy bajo, porque ning�
   - `registrar_cargo_cxc(uuid,uuid,numeric,text,uuid)` y `registrar_pago_comision(uuid,uuid,uuid)` quedaron con `anon=false`, `authenticated=false` y `service_role=true`; permisos `{postgres=X, service_role=X}`;
   - una llamada sin sesión desde internet a `registrar_pago_comision` responde **HTTP 404**, es decir, ya no es visible;
   - la versión protegida `registrar_cargo_cxc(uuid)` no se tocó.
+- Constancia en el repositorio: solicitud de cambio #83 (commit `e4500931`).
 - Riesgo: ninguno conocido, porque el programa no usa esas funciones.
 
 ## Pendiente
