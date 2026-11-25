@@ -4,7 +4,7 @@
 - **Entorno:** solo **staging** (`construacero-staging/` y base de pruebas `spupqgkdsgohxxfoxydl`). Producción no se toca en este caso.
 - **Carpeta de trabajo:** `construacero-op086`, rama `fix/op-086-inventario-staging`, creada desde `origin/main` (regla de OP-2026-083).
 - **Planes que se ejecutan:** [OP-2026-078](../plans/OP-2026-078_plan-correccion-hallazgos-auditoria-inventario-staging.md) (correcciones) y [OP-2026-084](../plans/OP-2026-084_plan-testeo-completo-inventario.md) (pruebas). Aprobados por el dueño el 2026-11-25.
-- **Estado:** 🔧 En ejecución. Fase 1 terminada.
+- **Estado:** 🔧 En ejecución. Fases 1 y 2 terminadas.
 
 ---
 
@@ -34,9 +34,21 @@
 5. **Pruebas que no estaban guardadas:** las 4 pruebas `*071.test.js` existían solo como archivos sueltos (el proyecto las ignoraba). Ahora quedan guardadas en el repositorio y apuntan a los nuevos nombres. Otras 20 pruebas sueltas de casos anteriores se copiaron solo para correrlas aquí, sin guardarlas (siguen la regla de lista permitida del proyecto).
 6. **Verificación:** `vitest`, 64 archivos y 545 pruebas OK; `vite build` OK.
 
+## Fase 2 — Puertas cerradas en staging (C1, M5)
+
+- Migración `316_staging_cierre_rpcs_dinero.sql` (reversa `…_rollback.sql`), **aplicada en staging**.
+- Ahora solo el servidor puede usar estas 7 funciones: `registrar_cargo_cxc` (las 2 versiones), `registrar_pago_comision`, `registrar_abono_cxc`, `liquidar_transportista`, `reasignar_cliente` y `calcularcomisiondespacho_238b`. La pantalla no usaba ninguna; el servidor sí usa `liquidar_transportista`, con su llave propia.
+- `tester_cleanup_cotizacion` (borrador del probador interno) ya no borra cotizaciones de otra cuenta. Si la cotización no existe, no hace nada, como antes.
+- **Verificado en vivo:** ninguna función que modifique datos queda abierta a usuarios sin sesión. Las que siguen abiertas tienen una razón:
+  - **pantalla de ingreso (antes de iniciar sesión):** `listar_usuarios_login`, `tiene_gate_configurado`, `validar_gate_acceso`;
+  - **lecturas:** `obtener_*`, `buscar_productos_hibrido`, `peso_producto_visible`;
+  - **ayudantes de reglas de acceso:** `get_rol_actual`, `get_operador_id`, `current_operator_context`, `can_read_seller`;
+  - `guarda_precios_ddl` es un vigilante interno de la base y no se puede llamar desde afuera.
+- **Hallazgo nuevo para la Fase 5:** `obtener_stock_productos`, `obtener_productos_vendedor`, `obtener_categorias_vendedor` y `buscar_productos_hibrido` leen el catálogo con permisos de dueño y **sin filtrar por empresa**.
+
 ## Pendiente
 
-- Fases 2 a 6 de OP-078 (seguridad, respaldo y restauración, facturar préstamo, separación entre empresas, detalles menores).
+- Fases 3 a 6 de OP-078 (seguridad, respaldo y restauración, facturar préstamo, separación entre empresas, detalles menores).
 - Ejecución del plan de pruebas OP-084 y su informe.
 - Publicar el servidor de staging con esta versión.
 - Anotar las migraciones `301`–`315` en el registro de migraciones de la base de staging.
