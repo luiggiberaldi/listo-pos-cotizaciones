@@ -1,7 +1,7 @@
 # OP-2026-078 — Plan para corregir en staging los hallazgos de la auditoría OP-2026-076
 
 - **Fecha:** 2026-11-25
-- **Estado:** Aprobado por el dueño el 2026-11-25 (decisiones abajo). **Fase 1 en pausa** por choque con otra sesión (ver bitácora al final).
+- **Estado:** Aprobado por el dueño el 2026-11-25. Fase 1 desbloqueada (ver bitácora: la rama guardada borra 13 archivos de `main` y hay que llevar solo lo de inventario).
 - **Entorno:** solo **staging** (`construacero-staging/` y base de pruebas `spupqgkdsgohxxfoxydl`). Producción no se toca en este plan; solo se hará **una revisión de solo lectura** al final para saber si tiene los mismos problemas.
 - **Origen:** [OP-2026-076](../operaciones/OP-2026-076_auditoria-independiente-inventario-staging.md) (fallas N36–N43 en el [registro de fallas](../operaciones/REGISTRO-FALLAS-CODIGO.md)).
 
@@ -146,3 +146,10 @@ Hoy permite fijar el stock a un número sin comprobar si hubo ventas mientras ta
 
 - **2026-11-25 · Número cambiado:** este plan se escribió como OP-2026-077, pero otra sesión había tomado ese número minutos antes (responsividad móvil, [OP-2026-077](../operaciones/OP-2026-077_fixeo-responsividad-movil-staging.md)). Pasó a **OP-2026-078**.
 - **2026-11-25 · Fase 1 en pausa:** la otra sesión está cambiando archivos en la misma carpeta, y cuatro de ellos también son parte del trabajo de inventario (`EditDespachoModal.jsx`, `OrdenCompraView.jsx`, `ProveedoresView.jsx`, `QuickQuoteFAB.jsx`). Los dos cambios están mezclados dentro de los mismos archivos sin guardar. Antes de mover nada a la rama nueva hay que acordar con el dueño cómo separarlos o si van juntos.
+- **2026-11-25 · Revisión tras el orden de la carpeta (OP-2026-083):** la otra sesión terminó. El trabajo de inventario quedó guardado, **solo en esta PC**, en la rama `wip/op-075-inventario-staging` (commit `415db31a`), apoyada sobre `main` (`a186b391`). Pero esa rama es una "foto" de la carpeta vieja, no solo los cambios de inventario: además de agregarlos, **borra 13 archivos que `main` sí tiene**, entre ellos:
+  - la edición del vendedor de OP-070 en staging (`construacero-staging/src/utils/edicionVendedorDespacho.js` y la migración `311_staging_vendedor_edita_despacho_pendiente.sql` con su rollback);
+  - la limpieza de cotizaciones de OP-069 (`api/lib/limpiezaCotizaciones.js`, sus pruebas y `cotizacionesGuardarOp069.test.js`);
+  - el detalle de stock comprometido (`StockComprometidoDetalle.jsx`, `useStockComprometido.js`);
+  - `ClienteRow.jsx`, `CotizacionRow.jsx`, `DespachoRow.jsx` y `verify-op042-cxc-staging.mjs` (falta confirmar si su borrado era intencional por OP-079).
+  
+  **Consecuencia:** si esa rama se uniera tal cual, staging perdería OP-069 y OP-070. La Fase 1 debe tomar de esa rama **solo los archivos de inventario** (migraciones 310–313 renumeradas, handlers, pantallas, pruebas `*071`, `idempotencyKey.js`, `cargaDuplicada.js`) y aplicarlos sobre `main` actualizado, sin los borrados. Los 4 archivos que antes se mezclaban con la sesión de responsividad ya no chocan: el arreglo móvil se publicó por separado (solicitudes #77 y #79). **La Fase 1 queda desbloqueada.**
