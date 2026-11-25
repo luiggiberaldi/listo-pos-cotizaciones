@@ -1,6 +1,6 @@
 # OP-2026-064 — Anular un despacho "Esperando aprobación" ya no pregunta por dinero
 
-**Estado:** arreglo preparado en el código y probado (1208 pruebas en verde, compilación correcta). **No publicado.** Sin commit ni solicitud de cambio, a la espera de la aprobación del dueño. Falla registrada: **N27** en [REGISTRO-FALLAS-CODIGO.md](REGISTRO-FALLAS-CODIGO.md).
+**Estado:** **subido a main el 2026-11-24** (commit `18488ec6`, directo a main por orden del dueño, sin solicitud de cambio). 1208 pruebas en verde y compilación correcta. Falta comprobar en pantalla que la versión publicada ya no pregunta por el dinero. Falla registrada: **N27** en [REGISTRO-FALLAS-CODIGO.md](REGISTRO-FALLAS-CODIGO.md).
 
 ## En resumen
 
