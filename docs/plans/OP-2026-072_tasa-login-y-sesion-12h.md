@@ -1,6 +1,6 @@
 # OP-2026-072 — Tasa en el login y sesión con PIN persistente por 12 horas
 
-**Fecha:** 2026-11-24 · **Estado:** ✅ **Listo para producción (aplicado y probado en el código principal y en staging)**. Falta únicamente aprobar su publicación al servidor en vivo (solicitud de cambio / despliegue a `main`). No requiere cambios en la base de datos.
+**Fecha:** 2026-11-24 · **Estado:** ✅ **Publicado en producción (2026-11-24)** — Solicitud #75, commit `cc5b0e4c`, unión a `main` `a279b3f2`. No requiere cambios en la base de datos.
 
 ## En resumen
 
@@ -125,7 +125,14 @@ Tras tu aprobación, se portaron los mismos cambios al código principal (`src/`
 - **Revisión de calidad (`eslint`):** 0 errores nuevos en los archivos creados o modificados (solo 1 aviso previo sin relación en otra línea de `LoginPage.jsx`).
 - **Vista previa visual del paquete compilado en navegador (con datos simulados, sin tocar producción):** barra de tasas visible arriba idéntica al sistema tras el PIN tanto en PC (`1280×800`) como en celular (`375×812`), sin solapamientos sobre el logo ni el cuadro "¿Quién está operando?".
 
-### Qué falta para que lo vean los usuarios
+### Despliegue en producción y verificación en vivo (2026-11-24)
 
-1. Unir la rama limpia `feat/op-072-tasa-login-sesion-12h` a `main` para disparar la publicación automática en Vercel y Cloudflare Worker.
-2. No se requiere aplicar ningún archivo SQL en Supabase ni paso adicional tras el despliegue.
+1. **Solicitud de cambio #75** (`feat/op-072-tasa-login-sesion-12h`, commit `cc5b0e4c`) unida a `main` en `a279b3f2`.
+2. **Cloudflare Worker (`Deploy Worker a Cloudflare`, ejecución `45543668259`):** completado en verde (58 s).
+3. **Vercel (producción):** despliegue en `success` sobre `a279b3f2`.
+4. **Comprobaciones reales en el sitio publicado (`listo-pos-cotizaciones.vercel.app` y Worker):**
+   - `GET /` → `200 OK`.
+   - `GET /api/ping` → `200 OK` (`ok`).
+   - `GET /api/rates` → `200 OK`.
+   - `GET /api/auth/current-operator` y `GET /api/auth/tasa-config` sin sesión → `401 No autenticado` (confirma que ambas rutas nuevas están activas y protegidas; pendiente únicamente probar el inicio de sesión de 12 h desde un usuario real en el navegador de producción).
+5. **Base de datos:** no requirió ningún cambio ni archivo SQL nuevo (`operator_sessions` de la migración 241 ya trabaja a 12 horas).

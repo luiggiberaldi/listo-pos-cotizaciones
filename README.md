@@ -174,7 +174,7 @@ Cuando se publiquen, así funcionará:
 
 ## Acceso con PIN y tasas en el inicio (OP-2026-072)
 
-> **Listo para publicar en `main`** (ver [OP-2026-072](docs/plans/OP-2026-072_tasa-login-y-sesion-12h.md)).
+> **Publicado en producción el 2026-11-24** (solicitud #75; ver [OP-2026-072](docs/plans/OP-2026-072_tasa-login-y-sesion-12h.md)).
 
 - **Tasas visibles antes del PIN:** la barra superior de la pantalla de inicio muestra las mismas tasas del encabezado interno (**BCV**, **EUR**, **USDT** y tasa activa `USDT` o `Manual`) en modo solo lectura.
 - **Sesión de 12 horas automática:** tras ingresar el PIN, el acceso queda guardado en el equipo durante **12 horas** (sobrevive recargas, cambios de pestaña y cierre/reapertura de la app o navegador) hasta vencer o tocar **Cerrar sesión**.
