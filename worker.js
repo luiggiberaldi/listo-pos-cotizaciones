@@ -20,7 +20,7 @@ import { handleLogFromClient, handleGetLogs, handleGetLogStats, handleDownloadLo
 import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/handlers/audit.js'
 import { handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
 import { handleRegistrarAbono, handleRevertirAbono, handleMovimientosBorradosCliente, handleRevertirCargoCxc, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
-import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
+import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin, handleCurrentOperator, handleGetTasaConfig } from './api/handlers/auth-operators.js'
 import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleListarLotesPrecios, handleRestaurarLotePrecios, handleClearInventory, handlePdfTemp, handleActualizarProductoMetadatos, handleCrearProductoConKardex, handleActualizarProductoConKardex, handleBorrarProductoConKardex } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
 import { handleCrearDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleEditarCodigosExternos, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho, handlePreviewDevolucionCxc, handlePagosEnJuegoDespacho } from './api/handlers/despachos.js'
@@ -564,6 +564,12 @@ const worker = {
     }
     if (url.pathname === '/api/auth/super-admin' && request.method === 'POST') {
       return handleSuperAdmin(request, env);
+    }
+    if (url.pathname === '/api/auth/current-operator' && request.method === 'GET') {
+      return handleCurrentOperator(request, env);
+    }
+    if (url.pathname === '/api/auth/tasa-config' && request.method === 'GET') {
+      return handleGetTasaConfig(request, env);
     }
 
     // ── API: subir PDF temporal (para WhatsApp) ─────────────────────────
