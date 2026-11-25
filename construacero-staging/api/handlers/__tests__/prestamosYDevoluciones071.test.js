@@ -215,38 +215,71 @@ describe('OP-2026-071 Fase 2 (N27 préstamos, N35 bloqueo devolución parcial, N
     expect(rpcCalls).toHaveLength(0)
   })
 
-  it('N27: handleFacturarPrestamo carga deuda en CxC sin modificar stock_actual ni escribir movimientos de inventario', async () => {
-    const touchedUrls = []
+  it('N27/A2: handleFacturarPrestamo usa la función atómica con sello único y tasa del día, sin tocar inventario', async () => {
+    const touched = []
     vi.stubGlobal('fetch', vi.fn(async (url, opts) => {
-      touchedUrls.push({ url, method: opts?.method || 'GET' })
-      if (url.includes('/rest/v1/cliente_prestamos?') && (opts?.method || 'GET') === 'GET') {
-        return mockJson([{
-          id: PRESTAMO_ID,
-          cliente_id: CLIENTE_ID,
-          despacho_id: DESPACHO_ID,
-          producto_id: PROD_PRESTAMO_ID,
-          cantidad_prestada: 5,
-          cantidad_devuelta: 1,
-          cantidad_facturada: 0,
-          estado: 'devuelto_parcial',
-          producto: { id: PROD_PRESTAMO_ID, precio_usd: 20, nombre: 'Puntal', unidad: 'und' },
-          despacho: { numero: 703, cuenta_id: CUENTA_ID },
-          cliente: { id: CLIENTE_ID, cuenta_id: CUENTA_ID },
-        }])
+      touched.push({ url, method: opts?.method || 'GET', body: opts?.body ? JSON.parse(opts.body) : null })
+      if (url.includes('/rest/v1/rpc/facturar_prestamo_atomico')) {
+        return mockJson({
+          ok: true, prestamo_id: PRESTAMO_ID, cliente_id: CLIENTE_ID, despacho_id: DESPACHO_ID,
+          cargo_id: '88888888-8888-4888-8888-888888888888', cantidad: 2, precio_unit_usd: 18.5,
+          monto_usd: 37, tasa_bcv: 250.5, monto_bs: 9268.5, cantidad_facturada: 2,
+          estado: 'devuelto_parcial', producto_nombre: 'Puntal', unidad: 'und', despacho_ref: 'DES-00703',
+        })
       }
-      if (url.includes('/rest/v1/clientes?')) return mockJson([{ saldo_pendiente: 0 }])
       return mockJson({})
     }))
 
     const res = await handleFacturarPrestamo(makeReq('/api/clientes/facturar-prestamo', {
-      prestamoId: PRESTAMO_ID,
-      cantidad: 2,
+      prestamoId: PRESTAMO_ID, cantidad: 2, tasaBcv: 250.5,
     }), ENV)
+    const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(touchedUrls.some(t => t.url.includes('/rest/v1/productos'))).toBe(false)
-    expect(touchedUrls.some(t => t.url.includes('/rest/v1/inventario_movimientos'))).toBe(false)
-    expect(touchedUrls.some(t => t.url.includes('/rest/v1/cuentas_por_cobrar') && t.method === 'POST')).toBe(true)
+    expect(body.cargo).toBe(37)
+    expect(body.nuevoEstado).toBe('devuelto_parcial')
+    const rpc = touched.find(t => t.url.includes('/rpc/facturar_prestamo_atomico'))
+    expect(rpc.body).toMatchObject({
+      p_cuenta_id: CUENTA_ID, p_prestamo_id: PRESTAMO_ID, p_cantidad: 2,
+      p_usuario_id: ACTOR_ID, p_tasa_bcv: 250.5, p_idempotency_key: IDEM_KEY,
+    })
+    // El dinero lo mueve solo la función atómica: ni POST directo a CxC ni PATCH directo al préstamo.
+    expect(touched.some(t => t.url.includes('/rest/v1/cuentas_por_cobrar'))).toBe(false)
+    expect(touched.some(t => t.url.includes('/rest/v1/cliente_prestamos') && t.method === 'PATCH')).toBe(false)
+    expect(touched.some(t => t.url.includes('/rest/v1/productos'))).toBe(false)
+    expect(touched.some(t => t.url.includes('/rest/v1/inventario_movimientos'))).toBe(false)
+  })
+
+  it('A2: handleFacturarPrestamo exige tasa del día y sello único', async () => {
+    const f = vi.fn(async () => mockJson({}))
+    vi.stubGlobal('fetch', f)
+    const sinTasa = await handleFacturarPrestamo(makeReq('/x', { prestamoId: PRESTAMO_ID, cantidad: 1 }), ENV)
+    expect(sinTasa.status).toBe(400)
+    const sinClave = await handleFacturarPrestamo(new Request('https://staging.erp.test/x', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prestamoId: PRESTAMO_ID, cantidad: 1, tasaBcv: 250 }),
+    }), ENV)
+    expect(sinClave.status).toBe(400)
+    expect(f).not.toHaveBeenCalled()
+  })
+
+  it('A2: reenvío con la misma clave no repite avisos y la cantidad mayor a lo pendiente responde 409', async () => {
+    const touched = []
+    vi.stubGlobal('fetch', vi.fn(async (url, opts) => {
+      touched.push(url)
+      if (url.includes('/rpc/facturar_prestamo_atomico')) {
+        return mockJson({ ok: true, idempotent: true, cliente_id: CLIENTE_ID, cantidad: 2, monto_usd: 37, estado: 'pendiente', cantidad_facturada: 2 })
+      }
+      return mockJson({})
+    }))
+    const replay = await handleFacturarPrestamo(makeReq('/x', { prestamoId: PRESTAMO_ID, cantidad: 2, tasaBcv: 250 }), ENV)
+    expect(replay.status).toBe(200)
+    expect((await replay.json()).idempotent).toBe(true)
+    expect(touched.some(u => u.includes('seguimiento_operativo'))).toBe(false)
+
+    vi.stubGlobal('fetch', vi.fn(async () => mockJson({ message: 'CANTIDAD_SUPERA_PENDIENTE_PRESTAMO: pendiente 1' }, 400)))
+    const excede = await handleFacturarPrestamo(makeReq('/x', { prestamoId: PRESTAMO_ID, cantidad: 9, tasaBcv: 250 }), ENV)
+    expect(excede.status).toBe(409)
   })
 
   it('Contrato SQL 311: unifica stock de préstamos en despachos, bloquea préstamo en devolución parcial y agrupa intercambios', () => {

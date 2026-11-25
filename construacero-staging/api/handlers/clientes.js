@@ -902,119 +902,81 @@ export async function handleFacturarPrestamo(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { prestamoId, cantidad } = body;
+  const { prestamoId, cantidad, tasaBcv } = body || {};
   const cant = Number(cantidad);
+  const tasa = Number(tasaBcv);
   if (!prestamoId || !isValidUuid(prestamoId)) return jsonError('prestamoId inválido', 400, request);
   if (isNaN(cant) || cant <= 0) return jsonError('Cantidad a facturar inválida', 400, request);
+  if (!Number.isFinite(tasa) || tasa <= 0) return jsonError('Falta la tasa BCV del día para facturar el préstamo', 400, request);
+
+  // OP-2026-086 (A2): el mismo envío repetido (doble clic, reintento de red) usa la misma clave
+  // y la base devuelve el mismo resultado sin crear un segundo cargo.
+  const idempotencyKey = (typeof body?.idempotencyKey === 'string' ? body.idempotencyKey : (request.headers.get('Idempotency-Key') || '')).trim();
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key obligatoria e inválida', 400, request);
 
   try {
-    // 1. Obtener registro de préstamo actual (validando tenant)
-    const lpRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}&select=*,producto:productos(id,precio_usd,nombre,unidad),despacho:notas_despacho(numero,cuenta_id),cliente:clientes(id,cuenta_id)`,
-      { headers }
-    );
-    const [prestamo] = await lpRes.json();
-    if (!prestamo) return jsonError('Préstamo no encontrado', 404, request);
-    const tenantId = prestamo.despacho?.cuenta_id ?? prestamo.cliente?.cuenta_id;
-    if (tenantId && tenantId !== operador.cuenta_id) {
-      return jsonError('Préstamo no encontrado', 404, request);
-    }
-
-    const cantPrestada = Number(prestamo.cantidad_prestada);
-    const cantDevuelta = Number(prestamo.cantidad_devuelta || 0);
-    const cantFacturadaActual = Number(prestamo.cantidad_facturada || 0);
-    const restante = Math.max(0, cantPrestada - cantDevuelta - cantFacturadaActual);
-
-    if (cant > restante + 0.0001) {
-      return jsonError(`La cantidad ingresada (${cant}) supera el saldo pendiente del préstamo (${restante})`, 400, request);
-    }
-
-    const nuevaCantFacturada = cantFacturadaActual + cant;
-    let nuevoEstado = 'pendiente';
-    if (cantDevuelta + nuevaCantFacturada >= cantPrestada - 0.0001) {
-      nuevoEstado = 'facturado';
-    }
-
-    const precioUnitario = Number(prestamo.producto?.precio_usd || 0);
-    const totalCargo = Math.round((cant * precioUnitario) * 100) / 100;
-
-    if (totalCargo <= 0) {
-      return jsonError('El costo del artículo es cero. No se puede facturar un préstamo sin valor de referencia.', 400, request);
-    }
-
-    // 2. Obtener saldo pendiente actual del cliente
-    const cliRes = await fetch(`${env.SUPABASE_URL}/rest/v1/clientes?id=eq.${prestamo.cliente_id}&select=saldo_pendiente`, { headers });
-    const [cliente] = await cliRes.json();
-    const saldoActual = Number(cliente?.saldo_pendiente || 0);
-    const nuevoSaldo = saldoActual + totalCargo;
-
-    // 3. Crear cargo en Cuentas por Cobrar (CxC)
-    const despachoNum = prestamo.despacho?.numero ? `DES-${String(prestamo.despacho.numero).padStart(5, '0')}` : 'Préstamo';
-    const cargoBody = {
-      cliente_id: prestamo.cliente_id,
-      despacho_id: prestamo.despacho_id,
-      tipo: 'cargo',
-      monto_usd: totalCargo,
-      saldo_usd: nuevoSaldo,
-      descripcion: `Facturación de préstamo de ${cant} und ${prestamo.producto?.nombre || 'Producto'} (Orig: ${despachoNum})`,
-      registrado_por: operador.id
-    };
-    const cxcPost = await fetch(`${env.SUPABASE_URL}/rest/v1/cuentas_por_cobrar`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify(cargoBody)
-    });
-    if (!cxcPost.ok) {
-      const err = await cxcPost.text();
-      return jsonError(`Error al crear cargo de cuentas por cobrar: ${err}`, 500, request);
-    }
-
-    // 4. Actualizar préstamo a facturado
-    const patchLp = await fetch(`${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        cantidad_facturada: nuevaCantFacturada,
-        estado: nuevoEstado
-      })
-    });
-    if (!patchLp.ok) {
-      const err = await patchLp.text();
-      return jsonError(`Error al actualizar préstamo: ${err}`, 500, request);
-    }
-
-    // 5. Sincronizar saldo de clientes
-    await recalcularSaldoPendienteCliente(prestamo.cliente_id, env, headers);
-
-    // 6. Registrar en seguimiento_operativo
-    const timelinesPayload = {
-      cliente_id: prestamo.cliente_id,
-      despacho_id: prestamo.despacho_id,
-      usuario_id: operador.id,
-      tipo: 'seguimiento',
-      prioridad: 'informativa',
-      titulo: 'Conversión de préstamo a venta',
-      contenido: `Se facturaron y cargaron a cuenta ${cant} ${prestamo.producto?.unidad || 'und'} de "${prestamo.producto?.nombre || 'Producto'}" por un total de $${totalCargo.toFixed(2)} USD.`,
-      imagenes: [],
-      fijada: false,
-      cuenta_id: user.id
-    };
-    await fetch(`${env.SUPABASE_URL}/rest/v1/seguimiento_operativo`, {
+    // Todo ocurre en una sola transacción de la base: candado del préstamo, precio del despacho
+    // original (decisión del dueño: mismo precio en dólares, tasa del día anotada), cargo en CxC
+    // y actualización del préstamo. No mueve inventario (N27).
+    const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/facturar_prestamo_atomico`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(timelinesPayload)
+      body: JSON.stringify({
+        p_cuenta_id: operador.cuenta_id,
+        p_prestamo_id: prestamoId,
+        p_cantidad: cant,
+        p_usuario_id: operador.actor_id || operador.id,
+        p_tasa_bcv: tasa,
+        p_idempotency_key: idempotencyKey,
+      }),
     });
+    const text = await rpcRes.text();
+    let r = null;
+    try { r = text ? JSON.parse(text) : null; } catch { r = null; }
+    if (!rpcRes.ok) {
+      const msg = r?.message || text || `HTTP ${rpcRes.status}`;
+      if (msg.includes('PRESTAMO_NO_ENCONTRADO')) return jsonError('Préstamo no encontrado', 404, request);
+      if (msg.includes('CANTIDAD_SUPERA_PENDIENTE_PRESTAMO')) return jsonError('La cantidad supera lo que queda pendiente del préstamo (puede que otra persona lo haya movido); recarga la ficha', 409, request);
+      if (msg.includes('PRESTAMO_SIN_PRECIO')) return jsonError('La línea del despacho no tiene precio. No se puede facturar un préstamo sin valor de referencia.', 400, request);
+      if (msg.includes('ROL_NO_AUTORIZADO')) return jsonError('Solo administración o jefes pueden facturar préstamos', 403, request);
+      if (msg.includes('IDEMPOTENCY_KEY_REUTILIZADA')) return jsonError('Idempotency-Key ya fue utilizada para otra operación.', 409, request);
+      if (msg.includes('OPERACION_IDEMPOTENTE_SIN_RESULTADO')) return jsonError('La facturación está en proceso; espera unos segundos y recarga', 409, request);
+      return jsonError(`No se pudo facturar el préstamo: ${msg}`, 400, request);
+    }
+    if (!r?.ok) return jsonError('La base de datos no confirmó la facturación', 500, request);
 
-    // 7. Auditoría
-    await registrarAuditoria(env, headers, {
-      usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
-      categoria: 'FINANZAS', accion: 'FACTURAR_PRESTAMO',
-      descripcion: `Facturación de préstamo #${prestamoId}: ${cant} und de ${prestamo.producto?.nombre} por $${totalCargo}`,
-      entidadTipo: 'cliente', entidadId: prestamo.cliente_id,
-      meta: { prestamo_id: prestamoId, cantidad: cant, monto: totalCargo, estado_nuevo: nuevoEstado }, ip
-    });
+    // Solo la primera vez: aviso en el seguimiento y auditoría (no mueven dinero).
+    if (r.idempotent !== true) {
+      try {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/seguimiento_operativo`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            cliente_id: r.cliente_id,
+            despacho_id: r.despacho_id,
+            usuario_id: operador.id,
+            tipo: 'seguimiento',
+            prioridad: 'informativa',
+            titulo: 'Conversión de préstamo a venta',
+            contenido: `Se facturaron y cargaron a cuenta ${r.cantidad} ${r.unidad || 'und'} de "${r.producto_nombre || 'Producto'}" a $${Number(r.precio_unit_usd).toFixed(2)} (precio del despacho ${r.despacho_ref}) por un total de $${Number(r.monto_usd).toFixed(2)} USD · tasa BCV del día ${r.tasa_bcv} (≈ Bs ${Number(r.monto_bs).toFixed(2)}).`,
+            imagenes: [],
+            fijada: false,
+            cuenta_id: user.id
+          })
+        });
+      } catch { /* aviso opcional */ }
+      try {
+        await registrarAuditoria(env, headers, {
+          usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
+          categoria: 'FINANZAS', accion: 'FACTURAR_PRESTAMO',
+          descripcion: `Facturación de préstamo #${prestamoId}: ${r.cantidad} ${r.unidad || 'und'} de ${r.producto_nombre} por $${r.monto_usd} (tasa ${r.tasa_bcv})`,
+          entidadTipo: 'cliente', entidadId: r.cliente_id,
+          meta: { prestamo_id: prestamoId, cantidad: r.cantidad, monto: r.monto_usd, precio_unit_usd: r.precio_unit_usd, tasa_bcv: r.tasa_bcv, monto_bs: r.monto_bs, estado_nuevo: r.estado, cargo_id: r.cargo_id, idempotency_key: idempotencyKey }, ip
+        });
+      } catch { /* auditoría best-effort */ }
+    }
 
-    return json({ ok: true, nuevoEstado, cantidad_facturada: nuevaCantFacturada, cargo: totalCargo }, 200, request);
+    return json({ ok: true, nuevoEstado: r.estado, cantidad_facturada: r.cantidad_facturada, cargo: r.monto_usd, precio_unit_usd: r.precio_unit_usd, tasa_bcv: r.tasa_bcv, monto_bs: r.monto_bs, idempotent: r.idempotent === true }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al facturar préstamo', 500, request);
   }

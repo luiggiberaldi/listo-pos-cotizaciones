@@ -14,6 +14,8 @@ import { showToast } from '../ui/Toast'
 import { apiUrl } from '../../services/apiBase'
 import { authFetch } from '../../services/authFetch'
 import ConfirmModal from '../ui/ConfirmModal'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
+import { crearGeneradorClaveIdempotente } from '../../utils/idempotencyKey'
 
 function fmtFecha(iso) {
   if (!iso) return '—'
@@ -895,6 +897,10 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const [busquedaPrestamos, setBusquedaPrestamos] = useState('')
   const [activeAction, setActiveAction] = useState(null)
   const [actionQty, setActionQty] = useState('')
+  // OP-2026-086: tasa del día para facturar préstamos y sello único por envío (doble clic / reintento)
+  const { tasaBcv } = useTasaCambio()
+  const claveAccionPrestamoRef = useRef(null)
+  if (!claveAccionPrestamoRef.current) claveAccionPrestamoRef.current = crearGeneradorClaveIdempotente()
   const [actionLoading, setActionLoading] = useState(false)
 
   const [cargadoUnaVez, setCargadoUnaVez] = useState(false)
@@ -934,20 +940,33 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
     setActionLoading(true)
     try {
       const url = type === 'devolver' ? '/api/clientes/prestamos/devolver' : '/api/clientes/prestamos/facturar'
+      const tasa = Number(tasaBcv)
+      if (type === 'facturar' && !(tasa > 0)) {
+        showToast('No se pudo obtener la tasa BCV del día. Recarga e intenta de nuevo.', 'error')
+        return
+      }
+      const firma = JSON.stringify({ type, prestamoId: prestamo.id, cantidad: qty })
+      const idempotencyKey = claveAccionPrestamoRef.current.resolver(firma)
       const res = await authFetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey
         },
         body: JSON.stringify({
           prestamoId: prestamo.id,
-          cantidad: qty
+          cantidad: qty,
+          idempotencyKey,
+          ...(type === 'facturar' ? { tasaBcv: tasa } : {})
         })
       })
       const result = await res.json()
       if (!res.ok) {
+        // Error de negocio: se permite corregir y reenviar con una clave nueva.
+        if ([400, 403, 404, 409].includes(res.status)) claveAccionPrestamoRef.current.limpiar(firma)
         showToast(result.error || 'Error al procesar la acción', 'error')
       } else {
+        claveAccionPrestamoRef.current.limpiar(firma)
         showToast(type === 'devolver' ? 'Devolución física registrada con éxito ✓' : 'Conversión a venta registrada con éxito ✓', 'success')
         setActiveAction(null)
         setActionQty('')

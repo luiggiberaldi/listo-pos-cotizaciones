@@ -4,7 +4,7 @@
 - **Entorno:** solo **staging** (`construacero-staging/` y base de pruebas `spupqgkdsgohxxfoxydl`). Producción no se toca en este caso.
 - **Carpeta de trabajo:** `construacero-op086`, rama `fix/op-086-inventario-staging`, creada desde `origin/main` (regla de OP-2026-083).
 - **Planes que se ejecutan:** [OP-2026-078](../plans/OP-2026-078_plan-correccion-hallazgos-auditoria-inventario-staging.md) (correcciones) y [OP-2026-084](../plans/OP-2026-084_plan-testeo-completo-inventario.md) (pruebas). Aprobados por el dueño el 2026-11-25.
-- **Estado:** 🔧 En ejecución. Fases 1, 2 y 5 terminadas.
+- **Estado:** 🔧 En ejecución. Fases 1, 2, 4 y 5 terminadas.
 
 ---
 
@@ -63,10 +63,37 @@ Cambios: migración `317_staging_aislamiento_cuentas.sql` (reversa `…_rollback
 
 **Verificado en vivo** (simulando la sesión de la empresa principal): `obtener_stock_productos` devuelve 11 productos (los propios) en vez de 458, y `obtener_productos_vendedor` devuelve 11. Ninguna fila tenía la empresa vacía, así que la regla no esconde datos que se deban ver.
 
+## Fase 4 — Facturar préstamo sin cobro doble (A2 y Decisión 1 del dueño)
+
+- Migración `318_staging_facturar_prestamo_atomico.sql` (reversa `…_rollback.sql`), **aplicada en staging**. Función nueva `facturar_prestamo_atomico`, que solo puede usar el servidor.
+- **En un solo paso, todo o nada:**
+  - bloquea el préstamo;
+  - valida lo pendiente;
+  - calcula el **precio en dólares de la línea del despacho original**, con su descuento por porcentaje y en dólares;
+  - redondea el monto a 2 decimales;
+  - anota la **tasa BCV del día** y el equivalente en bolívares en la descripción del cargo;
+  - crea el cargo en cuentas por cobrar con sello único;
+  - actualiza el préstamo con la misma regla de estados que el resto del sistema.
+  
+  No mueve inventario.
+- **Servidor** (`clientes.js`, `handleFacturarPrestamo`): ahora solo llama a esa función. Exige tasa del día y sello único, y traduce los errores a mensajes claros (409 si otra persona movió el préstamo).
+- **Pantalla** (`FichaClienteModal.jsx`): envía la tasa del día (`useTasaCambio`) y un sello único que se reutiliza ante doble clic o corte de conexión, también al **devolver** un préstamo.
+- **Prueba en la base real** (dentro de una transacción que se deshizo al final):
+
+  | Caso | Resultado |
+  |---|---|
+  | Facturar 2 unidades de un préstamo de 15 | Cargo de $195,82 (2 × $97,91 del despacho DES-00665) y tasa 250,5 (≈ Bs 49 052,91) |
+  | Repetir con la misma clave | Mismo cargo, 1 solo cobro |
+  | Kardex | Sin cambios |
+  | Pedir 99 | Rechazado: "pendiente 13" |
+  | Intentar desde otra empresa | Rechazado |
+
+- **Pruebas automáticas:** se reemplazó la prueba vieja (que validaba el cobro en pasos separados) por 3 pruebas nuevas.
+
 ## Pendiente
 
 - Registros técnicos sin columna de empresa (`system_logs`, `system_log_analysis`).
-- Fases 3, 4 y 6 de OP-078 (seguridad, respaldo y restauración, facturar préstamo, separación entre empresas, detalles menores).
+- Fases 3 y 6 de OP-078 (seguridad, respaldo y restauración, facturar préstamo, separación entre empresas, detalles menores).
 - Ejecución del plan de pruebas OP-084 y su informe.
 - Publicar el servidor de staging con esta versión.
 - Anotar las migraciones `301`–`315` en el registro de migraciones de la base de staging.
