@@ -6,7 +6,7 @@ import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 import { calcularDescuentoValido } from '../lib/descuentoUtils.js'
 import { calcularComisionConDescuentos, reconciliarComisionConDescuento } from '../lib/comisionUtils.js'
 import { tieneZonaHoraria } from '../lib/fechaEntrega.js'
-import { esRolVendedor, validarEdicionVendedor } from '../lib/edicionVendedorDespacho.js'
+import { esRolVendedor, validarEdicionVendedor } from '../../src/utils/edicionVendedorDespacho.js'
 import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
 
 function resolverIdempotencyKey(request, body) {
@@ -2045,7 +2045,7 @@ export async function handleEditarItemsDespacho(request, env) {
 
   // ── 1. Solo administración o jefes pueden editar ítems de despacho ──────────
   // OP-2026-070: el vendedor también puede, solo en SUS despachos pendientes, con precios de
-  // lista y sin tocar pagos (reglas en api/lib/edicionVendedorDespacho.js y en la base).
+  // lista y sin tocar pagos (reglas en src/utils/edicionVendedorDespacho.js y en la base).
   if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol) && !esRolVendedor(operador.rol)) {
     return jsonError('Solo administración puede editar ítems del despacho', 403, request);
   }

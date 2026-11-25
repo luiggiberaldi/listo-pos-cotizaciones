@@ -158,7 +158,7 @@ Cuando se publiquen, así funcionará:
 - **Qué puede cambiar:** agregar, quitar y cambiar cantidades. El precio se elige de una lista con los **precios de lista** (P1, P2 y P3 habilitados, con su recargo si es vendedor externo) o el precio que ya tenía.
 - **Qué no puede:** escribir precios a mano, agregar artículos externos o préstamos, poner descuentos, elegir o cambiar pagos, ni editar despachos ajenos o ya aprobados.
 - **Pagos:** si el despacho tiene un solo método de pago, su monto se ajusta solo al nuevo total (mismo método). Con pagos combinados, adelantos o saldo a favor, el vendedor no puede editar y debe pedirlo a administración.
-- Lo controlan la pantalla, el servidor (`api/lib/edicionVendedorDespacho.js`) y la base de datos (`editar_despacho_profundidad`, migración 311). El supervisor sigue aprobando después.
+- Lo controlan la pantalla, el servidor (`src/utils/edicionVendedorDespacho.js`) y la base de datos (`editar_despacho_profundidad`, migración 311). El supervisor sigue aprobando después.
 
 ## Documentación interna
 

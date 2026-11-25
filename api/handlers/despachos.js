@@ -7,7 +7,7 @@ import { getCommissionablePaymentSplit, isDonationPayment } from '../../src/util
 import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
 import { pendienteDeDespacho, pendienteSoloEnlazado, abonosQueCubrenDespacho, abonoAnulableEnDevolucion } from '../../src/utils/cxcReparto.js'
 import { valorDevolucionAcreditable } from '../../src/utils/donacionDevolucion.js'
-import { esRolVendedor, validarEdicionVendedor } from '../lib/edicionVendedorDespacho.js'
+import { esRolVendedor, validarEdicionVendedor } from '../../src/utils/edicionVendedorDespacho.js'
 import { errorCruceSinExplicacion } from '../../src/utils/formaPagoReglas.js'
 
 function resolverIdempotencyKey(request, body) {
@@ -1727,7 +1727,7 @@ export async function handleEditarItemsDespacho(request, env) {
   // La edición profunda queda reservada a administración, jefatura y desarrollo.
   // El estado se valida nuevamente abajo y en el RPC.
   // OP-2026-070: el vendedor también puede, solo en SUS despachos pendientes, con precios de
-  // lista y sin tocar pagos (reglas en api/lib/edicionVendedorDespacho.js y en la base).
+  // lista y sin tocar pagos (reglas en src/utils/edicionVendedorDespacho.js y en la base).
   if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol) && !esRolVendedor(operador.rol)) {
     return jsonError('No tienes permiso para editar profundamente el despacho', 403, request);
   }

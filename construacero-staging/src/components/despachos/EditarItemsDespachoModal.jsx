@@ -16,7 +16,7 @@ import { showToast } from '../ui/Toast'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 // OP-2026-070: mismas reglas que aplica el servidor al vendedor (precios de lista y pagos)
-import { preciosPermitidos, planDePagoSimple } from '../../../api/lib/edicionVendedorDespacho.js'
+import { preciosPermitidos, planDePagoSimple } from '../../utils/edicionVendedorDespacho.js'
 
 export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, modoVendedor = false }) {
   const { perfil } = useAuthStore()

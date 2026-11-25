@@ -24,14 +24,14 @@ Pregunta: "En un despacho suyo que espera aprobación, ¿qué puede cambiar el v
 | Capa | Archivo | Cambio |
 |---|---|---|
 | Base de datos | `supabase/migrations/311_vendedor_edita_despacho_pendiente.sql` (staging: `construacero-staging/supabase/migrations/311_staging_…`) y su `_rollback` | `editar_despacho_profundidad` también acepta `vendedor` y `vendedor_sin_comision`, pero solo si el despacho es **suyo** y está **pendiente**. Hecha a partir de la definición viva, idéntica en producción y staging; el resto de la función no cambia |
-| Servidor | [`api/lib/edicionVendedorDespacho.js`](../../api/lib/edicionVendedorDespacho.js) (nuevo, igual en staging) y [`api/handlers/despachos.js`](../../api/handlers/despachos.js) | Para el vendedor: despacho suyo y pendiente; precios de lista (P1/P2/P3 habilitados, con su recargo de externo y el descuento de cliente personal) o el precio que ya tenía; artículos externos y préstamos solo los que ya estaban; sin descuentos nuevos; pagos solo con el mismo método y el monto igual al nuevo total; nunca "qué hacer con pagos ya hechos" |
+| Servidor | [`src/utils/edicionVendedorDespacho.js`](../../src/utils/edicionVendedorDespacho.js) (nuevo, igual en staging) y [`api/handlers/despachos.js`](../../api/handlers/despachos.js) | Para el vendedor: despacho suyo y pendiente; precios de lista (P1/P2/P3 habilitados, con su recargo de externo y el descuento de cliente personal) o el precio que ya tenía; artículos externos y préstamos solo los que ya estaban; sin descuentos nuevos; pagos solo con el mismo método y el monto igual al nuevo total; nunca "qué hacer con pagos ya hechos" |
 | Pantalla | [`DetalleModal.jsx`](../../src/components/ui/DetalleModal.jsx), [`EditarItemsDespachoModal.jsx`](../../src/components/despachos/EditarItemsDespachoModal.jsx) | Botón "Editar productos" para el vendedor en sus despachos pendientes. "Modo vendedor": precio como lista desplegable (sale de la misma función que usa el servidor), sin botón de artículo manual, sin la sección de pagos (en su lugar, un aviso) y pagos ajustados solos al guardar |
 
 Administración, jefe y desarrollador: **sin cambios**.
 
 ## Pruebas
 
-- **Automáticas:** 22 pruebas nuevas de las reglas (`api/lib/__tests__/edicionVendedorDespacho.test.js`). Producción: **1.230 de 1.230**. Staging: **277 de 277**. La app se construye. Revisión de estilo sin errores nuevos.
+- **Automáticas:** 22 pruebas nuevas de las reglas (`src/utils/__tests__/edicionVendedorDespacho.test.js`). Producción: **1.230 de 1.230**. Staging: **277 de 277**. La app se construye. Revisión de estilo sin errores nuevos.
 - **En pantalla (staging local, como "Vendedor E2E Staging"):**
   1. Se creó el despacho DES-04907 desde la cotización COT-04907, pagado con "Efectivo $" ($0,35), en estado "Esperando aprobación".
   2. En su ficha apareció **Editar productos**, con el modo vendedor: lista de precios, sin producto manual y con el aviso de pagos.
@@ -53,3 +53,7 @@ Administración, jefe y desarrollador: **sin cambios**.
 - En staging, la ficha del despacho no muestra los productos nuevos hasta cerrarla y abrirla de nuevo. En producción sí se refresca sola (`onSaved`).
 - Los vendedores con recargo (externos) no se probaron en pantalla. Están cubiertos por pruebas automáticas.
 - El botón está en la ficha del despacho (se abre con "1 Ítem" en la tarjeta), no en la tarjeta misma.
+
+## Corrección antes de publicar (2026-11-24)
+
+Vercel rechazó la primera versión de la solicitud #73: el archivo de reglas estaba en la carpeta `api/`, que Vercel no incluye al construir la pantalla (`.vercelignore`), y la pantalla no lo encontraba. Se movió a `src/utils/` (el servidor también puede leerlo de ahí, como ya hace con otros archivos). Pruebas y construcción pasan en producción y staging.
