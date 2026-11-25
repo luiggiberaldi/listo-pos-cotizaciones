@@ -92,6 +92,19 @@ La evidencia corresponde al runner CLI `npm run test:e2e:staging`. La vista inte
 - Fallos de `recalcularSaldoPendienteCliente` se anotan como `RECALCULO_SALDO_FALLIDO` (auditoría, SISTEMA).
 - Pruebas: `scripts/op057-acceso-vendedor.mjs`, `scripts/op057-comparacion-reparto.mjs` (con `op057_comparacion_datos.py`) y `scripts/op056-historial-pantalla.mjs`. Informe: `docs/operaciones/OP-2026-057_acceso-y-consistencia-staging.md`.
 
+## Inventario, préstamos, respaldo y seguridad (OP-2026-071/075/086, 2026-11-25)
+
+- **Editar un producto no cambia el stock.** Para cuadrar existencias se usa "Ajustar por conteo físico" o la pestaña "Conteo físico". Si el stock cambió mientras se contaba, la ventana avisa, trae el stock actual y deja volver a guardar.
+- **Ingreso por lote: solo suma.** Se eliminó "sobrescribir" (decisión del dueño). Filas repetidas del mismo producto se suman; aviso amarillo si se carga lo mismo dos veces en 24 h.
+- **Importar CSV:** cada fila lleva un sello estable; reintentar el mismo archivo no duplica productos.
+- **Kardex → Revertir:** solo ajustes manuales y conteos físicos (lista de permitidos en `src/utils/kardexRevertible.js` y en la migración 319).
+- **Préstamos:** descuentan stock al aprobar o entregar. **Facturar un préstamo** se hace en un solo paso (`facturar_prestamo_atomico`, migración 318): precio en dólares de la línea del despacho original (con su descuento), monto a 2 decimales, tasa BCV del día anotada en el cargo, sin mover inventario y sin cobro doble ante doble clic o reintento.
+- **Devolución parcial:** no admite préstamos; la base valida filas y totales (migración 321).
+- **Respaldo JSON (versión 1.2):** lee todas las filas por páginas y compara con el conteo real; si no cuadra, sale marcado como incompleto y la pantalla lo avisa. Ahora incluye las comisiones (antes siempre salían vacías).
+- **Restauración:** un solo paso, todo o nada (`restaurar_respaldo_atomico`, migración 322). Conserva números originales y lo ya devuelto/facturado de los préstamos, rechaza datos de otra empresa y no restaura respaldos marcados como incompletos.
+- **Seguridad:** funciones de dinero solo para el servidor (316); cada empresa ve solo lo suyo (317); sin escritura directa en cuentas por cobrar (323).
+- Pruebas: `scripts/op084-pruebas-staging.mjs` (17 pruebas que intentan romper el sistema) y `scripts/op084-restauracion-real-staging.mjs` (respaldo y restauración reales). Informe: `docs/operaciones/OP-2026-086_ejecucion-correcciones-y-pruebas-inventario-staging.md`.
+
 ## Tasas oficiales BCV — corrección 2026-08-18
 
 La aplicación no debe tomar directamente `ve.dolarapi.com` como fuente primaria de USD/EUR: su publicación puede quedar un día atrás. El Worker consulta en este orden:
@@ -172,7 +185,7 @@ PINs de los usuarios de prueba actuales: el Jefe de pruebas usa `246813` (ver `.
 
 ## Restauración y secuencias
 
-Los restores que insertan números explícitos deben reparar los correlativos antes de volver a operar. La migración `240_sync_sequences_after_restore.sql` crea `public.sync_sequences_after_restore()`, que ajusta de forma idempotente las secuencias de configuración, cotizaciones, despachos, inventario y órdenes de compra al máximo restaurado. El endpoint JSON de restore la invoca automáticamente al terminar; para un restore SQL manual se puede ejecutar:
+Los restores que insertan números explícitos deben reparar los correlativos antes de volver a operar. La migración `240_sync_sequences_after_restore.sql` crea `public.sync_sequences_after_restore()`, que ajusta de forma idempotente las secuencias de configuración, cotizaciones, despachos, inventario y órdenes de compra al máximo restaurado. La restauración JSON (`restaurar_respaldo_atomico`, OP-2026-086) la invoca automáticamente al terminar, dentro de la misma transacción; para un restore SQL manual se puede ejecutar:
 
 ```sql
 SELECT public.sync_sequences_after_restore();
