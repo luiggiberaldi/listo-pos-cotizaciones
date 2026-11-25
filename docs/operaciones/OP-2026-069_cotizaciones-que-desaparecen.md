@@ -1,8 +1,8 @@
-# OP-2026-067 — Cotizaciones que "desaparecen" (auditoría y arreglo)
+# OP-2026-069 — Cotizaciones que "desaparecen" (auditoría y arreglo)
 
-**Fecha:** 2026-11-24 · **Estado:** **arreglado y probado en staging; falta publicar en producción** (espera el visto bueno del dueño) · Rama `fix/op-067-cotizaciones-que-desaparecen` · Plan: [OP-2026-067_plan-cotizaciones-que-desaparecen.md](../plans/OP-2026-067_plan-cotizaciones-que-desaparecen.md)
+**Fecha:** 2026-11-24 · **Estado:** **arreglado y probado en staging; falta publicar en producción** (espera el visto bueno del dueño) · Rama `fix/op-067-cotizaciones-que-desaparecen` · Plan: [OP-2026-069_plan-cotizaciones-que-desaparecen.md](../plans/OP-2026-069_plan-cotizaciones-que-desaparecen.md)
 
-> Nota de numeración: este caso se trabajó primero con el número OP-2026-062, que ya estaba usado por otro caso (reporte de Crédito). Se renumeró (primero a OP-2026-065, también ocupado) a **OP-2026-067**, y sus fallas pasaron a **N28–N32**.
+> Nota de numeración: este caso se trabajó primero con el número OP-2026-062, que ya estaba usado por otro caso (reporte de Crédito). Se renumeró (primero a 065 y luego a 067, ambos ocupados por otras conversaciones) a **OP-2026-069**, y sus fallas pasaron a **N36–N40**.
 
 ## En resumen
 
@@ -61,7 +61,7 @@ Al editar un borrador, el servidor **borra los productos viejos al mismo tiempo*
 
 ## Qué se propuso arreglar (en este orden)
 
-Plan detallado: [OP-2026-067_plan-cotizaciones-que-desaparecen.md](../plans/OP-2026-067_plan-cotizaciones-que-desaparecen.md).
+Plan detallado: [OP-2026-069_plan-cotizaciones-que-desaparecen.md](../plans/OP-2026-069_plan-cotizaciones-que-desaparecen.md).
 
 1. **Reenvío con la sesión del vendedor** (urgente): que las cotizaciones atrapadas se suban solas apenas el vendedor abra la app con su PIN. Así se recuperan las que ya están atrapadas.
 2. **No fingir que se envió:** si el servidor tarda o falla estando con internet, decir claramente "no se pudo guardar, reintenta" en vez de guardarla en la gaveta. Subir el tiempo de espera de 8 a unos 20 segundos.
@@ -75,12 +75,12 @@ Todo se probaría primero en staging y después se publicaría en producción.
 
 | Arreglo | Dónde | Qué hace ahora |
 |---|---|---|
-| 1. Reenvío con PIN (N28) | [useMutationQueue.js](../../src/hooks/useMutationQueue.js), [mutationQueue.js](../../src/lib/mutationQueue.js), [sw.js](../../src/sw.js) | El reenvío lleva la sesión del vendedor. Solo sube una cotización cuando entra con su PIN **el mismo vendedor que la hizo**, así no queda a nombre de otro en un equipo compartido. Se intenta al abrir la app, al entrar con el PIN y al volver la conexión. Esperar el PIN no gasta intentos. El reenvío en segundo plano del navegador ya no toca cotizaciones, porque no puede leer el PIN |
-| 1. Sin duplicados (N28) | [cotizaciones.js](../../api/handlers/cotizaciones.js), [CotizacionBuilder.jsx](../../src/components/cotizaciones/CotizacionBuilder.jsx) | Cada cotización nueva lleva su identidad desde el primer intento, guardada también en el borrador automático. Si un intento ya llegó, el servidor lo reconoce: si sigue en borrador lo actualiza, y si ya fue enviada no hace nada. Nunca crea otra |
-| 2. No fingir el envío (N28) | [useCotizaciones.js](../../src/hooks/useCotizaciones.js), [CotizacionBuilder.jsx](../../src/components/cotizaciones/CotizacionBuilder.jsx), [PendingQueueBadge.jsx](../../src/components/ui/PendingQueueBadge.jsx) | Espera hasta 20 segundos (antes 8). Con internet, si falla, avisa "No se pudo guardar… pulsa de nuevo" y la cotización sigue en pantalla. Solo sin internet queda **PENDIENTE** en el equipo, con un aviso claro de que no está en el sistema. El aviso de pendientes dice "Cotización pendiente" y pide confirmación antes de descartar |
-| 3. Auditoría (N29) | [cotizaciones.js](../../api/handlers/cotizaciones.js), [worker.js](../../worker.js) | La nube termina de escribir CREAR_COTIZACION y EDITAR_COTIZACION aunque ya haya respondido |
-| 4. Limpieza nocturna, opción B (N30) | [limpiezaCotizaciones.js](../../api/lib/limpiezaCotizaciones.js) | Enviada sin movimiento en 30 días → vencida. Borrador sin movimiento en 30 días → anulada (la base no permite borrador → vencida). Cada una queda en la auditoría. Vencida, rechazada o anulada sin movimiento en 1 año → copia completa en la auditoría y luego se borra; sin copia no se borra. Las que tienen despacho o comisiones no se borran. Las aceptadas nunca se tocan. Un candado evita que corra dos veces por noche |
-| 5. Editar sin perder productos (N31) | [cotizaciones.js](../../api/handlers/cotizaciones.js) | Primero inserta los productos nuevos y después borra solo los viejos. Si algo falla, la cotización queda como estaba |
+| 1. Reenvío con PIN (N36) | [useMutationQueue.js](../../src/hooks/useMutationQueue.js), [mutationQueue.js](../../src/lib/mutationQueue.js), [sw.js](../../src/sw.js) | El reenvío lleva la sesión del vendedor. Solo sube una cotización cuando entra con su PIN **el mismo vendedor que la hizo**, así no queda a nombre de otro en un equipo compartido. Se intenta al abrir la app, al entrar con el PIN y al volver la conexión. Esperar el PIN no gasta intentos. El reenvío en segundo plano del navegador ya no toca cotizaciones, porque no puede leer el PIN |
+| 1. Sin duplicados (N36) | [cotizaciones.js](../../api/handlers/cotizaciones.js), [CotizacionBuilder.jsx](../../src/components/cotizaciones/CotizacionBuilder.jsx) | Cada cotización nueva lleva su identidad desde el primer intento, guardada también en el borrador automático. Si un intento ya llegó, el servidor lo reconoce: si sigue en borrador lo actualiza, y si ya fue enviada no hace nada. Nunca crea otra |
+| 2. No fingir el envío (N36) | [useCotizaciones.js](../../src/hooks/useCotizaciones.js), [CotizacionBuilder.jsx](../../src/components/cotizaciones/CotizacionBuilder.jsx), [PendingQueueBadge.jsx](../../src/components/ui/PendingQueueBadge.jsx) | Espera hasta 20 segundos (antes 8). Con internet, si falla, avisa "No se pudo guardar… pulsa de nuevo" y la cotización sigue en pantalla. Solo sin internet queda **PENDIENTE** en el equipo, con un aviso claro de que no está en el sistema. El aviso de pendientes dice "Cotización pendiente" y pide confirmación antes de descartar |
+| 3. Auditoría (N37) | [cotizaciones.js](../../api/handlers/cotizaciones.js), [worker.js](../../worker.js) | La nube termina de escribir CREAR_COTIZACION y EDITAR_COTIZACION aunque ya haya respondido |
+| 4. Limpieza nocturna, opción B (N38) | [limpiezaCotizaciones.js](../../api/lib/limpiezaCotizaciones.js) | Enviada sin movimiento en 30 días → vencida. Borrador sin movimiento en 30 días → anulada (la base no permite borrador → vencida). Cada una queda en la auditoría. Vencida, rechazada o anulada sin movimiento en 1 año → copia completa en la auditoría y luego se borra; sin copia no se borra. Las que tienen despacho o comisiones no se borran. Las aceptadas nunca se tocan. Un candado evita que corra dos veces por noche |
+| 5. Editar sin perder productos (N39) | [cotizaciones.js](../../api/handlers/cotizaciones.js) | Primero inserta los productos nuevos y después borra solo los viejos. Si algo falla, la cotización queda como estaba |
 
 No hubo cambios en la estructura de la base de datos.
 
@@ -92,7 +92,7 @@ No hubo cambios en la estructura de la base de datos.
 - **Producción (código):** 1.228 de 1.228 pruebas pasan. Un archivo de pruebas, `medirRendimientoServerTiming`, no corre en la copia aparte porque necesita el archivo de credenciales `.env`. No tiene relación con este cambio.
 - **Staging (código):** 278 de 278 pruebas pasan, incluidas las nuevas.
 - **La app se construye sin errores** en las dos versiones. Revisión de estilo: ningún error nuevo (los 8 del armador de cotizaciones ya existían).
-- **Contra la base real de staging** ([prueba.staging.test.js](OP-2026-067_scripts/prueba.staging.test.js), 4 de 4):
+- **Contra la base real de staging** ([prueba.staging.test.js](OP-2026-069_scripts/prueba.staging.test.js), 4 de 4):
   - crear con identidad propia y reintentar deja **una sola** cotización con un producto;
   - editar deja exactamente los 2 productos nuevos;
   - quedan guardados **CREAR_COTIZACION** y **EDITAR_COTIZACION** en la auditoría;
@@ -104,7 +104,7 @@ No hubo cambios en la estructura de la base de datos.
 - **Búsqueda de todo lo que puede borrar cotizaciones:**
   - **Dentro de la base de producción:** ninguna función interna ni disparador borra cotizaciones, y no hay tareas programadas en la base (sin `pg_cron`).
   - **En el código, con el cambio:** la única parte que borra cotizaciones de forma automática es la limpieza nueva: al año, con copia previa, y nunca las aceptadas.
-  - **Herramientas de administración (sin cambios):** "Reset operacional" y las del Tester ("clear all", "seed demo", "stress seed") borran **todas** las cotizaciones de la cuenta. Las puede usar un jefe, administración o el desarrollador. **No hay ningún rastro de que se hayan usado en producción** (ni en la auditoría ni en los registros del sistema). Quedan anotadas como riesgo (N33).
+  - **Herramientas de administración (sin cambios):** "Reset operacional" y las del Tester ("clear all", "seed demo", "stress seed") borran **todas** las cotizaciones de la cuenta. Las puede usar un jefe, administración o el desarrollador. **No hay ningún rastro de que se hayan usado en producción** (ni en la auditoría ni en los registros del sistema). Quedan anotadas como riesgo (N41).
 - **Producción, cifras reales (solo lectura, 2026-11-24):**
   - **Últimos 30 días:** 661 cotizaciones creadas, **ninguna falta**.
   - **Toda la historia:** de la 206 a la 4938 existen 3.052 y faltan 1.681 números. Desde el 26 de julio, la limpieza vieja borró **1.026** en 97 noches (según sus registros). El resto es anterior a esos registros.
@@ -131,12 +131,12 @@ Con permiso del dueño se regeneró la cuenta de pruebas de staging (`provision:
 
 **Pruebas después de los ajustes:** **1.232 de 1.232** en producción (los 123 archivos, ninguno saltado) y **279 de 279** en staging. La app se construye en las dos versiones. Revisión de estilo sin errores nuevos.
 
-Las 4 cotizaciones de prueba quedaron en staging con la nota interna "PRUEBA OP-067".
+Las 4 cotizaciones de prueba quedaron en staging con la nota interna "PRUEBA OP-069".
 
 ## Fallas relacionadas encontradas (no arregladas en este cambio)
 
-- **N33 — Herramientas que borran todo:** "Reset operacional" y las del Tester borran todas las cotizaciones de la cuenta, y en producción las puede usar un jefe o administración. Sin rastro de uso. Conviene bloquear las del Tester en producción y pedir una doble confirmación para el reset. Necesita su propio caso.
-- **N32 — Ventas rápidas sin conexión:** tienen el mismo defecto de reenvío (sin PIN, siempre falla). **No se arregló aquí a propósito**: el servidor de ventas rápidas no tiene protección contra duplicados, y activar el reenvío podría crear **ventas dobles**, con su efecto en dinero e inventario. Necesita su propio caso: primero la protección contra duplicados y después el reenvío.
+- **N41 — Herramientas que borran todo:** "Reset operacional" y las del Tester borran todas las cotizaciones de la cuenta, y en producción las puede usar un jefe o administración. Sin rastro de uso. Conviene bloquear las del Tester en producción y pedir una doble confirmación para el reset. Necesita su propio caso.
+- **N40 — Ventas rápidas sin conexión:** tienen el mismo defecto de reenvío (sin PIN, siempre falla). **No se arregló aquí a propósito**: el servidor de ventas rápidas no tiene protección contra duplicados, y activar el reenvío podría crear **ventas dobles**, con su efecto en dinero e inventario. Necesita su propio caso: primero la protección contra duplicados y después el reenvío.
 
 ## Cómo se verificó
 
@@ -153,4 +153,4 @@ Las 4 cotizaciones de prueba quedaron en staging con la nota interna "PRUEBA OP-
 - Una cotización pendiente llega al sistema **como borrador**: el vendedor debe abrirla y pulsar Enviar. Los avisos lo dicen.
 - **Descartar una pendiente** no deja copia en la auditoría: sin conexión no se puede escribir en el servidor. Se puso una confirmación clara.
 - **Las cotizaciones atrapadas desde antes del arreglo** no tienen identidad propia. Si alguna sí había llegado al servidor, podría subirse dos veces (riesgo bajo: en producción no hay borradores recientes).
-- **N32** (ventas rápidas sin conexión) queda abierta.
+- **N40** (ventas rápidas sin conexión) queda abierta.

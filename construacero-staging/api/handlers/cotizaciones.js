@@ -65,7 +65,7 @@ export async function handleGuardarCotizacion(request, env) {
 
   const { cotizacionId, headerData, items, nuevoId } = body;
   if (!headerData || !items || !Array.isArray(items)) return jsonError('Faltan campos', 400, request);
-  // OP-2026-067: la pantalla le da a cada cotización nueva su identidad desde el
+  // OP-2026-069: la pantalla le da a cada cotización nueva su identidad desde el
   // primer intento; así un reintento (o el reenvío de una atrapada) no la duplica.
   if (nuevoId != null && !isValidUuid(nuevoId)) return jsonError('nuevoId inválido', 400, request);
   if (cotizacionId != null && !isValidUuid(cotizacionId)) return jsonError('cotizacionId inválido', 400, request);
@@ -99,7 +99,7 @@ export async function handleGuardarCotizacion(request, env) {
 
   try {
     if (!id && nuevoId) {
-      // OP-2026-067: ¿ya llegó un intento anterior de esta misma cotización?
+      // OP-2026-069: ¿ya llegó un intento anterior de esta misma cotización?
       const exRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${nuevoId}&select=id,vendedor_id,estado`, { headers: serviceRead });
       if (!exRes.ok) return jsonError('Error al verificar cotización', 500, request);
       const [previa] = await exRes.json();
@@ -153,7 +153,7 @@ export async function handleGuardarCotizacion(request, env) {
       }
       if (existing.estado !== 'borrador') return jsonError('Solo se pueden editar cotizaciones en borrador', 400, request);
 
-      // OP-2026-067 (N31): reemplazar productos sin perder nunca los anteriores.
+      // OP-2026-069 (N31): reemplazar productos sin perder nunca los anteriores.
       // Orden: 1) anotar los renglones viejos, 2) cabecera, 3) insertar los nuevos,
       // 4) recién entonces borrar los viejos. Si algo falla, la cotización conserva sus productos.
       const oldRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cotizacion_items?cotizacion_id=eq.${id}&select=id`, { headers: serviceRead });
@@ -197,7 +197,7 @@ export async function handleGuardarCotizacion(request, env) {
       }
     }
 
-    // OP-2026-067 (N29): la auditoría debe terminar aunque ya se haya respondido.
+    // OP-2026-069 (N29): la auditoría debe terminar aunque ya se haya respondido.
     // Antes era "suelta" y la nube la cortaba al responder: nunca quedaba CREAR_COTIZACION.
     const auditoria = registrarAuditoria(env, supaHeaders, {
       usuarioId: user.operator_id, usuarioNombre: user.operator_nombre || 'Operador', usuarioRol: user.operator_rol || 'vendedor',
@@ -890,5 +890,5 @@ export async function handleVentaRapida(request, env) {
   }
 }
 
-// ── Limpieza nocturna: ver api/lib/limpiezaCotizaciones.js (OP-2026-067, opción B) ──
+// ── Limpieza nocturna: ver api/lib/limpiezaCotizaciones.js (OP-2026-069, opción B) ──
 export { runCleanupCotizaciones } from '../lib/limpiezaCotizaciones.js'

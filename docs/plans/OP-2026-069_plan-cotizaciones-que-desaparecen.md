@@ -1,7 +1,7 @@
-# Plan OP-2026-067 — Que ninguna cotización se pierda
+# Plan OP-2026-069 — Que ninguna cotización se pierda
 
-**Fecha:** 2026-11-24 · **Estado:** aprobado por el dueño y **hecho en staging** (2026-11-24); falta publicar en producción. Resultado en el [caso OP-2026-067](../operaciones/OP-2026-067_cotizaciones-que-desaparecen.md)
-**Caso:** [OP-2026-067](../operaciones/OP-2026-067_cotizaciones-que-desaparecen.md) · **Fallas:** N28, N29, N30, N31 del [registro de fallas](../operaciones/REGISTRO-FALLAS-CODIGO.md)
+**Fecha:** 2026-11-24 · **Estado:** aprobado por el dueño y **hecho en staging** (2026-11-24); falta publicar en producción. Resultado en el [caso OP-2026-069](../operaciones/OP-2026-069_cotizaciones-que-desaparecen.md)
+**Caso:** [OP-2026-069](../operaciones/OP-2026-069_cotizaciones-que-desaparecen.md) · **Fallas:** N36, N37, N38, N39 del [registro de fallas](../operaciones/REGISTRO-FALLAS-CODIGO.md)
 
 ## En resumen
 
@@ -11,7 +11,7 @@
 - No hace falta cambiar la estructura de la base de datos. Son cambios en la pantalla y en el servidor.
 - Tiempo estimado: un día de trabajo más las pruebas en staging.
 
-## Arreglo 1 — Las cotizaciones atrapadas se suben solas (N28, urgente)
+## Arreglo 1 — Las cotizaciones atrapadas se suben solas (N36, urgente)
 
 **Problema:** el reenvío automático manda la cotización sin el PIN del vendedor y el servidor la rechaza siempre.
 
@@ -25,7 +25,7 @@
 
 **Cómo se sabe que funciona:** prueba automática de que el reenvío lleva el PIN. En staging: cortar la conexión a mitad de un guardado, volver a entrar y comprobar que la cotización aparece **una sola vez**.
 
-## Arreglo 2 — No fingir que se envió (N28)
+## Arreglo 2 — No fingir que se envió (N36)
 
 **Problema:** con internet, si el servidor tarda más de 8 segundos o da error, la pantalla guarda la cotización a escondidas y dice "enviada" con número OFFLINE.
 
@@ -35,7 +35,7 @@
 3. **Sin internet de verdad:** se guarda en el equipo, pero con un aviso claro y permanente: "Pendiente de subir — no está en el sistema todavía". Nunca "enviada".
 4. El número "OFFLINE" se reemplaza por "PENDIENTE".
 
-## Arreglo 3 — "Crear cotización" queda en la auditoría (N29)
+## Arreglo 3 — "Crear cotización" queda en la auditoría (N37)
 
 **Problema:** el servidor responde antes de escribir la auditoría y la nube corta la tarea.
 
@@ -43,7 +43,7 @@
 
 **Cómo se sabe que funciona:** en staging, crear una cotización y ver el registro CREAR_COTIZACION en la auditoría.
 
-## Arreglo 4 — Limpieza nocturna sin borrar (N30)
+## Arreglo 4 — Limpieza nocturna sin borrar (N38)
 
 **Decisión del dueño (2026-11-24): opción B.**
 
@@ -56,7 +56,7 @@
 
 **Efecto el primer día:** las anuladas de entre 30 días y 1 año ya no se borran. Las enviadas viejas sin movimiento pasan a vencida.
 
-## Arreglo 5 — Editar sin perder productos (N31)
+## Arreglo 5 — Editar sin perder productos (N39)
 
 **Problema:** al editar, se borran los productos viejos antes de saber si los nuevos se guardaron bien.
 
@@ -105,4 +105,4 @@
 
 - ~~Elegir la opción para la limpieza nocturna~~ → **B** (2026-11-24).
 - ~~Aprobar el plan para empezar~~ → aprobado (2026-11-24).
-- Cambios respecto al plan: los borradores sin movimiento pasan a **anulada**, no a vencida (la base no permite borrador → vencida). Descartar una pendiente pide confirmación, pero no deja copia en la auditoría (sin conexión no se puede). Las ventas rápidas sin conexión tienen el mismo defecto, pero quedan fuera (N32) por el riesgo de ventas dobles. La prueba en pantalla mostró que la cotización pendiente llega como **borrador** (no se envía sola); los avisos se ajustaron para decirlo.
+- Cambios respecto al plan: los borradores sin movimiento pasan a **anulada**, no a vencida (la base no permite borrador → vencida). Descartar una pendiente pide confirmación, pero no deja copia en la auditoría (sin conexión no se puede). Las ventas rápidas sin conexión tienen el mismo defecto, pero quedan fuera (N40) por el riesgo de ventas dobles. La prueba en pantalla mostró que la cotización pendiente llega como **borrador** (no se envía sola); los avisos se ajustaron para decirlo.

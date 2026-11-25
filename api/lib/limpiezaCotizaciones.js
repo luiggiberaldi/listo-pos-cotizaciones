@@ -1,4 +1,4 @@
-// Limpieza nocturna de cotizaciones — OP-2026-067 (opción B, decidida por el dueño 2026-11-24)
+// Limpieza nocturna de cotizaciones — OP-2026-069 (opción B, decidida por el dueño 2026-11-24)
 //
 // Antes: a los 15 días desde la CREACIÓN anulaba, y a los 30 días BORRABA para siempre,
 // sin dejar rastro de cuáles. Ahora:

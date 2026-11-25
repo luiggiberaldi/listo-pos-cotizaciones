@@ -84,7 +84,7 @@ export async function retryFailed(id) {
   await set(id, { ...item, status: 'pending', attempts: 0, error: null, lastAttemptAt: null })
 }
 
-// ─── OP-2026-067: rescatar cotizaciones que fallaron por el defecto del PIN ────
+// ─── OP-2026-069: rescatar cotizaciones que fallaron por el defecto del PIN ────
 // Antes del arreglo, el reenvío iba sin la sesión del vendedor y el servidor respondía
 // "No hay operador seleccionado" (o pedía el PIN); tras 3 intentos quedaban "fallidas".
 // Esas vuelven a la fila de pendientes para que se suban solas con el reenvío corregido.
@@ -117,7 +117,7 @@ export async function processQueue(dispatch) {
       await markDone(item.id)
       results.done++
     } catch (err) {
-      // OP-2026-067: "posponer" (falta el PIN del dueño, sin conexión) no gasta intentos.
+      // OP-2026-069: "posponer" (falta el PIN del dueño, sin conexión) no gasta intentos.
       if (err?.posponer) {
         await updateItem(item.id, { error: err.message || null })
         results.postponed++

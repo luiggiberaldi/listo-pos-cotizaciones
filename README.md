@@ -150,9 +150,9 @@ Cuando se publiquen, así funcionará:
 - **"Cruce"** exige decir contra qué se cruzó.
 - La ficha y el reporte de Crédito muestran los **pagos de más** que antes no se veían.
 
-## Cotizaciones: guardado, pendientes y limpieza nocturna (OP-2026-067)
+## Cotizaciones: guardado, pendientes y limpieza nocturna (OP-2026-069)
 
-> Preparado y probado en staging (también en pantalla); **todavía no publicado en producción** (ver [OP-2026-067](docs/operaciones/OP-2026-067_cotizaciones-que-desaparecen.md)).
+> Preparado y probado en staging (también en pantalla); **todavía no publicado en producción** (ver [OP-2026-069](docs/operaciones/OP-2026-069_cotizaciones-que-desaparecen.md)).
 
 - **Guardar con internet:** si el servidor tarda más de 20 segundos o falla, la pantalla avisa "No se pudo guardar" y la cotización sigue en pantalla para reintentar. Ya no se guarda a escondidas en el equipo.
 - **Sin internet:** la cotización queda **PENDIENTE** en ese equipo, con el aviso de que todavía no está en el sistema. Se sube sola **como borrador** cuando hay conexión y entra con su PIN **el mismo vendedor que la hizo**; después hay que abrirla y pulsar Enviar. El aviso de pendientes (arriba en el menú) muestra cuáles hay, y descartar una pide confirmación.

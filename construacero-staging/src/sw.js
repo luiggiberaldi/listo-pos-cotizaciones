@@ -34,7 +34,7 @@ async function processMutationQueueInSW() {
   let failed = 0
 
   for (const item of items) {
-    // OP-2026-067: las cotizaciones las sube la pantalla, que sí tiene el PIN del vendedor.
+    // OP-2026-069: las cotizaciones las sube la pantalla, que sí tiene el PIN del vendedor.
     // Aquí no se puede leer el PIN y el servidor las rechazaría (gastando intentos).
     if (item.type === 'GUARDAR_COTIZACION') continue
     try {

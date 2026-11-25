@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { AlertTriangle, RefreshCw, Trash2, X, CloudOff } from 'lucide-react'
 import { useMutationQueue } from '../../hooks/useMutationQueue'
 
-// OP-2026-067: la cola guarda ventas rápidas y cotizaciones; nombrar cada una por lo que es.
+// OP-2026-069: la cola guarda ventas rápidas y cotizaciones; nombrar cada una por lo que es.
 function nombreItem(item) {
   return item?.type === 'GUARDAR_COTIZACION' ? 'Cotización pendiente' : 'Venta Rápida'
 }

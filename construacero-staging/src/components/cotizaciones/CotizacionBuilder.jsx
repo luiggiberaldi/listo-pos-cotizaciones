@@ -511,7 +511,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   // marcarla se toca la ficha del chofer; sin ella, el camión es de este viaje.
   async function aplicarVehiculoFijo() {
     if (!fijarVehiculoFijo || !transportistaId || !vehiculoViajeId) return
-    // OP-2026-067: sin conexión este cambio quedaría en pausa y frenaría el envío; se omite.
+    // OP-2026-069: sin conexión este cambio quedaría en pausa y frenaría el envío; se omite.
     if (!navigator.onLine) return
     try {
       await actualizarTransp.mutateAsync({ id: transportistaId, campos: { vehiculo_habitual_id: vehiculoViajeId } })
@@ -554,7 +554,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [errorGeneral,  setErrorGeneral]  = useState('')
   const [showModalDespachar, setShowModalDespachar] = useState(false)
   const [cotizacionId,  setCotizacionId]  = useState(cotizacionExistente?.id ?? null)
-  // OP-2026-067: identidad de la cotización nueva, fija desde el primer intento de guardar.
+  // OP-2026-069: identidad de la cotización nueva, fija desde el primer intento de guardar.
   // Si un intento tarda pero sí llegó al servidor, el reintento la reconoce y no crea otra.
   const nuevoIdRef = useRef(null)
   function idCotizacionNueva() {

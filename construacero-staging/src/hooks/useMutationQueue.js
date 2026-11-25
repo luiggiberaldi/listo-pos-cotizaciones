@@ -30,12 +30,12 @@ function posponer(mensaje) {
   return err
 }
 
-// Quién hizo la cotización pendiente (las encoladas antes de OP-2026-067 no lo guardaban).
+// Quién hizo la cotización pendiente (las encoladas antes de OP-2026-069 no lo guardaban).
 export function duenoDeCotizacionEncolada(item) {
   return item?.payload?._operadorId || item?.payload?.headerData?.vendedor_id || null
 }
 
-// OP-2026-067 (N28): el reenvío de cotizaciones lleva la sesión del vendedor (PIN),
+// OP-2026-069 (N28): el reenvío de cotizaciones lleva la sesión del vendedor (PIN),
 // igual que un guardado normal. Antes iba sin ella y el servidor la rechazaba siempre.
 async function dispatchCotizacion(item) {
   if (!navigator.onLine) throw posponer('Sin conexión')
@@ -156,7 +156,7 @@ export function useMutationQueue() {
   // Escuchar reconexión → procesar automáticamente
   useEffect(() => {
     refresh()
-    // OP-2026-067: intentar también al abrir la app y al entrar con el PIN.
+    // OP-2026-069: intentar también al abrir la app y al entrar con el PIN.
     // Primero se rescatan las que fallaron por el defecto viejo del PIN.
     rescatarCotizacionesFallidas().catch(() => 0).then(() => sync({ silent: false }))
     const quitarSuscripcion = subscribeOperatorSession(() => {

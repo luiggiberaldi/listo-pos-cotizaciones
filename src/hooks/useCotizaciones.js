@@ -295,7 +295,7 @@ export function useCotizacion(id) {
 
 // ─── Guardar borrador (crear o actualizar) ────────────────────────────────────
 // Si cotizacionId es null → crea nueva. Si tiene ID → actualiza.
-// OP-2026-067: una cotización nueva viaja con su propia identidad (nuevoId) desde el
+// OP-2026-069: una cotización nueva viaja con su propia identidad (nuevoId) desde el
 // primer intento, para que un reintento o el reenvío desde el equipo no la duplique.
 // Solo si NO hay internet se guarda en el equipo (cola) con un ID local temporal (local_XXXX).
 // Con internet, si el servidor tarda o falla, se avisa el error y el borrador sigue en pantalla.
@@ -305,7 +305,7 @@ export function useGuardarBorrador() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
 
   return useMutation({
-    // OP-2026-067: sin conexión, la herramienta de la pantalla pausaba el guardado en silencio
+    // OP-2026-069: sin conexión, la herramienta de la pantalla pausaba el guardado en silencio
     // (botón "pensando" sin aviso). Con "always" corre igual y, sin red, la cotización
     // queda PENDIENTE en el equipo con aviso claro y se sube sola al volver la conexión.
     networkMode: 'always',
