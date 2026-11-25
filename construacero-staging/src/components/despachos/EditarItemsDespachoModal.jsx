@@ -14,8 +14,11 @@ import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
 import { round4, round2 } from '../../utils/dinero'
 import { showToast } from '../ui/Toast'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
+import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
+// OP-2026-070: mismas reglas que aplica el servidor al vendedor (precios de lista y pagos)
+import { preciosPermitidos, planDePagoSimple } from '../../utils/edicionVendedorDespacho.js'
 
-export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) {
+export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, modoVendedor = false }) {
   const { perfil } = useAuthStore()
   const esDesarrollador = perfil?.rol === 'desarrollador'
 
@@ -28,6 +31,35 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const editarItems = useEditarItemsDespacho()
   const { data: config = {} } = useConfigNegocio()
+  const { factor: factorMarkupVendedor } = usePrecioVendedor()
+  // OP-2026-070 — modo vendedor: productos y cantidades con precios de lista; los pagos no se
+  // eligen: si hay un solo método, su monto sigue al nuevo total (mismo método).
+  const formaPagoOriginal = despacho?.forma_pago_cliente || despacho?.forma_pago || null
+  const planSimpleVendedor = !modoVendedor || planDePagoSimple(formaPagoOriginal)
+  function opcionesPrecioVendedor(it) {
+    const prod = productos.find(x => x.id === it.productoId)
+    const set = new Set(preciosPermitidos(prod, { factorMarkup: factorMarkupVendedor || 1 }))
+    for (const v of [it.precioOriginalUsd, it.precioUnitUsd]) {
+      const n = Number(v)
+      if (Number.isFinite(n) && n > 0) set.add(Math.round(n * 10000) / 10000)
+    }
+    return [...set].sort((a, b) => b - a)
+  }
+  function pagosAjustadosVendedor(totalNuevo) {
+    if (!formaPagoOriginal) return undefined
+    if (Math.abs(Number(totalNuevo) - Number(despacho?.total_usd || 0)) < 0.005) return undefined
+    const monto = Math.round(Number(totalNuevo) * 100) / 100
+    let lista
+    try { lista = JSON.parse(formaPagoOriginal) } catch { lista = null }
+    if (!Array.isArray(lista)) return [{ metodo: String(formaPagoOriginal), monto }]
+    if (lista.length === 0) return undefined
+    const [fp] = lista
+    const ajustado = { ...fp, monto }
+    if (fp.metodo === 'Cobro a destino' && Array.isArray(fp.metodo_propuesto)) {
+      ajustado.metodo_propuesto = fp.metodo_propuesto.map(x => ({ ...x, monto }))
+    }
+    return [ajustado]
+  }
   const { items, setItems, agregarItem: _agregarItem, eliminarPorId, cambiarCantidad, setCantidadDirecta, cambiarPrecio: _cambiarPrecio, togglePrestamo, setStockMap } = useLineItems({ checkStock: false })
 
   const [seccionMovil, setSeccionMovil] = useState('catalogo')
@@ -387,7 +419,11 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         showToast('Los días de vencimiento son obligatorios para cuentas por cobrar', 'error')
         return
       }
-      if (!totales.estaCuadrado) {
+      if (modoVendedor && !planSimpleVendedor) {
+        showToast('Este despacho tiene pagos combinados o adelantos. Pide a administración que lo edite.', 'error')
+        return
+      }
+      if (!modoVendedor && !totales.estaCuadrado) {
         showToast(`Los pagos no cuadran con el total. Diferencia: ${fmtUsd(totales.diferencia)}`, 'error')
         return
       }
@@ -414,7 +450,9 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
         await editarItems.mutateAsync({ 
           despachoId: despacho.id, 
           items: itemsApi, 
-          pagos: JSON.stringify(formasPagoFinales)
+          pagos: modoVendedor
+            ? (pagosAjustadosVendedor(totales.total) ? JSON.stringify(pagosAjustadosVendedor(totales.total)) : undefined)
+            : JSON.stringify(formasPagoFinales)
         })
         onClose()
       } catch {
@@ -442,13 +480,13 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:bg-white text-sm transition-all"
               />
             </div>
-            <button
+            {!modoVendedor && (<button
               onClick={() => setShowManual(!showManual)}
               className={`shrink-0 p-2.5 rounded-xl border-2 transition-all active:scale-95 flex items-center justify-center ${showManual ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-indigo-100 text-indigo-600 hover:border-indigo-300'}`}
               title="Agregar producto manual"
             >
               <Plus size={18} strokeWidth={3} />
-            </button>
+            </button>)}
           </div>
 
           {/* Formulario de producto manual */}
@@ -739,6 +777,21 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                       {/* Precio */}
                       <div className="relative w-24">
                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                        {modoVendedor ? (
+                          (it.origen === 'externo' || !it.productoId) ? (
+                            <span className="block w-full pl-5 pr-2 py-1.5 text-xs font-bold text-right text-slate-500">{Number(it.precioUnitUsd).toFixed(2)}</span>
+                          ) : (
+                            <select
+                              data-testid="precio-lista-vendedor"
+                              value={Math.round(Number(it.precioUnitUsd) * 10000) / 10000}
+                              onChange={e => cambiarPrecio(it._key, e.target.value)}
+                              title="Precios de lista permitidos"
+                              className="w-full pl-5 pr-1 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-right text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-400"
+                            >
+                              {opcionesPrecioVendedor(it).map(v => <option key={v} value={v}>{v.toFixed(2)}</option>)}
+                            </select>
+                          )
+                        ) : (
                         <input
                           type="number"
                           step="0.01"
@@ -746,6 +799,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
                           onChange={e => cambiarPrecio(it.productoId, e.target.value)}
                           className="w-full pl-5 pr-2 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-right text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-400 transition-all"
                         />
+                        )}
                       </div>
                       {/* Subtotal */}
                       <div className="ml-auto text-right">
@@ -760,6 +814,13 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
           </div>
         </div>
 
+        {modoVendedor ? (
+          <div className={`shrink-0 border-t-2 px-6 py-3 text-[11px] ${planSimpleVendedor ? 'border-slate-100 bg-slate-50 text-slate-600' : 'border-amber-200 bg-amber-50 text-amber-800'}`} data-testid="aviso-pagos-vendedor">
+            {planSimpleVendedor
+              ? 'Pagos: no se cambian. Si el total cambia, el monto del mismo método de pago se ajusta solo al nuevo total. El supervisor revisará el despacho al aprobarlo.'
+              : 'Este despacho tiene pagos combinados, adelantos o saldo a favor. Para cambiar sus productos, pide a administración que lo edite.'}
+          </div>
+        ) : (<>
         {/* ── SECCIÓN PAGOS — franja full-width debajo de las columnas ── */}
         <div className="shrink-0 border-t-2 border-slate-100 bg-gradient-to-b from-slate-50 to-white">
 
@@ -1141,6 +1202,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
           </div>
         </div>
 
+        </>)}
+
         {/* ── Footer Totales + Botones ── */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 bg-white border-t border-slate-200 shrink-0">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
@@ -1172,7 +1235,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho }) 
               </button>
               <button
                 onClick={handleSave}
-                disabled={editarItems.isPending || items.length === 0 || !totales.estaCuadrado || !cxcVencimientoValido}
+                disabled={editarItems.isPending || items.length === 0 || (modoVendedor ? !planSimpleVendedor : (!totales.estaCuadrado || !cxcVencimientoValido))}
                 title={
                   !cxcVencimientoValido
                     ? 'Días de vencimiento obligatorios para cuentas por cobrar'

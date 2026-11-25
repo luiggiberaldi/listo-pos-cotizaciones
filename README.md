@@ -25,8 +25,8 @@ Cada persona entra con un rol. El rol define qué puede ver y hacer. La lista of
 | `jefe` | Ve toda la empresa: ventas, comisiones, equipo y auditoría |
 | `administracion` | Aprueba despachos, maneja cobros, cuentas por cobrar e inventario |
 | `supervisor` | Ve sus propias ventas y las de su equipo |
-| `vendedor` | Sus propios clientes y cotizaciones; gana comisión |
-| `vendedor_sin_comision` | Ventas de empresa, sin comisión |
+| `vendedor` | Sus propios clientes y cotizaciones; gana comisión. Puede editar productos y cantidades de **sus** despachos que esperan aprobación (ver abajo) |
+| `vendedor_sin_comision` | Ventas de empresa, sin comisión. Mismo permiso de edición de sus despachos que esperan aprobación |
 | `logistica` | Ve los despachos por entregar y registra las entregas |
 | `desarrollador` | Acceso técnico |
 
@@ -152,7 +152,7 @@ Cuando se publiquen, así funcionará:
 
 ## Cotizaciones: guardado, pendientes y limpieza nocturna (OP-2026-069)
 
-> Preparado y probado en staging (también en pantalla); **todavía no publicado en producción** (ver [OP-2026-069](docs/operaciones/OP-2026-069_cotizaciones-que-desaparecen.md)).
+> **Publicado en producción el 2026-11-24** (solicitud #72; ver [OP-2026-069](docs/operaciones/OP-2026-069_cotizaciones-que-desaparecen.md)).
 
 - **Guardar con internet:** si el servidor tarda más de 20 segundos o falla, la pantalla avisa "No se pudo guardar" y la cotización sigue en pantalla para reintentar. Ya no se guarda a escondidas en el equipo.
 - **Sin internet:** la cotización queda **PENDIENTE** en ese equipo, con el aviso de que todavía no está en el sistema. Se sube sola **como borrador** cuando hay conexión y entra con su PIN **el mismo vendedor que la hizo**; después hay que abrirla y pulsar Enviar. El aviso de pendientes (arriba en el menú) muestra cuáles hay, y descartar una pide confirmación.
@@ -161,6 +161,16 @@ Cuando se publiquen, así funcionará:
   - enviada sin movimiento en **30 días** → **vencida**; borrador sin movimiento en 30 días → **anulada**. Cada una queda en la auditoría.
   - vencida, rechazada o anulada sin movimiento en **1 año** → se borra, **después de guardar una copia completa** en la auditoría. Si la copia no se guarda, no se borra.
   - Las aceptadas nunca se tocan. "Sin movimiento" cuenta desde la última modificación.
+
+## Vendedores: editar sus despachos que esperan aprobación (OP-2026-070)
+
+> **Publicado en producción el 2026-11-24** (solicitud #73; ver [OP-2026-070](docs/operaciones/OP-2026-070_vendedor-edita-despacho.md)).
+
+- **Dónde:** en la ficha del despacho (botón "1 Ítem" de la tarjeta) aparece **Editar productos** si el despacho es del vendedor y está **Esperando aprobación**.
+- **Qué puede cambiar:** agregar, quitar y cambiar cantidades. El precio se elige de una lista con los **precios de lista** (P1, P2 y P3 habilitados, con su recargo si es vendedor externo) o el precio que ya tenía.
+- **Qué no puede:** escribir precios a mano, agregar artículos externos o préstamos, poner descuentos, elegir o cambiar pagos, ni editar despachos ajenos o ya aprobados.
+- **Pagos:** si el despacho tiene un solo método de pago, su monto se ajusta solo al nuevo total (mismo método). Con pagos combinados, adelantos o saldo a favor, el vendedor no puede editar y debe pedirlo a administración.
+- Lo controlan la pantalla, el servidor (`src/utils/edicionVendedorDespacho.js`) y la base de datos (`editar_despacho_profundidad`, migración 311). El supervisor sigue aprobando después.
 
 ## Documentación interna
 

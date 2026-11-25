@@ -7,6 +7,7 @@ import { getCommissionablePaymentSplit, isDonationPayment } from '../../src/util
 import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
 import { pendienteDeDespacho, pendienteSoloEnlazado, abonosQueCubrenDespacho, abonoAnulableEnDevolucion } from '../../src/utils/cxcReparto.js'
 import { valorDevolucionAcreditable } from '../../src/utils/donacionDevolucion.js'
+import { esRolVendedor, validarEdicionVendedor } from '../../src/utils/edicionVendedorDespacho.js'
 import { errorCruceSinExplicacion } from '../../src/utils/formaPagoReglas.js'
 
 function resolverIdempotencyKey(request, body) {
@@ -1725,7 +1726,9 @@ export async function handleEditarItemsDespacho(request, env) {
   // ── 1. Roles autorizados para edición profunda ─────────────────────────────
   // La edición profunda queda reservada a administración, jefatura y desarrollo.
   // El estado se valida nuevamente abajo y en el RPC.
-  if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
+  // OP-2026-070: el vendedor también puede, solo en SUS despachos pendientes, con precios de
+  // lista y sin tocar pagos (reglas en src/utils/edicionVendedorDespacho.js y en la base).
+  if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol) && !esRolVendedor(operador.rol)) {
     return jsonError('No tienes permiso para editar profundamente el despacho', 403, request);
   }
 
@@ -1771,6 +1774,15 @@ export async function handleEditarItemsDespacho(request, env) {
       return jsonError('El despacho contiene líneas duplicadas. Actualiza el modal y deja una sola línea por producto y condición comercial.', 400, request)
     }
     clavesItems.add(clave)
+  }
+
+  if (esRolVendedor(operador.rol)) {
+    try {
+      const rv = await validarEdicionVendedor({ env, headers, operador, despachoId, items, pagos, destinoPagos: body.destinoPagos });
+      if (rv) return jsonError(rv.error, rv.status, request);
+    } catch (e) {
+      return jsonError(e.message || 'No se pudo validar la edición', 500, request);
+    }
   }
 
   try {

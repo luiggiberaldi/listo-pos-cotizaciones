@@ -377,7 +377,10 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
 
   const tieneChofer = !esCot && registro.transportista?.nombre
   const tienePago = !esCot && (formasDisplay.length > 0 || registro.referencia_pago)
-  const puedeEditarProfundamente = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  const esAdminEdicion = tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
+  // OP-2026-070: el vendedor edita productos y cantidades de SUS despachos que esperan aprobación
+  const esVendedorEdicion = tipo === 'despacho' && ['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol) && !!perfil?.id && registro.vendedor_id === perfil.id
+  const puedeEditarProfundamente = esAdminEdicion || esVendedorEdicion
   const edicionBloqueadaPorEstado = puedeEditarProfundamente && !['pendiente', 'anulada'].includes(registro.estado)
   const estadoEdicionLabel = registro.estado === 'entregada' ? 'entregado' : registro.estado === 'despachada' ? 'aprobado' : registro.estado
 
@@ -754,6 +757,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           onClose={() => setShowEditItems(false)}
           onSaved={aplicarItemsEditados}
           despacho={registro}
+          modoVendedor={esVendedorEdicion && !esAdminEdicion}
         />
       )}
     </div>

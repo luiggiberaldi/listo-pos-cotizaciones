@@ -1,6 +1,6 @@
 # OP-2026-069 — Cotizaciones que "desaparecen" (auditoría y arreglo)
 
-**Fecha:** 2026-11-24 · **Estado:** **arreglado y probado en staging; falta publicar en producción** (espera el visto bueno del dueño) · Rama `fix/op-067-cotizaciones-que-desaparecen` · Plan: [OP-2026-069_plan-cotizaciones-que-desaparecen.md](../plans/OP-2026-069_plan-cotizaciones-que-desaparecen.md)
+**Fecha:** 2026-11-24 · **Estado:** **publicado en producción el 2026-11-24** (solicitud #72, commit `2f847c2e`) · Rama `fix/op-067-cotizaciones-que-desaparecen` · Plan: [OP-2026-069_plan-cotizaciones-que-desaparecen.md](../plans/OP-2026-069_plan-cotizaciones-que-desaparecen.md)
 
 > Nota de numeración: este caso se trabajó primero con el número OP-2026-062, que ya estaba usado por otro caso (reporte de Crédito). Se renumeró (primero a 065 y luego a 067, ambos ocupados por otras conversaciones) a **OP-2026-069**, y sus fallas pasaron a **N36–N40**.
 
