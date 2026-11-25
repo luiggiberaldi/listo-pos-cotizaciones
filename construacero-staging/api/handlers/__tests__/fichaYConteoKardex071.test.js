@@ -155,8 +155,12 @@ describe('OP-2026-071 Fase 1 (N25 ficha + conteo físico + N26 reversión Kardex
     expect(hookMovSrc).toContain('origen_tipo, origen_id, origen_referencia')
 
     // Kardex elegible para movimiento_inventario y conteo_fisico, bloqueando orígenes de sistema
-    expect(kardexSrc).toContain("'movimiento_inventario'")
-    expect(kardexSrc).toContain("'conteo_fisico'")
+    // (OP-2026-086: la regla vive en src/utils/kardexRevertible.js y tiene pruebas de comportamiento
+    // en src/utils/__tests__/op086Inventario.test.js)
+    const reglaSrc = readFileSync(new URL('../../../src/utils/kardexRevertible.js', import.meta.url), 'utf8')
+    expect(kardexSrc).toContain("from '../../utils/kardexRevertible'")
+    expect(reglaSrc).toContain("'movimiento_inventario'")
+    expect(reglaSrc).toContain("'conteo_fisico'")
     expect(kardexSrc).not.toMatch(/const elegible\s*=\s*puedeRevertir\s*&&\s*!m\.origen_tipo/)
   })
 })

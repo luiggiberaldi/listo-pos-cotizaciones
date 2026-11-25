@@ -1,6 +1,11 @@
 -- Rollback de 314_staging_seguridad_inventario_rpcs_y_rls.sql (Staging)
 -- Restaura permisos anteriores en caso de necesitar reversión manual en staging.
 
+-- ¡PELIGROSO! Vuelve a dar escritura directa a authenticated y crea reglas USING (true) que abren
+-- préstamos y devoluciones a TODAS las empresas. Solo en emergencia y por poco tiempo.
+-- OP-2026-086 (B1): todo dentro de una transacción; si algo falla, no queda nada a medias.
+BEGIN;
+
 GRANT INSERT, UPDATE, DELETE ON TABLE
   public.productos,
   public.inventario_movimientos,
@@ -23,3 +28,5 @@ CREATE POLICY "Permitir todo a operadores autorizados en despacho_devoluciones"
   ON public.despacho_devoluciones FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo a operadores autorizados en despacho_devolucion_i"
   ON public.despacho_devolucion_intercambios FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+COMMIT;

@@ -4,7 +4,7 @@
 - **Entorno:** solo **staging** (`construacero-staging/` y base de pruebas `spupqgkdsgohxxfoxydl`). Producción no se toca en este caso.
 - **Carpeta de trabajo:** `construacero-op086`, rama `fix/op-086-inventario-staging`, creada desde `origin/main` (regla de OP-2026-083).
 - **Planes que se ejecutan:** [OP-2026-078](../plans/OP-2026-078_plan-correccion-hallazgos-auditoria-inventario-staging.md) (correcciones) y [OP-2026-084](../plans/OP-2026-084_plan-testeo-completo-inventario.md) (pruebas). Aprobados por el dueño el 2026-11-25.
-- **Estado:** 🔧 En ejecución. Fases 1, 2, 4 y 5 terminadas.
+- **Estado:** 🔧 En ejecución. Fases 1, 2, 4, 5 y 6 terminadas; falta la Fase 3 (respaldo/restauración) y correr el plan de pruebas.
 
 ---
 
@@ -90,10 +90,23 @@ Cambios: migración `317_staging_aislamiento_cuentas.sql` (reversa `…_rollback
 
 - **Pruebas automáticas:** se reemplazó la prueba vieja (que validaba el cobro en pasos separados) por 3 pruebas nuevas.
 
+## Fase 6 — Detalles (M1, M2, M3, M4, B1, B2)
+
+| Punto | Qué cambió | Dónde | Verificación |
+|---|---|---|---|
+| M1 · Revertir en Kardex | Pasa de lista de **prohibidos** a lista de **permitidos**: solo ajustes manuales y conteos. Los movimientos viejos sin origen y las devoluciones ya no se pueden revertir | Migración `319_staging_kardex_revertir_lista_permitidos.sql`; pantalla `src/utils/kardexRevertible.js` (usada por `KardexModal.jsx`) | Base real (se deshizo al final): devolución vieja → rechazada; despacho → rechazado; ajuste manual → revertido una vez y el segundo intento → "ya revertido". 3 pruebas de comportamiento nuevas |
+| M2 · "Sobrescribir" en el lote | **Eliminado** (Decisión 2 del dueño). La pantalla muestra "Suma al stock"; el servidor y la base rechazan cualquier otro modo | `IngresoLoteHubModal.jsx`, `inventario.js` (`handleBatchIngest`), migración `320_staging_lote_solo_suma.sql` | Aplicada en staging |
+| M3 · Importador CSV | Cada fila lleva un sello calculado a partir de su contenido: reintentar el mismo archivo no duplica productos (aparecen como "ya estaba importado"). **Limitación aceptada:** sigue sin ser "todo o nada", porque el ingreso por lote no admite productos con stock 0; si se corta, queda parcial, pero reintentar es seguro | `ImportadorModal.jsx`, `idempotencyKey.js` (`claveDeterministica`) | 2 pruebas nuevas |
+| M4 · Devolución parcial en la base | La base revisa:<br>• que cada fila coincida con la línea del despacho (producto y origen);<br>• que el total de cada fila sea cantidad × precio;<br>• que el total acreditado no supere la suma de las filas;<br>• que el total del intercambio cuadre | Migración `321_staging_devolucion_valida_totales.sql` | Aplicada; el probador completo la ejercita |
+| B1 · Transacciones | `313_…` y los rollbacks `313_…`/`314_…` quedan dentro de `BEGIN/COMMIT`, con avisos de orden y de peligro. El rollback `315_…` dice por escrito qué no revierte | Archivos de migración | — |
+| B2 · Conteo tras conflicto | Si otra persona movió el stock mientras se contaba, la ventana trae el stock actual, muestra qué cambió y deja volver a guardar sin cerrarla | `MovimientoLoteModal.jsx` | Revisión en navegador pendiente |
+
+Pruebas automáticas: 64 archivos y 552 pruebas OK (se agregaron pruebas de comportamiento y se ajustó una prueba de texto). Compilación OK.
+
 ## Pendiente
 
 - Registros técnicos sin columna de empresa (`system_logs`, `system_log_analysis`).
-- Fases 3 y 6 de OP-078 (seguridad, respaldo y restauración, facturar préstamo, separación entre empresas, detalles menores).
+- Fase 3 de OP-078 (respaldo completo y restauración segura) (seguridad, respaldo y restauración, facturar préstamo, separación entre empresas, detalles menores).
 - Ejecución del plan de pruebas OP-084 y su informe.
 - Publicar el servidor de staging con esta versión.
 - Anotar las migraciones `301`–`315` en el registro de migraciones de la base de staging.

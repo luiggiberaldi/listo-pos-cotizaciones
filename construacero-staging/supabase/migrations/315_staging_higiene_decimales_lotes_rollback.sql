@@ -1,3 +1,8 @@
+-- OP-2026-086: LO QUE ESTE ROLLBACK NO REVIERTE (a propósito o por omisión):
+--   * los tipos de columna NUMERIC(12,4) y las vistas (bajar a 2 decimales perdería datos);
+--   * devolver_prestamo_inventario_atomico, revertir_despacho_inventario_atomica,
+--     revertir_entrega_inventario_atomica, editar_despacho_profundidad y
+--     registrar_devolucion_inventario_atomica (quedan en su versión de 315).
 -- Rollback de 315_staging_higiene_decimales_lotes.sql (staging)
 BEGIN;
 

@@ -1575,6 +1575,12 @@ export async function handleBatchIngest(request, env) {
   const idempotencyKey = requestedIdempotencyKey || crypto.randomUUID();
   if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
 
+  // OP-2026-086 (Decisión 2 del dueño): el ingreso por lote solo SUMA. Para fijar el stock a un
+  // número se usa el conteo físico, que comprueba si hubo ventas mientras se contaba.
+  if (productos.some((p) => (p?.modoExistente || p?.modo_existente || 'sumar') !== 'sumar')) {
+    return jsonError('El ingreso por lote solo suma al stock. Para cuadrar existencias usa "Conteo físico".', 400, request);
+  }
+
   const rpcItems = productos.map((p) => {
     const isNuevo = Boolean(p.isNuevo);
     // Los precios de venta SOLO aplican a productos nuevos. Un ingreso de lote
@@ -1599,7 +1605,7 @@ export async function handleBatchIngest(request, env) {
       precio1_porcentaje: isNuevo ? (p.precio1_porcentaje ?? null) : null,
       precio2_porcentaje: isNuevo ? (p.precio2_porcentaje ?? null) : null,
       precio3_porcentaje: isNuevo ? (p.precio3_porcentaje ?? null) : null,
-      modo_existente: p.modoExistente || p.modo_existente || 'sumar',
+      modo_existente: 'sumar',
       actualizar_costo: Boolean(p.actualizarCosto ?? p.actualizar_costo),
     };
   });

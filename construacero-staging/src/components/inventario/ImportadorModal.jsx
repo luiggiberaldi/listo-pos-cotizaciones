@@ -5,6 +5,7 @@ import { Upload, X, FileText, AlertTriangle, CheckCircle2, Loader2, Table2, Chev
 import { Modal } from '../ui/Modal'
 import { useCrearProducto } from '../../hooks/useInventario'
 import { consolidarFilasImportacionCsv } from '../../utils/cargaDuplicada'
+import { claveDeterministica } from '../../utils/idempotencyKey'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const CAMPOS_DESTINO = [
@@ -195,8 +196,10 @@ export default function ImportadorModal({ isOpen, onClose, onSuccess }) {
         continue
       }
       try {
-        await crear.mutateAsync(p)
-        ok.push(p.nombre)
+        // OP-2026-086 (M3): clave estable por fila; reintentar el mismo archivo no duplica.
+        const idempotencyKey = await claveDeterministica('importar-csv:' + JSON.stringify(p))
+        const res = await crear.mutateAsync({ ...p, idempotencyKey })
+        ok.push(res?.idempotent ? `${p.nombre} (ya estaba importado)` : p.nombre)
       } catch (e) {
         errores.push({ fila: i + 2, mensaje: e.message ?? 'Error desconocido' })
       }

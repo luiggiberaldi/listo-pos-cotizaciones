@@ -14,6 +14,9 @@
 --    devoluciones en aprobaciones, entregas, reversiones y edición profunda,
 --    y consolida el saldo disponible de intercambio en `registrar_devolucion_inventario_atomica`.
 
+-- OP-2026-086 (B1): todo dentro de una transacción; si algo falla, no queda nada a medias.
+BEGIN;
+
 CREATE OR REPLACE FUNCTION public.verificar_prestamos_despacho_reaperturable(
   p_despacho_id uuid
 )
@@ -1575,3 +1578,5 @@ BEGIN
   WHERE id = p_despacho_id;
 END;
 $function$;
+
+COMMIT;

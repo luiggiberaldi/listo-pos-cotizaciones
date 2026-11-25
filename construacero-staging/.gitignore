@@ -128,3 +128,4 @@ scripts/*
 !api/handlers/__tests__/prestamosYDevoluciones071.test.js
 !api/handlers/__tests__/seguridadIdempotencia071.test.js
 !api/handlers/__tests__/higieneDecimalesRespaldo071.test.js
+!src/utils/__tests__/op086Inventario.test.js

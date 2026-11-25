@@ -10,6 +10,7 @@ import { useKardex, useRevertirMovimiento } from '../../hooks/useMovimientosInve
 import { MOTIVOS_TIPO, formatCorrelativo, getMotivoChipClasses } from '../../utils/motivosTipo'
 import useAuthStore from '../../store/useAuthStore'
 import { showToast } from '../ui/Toast'
+import { esMovimientoManualRevertible } from '../../utils/kardexRevertible'
 
 function formatFecha(ts) {
   return new Date(ts).toLocaleString('es-VE', {
@@ -46,35 +47,6 @@ function SummaryCard({ icon: Icon, label, value, color, suffix }) {
   )
 }
 
-const ORIGENES_SISTEMA_NO_REVERTIBLES = new Set([
-  'venta',
-  'despacho',
-  'devolucion',
-  'loan_return',
-  'transformacion_inventario',
-  'batch_ingest',
-  'reversion_inventario',
-  'product_create',
-  'product_update',
-  'product_delete',
-  'reconciliacion_kardex',
-])
-
-const ORIGENES_MANUALES_REVERTIBLES = new Set([
-  'movimiento_inventario',
-  'conteo_fisico',
-  'ajuste_inventario',
-  'compra',
-  'transferencia',
-  'otro',
-])
-
-function esMovimientoManualRevertible(m) {
-  if (!m || m.motivo_tipo === 'venta') return false
-  if (!m.origen_tipo) return true
-  if (ORIGENES_MANUALES_REVERTIBLES.has(m.origen_tipo)) return true
-  return !ORIGENES_SISTEMA_NO_REVERTIBLES.has(m.origen_tipo)
-}
 
 // ── Fila de Movimiento ──────────────────────────────────────────────────────
 function KardexRow({ m, idx, isExpanded, onToggle, puedeRevertir, yaRevertida, onRevertir, revirtiendo }) {

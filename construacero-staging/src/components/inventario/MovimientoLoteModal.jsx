@@ -182,6 +182,25 @@ export default function MovimientoLoteModal({ isOpen, onClose, productos = [] })
     } catch (e) {
       if (e.status === 409) {
         submitKeyRef.current = { signature: null, key: null }
+        // OP-2026-086 (B2): en el conteo, traer el stock actual del servidor y mostrar qué cambió,
+        // para que el operador revise y vuelva a guardar sin cerrar la ventana.
+        if (esConteo && items.length > 0) {
+          try {
+            const { data } = await supabase
+              .from('productos')
+              .select('id, stock_actual')
+              .in('id', items.map(i => i.producto_id))
+            const actual = new Map((data || []).map(r => [r.id, Number(r.stock_actual ?? 0)]))
+            const cambiados = items.filter(i => actual.has(i.producto_id) && actual.get(i.producto_id) !== Number(i.stock_actual))
+            if (cambiados.length > 0) {
+              setItems(prev => prev.map(i => actual.has(i.producto_id) ? { ...i, stock_actual: actual.get(i.producto_id) } : i))
+              setError(`El stock cambió mientras contabas: ${cambiados.map(i => `${i.nombre} (${i.stock_actual} → ${actual.get(i.producto_id)})`).join(', ')}. Ya se actualizó en pantalla; revisa tu conteo y vuelve a guardar.`)
+              return
+            }
+          } catch {
+            // si no se pudo refrescar, se muestra el mensaje del servidor
+          }
+        }
       }
       setError(e.message || 'Error al aplicar movimiento')
     }

@@ -1,4 +1,10 @@
 -- Rollback de 313_staging_prestamos_reapertura_intercambios.sql (Staging)
+-- ORDEN: ejecutar solo después de revertir 321, 320, 319, 318, 317, 316, 315 y 314.
+-- AVISO: vuelve a la lógica vieja de préstamos (no reingresaba préstamos al reabrir); los despachos
+-- con préstamos hechos con la lógica nueva quedarían descuadrados al reabrirlos.
+-- OP-2026-086 (B1): todo dentro de una transacción; si algo falla, no queda nada a medias.
+BEGIN;
+
 DROP FUNCTION IF EXISTS public.obtener_items_netos_despacho(uuid);
 DROP FUNCTION IF EXISTS public.verificar_prestamos_despacho_reaperturable(uuid);
 
@@ -1478,3 +1484,5 @@ BEGIN
 END;
 $function$
 ;
+
+COMMIT;
