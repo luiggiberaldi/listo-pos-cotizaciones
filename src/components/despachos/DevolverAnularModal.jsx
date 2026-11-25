@@ -59,7 +59,7 @@ export default function DevolverAnularModal({ isOpen, onClose, onConfirm, accion
   const pideDecisionAnular = isAnular && !!juego?.requiere_decision_anular
   const pideDecision = pideDecisionReabrir || pideDecisionAnular
 
-  const motivoAnularOk = motivoText.trim().length >= 10
+  const motivoAnularOk = motivoText.trim().length >= 5
   const isValidDevolver = isDevolver && motivoSelect !== '' && (motivoSelect !== 'Otro' || motivoText.trim().length > 0)
   const isValidAnular = isAnular && motivoAnularOk && entendido
   const decisionOk = !pideDecision || destino !== ''
@@ -187,10 +187,10 @@ export default function DevolverAnularModal({ isOpen, onClose, onConfirm, accion
                 data-testid="motivo-anulacion"
                 value={motivoText}
                 onChange={e => setMotivoText(e.target.value)}
-                placeholder="Escriba el motivo (mínimo 10 caracteres)..."
+                placeholder="Escriba el motivo (mínimo 5 caracteres)..."
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition-colors min-h-[100px] resize-none"
               />
-              <p className="text-xs text-slate-400 mt-1">{motivoText.length}/10 mínimo</p>
+              <p className="text-xs text-slate-400 mt-1">{motivoText.length}/5 mínimo</p>
             </div>
             <label className="flex items-start gap-2 bg-slate-50 p-2 rounded-lg cursor-pointer">
               <input

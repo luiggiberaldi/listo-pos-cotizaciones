@@ -918,12 +918,23 @@ export async function handleActualizarEstadoDespacho(request, env) {
     const destinoPagos = typeof body.destinoPagos === 'string' ? body.destinoPagos : null;
     const destinoPagoAnotado = typeof body.destinoPagoAnotado === 'string' ? body.destinoPagoAnotado : null;
     let pagosEnJuego = null;
+    let anularSoloIntencion = false;
     if (esReabrirEntregada || esAnularPendiente) {
       const juegoRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/cxc_pagos_en_juego_despacho`, {
         method: 'POST', headers, body: JSON.stringify({ p_despacho_id: despachoId }),
       });
       if (!juegoRes.ok) return jsonError('No se pudo revisar los pagos del despacho. Vuelve a intentar.', 500, request);
       pagosEnJuego = await juegoRes.json();
+      // OP-2026-064: un despacho pendiente (esperando aprobación) NO ha recibido dinero; la forma de pago
+      // anotada es solo la intención. No se pregunta por ese dinero: se anula con motivo y la auditoría
+      // guarda lo que estaba anotado como "nunca se cobró" (ver el paso 6).
+      if (esAnularPendiente) {
+        anularSoloIntencion = Number(pagosEnJuego?.total_anotado) > 0.005;
+        pagosEnJuego = { ...sinDecisionAnularPendiente(pagosEnJuego), pagos_anotados_guardados: pagosEnJuego?.pagos_anotados || [] };
+        if (String(body.motivo_anulacion || '').trim().length < 5) {
+          return jsonError('Escribe el motivo de la anulación (mínimo 5 caracteres).', 400, request);
+        }
+      }
       const fmt = (n) => `$${Number(n || 0).toFixed(2)}`;
       if (esReabrirEntregada && pagosEnJuego?.requiere_decision_reabrir && !['mantener', 'saldo_favor'].includes(destinoPagos)) {
         return json({
@@ -1132,27 +1143,6 @@ export async function handleActualizarEstadoDespacho(request, env) {
     // OP-2026-052 (N1): anular un pendiente con pagos anotados aplica la decisión (saldo a favor,
     // otro despacho o no cobrado), cambia el estado y anota en la auditoría, todo en una transacción.
     let anulacionConPagos = null;
-    if (esAnularPendiente && pagosEnJuego?.requiere_decision_anular) {
-      const anRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/anular_despacho_con_pagos`, {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          p_despacho_id: despachoId,
-          p_usuario_id: user.operator_id,
-          p_usuario_nombre: operador.nombre,
-          p_usuario_rol: operador.rol,
-          p_destino: destinoPagoAnotado,
-          p_motivo: String(body.motivo_anulacion || '').trim(),
-        }),
-      });
-      if (!anRes.ok) {
-        const t = await anRes.text();
-        if (t.includes('MOTIVO_REQUERIDO')) return jsonError('Escribe el motivo de la anulación (mínimo 10 caracteres).', 400, request);
-        if (t.includes('DECISION_PAGOS_REQUERIDA')) return json({ error: 'Elige qué pasó con los pagos anotados antes de anular.', code: 'DECISION_PAGOS_REQUERIDA', pagos: pagosEnJuego }, 409, request);
-        return jsonError(`No se pudo anular el despacho: ${t.slice(0, 200)}`, 400, request);
-      }
-      anulacionConPagos = await anRes.json();
-    }
-
     // 4. Actualizar estado
     const updateData = { estado: nuevoEstado };
     if (esAnularPendiente && body.motivo_anulacion) updateData.motivo_anulacion = String(body.motivo_anulacion).trim();
@@ -1508,6 +1498,7 @@ export async function handleActualizarEstadoDespacho(request, env) {
       meta: {
         estado_anterior: desp.estado, estado_nuevo: nuevoEstado, cotizacion_id: desp.cotizacion_id,
         egreso_inventario: aprobacionAtomica ? 'sql_atomic' : null,
+        ...(anularSoloIntencion ? { motivo_anulacion: String(body.motivo_anulacion || '').trim(), pago_anotado_nunca_cobrado: pagosEnJuego?.pagos_anotados_guardados, total_anotado: pagosEnJuego?.total_anotado } : {}),
         ...(aprobacionAtomica?.alertas_stock?.length ? { stock_alertas: aprobacionAtomica.alertas_stock } : {}),
       }, ip,
     });
@@ -3114,6 +3105,11 @@ export async function handlePreviewDevolucionCxc(request, env, url) {
   }
 }
 
+// OP-2026-064: en un despacho pendiente los "pagos anotados" son solo la intención de pago, no dinero recibido.
+export function sinDecisionAnularPendiente(juego) {
+  return juego ? { ...juego, requiere_decision_anular: false, pagos_anotados_son_intencion: Number(juego.total_anotado) > 0 } : juego;
+}
+
 // OP-2026-052 (G2, N1): qué dinero está en juego antes de reabrir o anular un despacho.
 // La pantalla lo muestra y pide la decisión antes de confirmar.
 export async function handlePagosEnJuegoDespacho(request, env, url) {
@@ -3130,7 +3126,8 @@ export async function handlePagosEnJuegoDespacho(request, env, url) {
       method: 'POST', headers, body: JSON.stringify({ p_despacho_id: despachoId }),
     });
     if (!r.ok) return jsonError('No se pudo revisar los pagos del despacho', 500, request);
-    return json(await r.json(), 200, request);
+    const juego = await r.json();
+    return json(juego?.estado === 'pendiente' ? sinDecisionAnularPendiente(juego) : juego, 200, request);
   } catch (e) {
     return jsonError(e.message || 'No se pudo revisar los pagos del despacho', 500, request);
   }

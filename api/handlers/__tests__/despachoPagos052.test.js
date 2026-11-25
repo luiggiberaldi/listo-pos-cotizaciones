@@ -66,8 +66,7 @@ describe('G2 y N1 — contratos del servidor', () => {
     expect(despachos).toContain('p_destino_pagos: destinoPagos')
   })
 
-  it('anular un pendiente con pagos anotados pasa por la función con decisión', () => {
-    expect(despachos).toContain('rpc/anular_despacho_con_pagos')
+  it('la decisión de destino de pagos se valida si el servidor la exige (OP-064: ya no para pendientes)', () => {
     expect(despachos).toContain("['saldo_favor', 'otro_despacho', 'no_cobrado'].includes(destinoPagoAnotado)")
   })
 
@@ -112,5 +111,17 @@ describe('G2 y N1 — contratos de la pantalla', () => {
   it('anular desde la lista usa el mismo modal con motivo y decisión', () => {
     expect(vista).toContain('<_DevolverAnularModal') // producción usa el prefijo _ en los componentes de esta vista
     expect(vista).toContain('motivoAnulacion: motivo')
+  })
+})
+
+describe('OP-2026-064 — anular un despacho por aprobar no pregunta por dinero', () => {
+  it('la consulta y la anulación tratan los pagos anotados de un pendiente como intención', async () => {
+    const { sinDecisionAnularPendiente } = await import('../despachos.js')
+    const r = sinDecisionAnularPendiente({ estado: 'pendiente', total_anotado: 30, requiere_decision_anular: true })
+    expect(r.requiere_decision_anular).toBe(false)
+    expect(r.pagos_anotados_son_intencion).toBe(true)
+    expect(despachos).toContain('pago_anotado_nunca_cobrado')
+    expect(despachos).toContain('mínimo 5 caracteres')
+    expect(despachos).toContain('anularSoloIntencion')
   })
 })
