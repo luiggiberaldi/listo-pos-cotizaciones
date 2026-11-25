@@ -1,6 +1,6 @@
 # OP-2026-025 — Búsquedas de despachos y cotizaciones sin recortes
 
-**Fecha inicial:** 2026-11-10 · **Retomado y preparado para producción:** 2026-11-25 · **Rama:** `feat/op-025-busqueda-sin-limites` (desde `main` `fa13d0c2`, en la carpeta aparte `construacero-op025`) · **Estado:** 🧪 Listo y probado; **pendiente de tu visto bueno** para guardar, subir y publicar.
+**Fecha inicial:** 2026-11-10 · **Retomado y preparado para producción:** 2026-11-25 · **Rama:** `feat/op-025-busqueda-sin-limites` (desde `main` `fa13d0c2`, en la carpeta aparte `construacero-op025`) · **Estado:** 🧪 Solicitud de cambio **#79** abierta (commit `8a7111a9`); pendiente de tu visto bueno final para publicar.
 
 ## En resumen
 
@@ -42,6 +42,6 @@
 
 ## Pendiente
 
-1. Tu visto bueno a la prueba en el navegador.
-2. Guardar, subir, abrir la solicitud de cambio y, con tu aprobación final, publicar.
+1. ~~Tu visto bueno a la prueba en el navegador~~ (dado el 2026-11-25).
+2. ~~Guardar, subir y abrir la solicitud~~: hecho, solicitud #79 (https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/79). Falta mirar la vista previa (datos reales: solo mirar) y tu aprobación final para unir a `main`.
 3. Después de publicar: buscar un cliente con muchas cotizaciones/despachos y comprobar que aparecen los antiguos.
