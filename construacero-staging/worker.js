@@ -19,16 +19,16 @@ import { handlePush } from './api/handlers/push.js'
 import { handleLogFromClient, handleGetLogs, handleGetLogStats, handleDownloadLogs, handleAnalyzeLogs, handlePurgeLogs } from './api/handlers/logs.js'
 import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/handlers/audit.js'
 import { handleMarcarComisionPagada, handleLiberarComisionCxc, handleActualizarEstadoComision, handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
-import { handleRegistrarAbono, handleRevertirAbono, handleRevertirCargoCxc, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
-import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin } from './api/handlers/auth-operators.js'
-import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleListarLotesPrecios, handleRestaurarLotePrecios, handleClearInventory, handlePdfTemp } from './api/handlers/inventario.js'
+import { handleRegistrarAbono, handleRevertirAbono, handleMovimientosBorradosCliente, handleRevertirCargoCxc, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
+import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin, handleCurrentOperator, handleGetTasaConfig } from './api/handlers/auth-operators.js'
+import { handleBuscarProductosHibrido, handleSyncEmbeddings, handleParseMaterialText, handleScanMaterialList, handleAplicarMovimientoLote, handleConteoInventario, handleRevertirMovimientoInventario, handleBatchIngest, handleTransformacionInventario, handleBatchPriceUpdate, handleListarLotesPrecios, handleRestaurarLotePrecios, handleClearInventory, handlePdfTemp, handleActualizarProductoMetadatos, handleCrearProductoConKardex, handleActualizarProductoConKardex, handleBorrarProductoConKardex } from './api/handlers/inventario.js'
 import { handleGuardarCotizacion, handleReciclarCotizacion, handleReabrirCotizacion, handleCrearVersion, handleEnviarCotizacion, handleVentaRapida, runCleanupCotizaciones } from './api/handlers/cotizaciones.js'
-import { handleCrearDespacho, handleCambiarFechaEntregaDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleEditarCodigosExternos, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho, handleRegularizarCodEfectivo } from './api/handlers/despachos.js'
+import { handleCrearDespacho, handleCambiarFechaEntregaDespacho, handleActualizarEstadoDespacho, handleEditarItemsDespacho, handleEditarCodigosExternos, handleReciclarDespacho, handleGuardarDescuentos, handleObtenerDescuentos, handleEditarPagoDespacho, handleDevolucionParcialDespacho, handleRegularizarCodEfectivo, handlePreviewDevolucionCxc, handlePagosEnJuegoDespacho } from './api/handlers/despachos.js'
 import { handleResumenFinancieroDespacho, handleConciliarPagoCod } from './api/handlers/cod.js'
 import { isSameOriginRequest } from './api/lib/utils.js'
 import { handleDevTools } from './api/handlers/dev.js'
 import { handleGetRates } from './api/handlers/rates.js'
-import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleDesignacion, handleResetOperacional, handleTesterClearAll, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
+import { handleAdmin, handleBackup, handleRestore, handleSaveConfig, handleGetConfig, handleDesignacion, handleResetOperacional, handleTesterClearAll, handleTesterCleanupFixtures, handleTesterSeedDemo, handleTesterStressSeed, handleCrearTransportista, handleActualizarTransportista, handleDesactivarTransportista } from './api/handlers/admin.js'
 import { handleGetSeguimiento, handleCrearSeguimiento, handleActualizarSeguimiento, handleBorrarSeguimiento, runPurgeTrackingImages } from './api/handlers/seguimiento.js'
 import {
   handleListarProveedores,
@@ -194,6 +194,20 @@ export default {
       return handleBatchPriceUpdate(request, env);
     }
 
+    // ── API: crear/actualizar/borrar producto con Kardex (service_role) ──────
+    if (url.pathname === '/api/productos/crear' && request.method === 'POST') {
+      return handleCrearProductoConKardex(request, env);
+    }
+    if (url.pathname === '/api/productos/actualizar' && request.method === 'PATCH') {
+      return handleActualizarProductoConKardex(request, env);
+    }
+    if (url.pathname === '/api/productos/borrar' && request.method === 'DELETE') {
+      return handleBorrarProductoConKardex(request, env);
+    }
+    if (url.pathname === '/api/productos/metadatos' && request.method === 'PATCH') {
+      return handleActualizarProductoMetadatos(request, env);
+    }
+
     // ── API: Sincronizar embeddings de productos (admin) ────────────────────
     if (url.pathname === '/api/admin/sync-embeddings' && request.method === 'POST') {
       return handleSyncEmbeddings(request, env);
@@ -254,6 +268,15 @@ export default {
     // ── API: devolución parcial de despacho (administracion/logistica) ────
     if (url.pathname === '/api/despachos/devolucion-parcial' && request.method === 'POST') {
       return handleDevolucionParcialDespacho(request, env);
+    }
+
+    // ── API OP-2026-042: vista previa del efecto de una devolución en CxC ──
+    if (url.pathname === '/api/despachos/devolucion-preview-cxc' && request.method === 'GET') {
+      return handlePreviewDevolucionCxc(request, env, url);
+    }
+    // ── API OP-2026-052: dinero en juego antes de reabrir o anular un despacho ──
+    if (url.pathname === '/api/despachos/pagos-en-juego' && request.method === 'GET') {
+      return handlePagosEnJuegoDespacho(request, env, url);
     }
 
     // ── API: obtener descuentos de un despacho ────────────────────────────
@@ -325,6 +348,10 @@ export default {
     // ── API: revertir abono CxC (bypass RLS) ──────────────────────────────
     if (url.pathname === '/api/cxc/revertir-abono' && request.method === 'POST') {
       return handleRevertirAbono(request, env);
+    }
+    // ── API OP-2026-055: movimientos anulados o borrados de un cliente ──
+    if (url.pathname === '/api/cxc/movimientos-borrados' && request.method === 'GET') {
+      return handleMovimientosBorradosCliente(request, env, url);
     }
 
     // ── API: revertir (parcial/total) el cargo CxC de un despacho ──────────
@@ -447,6 +474,11 @@ export default {
       return handleAplicarMovimientoLote(request, env);
     }
 
+    // ── API: conteo físico atómico con concurrencia optimista (N25) ──────────
+    if (url.pathname === '/api/inventario/conteo' && request.method === 'POST') {
+      return handleConteoInventario(request, env);
+    }
+
     // ── API: revertir movimiento de inventario (admin) ─────────────────────
     if (url.pathname === '/api/inventario/movimiento/revertir' && request.method === 'POST') {
       return handleRevertirMovimientoInventario(request, env);
@@ -527,6 +559,9 @@ export default {
     if (url.pathname === '/api/admin/tester/clear-all' && request.method === 'DELETE') {
       return handleTesterClearAll(request, env);
     }
+    if (url.pathname === '/api/admin/tester/cleanup-fixtures' && request.method === 'DELETE') {
+      return handleTesterCleanupFixtures(request, env);
+    }
 
     // ── API: switch/clear operator (auth con PIN) ────────────────────────
     if (url.pathname === '/api/auth/switch-operator' && request.method === 'POST') {
@@ -537,6 +572,12 @@ export default {
     }
     if (url.pathname === '/api/auth/operators' && request.method === 'GET') {
       return handleGetOperators(request, env);
+    }
+    if (url.pathname === '/api/auth/current-operator' && request.method === 'GET') {
+      return handleCurrentOperator(request, env);
+    }
+    if (url.pathname === '/api/auth/tasa-config' && request.method === 'GET') {
+      return handleGetTasaConfig(request, env);
     }
     if (url.pathname === '/api/auth/super-admin' && request.method === 'POST') {
       return handleSuperAdmin(request, env);

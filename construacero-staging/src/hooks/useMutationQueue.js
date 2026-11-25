@@ -19,7 +19,6 @@ import { INVENTARIO_KEY } from './useInventario'
 import { COTIZACIONES_KEY } from './useCotizaciones'
 import { COMISIONES_KEY } from './useComisiones'
 import { CXC_KEY } from './useCuentasCobrar'
-import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 
 // ─── Dispatcher: convierte un item de la cola en un fetch real ────────────────
 async function dispatchItem(item) {
@@ -94,7 +93,6 @@ export function useMutationQueue() {
         qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
         qc.invalidateQueries({ queryKey: COMISIONES_KEY })
         qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
-        qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
         qc.invalidateQueries({ queryKey: CXC_KEY })
         if (!silent) showToast(`${done} venta${done > 1 ? 's' : ''} sincronizada${done > 1 ? 's' : ''}`, 'success')
       }

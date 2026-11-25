@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react'
 import { Upload, X, FileText, AlertTriangle, CheckCircle2, Loader2, Table2, ChevronRight, RefreshCw } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { useCrearProducto } from '../../hooks/useInventario'
+import { consolidarFilasImportacionCsv } from '../../utils/cargaDuplicada'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const CAMPOS_DESTINO = [
@@ -178,6 +179,8 @@ export default function ImportadorModal({ isOpen, onClose, onSuccess }) {
   }
 
   const productosPrevio = filas.map(construirProducto)
+  const productosConsolidados = consolidarFilasImportacionCsv(productosPrevio)
+  const filasConsolidadasCount = Math.max(0, productosPrevio.length - productosConsolidados.length)
 
   // ── Importar ─────────────────────────────────────────────────────────────────
   async function importar() {
@@ -185,8 +188,8 @@ export default function ImportadorModal({ isOpen, onClose, onSuccess }) {
     const ok = []
     const errores = []
 
-    for (let i = 0; i < productosPrevio.length; i++) {
-      const p = productosPrevio[i]
+    for (let i = 0; i < productosConsolidados.length; i++) {
+      const p = productosConsolidados[i]
       if (!p.nombre) {
         errores.push({ fila: i + 2, mensaje: 'Sin nombre' })
         continue
@@ -335,11 +338,12 @@ export default function ImportadorModal({ isOpen, onClose, onSuccess }) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-600">
-              <strong>{productosPrevio.length}</strong> productos listos para importar.
+              <strong>{productosConsolidados.length}</strong> productos listos para importar
+              {filasConsolidadasCount > 0 ? ` (${filasConsolidadasCount} fila(s) repetida(s) sumada(s) automáticamente)` : ''}.
               Revisa los datos antes de confirmar:
             </p>
             <span className="text-xs text-slate-400 flex items-center gap-1">
-              <Table2 size={12} /> {productosPrevio.filter(p => p.nombre).length} válidos
+              <Table2 size={12} /> {productosConsolidados.filter(p => p.nombre).length} válidos
             </span>
           </div>
 
@@ -385,7 +389,7 @@ export default function ImportadorModal({ isOpen, onClose, onSuccess }) {
               className="ml-auto flex items-center gap-2 px-5 py-2 rounded-xl text-white text-sm font-bold transition-all shadow-md active:scale-[0.98] disabled:opacity-60"
               style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}
             >
-              {importando ? <><Loader2 size={14} className="animate-spin" /> Importando...</> : <><Upload size={14} /> Importar {productosPrevio.length} productos</>}
+              {importando ? <><Loader2 size={14} className="animate-spin" /> Importando...</> : <><Upload size={14} /> Importar {productosConsolidados.length} productos</>}
             </button>
           </div>
         </div>
