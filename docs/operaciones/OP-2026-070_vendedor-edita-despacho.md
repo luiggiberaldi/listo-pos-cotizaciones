@@ -57,3 +57,10 @@ Administración, jefe y desarrollador: **sin cambios**.
 ## Corrección antes de publicar (2026-11-24)
 
 Vercel rechazó la primera versión de la solicitud #73: el archivo de reglas estaba en la carpeta `api/`, que Vercel no incluye al construir la pantalla (`.vercelignore`), y la pantalla no lo encontraba. Se movió a `src/utils/` (el servidor también puede leerlo de ahí, como ya hace con otros archivos). Pruebas y construcción pasan en producción y staging.
+
+## Publicación (2026-11-24)
+
+1. Copia de seguridad de la función viva de producción (`OP-2026-070_backup_editar_despacho_profundidad_produccion.sql`; coincide con el archivo de deshacer) y migración 311 aplicada: la función nueva ya reconoce al vendedor.
+2. Solicitudes #72 (commit `2f847c2e`) y #73 (commit `b78b6e2f`) unidas a main. Servidor desplegado con éxito; Vercel "Ready" en ambos.
+3. Revisión: `/api/ping` 200 y las rutas de guardar cotización y editar productos sin sesión responden 401.
+4. **Sin verificar aún:** prueba con un vendedor real y prueba "sin conexión" en un teléfono real.
