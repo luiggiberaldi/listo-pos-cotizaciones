@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
-import { apiUrl, getAuthHeaders } from '../services/apiBase'
+import { apiUrl, getAuthHeaders, chunkIds, traerTodo, mapConLimite, lookupClientesPorIds } from '../services/apiBase'
 import { getOperatorSessionHeaders, getOperatorSession } from '../services/operatorSession'
 import { calcTotales } from '../utils/calcTotales'
 import { round2 } from '../utils/dinero'
@@ -142,7 +142,7 @@ export function useBuscarCotizaciones(busqueda, { enabled = true } = {}) {
       // 1. Por número (COT-00123, 123, etc.)
       const numberClean = q.replace(/^cot[.\-\s]*/i, '').replace(/^0+/, '')
       if (numberClean && !isNaN(numberClean)) {
-        let byNum = supabase.from('cotizaciones').select(selectCols).eq('numero', parseInt(numberClean, 10)).limit(20)
+        let byNum = supabase.from('cotizaciones').select(selectCols).eq('numero', parseInt(numberClean, 10)).limit(200)
         if (!esPrivilegiado) byNum = byNum.eq('vendedor_id', perfil.id)
         promises.push(byNum.then(r => r.data ?? []))
       }
@@ -151,44 +151,49 @@ export function useBuscarCotizaciones(busqueda, { enabled = true } = {}) {
       if (session?.access_token && q.length >= 2) {
         promises.push(
           fetch(apiUrl(`/api/clientes?busqueda=${encodeURIComponent(q)}`), {
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            // OP-2026-025: sin la sesión de operador el servidor responde 403 y la
+            // búsqueda por cliente en el histórico no traía nada.
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+              ...getOperatorSessionHeaders(),
+            },
           })
             .then(r => r.ok ? r.json() : [])
             .then(async clients => {
               const ids = (clients || []).map(c => c.id).filter(Boolean)
               if (!ids.length) return []
-              let byCliente = supabase.from('cotizaciones').select(selectCols)
-                .in('cliente_id', ids)
-                .order('actualizado_en', { ascending: false })
-                .limit(60)
-              if (!esPrivilegiado) byCliente = byCliente.eq('vendedor_id', perfil.id)
-              const r = await byCliente
-              return r.data ?? []
+              // Sin tope de 60 (OP-2026-025): por lotes de 50 clientes (máx. 4 a la vez),
+              // y cada lote completo aunque pase de 1000 cotizaciones.
+              const lotes = await mapConLimite(chunkIds(ids, 50), 4, chunk => traerTodo(() => {
+                let byCliente = supabase.from('cotizaciones').select(selectCols)
+                  .in('cliente_id', chunk)
+                  .order('actualizado_en', { ascending: false })
+                  .order('id')
+                if (!esPrivilegiado) byCliente = byCliente.eq('vendedor_id', perfil.id)
+                return byCliente
+              }).catch(() => []))
+              return lotes.flat()
             })
             .catch(() => [])
         )
       }
 
       const results = (await Promise.all(promises)).flat()
-      // Dedupe por id
+      // Dedupe por id; más recientes primero (los lotes llegan por separado)
       const rows = [...new Map(results.map(r => [r.id, r])).values()]
+        .sort((a, b) => String(b.actualizado_en || '').localeCompare(String(a.actualizado_en || '')))
       if (!rows.length) return []
 
       // Enriquecer con clientes + vendedores (misma vía que la lista)
       const clienteIds = [...new Set(rows.map(r => r.cliente_id).filter(Boolean))]
       const vendedorIds = [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))]
       const [clientesData, vendedoresRes] = await Promise.all([
-        clienteIds.length
-          ? fetch(apiUrl('/api/clientes/lookup'), {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${session?.access_token}`,
-                ...getOperatorSessionHeaders(),
-              },
-              body: JSON.stringify({ ids: clienteIds }),
-            }).then(r => r.ok ? r.json() : []).catch(() => [])
-          : Promise.resolve([]),
+        // En tandas de 200: el servidor rechaza más (OP-2026-025)
+        lookupClientesPorIds(clienteIds, {
+          Authorization: `Bearer ${session?.access_token}`,
+          ...getOperatorSessionHeaders(),
+        }),
         vendedorIds.length
           ? supabase.from('usuarios').select('id, nombre, color, telefono, rol, markup_pct, es_externo').in('id', vendedorIds)
           : Promise.resolve({ data: [] }),

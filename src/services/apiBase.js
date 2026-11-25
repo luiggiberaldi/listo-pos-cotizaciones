@@ -73,3 +73,59 @@ export function chunkIds(ids, size = 50) {
   for (let i = 0; i < unique.length; i += size) chunks.push(unique.slice(i, i + size))
   return chunks
 }
+
+/**
+ * Trae TODAS las filas de una consulta (OP-2026-025). La base entrega como máximo
+ * 1000 filas por pedido; si una tanda llega llena se pide la siguiente.
+ * `crear` arma la consulta desde cero en cada tanda y debe incluir un orden estable
+ * (por ejemplo .order('id')) para que las tandas no se pisen ni dejen huecos.
+ */
+export async function traerTodo(crear, tanda = 1000) {
+  const filas = []
+  for (let desde = 0; ; desde += tanda) {
+    const { data, error } = await crear().range(desde, desde + tanda - 1)
+    if (error) throw error
+    filas.push(...(data || []))
+    if (!data || data.length < tanda) return filas
+  }
+}
+
+/**
+ * Ejecuta `fn` sobre cada elemento con como máximo `limite` llamadas a la vez y
+ * devuelve los resultados en el mismo orden (OP-2026-025). Evita lanzar cientos
+ * de consultas simultáneas cuando una búsqueda trae muchos resultados.
+ */
+export async function mapConLimite(items, limite, fn) {
+  const lista = items || []
+  const resultados = new Array(lista.length)
+  let siguiente = 0
+  const trabajador = async () => {
+    while (siguiente < lista.length) {
+      const i = siguiente++
+      resultados[i] = await fn(lista[i], i)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limite), lista.length) }, trabajador))
+  return resultados
+}
+
+/** Máximo de ids que acepta /api/clientes/lookup por pedido (api/handlers/clientes.js). */
+export const LOOKUP_CLIENTES_MAX = 200
+
+/**
+ * Busca clientes por id vía /api/clientes/lookup en tandas de 200 (el servidor
+ * rechaza más de 200). Si una tanda falla, esa tanda queda vacía y el resto se
+ * muestra igual (la lista enseña "cliente: —" en vez de fallar completa).
+ */
+export async function lookupClientesPorIds(ids, headers) {
+  const tandas = chunkIds(ids, LOOKUP_CLIENTES_MAX)
+  if (!tandas.length) return []
+  const res = await mapConLimite(tandas, 4, tanda =>
+    fetch(apiUrl('/api/clientes/lookup'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ ids: tanda }),
+    }).then(r => (r.ok ? r.json() : [])).catch(() => [])
+  )
+  return res.flat()
+}
