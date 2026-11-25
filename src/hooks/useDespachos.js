@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import supabase from '../services/supabase/client'
-import { apiUrl, getAuthHeaders, chunkIds } from '../services/apiBase'
+import { apiUrl, getAuthHeaders, chunkIds, traerTodo, mapConLimite, lookupClientesPorIds } from '../services/apiBase'
 import { getOperatorSessionHeaders } from '../services/operatorSession'
 import useAuthStore from '../store/useAuthStore'
 import { authFetch } from '../services/authFetch'
@@ -21,9 +21,10 @@ async function cargarPesosDespachos(ids) {
   const tandas = []
   for (let i = 0; i < unicos.length; i += 60) tandas.push(unicos.slice(i, i + 60))
   try {
-    const res = await Promise.all(tandas.map(t =>
+    // Máximo 4 tandas a la vez: una búsqueda sin tope puede traer miles (OP-2026-025)
+    const res = await mapConLimite(tandas, 4, t =>
       supabase.from('despacho_pesos').select('despacho_id, peso_total_kg, items_sin_peso, items_total').in('despacho_id', t)
-    ))
+    )
     const mapa = {}
     for (const r of res) if (!r.error) for (const f of r.data ?? []) mapa[f.despacho_id] = f
     return mapa
@@ -47,8 +48,13 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
     queryFn: async () => {
       let matchedIds = null
 
-      if (busqueda && busqueda.trim()) {
-        const q = busqueda.trim()
+      // OP-2026-025: la búsqueda ya no tiene tope de resultados, así que un texto de
+      // 1 sola letra (p. ej. "a") traería casi todos los despachos. Igual que en
+      // Cotizaciones, el texto se busca desde 2 caracteres; los números, desde 1.
+      const qBusqueda = (busqueda || '').trim()
+      const busquedaValida = qBusqueda.length >= 2 || /^\d+$/.test(qBusqueda)
+      if (qBusqueda && busquedaValida) {
+        const q = qBusqueda
         const promises = []
 
         // 1. Search by dispatch/quotation numbers
@@ -89,12 +95,15 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
               // Troceado en lotes de 50 (mismo patrón que los despachos abajo):
               // una URL con cientos de clientes x2 columnas muere con ERR_FAILED.
               const cliChunks = chunkIds(clientIds, 50)
-              const cliDespRes = await Promise.all(cliChunks.map(chunk =>
-                supabase.from('notas_despacho')
+              // Cada lote se trae completo, aunque pase de 1000 despachos (OP-2026-025).
+              const cliDespRes = await mapConLimite(cliChunks, 4, chunk =>
+                traerTodo(() => supabase.from('notas_despacho')
                   .select('id')
                   .or(`cliente_id.in.(${chunk.join(',')}),cliente_factura_id.in.(${chunk.join(',')})`)
-              ))
-              const cliIds = cliDespRes.flatMap(r => r.error ? [] : (r.data || []).map(d => d.id))
+                  .order('id'))
+                  .catch(() => [])
+              )
+              const cliIds = cliDespRes.flat().map(d => d.id)
               return [...new Set(cliIds)]
             })
             .catch(err => {
@@ -109,14 +118,17 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
           supabase.from('usuarios').select('id').ilike('nombre', `%${q}%`).then(async r => {
             const uIds = r.data?.map(u => u.id) || []
             if (uIds.length === 0) return []
-            const despRes = await supabase.from('notas_despacho').select('id').in('vendedor_id', uIds)
-            return despRes.data?.map(d => d.id) || []
-          })
+            // Completo aunque el vendedor tenga más de 1000 despachos (OP-2026-025).
+            const despRes = await traerTodo(() => supabase.from('notas_despacho').select('id').in('vendedor_id', uIds).order('id'))
+            return despRes.map(d => d.id)
+          }).catch(() => [])
         )
 
         // 4. Match in notes/references
         promises.push(
-          supabase.from('notas_despacho').select('id').or(`notas.ilike.%${q}%,referencia_pago.ilike.%${q}%`).then(r => r.data?.map(d => d.id) || [])
+          traerTodo(() => supabase.from('notas_despacho').select('id').or(`notas.ilike.%${q}%,referencia_pago.ilike.%${q}%`).order('id'))
+            .then(filas => filas.map(d => d.id))
+            .catch(() => [])
         )
 
         const results = await Promise.all(promises)
@@ -127,7 +139,7 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
         return []
       }
 
-      let query = supabase
+      const crearQuery = () => supabase
         .from('notas_despacho')
         .select(`
           id, numero, cotizacion_id, estado, tiene_prestamos, tiene_devoluciones,
@@ -147,44 +159,42 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
         `)
         .order(estado ? 'actualizado_en' : 'numero', { ascending: false })
 
+      // Filtros comunes a cada consulta (se aplican también a cada lote de ids).
+      const aplicarFiltros = (q) => {
+        if (esHoy) {
+          const start = new Date()
+          start.setHours(0, 0, 0, 0)
+          const end = new Date()
+          end.setHours(23, 59, 59, 999)
+          q = q.gte('creado_en', start.toISOString()).lte('creado_en', end.toISOString())
+        }
+        if (estado) q = q.eq('estado', estado)
+        // Logística solo ve despachos aprobados (despachada/entregada), NO pendientes
+        if (esLogistica && !estado) q = q.in('estado', ['despachada', 'entregada'])
+        // Vendedores solo ven sus propios despachos; logística/admin/supervisor ven todos
+        if (!veTodos) q = q.eq('vendedor_id', perfil.id)
+        return q
+      }
+
+      const campoOrden = estado ? 'actualizado_en' : 'numero'
+      let data, error
       if (matchedIds !== null) {
-        // Evitar URLs gigantes; para búsquedas con muchos resultados el filtro
-        // se divide en lotes y se resuelve antes de la consulta enriquecida.
+        // Búsqueda: SIN tope de resultados (OP-2026-025; antes se cortaba en 200).
+        // Lotes de 50 ids para no armar URLs gigantes, máximo 4 consultas a la vez.
         const matchedChunks = chunkIds(matchedIds, 50)
         if (matchedChunks.length === 0) return []
-        if (matchedChunks.length > 1) {
-          const results = await Promise.all(matchedChunks.map(chunk =>
-            supabase.from('notas_despacho').select('id').in('id', chunk)
-          ))
-          const ids = results.flatMap(r => r.error ? [] : (r.data || []).map(row => row.id))
-          if (ids.length === 0) return []
-          query = query.in('id', ids.slice(0, 200))
-        } else {
-          query = query.in('id', matchedChunks[0])
-        }
+        const results = await mapConLimite(matchedChunks, 4, chunk =>
+          aplicarFiltros(crearQuery().in('id', chunk))
+        )
+        error = results.find(r => r.error)?.error
+        data = results.flatMap(r => r.data || [])
+        data.sort((a, b) => (a[campoOrden] === b[campoOrden] ? 0 : (b[campoOrden] > a[campoOrden] ? 1 : -1)))
+      } else {
+        let query = aplicarFiltros(crearQuery())
+        // Lista normal (sin texto): solo los 200 más recientes, para que abra rápido.
+        if (!esHoy) query = query.limit(200)
+        ;({ data, error } = await query)
       }
-
-      if (esHoy) {
-        const start = new Date()
-        start.setHours(0, 0, 0, 0)
-        const end = new Date()
-        end.setHours(23, 59, 59, 999)
-        query = query.gte('creado_en', start.toISOString()).lte('creado_en', end.toISOString())
-      }
-
-      if (matchedIds === null && !esHoy) {
-        query = query.limit(200)
-      }
-
-      if (estado) query = query.eq('estado', estado)
-
-      // Logística solo ve despachos aprobados (despachada/entregada), NO pendientes
-      if (esLogistica && !estado) query = query.in('estado', ['despachada', 'entregada'])
-
-      // Vendedores solo ven sus propios despachos; logística/admin/supervisor ven todos
-      if (!veTodos) query = query.eq('vendedor_id', perfil.id)
-
-      const { data, error } = await query
       if (error) throw error
       if (!data?.length) return []
 
@@ -205,17 +215,11 @@ export function useDespachos({ estado = '', veTodos: veTodosParam = false, busqu
       //    El lookup de clientes degrada a [] si falla: la lista se muestra
       //    con "cliente: —" en vez de fallar completa.
       const [clientesData, vendedoresDespRes, pesosPorDespacho] = await Promise.all([
-        clienteIds.length
-          ? fetch(apiUrl('/api/clientes/lookup'), {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${session?.access_token}`,
-                ...getOperatorSessionHeaders(),
-              },
-              body: JSON.stringify({ ids: clienteIds }),
-            }).then(r => r.ok ? r.json() : []).catch(() => [])
-          : Promise.resolve([]),
+        // En tandas de 200: el servidor rechaza más y la lista quedaba con "cliente: —" (OP-2026-025)
+        lookupClientesPorIds(clienteIds, {
+          Authorization: `Bearer ${session?.access_token}`,
+          ...getOperatorSessionHeaders(),
+        }),
         vendedorIds.length
           ? supabase.from('usuarios').select(VENDEDOR_COLS).in('id', vendedorIds)
           : Promise.resolve({ data: [] }),
