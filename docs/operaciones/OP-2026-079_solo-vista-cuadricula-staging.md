@@ -1,5 +1,7 @@
 # OP-2026-079 — Unificación a vista única en cuadrícula (solo staging)
 
+> ✅ **Publicado en producción el 2026-11-25** mediante [OP-2026-080](../plans/OP-2026-080_plan-llevar-077-079-a-produccion.md) (solicitud #77, unión `fa13d0c2`). Diferencia con lo probado en staging: el botón `+` de cotización rápida quedó **solo en Inicio** por decisión del dueño.
+
 ## En resumen
 
 Se eliminó el botón para alternar entre **cuadrícula** y **lista** junto con las filas de lista en las cuatro pantallas que aún lo tenían (**Clientes**, **Personal**, **Cotizaciones** y **Despachos**) dentro de `construacero-staging/`. Ahora todo el sistema opera siempre con tarjetas en cuadrícula (como ya hacían **Inventario** y **Proveedores**), con menos código por mantener y mejor aprovechamiento del ancho tanto en teléfono como en computadora. No se tocó producción ni la base de datos, y se mantuvieron intactos el selector de formato de la **Lista de Precios en PDF** y las tablas de **Reportes**.

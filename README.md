@@ -181,6 +181,14 @@ Cuando se publiquen, así funcionará:
 - **Validación al recargar:** cada vez que la app recarga o despierta, confirma con el servidor que el operador siga activo y su PIN no haya cambiado; si fue revocado, vuelve de inmediato a "¿Quién está operando?".
 - **Salidas claras:** el menú lateral dice **Cerrar sesión** (cierra todas las pestañas y revoca el pase de 12 horas en el servidor); el botón **Salir** de la cuenta de la empresa en el login pide confirmación.
 
+## Pantallas en teléfono y vista única en cuadrícula (OP-2026-077/079)
+
+> **Publicado en producción el 2026-11-25** (solicitud #77, commit `fa13d0c2`; ver [OP-2026-080](docs/plans/OP-2026-080_plan-llevar-077-079-a-produccion.md)).
+
+- **Solo cuadrícula:** **Clientes**, **Personal**, **Cotizaciones** y **Despachos** muestran siempre tarjetas; ya no existe el botón para cambiar a lista. Si un equipo tenía guardada la vista lista, pasa sola a cuadrícula (`src/utils/vistaCuadricula.js`). La **Lista de Precios en PDF** conserva su elección *Lista* / *Cuadrícula* porque es el formato del documento impreso.
+- **Teléfono (360–375 px):** barras y botones de Clientes, Personal, Transportistas, Vehículos, Comisiones, Orden de Compra, Configuración, Reportes, Mis ventas y Reporte de Vendedores se acomodan en varias líneas sin salirse ni cortarse; las ventanas emergentes usan el alto real de la pantalla móvil y los botones pequeños tienen al menos 36 px para el dedo.
+- **Botones flotantes en teléfono:** el **`+`** de cotización rápida aparece **solo en Inicio** (`src/components/cotizaciones/quickQuoteFabRutas.js`); el **Buzón** 💬 va abajo a la izquierda para no tapar el `+`. En computadora no hay `+` y el Buzón sigue abajo a la derecha.
+
 ## Documentación interna
 
 - **[`REGISTRO.md`](docs/operaciones/REGISTRO.md)**: índice maestro de todos los casos, con número fijo (OP-2026-001 en adelante).
