@@ -25,8 +25,8 @@ Cada persona entra con un rol. El rol define qué puede ver y hacer. La lista of
 | `jefe` | Ve toda la empresa: ventas, comisiones, equipo y auditoría |
 | `administracion` | Aprueba despachos, maneja cobros, cuentas por cobrar e inventario |
 | `supervisor` | Ve sus propias ventas y las de su equipo |
-| `vendedor` | Sus propios clientes y cotizaciones; gana comisión |
-| `vendedor_sin_comision` | Ventas de empresa, sin comisión |
+| `vendedor` | Sus propios clientes y cotizaciones; gana comisión. Puede editar productos y cantidades de **sus** despachos que esperan aprobación (ver abajo) |
+| `vendedor_sin_comision` | Ventas de empresa, sin comisión. Mismo permiso de edición de sus despachos que esperan aprobación |
 | `logistica` | Ve los despachos por entregar y registra las entregas |
 | `desarrollador` | Acceso técnico |
 
@@ -149,6 +149,16 @@ Cuando se publiquen, así funcionará:
 - **Devoluciones:** usan el mismo reparto que la ficha (ven los pagos sueltos) y, si un abono manual ya cubría ese crédito, permiten anularlo en el mismo paso. Lo **donado** que se devuelve no da crédito, salvo autorización con motivo (administración, jefe o desarrollador).
 - **"Cruce"** exige decir contra qué se cruzó.
 - La ficha y el reporte de Crédito muestran los **pagos de más** que antes no se veían.
+
+## Vendedores: editar sus despachos que esperan aprobación (OP-2026-070)
+
+> Preparado y probado en staging; **todavía no publicado en producción** (ver [OP-2026-070](docs/operaciones/OP-2026-070_vendedor-edita-despacho.md)).
+
+- **Dónde:** en la ficha del despacho (botón "1 Ítem" de la tarjeta) aparece **Editar productos** si el despacho es del vendedor y está **Esperando aprobación**.
+- **Qué puede cambiar:** agregar, quitar y cambiar cantidades. El precio se elige de una lista con los **precios de lista** (P1, P2 y P3 habilitados, con su recargo si es vendedor externo) o el precio que ya tenía.
+- **Qué no puede:** escribir precios a mano, agregar artículos externos o préstamos, poner descuentos, elegir o cambiar pagos, ni editar despachos ajenos o ya aprobados.
+- **Pagos:** si el despacho tiene un solo método de pago, su monto se ajusta solo al nuevo total (mismo método). Con pagos combinados, adelantos o saldo a favor, el vendedor no puede editar y debe pedirlo a administración.
+- Lo controlan la pantalla, el servidor (`api/lib/edicionVendedorDespacho.js`) y la base de datos (`editar_despacho_profundidad`, migración 311). El supervisor sigue aprobando después.
 
 ## Documentación interna
 

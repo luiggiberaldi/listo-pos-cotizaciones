@@ -78,6 +78,7 @@
 | OP-2026-061 | 2026-11-24 | La deuda del cliente y su historial se actualizan solos en las pantallas abiertas, sin recargar | **Publicado en producción 2026-11-24**: aviso de cuentas por cobrar activado en la base (310; staging 309) y pantallas que se redibujan solas; staging probado (avisos recibidos), 1.204/1.204 pruebas y build correcto. Falta verlo en pantalla real con dos equipos | Solicitud #68 (`42e2cfc5`) | [OP-2026-061_clientes-al-instante.md](OP-2026-061_clientes-al-instante.md) |
 | OP-2026-062 | 2026-11-24 | Auditoría de Reportes → Crédito (CxC): Antigüedad sumaba $302,26 de más y había 3 alertas falsas (pago anotado antes que la nota); en períodos pasados faltaban clientes que pagaron después (septiembre −$739); Imprimir dejaba una pestaña en blanco | **Publicado en producción 2026-11-24** (solicitud #70 unida; Vercel terminó): con datos reales Antigüedad = CxC al cierre $72.399,70 y 36 alertas (todas vencidas). Fallas N19–N25 (N24 y N25 solo propuestas). Falta verlo en pantalla tras recargar la app | Solicitud #70 (`8c4ed8ac`) | [OP-2026-062_auditoria-reporte-credito.md](OP-2026-062_auditoria-reporte-credito.md) |
 | OP-2026-064 | 2026-11-24 | Anular un despacho "Esperando aprobación" preguntaba qué pasó con $30 "anotados" (DES-04906) aunque aún no entró dinero | **Subido a main 2026-11-24** (commit `18488ec6`): se anula solo con motivo y la auditoría guarda la forma de pago anotada. Falla N27. Datos de producción pendientes de revisar | [OP-064](OP-2026-064_anular-despacho-por-aprobar-sin-preguntar-dinero.md) |
+| OP-2026-070 | 2026-11-24 | Vendedores: editar productos y cantidades de sus despachos que esperan aprobación (precios de lista, sin tocar pagos) | **Hecho y probado en staging, falta publicar**: migración 311 (solo aplicada en staging), servidor y pantalla; 22 pruebas nuevas, 1.230 + 277 pruebas, prueba en pantalla y 7 intentos de saltarse las reglas bloqueados | — | [OP-2026-070_vendedor-edita-despacho.md](OP-2026-070_vendedor-edita-despacho.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -93,7 +94,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-065**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-071**).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.

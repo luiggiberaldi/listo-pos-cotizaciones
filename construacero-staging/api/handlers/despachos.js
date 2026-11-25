@@ -6,6 +6,7 @@ import { recalcularSaldoPendienteCliente } from '../lib/cxcUtils.js'
 import { calcularDescuentoValido } from '../lib/descuentoUtils.js'
 import { calcularComisionConDescuentos, reconciliarComisionConDescuento } from '../lib/comisionUtils.js'
 import { tieneZonaHoraria } from '../lib/fechaEntrega.js'
+import { esRolVendedor, validarEdicionVendedor } from '../lib/edicionVendedorDespacho.js'
 import { guardarVehiculoHabitual, validarVehiculoDeCuenta } from './vehiculos.js'
 
 function resolverIdempotencyKey(request, body) {
@@ -2043,7 +2044,9 @@ export async function handleEditarItemsDespacho(request, env) {
   const { user, operador, headers, ip } = v;
 
   // ── 1. Solo administración o jefes pueden editar ítems de despacho ──────────
-  if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol)) {
+  // OP-2026-070: el vendedor también puede, solo en SUS despachos pendientes, con precios de
+  // lista y sin tocar pagos (reglas en api/lib/edicionVendedorDespacho.js y en la base).
+  if (!['administracion', 'jefe', 'desarrollador'].includes(operador.rol) && !esRolVendedor(operador.rol)) {
     return jsonError('Solo administración puede editar ítems del despacho', 403, request);
   }
 
@@ -2057,6 +2060,15 @@ export async function handleEditarItemsDespacho(request, env) {
 
   if (!despachoId || !isValidUuid(despachoId)) return jsonError('despachoId inválido', 400, request);
   if (!Array.isArray(items) || items.length === 0) return jsonError('items no puede estar vacío', 400, request);
+
+  if (esRolVendedor(operador.rol)) {
+    try {
+      const rv = await validarEdicionVendedor({ env, headers, operador, despachoId, items, pagos, destinoPagos: body.destinoPagos });
+      if (rv) return jsonError(rv.error, rv.status, request);
+    } catch (e) {
+      return jsonError(e.message || 'No se pudo validar la edición', 500, request);
+    }
+  }
 
   try {
     const checkRes = await fetch(`${env.SUPABASE_URL}/rest/v1/notas_despacho?id=eq.${despachoId}&select=cliente_id,cliente_factura_id`, { headers });

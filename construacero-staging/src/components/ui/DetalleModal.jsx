@@ -509,12 +509,13 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <Package size={12} />Productos
             </p>
-            {tipo === 'despacho' && ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) && registro.estado !== 'anulada' && registro.estado !== 'entregada' && (
+            {/* OP-2026-070: el vendedor también, en SUS despachos que esperan aprobación */}
+            {tipo === 'despacho' && (['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol) || (['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol) && registro.vendedor_id === perfil?.id && registro.estado === 'pendiente')) && registro.estado !== 'anulada' && registro.estado !== 'entregada' && (
               <button 
                 onClick={() => setShowEditItems(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg text-[11px] font-bold transition-colors">
                 <Pencil size={12} />
-                Editar Ítems (Admin)
+                {['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol) ? 'Editar productos' : 'Editar Ítems (Admin)'}
               </button>
             )}
           </div>
@@ -671,6 +672,7 @@ export default function DetalleModal({ isOpen, onClose, tipo = 'cotizacion', reg
           isOpen={showEditItems}
           onClose={() => setShowEditItems(false)}
           despacho={registro}
+          modoVendedor={['vendedor', 'vendedor_sin_comision'].includes(perfil?.rol)}
         />
       )}
     </div>
