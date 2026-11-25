@@ -1,6 +1,6 @@
 # OP-2026-070 — Vendedores: editar productos y cantidades de sus despachos que esperan aprobación
 
-**Fecha:** 2026-11-24 · **Estado:** **hecho y probado en staging; falta publicar en producción** (necesita el visto bueno del dueño y aplicar la migración 311 en la base de producción) · Rama `feat/op-070-vendedor-edita-despacho`
+**Fecha:** 2026-11-24 · **Estado:** **publicado en producción el 2026-11-24** (solicitud #73; migración 311 aplicada en producción con copia de seguridad en `OP-2026-070_backup_editar_despacho_profundidad_produccion.sql`) · Rama `feat/op-070-vendedor-edita-despacho`
 
 ## En resumen
 

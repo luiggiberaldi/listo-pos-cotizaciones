@@ -511,6 +511,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   // marcarla se toca la ficha del chofer; sin ella, el camión es de este viaje.
   async function aplicarVehiculoFijo() {
     if (!fijarVehiculoFijo || !transportistaId || !vehiculoViajeId) return
+    // OP-2026-069: sin conexión este cambio quedaría en pausa y frenaría el envío; se omite.
+    if (!navigator.onLine) return
     try {
       await actualizarTransp.mutateAsync({ id: transportistaId, campos: { vehiculo_habitual_id: vehiculoViajeId } })
     } catch {
@@ -552,6 +554,13 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
   const [errorGeneral,  setErrorGeneral]  = useState('')
   const [showModalDespachar, setShowModalDespachar] = useState(false)
   const [cotizacionId,  setCotizacionId]  = useState(cotizacionExistente?.id ?? null)
+  // OP-2026-069: identidad de la cotización nueva, fija desde el primer intento de guardar.
+  // Si un intento tarda pero sí llegó al servidor, el reintento la reconoce y no crea otra.
+  const nuevoIdRef = useRef(null)
+  function idCotizacionNueva() {
+    if (!nuevoIdRef.current) nuevoIdRef.current = globalThis.crypto?.randomUUID?.() || null
+    return nuevoIdRef.current
+  }
 
   // Estado post-envío (para paso 4)
   const [enviada, setEnviada] = useState(false)
@@ -639,6 +648,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     if (d.monedaPDF) setMonedaPDF(d.monedaPDF)
     if (d.costoEnvioUsd !== undefined) setCostoEnvioUsd(d.costoEnvioUsd)
     if (d.corteUsd !== undefined) setCorteUsd(d.corteUsd)
+    if (d.nuevoId) nuevoIdRef.current = d.nuevoId
     if (d.items?.length > 0) {
       setItems(d.items.map(it => ({ ...it, _key: `item-${++_itemCounter}` })))
     }
@@ -680,6 +690,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
         const clienteObj = clientes.find(c => c.id === clienteId)
         saveDraft({
           paso, clienteId, vendedorId, notasCliente, notasInternas, monedaPDF, items, costoEnvioUsd, corteUsd,
+          nuevoId: nuevoIdRef.current,
           _clienteNombre: clienteObj?.nombre || '',
           _totalUsd: totalUsd,
           _itemsCount: items.length,
@@ -876,6 +887,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
 
       const payload = {
         cotizacionId,
+        nuevoId: cotizacionId ? null : idCotizacionNueva(),
         campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, vehiculoId: vehiculoViajeId || null, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd, canal_venta: esVendedorExterno ? 'externo' : 'interno' },
         items: itemsConDescuento,
       }
@@ -916,6 +928,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       if (!currentId) {
         const payload = {
           cotizacionId: null,
+          nuevoId: idCotizacionNueva(),
           campos: { clienteId, vendedorId: esSupervisor && !esEdicion ? vendedorId : undefined, transportistaId, vehiculoId: vehiculoViajeId || null, notasCliente, notasInternas, descuentoGlobalPct, costoEnvioUsd, corteUsd },
           items: itemsConDescuento,
         }
@@ -939,7 +952,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       // Si se guardó como borrador local (offline), NO intentamos enviar
       // Solo simulamos que fue enviada para que el usuario avance y no se quede colgado
       if (isOfflineId || !navigator.onLine) {
-        setNumDisplay('OFFLINE')
+        setNumDisplay('PENDIENTE')
         setEnviada(true)
         clearDraft(perfil?.id)
         setPaso(4)
@@ -979,7 +992,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
     if (String(cotizacionId).startsWith('local_')) {
       const vendedor = esSupervisor ? vendedores.find(v => v.id === vendedorId) || perfil : perfil
       cot = {
-        id: cotizacionId, numero: 'OFFLINE', cliente_id: clienteId, vendedor_id: vendedor?.id,
+        id: cotizacionId, numero: 'PENDIENTE', cliente_id: clienteId, vendedor_id: vendedor?.id,
         transportista_id: transportistaId, estado: 'borrador', 
         subtotal_usd: subtotal, descuento_global_pct: descuentoGlobalPct, descuento_usd,
         costo_envio_usd: costoEnvioUsd, corte_usd: corteUsd, total_usd: totalUsd,
@@ -1150,7 +1163,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
               </button>
             )}
             <h2 className="font-bold text-slate-800 text-sm sm:text-base md:text-lg truncate">
-              {paso === 4 ? 'Cotización enviada' :
+              {paso === 4 ? (numDisplay === 'PENDIENTE' ? 'Cotización pendiente' : 'Cotización enviada') :
                esEdicion ? 'Editar' : 'Nueva cotización'}
             </h2>
             {paso === 2 && clienteSeleccionado && (
@@ -1782,13 +1795,18 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                 <div className="relative z-10 w-10 h-10 rounded-full flex items-center justify-center bg-white/20 backdrop-blur-sm border-2 border-white/40 shadow-lg">
                   <CheckCircle size={20} color="white" strokeWidth={2.5} />
                 </div>
-                <p className="relative z-10 text-white/80 text-[10px] font-medium mt-1 tracking-wide uppercase">Enviada exitosamente</p>
+                <p className="relative z-10 text-white/80 text-[10px] font-medium mt-1 tracking-wide uppercase">{numDisplay === 'PENDIENTE' ? 'Pendiente de subir' : 'Enviada exitosamente'}</p>
               </div>
 
               <div className="p-4 space-y-3 text-center">
                 {/* Número de cotización */}
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800">Cotización enviada</h3>
+                  <h3 className="text-sm font-bold text-slate-800">{numDisplay === 'PENDIENTE' ? 'Cotización guardada solo en este equipo' : 'Cotización enviada'}</h3>
+                  {numDisplay === 'PENDIENTE' && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 mt-1.5">
+                      Sin conexión: <b>todavía no está en el sistema</b>. Se subirá sola <b>como borrador</b> cuando vuelva la conexión y entres con tu PIN; después ábrela y pulsa Enviar. No la descartes.
+                    </p>
+                  )}
                   {numDisplay && (
                     <p className="font-black text-xl font-mono mt-0.5 tracking-tight" style={{ color: '#1B365D' }}>{numDisplay}</p>
                   )}
@@ -1884,7 +1902,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
                         : <Printer size={14} />}
                       Imprimir
                     </button>
-                    {onDespachar && (
+                    {onDespachar && numDisplay !== 'PENDIENTE' && (
                       <button onClick={() => {
                         const insuficientes = items.filter(it =>
                           stockMap[it.productoId] !== undefined && it.cantidad > stockMap[it.productoId]

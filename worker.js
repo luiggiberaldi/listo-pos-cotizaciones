@@ -162,7 +162,7 @@ const worker = {
 
     // ── API: guardar cotización (bypass RLS para clientes ajenos) ─────────
     if (url.pathname === '/api/cotizaciones/guardar' && request.method === 'POST') {
-      return handleGuardarCotizacion(request, env);
+      return handleGuardarCotizacion(request, conWaitUntil(env, ctx));
     }
 
     // ── API: reciclar cotización (supervisor: crea borrador desde rechazada/anulada/vencida) ──
