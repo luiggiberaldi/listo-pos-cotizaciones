@@ -253,3 +253,8 @@ construacero-backups/
 # OP-2026-061: pantallas de clientes al instante
 
 !src/utils/__tests__/realtimeSync061.test.js
+
+# OP-2026-072: tasa en login y sesión de PIN por 12 horas
+!api/handlers/__tests__/authOperatorSession12h.test.js
+!src/utils/__tests__/operatorSessionPersistence12h.test.js
+!docs/plans/OP-2026-072_tasa-login-y-sesion-12h.md

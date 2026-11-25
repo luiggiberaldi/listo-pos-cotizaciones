@@ -1,7 +1,7 @@
 // api/handlers/auth-operators.js
 import { json as baseJson, jsonError as baseJsonError, isRateLimited, isValidUuid } from '../lib/utils.js'
 import { verifyAuth, SUPER_ADMIN_UUID, supaServiceHeaders } from '../lib/auth.js'
-import { issueOperatorSession, revokeOperatorSession } from '../lib/operatorSession.js'
+import { issueOperatorSession, resolveOperatorSession, revokeOperatorSession } from '../lib/operatorSession.js'
 import { verifyPinPBKDF2 } from '../lib/crypto.js'
 import { registrarAuditoria, logToSystem } from '../lib/audit.js'
 
@@ -38,6 +38,33 @@ async function replaceOperatorSession(request, env, accountId, operator, virtual
     throw error
   }
   return session
+}
+
+async function resolveOperatorMarkup(env, headers, accountId, operator) {
+  let markup_pct = operator.markup_pct ?? null
+  if (operator.es_externo) {
+    const configResponse = await fetchConTimeout(
+      `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${accountId}&limit=1&select=markup_pct_externo`,
+      { headers },
+    )
+    if (!configResponse.ok) throw new Error('Error al obtener configuración del operador')
+    const [config] = await configResponse.json()
+    if (config) markup_pct = config.markup_pct_externo
+  }
+  return markup_pct
+}
+
+function formatOperatorPayload(operator, markup_pct) {
+  return {
+    id: operator.id,
+    nombre: operator.nombre,
+    rol: operator.rol,
+    color: operator.color,
+    markup_pct,
+    comision_pct: operator.comision_pct ?? null,
+    comision_pct_cabilla: operator.comision_pct_cabilla ?? null,
+    es_externo: !!operator.es_externo,
+  }
 }
 
 export async function handleSwitchOperator(request, env) {
@@ -84,15 +111,11 @@ export async function handleSwitchOperator(request, env) {
       return jsonError('PIN incorrecto', 401, request)
     }
 
-    let markup_pct = operator.markup_pct ?? null
-    if (operator.es_externo) {
-      const configResponse = await fetchConTimeout(
-        `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=markup_pct_externo`,
-        { headers },
-      )
-      if (!configResponse.ok) return jsonError('Error al obtener configuración del operador', 500, request)
-      const [config] = await configResponse.json()
-      if (config) markup_pct = config.markup_pct_externo
+    let markup_pct
+    try {
+      markup_pct = await resolveOperatorMarkup(env, headers, user.id, operator)
+    } catch {
+      return jsonError('Error al obtener configuración del operador', 500, request)
     }
 
     const operatorSession = await replaceOperatorSession(request, env, user.id, operator)
@@ -103,21 +126,59 @@ export async function handleSwitchOperator(request, env) {
     })
     return json({
       ok: true,
-      operator: {
-        id: operator.id,
-        nombre: operator.nombre,
-        rol: operator.rol,
-        color: operator.color,
-        markup_pct,
-        comision_pct: operator.comision_pct ?? null,
-        comision_pct_cabilla: operator.comision_pct_cabilla ?? null,
-        es_externo: !!operator.es_externo,
-      },
+      operator: formatOperatorPayload(operator, markup_pct),
       operatorSession,
     }, 200, request)
   } catch (error) {
     console.error('[SWITCH-OP] Failed', requestId, error?.message)
     return jsonError('Error interno al verificar operador', 500, request)
+  }
+}
+
+export async function handleCurrentOperator(request, env) {
+  try {
+    const user = await verifyAccount(request, env)
+    if (!user?.id) return jsonError('No autenticado', 401, request)
+
+    const tokenHeader = request.headers.get('X-Operator-Session')
+    const operatorHeader = request.headers.get('X-Operator-Id')
+    const session = await resolveOperatorSession(env, tokenHeader, user.id, operatorHeader)
+    if (!session || (operatorHeader && operatorHeader !== session.operator.id)) {
+      return json({ error: 'Sesión de operador expirada o revocada', code: 'OPERATOR_SESSION_INVALID' }, 403, request)
+    }
+
+    const headers = supaServiceHeaders(env)
+    const markup_pct = session.virtualDeveloper
+      ? null
+      : await resolveOperatorMarkup(env, headers, user.id, session.operator)
+
+    return json({
+      ok: true,
+      operator: formatOperatorPayload(session.operator, markup_pct),
+      operatorSession: { id: session.id, expiresAt: session.expiresAt },
+    }, 200, request)
+  } catch {
+    return jsonError('Error al verificar la sesión de operador', 500, request)
+  }
+}
+
+export async function handleGetTasaConfig(request, env) {
+  try {
+    const user = await verifyAccount(request, env)
+    if (!user?.id) return jsonError('No autenticado', 401, request)
+    const response = await fetchConTimeout(
+      `${env.SUPABASE_URL}/rest/v1/configuracion_negocio?cuenta_id=eq.${user.id}&limit=1&select=tasa_bcv_manual,actualizado_en`,
+      { headers: supaServiceHeaders(env) },
+    )
+    if (!response.ok) return jsonError('Error al obtener tasa configurada', 500, request)
+    const rows = await response.json()
+    const config = Array.isArray(rows) ? rows[0] : null
+    return json({
+      tasa_bcv_manual: config?.tasa_bcv_manual ?? 0,
+      actualizado_en: config?.actualizado_en ?? null,
+    }, 200, request)
+  } catch {
+    return jsonError('Error al obtener tasa configurada', 500, request)
   }
 }
 

@@ -6,7 +6,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Users, FileText, Package, Truck, Zap,
   UserCog,
-  LayoutDashboard, Settings, ArrowRightLeft,
+  LayoutDashboard, Settings, LogOut,
   Menu, X, DollarSign, RefreshCw, PackageCheck, Bell, BellOff,
   AlertTriangle, Send, CheckCircle, Ban, MessageSquare,
   PanelLeftClose, PanelLeftOpen, BarChart3, BarChart2,
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import useAuthStore from '../../store/useAuthStore'
 import LoginAvatar from '../auth/LoginAvatar'
-import BcvWidget from './BcvWidget'
+import HeaderTasas from './HeaderTasas'
 import BottomNav from './BottomNav'
 import Breadcrumbs from '../ui/Breadcrumbs'
 import QuickQuoteFAB from '../cotizaciones/QuickQuoteFAB'
@@ -29,7 +29,6 @@ import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
 import { NOTIF_TYPES, setNotificationUserId, startRealtimeNotifications, stopRealtimeNotifications } from '../../services/notificationService'
 import PendingQueueBadge from '../ui/PendingQueueBadge'
-import { useTasaCambio } from '../../hooks/useTasaCambio'
 
 // ─── Formato de tiempo relativo para notificaciones ─────────────────────────
 function formatNotifTime(ts) {
@@ -188,7 +187,6 @@ export default function AppLayout() {
   const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const switchOut = useAuthStore(s => s.switchOut)
   const navigate = useNavigate()
-  const { tasaBcv, tasaUsdt, tasaEuro } = useTasaCambio()
   const [menuOpen, setMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth >= 768 && window.innerWidth < 1400)
 
@@ -362,36 +360,8 @@ export default function AppLayout() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Tasas en Header - Solo en PC */}
-        <div className="hidden md:flex items-center gap-3 mr-2 select-none">
-          {tasaBcv?.precio > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 whitespace-nowrap">
-              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">BCV:</span>
-              <span className="font-extrabold text-emerald-300 text-xs">
-                Bs {tasaBcv.precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-          )}
-          {tasaEuro?.precio > 0 && (
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 whitespace-nowrap">
-              <span className="text-[10px] font-black text-blue-400 uppercase tracking-wider">EUR:</span>
-              <span className="font-extrabold text-blue-300 text-xs">
-                Bs {tasaEuro.precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-          )}
-          {tasaUsdt?.precio > 0 && (
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 whitespace-nowrap">
-              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">USDT:</span>
-              <span className="font-extrabold text-indigo-300 text-xs">
-                Bs {tasaUsdt.precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Widget BCV — supervisor puede configurar, vendedor solo ve la tasa */}
-        <BcvWidget soloLectura={!esPrivilegiado} />
+        {/* Tasas y Widget BCV — supervisor puede configurar, vendedor solo ve la tasa */}
+        <HeaderTasas soloLectura={!esPrivilegiado} />
 
         {/* Badge de cola offline — solo para roles que pueden hacer ventas */}
         {(perfil?.rol === 'vendedor' || perfil?.rol === 'vendedor_sin_comision' || perfil?.rol === 'supervisor' || perfil?.rol === 'desarrollador' || perfil?.rol === 'jefe') && (
@@ -656,18 +626,18 @@ export default function AppLayout() {
           )}
         </nav>
 
-        {/* Cambiar usuario — solo móvil */}
+        {/* Cerrar sesión — solo móvil */}
         <div className="md:hidden relative z-10 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <button
             onClick={() => { cerrarMenu(); handleSwitchOut() }}
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors active:scale-[0.98]"
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-white/60 hover:text-white/90 hover:bg-white/5 transition-colors active:scale-[0.98]"
           >
-            <ArrowRightLeft size={18} />
-            <span className="text-sm font-semibold">Cambiar usuario</span>
+            <LogOut size={18} />
+            <span className="text-sm font-semibold">Cerrar sesión</span>
           </button>
         </div>
 
-        {/* Usuario — toca para cambiar operador (solo desktop) */}
+        {/* Usuario — toca para cerrar sesión (solo desktop) */}
         <div className="relative z-10 p-2 pb-2 shrink-0 hidden md:block" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleSwitchOut}
@@ -675,7 +645,8 @@ export default function AppLayout() {
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)' }}
-            title={collapsed ? 'Cambiar operador' : undefined}
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
           >
             <LoginAvatar user={perfil} size="sm" />
             {!collapsed && (
@@ -686,7 +657,7 @@ export default function AppLayout() {
                   </p>
                   <BadgeRol rol={perfil?.rol} />
                 </div>
-                <ArrowRightLeft size={14} className="shrink-0 text-white/25 group-hover:text-white/50 transition-colors" />
+                <LogOut size={14} className="shrink-0 text-white/35 group-hover:text-rose-300 transition-colors" />
               </>
             )}
           </button>

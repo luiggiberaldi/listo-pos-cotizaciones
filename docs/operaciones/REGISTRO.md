@@ -80,6 +80,7 @@
 | OP-2026-064 | 2026-11-24 | Anular un despacho "Esperando aprobación" preguntaba qué pasó con $30 "anotados" (DES-04906) aunque aún no entró dinero | **Subido a main 2026-11-24** (commit `18488ec6`): se anula solo con motivo y la auditoría guarda la forma de pago anotada. Falla N27. Datos de producción pendientes de revisar | [OP-064](OP-2026-064_anular-despacho-por-aprobar-sin-preguntar-dinero.md) |
 | OP-2026-069 | 2026-11-24 | Cotizaciones que "desaparecen": las del mismo día quedaban atrapadas en el equipo del vendedor (se guardaban solo en el navegador si el servidor tardaba más de 8 s, y el reenvío fallaba siempre por no mandar el PIN); "crear cotización" nunca se auditaba; la limpieza nocturna borraba a los 30 días | **Publicado en producción 2026-11-24** (solicitud #72, commit `2f847c2e`): reenvío con PIN y sin duplicados, aviso honesto ("PENDIENTE" o "No se pudo guardar"), auditoría, edición sin perder productos y limpieza opción B (vencer a los 30 días sin movimiento, borrar al año con copia). 1.232 + 279 pruebas, 4/4 contra la base de staging y **prueba en pantalla** (con conexión, sin conexión, servidor lento: ninguna se perdió ni se duplicó); rescate automático de las ya atrapadas; en producción no falta ninguna de los últimos 30 días (la limpieza vieja borró 1.026 desde julio) | — | [OP-2026-069_cotizaciones-que-desaparecen.md](OP-2026-069_cotizaciones-que-desaparecen.md) · [plan](../plans/OP-2026-069_plan-cotizaciones-que-desaparecen.md) |
 | OP-2026-070 | 2026-11-24 | Vendedores: editar productos y cantidades de sus despachos que esperan aprobación (precios de lista, sin tocar pagos) | **Publicado en producción 2026-11-24** (solicitud #73, commit `b78b6e2f`): migración 311 aplicada en producción con copia de seguridad previa, servidor y pantalla; 22 pruebas nuevas, 1.230 + 277 pruebas, prueba en pantalla y 7 intentos de saltarse las reglas bloqueados | — | [OP-2026-070_vendedor-edita-despacho.md](OP-2026-070_vendedor-edita-despacho.md) |
+| OP-2026-072 | 2026-11-24 | Tasa en el header del login (tal cual post-PIN) y sesión con PIN persistente por 12 horas hasta cerrar sesión | **Listo para publicar en `main` desde rama limpia** — Probado sobre la base actual de producción; sin cambios en BD (nota: `OP-2026-071` reservado para el plan de inventario en staging) | Pendiente de unión a `main` | [plan y reporte](../plans/OP-2026-072_tasa-login-y-sesion-12h.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -95,7 +96,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-071**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-073**; `OP-2026-071` reservado en staging).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.

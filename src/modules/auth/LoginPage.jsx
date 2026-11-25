@@ -9,6 +9,7 @@ import { getOperatorSession, setOperatorSession } from '../../services/operatorS
 import queryClient from '../../lib/queryClient'
 import LoginAvatar from '../../components/auth/LoginAvatar'
 import LoginPinModal from '../../components/auth/LoginPinModal'
+import HeaderTasas from '../../components/layout/HeaderTasas'
 
 
 // ─── Fondo animado con orbes ─────────────────────────────────────────────────
@@ -342,7 +343,7 @@ function GateStep({ onPass }) {
   return (
     <>
       <DarkBackground />
-      <div className="relative z-10 min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 py-8">
+      <div className="relative z-10 min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 pt-16 sm:pt-20 pb-8">
         {/* Logo */}
         <div className="flex flex-col items-center gap-4 mb-8 select-none" style={{ animation: 'logoReveal 0.8s ease forwards' }}>
           <div className="relative flex items-center justify-center">
@@ -690,7 +691,7 @@ function UserSelectStep({ onLogout }) {
       <DarkBackground />
       <BuscarPorInicial lista={lista} activo={!seleccionado && !showSuperPin} />
 
-      <div className="relative z-10 min-h-[100dvh] w-full flex flex-col lg:flex-row items-center justify-start lg:justify-center px-3 sm:px-6 lg:px-8 xl:px-12 pt-9 pb-16 sm:pt-10 sm:pb-16 lg:py-6 [@media(max-height:700px)]:pb-4 gap-3 sm:gap-5 lg:gap-8 xl:gap-12 overflow-x-hidden overflow-y-auto">
+      <div className="relative z-10 min-h-[100dvh] w-full flex flex-col lg:flex-row items-center justify-start lg:justify-center px-3 sm:px-6 lg:px-8 xl:px-12 pt-14 pb-14 sm:pt-16 sm:pb-16 lg:pt-16 lg:pb-6 [@media(max-height:700px)]:pt-14 [@media(max-height:700px)]:pb-3 gap-3 sm:gap-5 lg:gap-8 xl:gap-12 overflow-x-hidden overflow-y-auto">
 
         {/* ── LOGO COMPACTO (celular y tablet) ── */}
         <div
@@ -795,7 +796,11 @@ function UserSelectStep({ onLogout }) {
                 </button>
                 <button
                   type="button"
-                  onClick={onLogout}
+                  onClick={() => {
+                    if (window.confirm('¿Cerrar la sesión de la empresa en este equipo? Tendrás que ingresar el correo y contraseña de nuevo.')) {
+                      onLogout()
+                    }
+                  }}
                   className="flex items-center gap-1.5 px-2.5 py-2 sm:px-3 rounded-xl text-xs font-semibold transition-all"
                   style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: 'rgba(252,165,165,0.9)' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = '#fecaca' }}
@@ -1054,15 +1059,22 @@ export default function LoginPage() {
 
   return (
     <>
-      {/* ── Badge de Versión (Superior Izquierda en Desktop y Móvil) ── */}
-      <div className="fixed top-3 left-3 sm:top-5 sm:left-5 z-50 pointer-events-none select-none">
-        <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.06] border border-white/[0.1] backdrop-blur-md shadow-lg shadow-black/20">
+      {/* ── Barra superior (móvil + desktop, tal cual como el header post-PIN) ── */}
+      <header
+        className="fixed top-0 left-0 right-0 z-40 px-3 md:px-4 h-12 md:h-14 flex items-center justify-between gap-2 md:gap-4"
+        style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+      >
+        <div className="pointer-events-none select-none flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.06] border border-white/[0.1] backdrop-blur-md shadow-lg shadow-black/20">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           <span className="text-[10px] sm:text-xs font-semibold tracking-wider text-slate-300 font-mono">
             v1.0.4
           </span>
         </div>
-      </div>
+
+        <div className="flex-1" />
+
+        <HeaderTasas soloLectura />
+      </header>
 
       {/* Si no hay sesión de negocio o se cerró sesión → pedir email/contraseña */}
       {!gatePassed || !user ? (

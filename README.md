@@ -172,6 +172,15 @@ Cuando se publiquen, así funcionará:
 - **Pagos:** si el despacho tiene un solo método de pago, su monto se ajusta solo al nuevo total (mismo método). Con pagos combinados, adelantos o saldo a favor, el vendedor no puede editar y debe pedirlo a administración.
 - Lo controlan la pantalla, el servidor (`src/utils/edicionVendedorDespacho.js`) y la base de datos (`editar_despacho_profundidad`, migración 311). El supervisor sigue aprobando después.
 
+## Acceso con PIN y tasas en el inicio (OP-2026-072)
+
+> **Listo para publicar en `main`** (ver [OP-2026-072](docs/plans/OP-2026-072_tasa-login-y-sesion-12h.md)).
+
+- **Tasas visibles antes del PIN:** la barra superior de la pantalla de inicio muestra las mismas tasas del encabezado interno (**BCV**, **EUR**, **USDT** y tasa activa `USDT` o `Manual`) en modo solo lectura.
+- **Sesión de 12 horas automática:** tras ingresar el PIN, el acceso queda guardado en el equipo durante **12 horas** (sobrevive recargas, cambios de pestaña y cierre/reapertura de la app o navegador) hasta vencer o tocar **Cerrar sesión**.
+- **Validación al recargar:** cada vez que la app recarga o despierta, confirma con el servidor que el operador siga activo y su PIN no haya cambiado; si fue revocado, vuelve de inmediato a "¿Quién está operando?".
+- **Salidas claras:** el menú lateral dice **Cerrar sesión** (cierra todas las pestañas y revoca el pase de 12 horas en el servidor); el botón **Salir** de la cuenta de la empresa en el login pide confirmación.
+
 ## Documentación interna
 
 - **[`REGISTRO.md`](docs/operaciones/REGISTRO.md)**: índice maestro de todos los casos, con número fijo (OP-2026-001 en adelante).

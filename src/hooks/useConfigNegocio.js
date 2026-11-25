@@ -17,9 +17,10 @@ import { broadcastEntidad } from '../services/supabase/realtimeBus'
 
 const KEY = ['config_negocio']
 
-export function useConfigNegocio() {
+export function useConfigNegocio({ enabled = true } = {}) {
   return useQuery({
     queryKey: KEY,
+    enabled,
     queryFn: async () => {
       const res = await authFetch('/api/config')
       if (!res.ok) {
