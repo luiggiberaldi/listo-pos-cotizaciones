@@ -27,7 +27,7 @@ Definidas en `supabase/migrations/061_atomic_cargo_cxc.sql` y `118_rpc_registrar
 ## Otros hallazgos de la misma revisión (producción)
 
 - **Respaldo recortado:** el servidor de datos de producción también entrega como máximo **1000 filas** por consulta. El respaldo de la app guarda solo 1000 de los 8044 movimientos de Kardex, de las 7731 líneas de cotización, de los 6798 artículos de despacho y de los 1065 movimientos de cuentas por cobrar. **Los respaldos descargados desde la app están incompletos.**
-- **Reglas de lectura sin filtro de empresa** en productos, Kardex, despachos, cotizaciones, clientes, cuentas por cobrar y préstamos. Producción tiene 2 cuentas; hay que confirmar si la segunda es real o de prueba para medir el impacto.
+- **Reglas de lectura entre empresas (corregido el 2026-11-25):** la primera lectura de esta revisión exageró el problema, porque no tomó en cuenta las reglas de bloqueo ("restrictivas") que ya existen. Con esas reglas incluidas, casi todas las tablas están protegidas por empresa. Solo quedan abiertas a cualquier sesión, sin importar la empresa: `despacho_devoluciones` y `despacho_devolucion_intercambios` (regla "Permitir todo…" con `USING (true)`), y los registros técnicos `system_logs` y `system_log_analysis` (para supervisores). Producción tiene 2 cuentas.
 - **Escritura directa a tablas:** ninguna (correcto).
 
 ## Arreglo propuesto (requiere autorización del dueño)
