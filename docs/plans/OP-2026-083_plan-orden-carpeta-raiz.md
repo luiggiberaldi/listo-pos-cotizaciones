@@ -1,6 +1,6 @@
 # OP-2026-083 — Plan para ordenar la carpeta raíz `construacero`
 
-**Fecha:** 2026-11-25 · **Estado:** 📝 Propuesta, pendiente de tu aprobación. No se ha movido ni borrado nada. · **Base:** inventario [OP-2026-082](../operaciones/OP-2026-082_inventario-carpetas-locales.md).
+**Fecha:** 2026-11-25 · **Estado:** 🔧 En ejecución (2026-11-25): pasos 1, 2, 3, 4 (solo mover) y 7 hechos; pendiente borrar (pasos 4–6) con tu lista confirmada. · **Base:** inventario [OP-2026-082](../operaciones/OP-2026-082_inventario-carpetas-locales.md).
 
 ## En resumen
 
@@ -29,3 +29,13 @@
 
 - Producción, la base de datos y GitHub (salvo abrir la solicitud de documentación del paso 2a, con tu visto bueno).
 - Los archivos de configuración con claves (`.env*`, `tmp/staging-local.dev.vars`): se quedan donde están y nunca se suben.
+
+## Ejecución (2026-11-25)
+
+- **Paso 1:** copia de seguridad en la rama local `respaldo/carpeta-principal-2026-11-25` (commit `bfb2edef`, no se sube).
+- **Paso 2a:** documentos pendientes subidos en la solicitud #80 (unión `a186b391`). Códigos de fallas repetidos: las de inventario quedaron con sufijo `-INV` en `REGISTRO-FALLAS-CODIGO.md`.
+- **Paso 2b:** inventario de staging guardado en la rama local `wip/op-075-inventario-staging` (commit `415db31a`), sin subir ni publicar.
+- **Paso 3:** carpeta principal en `main` al día (`a186b391`), sin cambios sin guardar.
+- **Paso 4 (solo mover, nada borrado):** 115 PDF a `tmp/pdfs-generados/`, 4 `.dump` a `construacero-backups/dumps-2026-08-16/`, notas de COD a `docs/archivo/`.
+- **Paso 7:** regla de carpetas añadida a `AGENTS.md`.
+- **Pendiente (requiere tu confirmación):** borrar PDF de prueba, captura, `scratch*`, limpiar `tmp/` (paso 5) y carpetas de trabajo sobrantes (paso 6, tras unir #78).

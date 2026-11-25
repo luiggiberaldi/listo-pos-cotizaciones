@@ -51,3 +51,9 @@ Este repositorio es **construacero** (ERP de ventas/despachos/inventario) con:
   **staging** (copia de pruebas donde se puede experimentar).
 - Documentación de operaciones en `docs/operaciones/` — escribir los informes también
   en lenguaje claro, con una sección de "En resumen" al inicio.
+
+## Regla de carpetas de trabajo (OP-2026-083)
+
+- La **carpeta principal** (`construacero`) se queda siempre en la rama `main`, al día con producción y **limpia**: no se trabaja ni se guardan archivos sueltos ahí.
+- **Cada caso se hace en su propia carpeta de trabajo** creada desde `origin/main` (`git worktree add ../construacero-<caso> -b <rama> origin/main`), con su propia rama y solicitud de cambio.
+- Al publicar un caso, se borra su carpeta de trabajo. Los PDF de prueba van a `tmp/pdfs-generados/` y los respaldos de base de datos a `construacero-backups/` (ninguno se sube a GitHub).
