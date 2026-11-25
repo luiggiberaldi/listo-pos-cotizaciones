@@ -335,6 +335,9 @@ export async function handleBackup(request, env) {
     }
     // configuracion_negocio: una fila por empresa.
     if (tabla === 'configuracion_negocio') return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query, { ordenarPorId: false });
+    // comisiones usa columnas sin guion bajo (cuentaid, creadoen). Antes el respaldo pedía
+    // cuenta_id, la base respondía 400 y las comisiones quedaban SIEMPRE vacías (OP-2026-086).
+    if (tabla === 'comisiones') return leerPaginado(tabla, `cuentaid=eq.${user.id}`, '&order=creadoen.asc');
     // inventario_operaciones no tiene columna id (su llave es empresa + clave única).
     if (tabla === 'inventario_operaciones') return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query.includes('order=') ? `${query},idempotency_key.asc` : '&order=idempotency_key.asc', { ordenarPorId: false });
     return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query);

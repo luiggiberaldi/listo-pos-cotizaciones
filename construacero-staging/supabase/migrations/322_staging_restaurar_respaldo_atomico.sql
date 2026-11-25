@@ -89,7 +89,7 @@ BEGIN
     -- Filas que ya existen en OTRA empresa: se rechaza todo.
     IF v_cuenta_col IS NOT NULL AND 'id' = ANY (v_pk) THEN
       EXECUTE format(
-        'SELECT count(*) FROM jsonb_array_elements($1) r JOIN public.%I x ON x.id = (r->>''id'')::uuid WHERE x.%I IS DISTINCT FROM $2',
+        'SELECT count(*) FROM jsonb_array_elements($1) r JOIN public.%I x ON x.id::text = (r->>''id'') WHERE x.%I IS DISTINCT FROM $2',
         v_t, v_cuenta_col)
       INTO v_n USING v_filas, p_cuenta_id;
       IF v_n > 0 THEN
@@ -100,8 +100,15 @@ BEGIN
     SELECT string_agg(CASE WHEN col = v_cuenta_col THEN quote_literal(p_cuenta_id) || '::uuid' ELSE quote_ident(col) END, ', ')
     INTO v_sel FROM unnest(v_cols) AS col;
 
+    -- Al actualizar una fila existente no se tocan la llave ni los números automáticos
+    -- "GENERATED ALWAYS" (la base no lo permite; la fila ya tiene su número).
     SELECT string_agg(format('%I = EXCLUDED.%I', col, col), ', ')
-    INTO v_set FROM unnest(v_cols) AS col WHERE NOT (col = ANY (v_pk));
+    INTO v_set FROM unnest(v_cols) AS col
+    WHERE NOT (col = ANY (v_pk))
+      AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns ic
+        WHERE ic.table_schema = 'public' AND ic.table_name = v_t AND ic.column_name = col
+          AND ic.is_identity = 'YES' AND ic.identity_generation = 'ALWAYS');
 
     EXECUTE format(
       'INSERT INTO public.%1$I (%2$s) OVERRIDING SYSTEM VALUE SELECT %3$s FROM jsonb_populate_recordset(NULL::public.%1$I, $1) ON CONFLICT (%4$s) %5$s',
@@ -118,17 +125,17 @@ BEGIN
   -- Tablas hijas sin columna de empresa: deben colgar de un cliente/despacho de esta empresa.
   IF EXISTS (
     SELECT 1 FROM jsonb_array_elements(COALESCE(p_tablas->'cliente_prestamos', '[]')) r
-    JOIN public.cliente_prestamos cp ON cp.id = (r->>'id')::uuid
+    JOIN public.cliente_prestamos cp ON cp.id::text = (r->>'id')
     LEFT JOIN public.clientes c ON c.id = cp.cliente_id
     WHERE c.cuenta_id IS DISTINCT FROM p_cuenta_id
   ) OR EXISTS (
     SELECT 1 FROM jsonb_array_elements(COALESCE(p_tablas->'despacho_devoluciones', '[]')) r
-    JOIN public.despacho_devoluciones dd ON dd.id = (r->>'id')::uuid
+    JOIN public.despacho_devoluciones dd ON dd.id::text = (r->>'id')
     LEFT JOIN public.notas_despacho d ON d.id = dd.despacho_id
     WHERE d.cuenta_id IS DISTINCT FROM p_cuenta_id
   ) OR EXISTS (
     SELECT 1 FROM jsonb_array_elements(COALESCE(p_tablas->'despacho_devolucion_intercambios', '[]')) r
-    JOIN public.despacho_devolucion_intercambios di ON di.id = (r->>'id')::uuid
+    JOIN public.despacho_devolucion_intercambios di ON di.id::text = (r->>'id')
     LEFT JOIN public.notas_despacho d ON d.id = di.despacho_id
     WHERE d.cuenta_id IS DISTINCT FROM p_cuenta_id
   ) THEN

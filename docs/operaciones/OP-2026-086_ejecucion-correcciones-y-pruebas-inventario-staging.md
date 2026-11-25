@@ -4,7 +4,7 @@
 - **Entorno:** solo **staging** (`construacero-staging/` y base de pruebas `spupqgkdsgohxxfoxydl`). Producción no se toca en este caso.
 - **Carpeta de trabajo:** `construacero-op086`, rama `fix/op-086-inventario-staging`, creada desde `origin/main` (regla de OP-2026-083).
 - **Planes que se ejecutan:** [OP-2026-078](../plans/OP-2026-078_plan-correccion-hallazgos-auditoria-inventario-staging.md) (correcciones) y [OP-2026-084](../plans/OP-2026-084_plan-testeo-completo-inventario.md) (pruebas). Aprobados por el dueño el 2026-11-25.
-- **Estado:** 🔧 En ejecución. Fases 1 a 6 terminadas en código y base de staging; falta publicar el servidor y la página de staging y correr el plan de pruebas.
+- **Estado:** 🟡 Correcciones aplicadas en staging y pruebas automáticas y de base de datos en verde. Faltan la revisión visual en navegador, el ensayo de vuelta atrás y el visto bueno del dueño. Producción no se tocó en este caso.
 
 ---
 
@@ -12,6 +12,7 @@
 
 - **Respaldo de staging hecho** antes de tocar nada: las 49 tablas completas (46 558 filas) más funciones, reglas de acceso, vistas y disparadores, en `construacero-backups/staging-2026-11-25-antes-op086/`.
 - **Fase 1 terminada:** el trabajo de staging que estaba guardado solo en la PC quedó sobre la versión principal, **sin perder** los arreglos publicados (cotizaciones que no se pierden, OP-069; edición del vendedor, OP-070). Pasan las 545 pruebas automáticas y el sitio compila.
+- **Pruebas:** 555 pruebas automáticas, 3 corridas seguidas de 123/123 del probador completo, 17/17 pruebas extra diseñadas para romper el sistema y una restauración real completa: todo OK. Las pruebas encontraron 3 fallas más (una ya existía: el respaldo nunca guardaba comisiones), corregidas aquí.
 - **Cambio frente a lo que se dijo al dueño:** no fue posible llevar "solo inventario". En `despachos.js` (el archivo del servidor que maneja los despachos), lo de inventario está entrelazado con las copias de staging de Cuentas por Cobrar (migraciones `301`–`308`), que **ya están instaladas en la base de staging** y de las que inventario depende. Se llevó todo el trabajo local de staging y queda cubierto por las pruebas del plan OP-084 (bloque 9). **Nada de esto toca producción**: producción se publica desde otra carpeta.
 
 ## Fase 1 — detalle
@@ -123,6 +124,47 @@ Pruebas automáticas: 64 archivos y 552 pruebas OK (se agregaron pruebas de comp
   - restauración en una sola llamada sin escrituras sueltas;
   - restauración que rechaza un respaldo incompleto o de otra empresa (409).
 - **Sin verificar todavía:** restaurar un respaldo del tamaño de producción (unos 20 MB) en una sola llamada. Se probará con el respaldo completo de staging en el bloque 8 del plan de pruebas.
+
+## Resultados de las pruebas (plan OP-2026-084)
+
+Todo contra la **base real de staging**, con el servidor y la página corriendo en esta PC (`localhost:8789` y `localhost:5174`), versión de esta rama.
+
+| Bloque / prueba | Resultado | Evidencia |
+|---|---|---|
+| Pruebas automáticas del código (nivel A) | **555/555 OK** (65 archivos) | `vitest` |
+| Compilación del sitio | **OK** | `vite build` |
+| Probador completo de punta a punta (RG1) | **123/123 OK en 3 corridas** (la tercera después de los últimos ajustes) | `tmp-op086/e2e-corrida1.log`, `…2.log`, `…3.log` (locales) |
+| Pruebas extra de "romper el sistema" (`scripts/op084-pruebas-staging.mjs`) | **17/17 OK** | Ver detalle abajo |
+| Restauración real completa (`scripts/op084-restauracion-real-staging.mjs`) | **OK** | Respaldo de 2,90 MB de la empresa de prueba, restaurado en 3,3 s. Conteos, stock total, saldos de clientes, comisiones y número máximo del Kardex quedaron idénticos; disparadores encendidos al final |
+| Facturar préstamo en la base real (PR3–PR6) | **OK** | $195,82 = 2 × $97,91 a tasa 250,5; repetir = mismo cargo; pedir de más = rechazado; otra empresa = rechazado; dos a la vez = la segunda espera el candado |
+| Revertir en Kardex en la base real (K1–K4) | **OK** | Devolución vieja y despacho rechazados; ajuste manual revertido una sola vez |
+| Restauración de préstamos con devoluciones (A1) | **OK** | Préstamos restaurados con lo devuelto intacto; otra empresa rechazada |
+| Cuadre final de datos | **OK** | 0 préstamos rotos, 0 restos de datos de prueba, 0 disparadores apagados; los 14 descuadres históricos (mayo–agosto) siguen igual, sin nuevos |
+
+**Detalle de las 17 pruebas extra:**
+- **R1** respaldo completo: el archivo coincide con la base (Kardex 2336, líneas de cotización 37, artículos de despacho 57, cuentas por cobrar 18, productos 11).
+- **L4** "sobrescribir": rechazado por el servidor (HTTP 400) y por la base.
+- **S2/S3** (10 pruebas): `registrar_cargo_cxc`, `registrar_pago_comision`, `facturar_prestamo_atomico`, `restaurar_respaldo_atomico` y `buscar_productos_hibrido` se rechazan sin sesión (401/404) y con sesión común (403/404).
+- **S4**: ninguna de las 8 tablas críticas permite escritura directa.
+- **S1**: sin sesión solo quedan las 4 funciones de ingreso y vigilancia.
+- **S5**: con una sesión real de operador, 0 filas de otras empresas en 12 tablas (2556 filas propias visibles).
+- **PR6**: dos facturaciones simultáneas del mismo préstamo esperan turno.
+
+**Fallas que las pruebas encontraron y que se corrigieron en este caso:**
+1. **El respaldo nunca guardaba las comisiones**, y la falla ya existía antes: pedía la columna `cuenta_id`, pero la tabla usa `cuentaid`; la base respondía error y la tabla quedaba vacía. Corregido en `admin.js`.
+2. **En staging, una sesión iniciada podía escribir directo en cuentas por cobrar.** Cerrado con la migración `323_staging_cxc_sin_escritura_directa.sql` (en producción ese permiso no existe).
+3. **La restauración fallaba con identificadores numéricos y con números automáticos ya existentes.** Corregido en la migración 322. En ambos casos la operación se deshizo completa, sin cambiar nada, como corresponde.
+
+**Corrección a la revisión de producción (INC-004):** la afirmación "nadie escribe directo en las tablas" estaba mal. Con el método correcto, en producción hay permiso de escritura directa en despachos, artículos, préstamos, clientes y cotizaciones; en préstamos lo deja abierto la regla "Permitir todo…". Es la falla N30, ya registrada y abierta en producción hasta el paso de este trabajo. Corregido en INC-004 (solicitud #83).
+
+**Advertencias del probador que no son nuevas:** "permiso denegado" al limpiar usuarios y designaciones de prueba. Ninguna migración de este caso toca los permisos de esas tablas; no afectan el resultado.
+
+**No cubierto todavía:**
+- **Revisión visual en navegador (bloque 10)** y tu visto bueno.
+- **Ensayo de vuelta atrás completo** en una base desechable (sección 5 del plan).
+- **Restaurar un respaldo del tamaño de producción** (solo se probó con 2,9 MB).
+- **Segunda revisión independiente.**
+- **Registros técnicos sin columna de empresa** (`system_logs`, `system_log_analysis`).
 
 ## Pendiente
 
