@@ -189,6 +189,15 @@ Cuando se publiquen, así funcionará:
 - **Teléfono (360–375 px):** barras y botones de Clientes, Personal, Transportistas, Vehículos, Comisiones, Orden de Compra, Configuración, Reportes, Mis ventas y Reporte de Vendedores se acomodan en varias líneas sin salirse ni cortarse; las ventanas emergentes usan el alto real de la pantalla móvil y los botones pequeños tienen al menos 36 px para el dedo.
 - **Botones flotantes en teléfono:** el **`+`** de cotización rápida aparece **solo en Inicio** (`src/components/cotizaciones/quickQuoteFabRutas.js`); el **Buzón** 💬 va abajo a la izquierda para no tapar el `+`. En computadora no hay `+` y el Buzón sigue abajo a la derecha.
 
+## Búsquedas sin recortes en Despachos y Cotizaciones (OP-2026-025)
+
+> **Publicado en producción el 2026-11-25** (solicitud #79, commit `eb73df7b`; ver [OP-2026-025](docs/operaciones/OP-2026-025_busqueda-sin-limites.md)).
+
+- **Despachos:** al escribir en el buscador se traen **todos** los resultados (antes, máximo 200). El texto se busca en el servidor desde **2 letras**; con 1 sola letra se filtra lo que ya está en pantalla. Los números se buscan desde el primer dígito.
+- **Cotizaciones:** si la lista de las 200 más recientes no tiene lo buscado, se busca en todo el histórico por número o por cliente, **sin tope** (antes 60 por cliente). La búsqueda por cliente envía ahora la sesión de operador (antes el servidor la rechazaba y no traía nada).
+- **Sin listas a medias:** las consultas grandes van en tandas de 1000 filas, con máximo 4 consultas a la vez, y los nombres de clientes se piden en tandas de 200 (`src/services/apiBase.js`: `traerTodo`, `mapConLimite`, `lookupClientesPorIds`).
+- La **lista normal** (sin escribir nada) sigue mostrando los 200 más recientes para abrir rápido.
+
 ## Documentación interna
 
 - **[`REGISTRO.md`](docs/operaciones/REGISTRO.md)**: índice maestro de todos los casos, con número fijo (OP-2026-001 en adelante).
