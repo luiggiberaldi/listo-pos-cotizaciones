@@ -17,4 +17,18 @@ describe('OP-2026-092 despacho solo préstamo sin método de pago', () => {
   it('al guardar sin cobro se limpian los pagos anotados que ya no corresponden', () => {
     expect(s).toContain('JSON.stringify(totales.sinCobro ? [] : formasPagoFinales)')
   })
+
+  describe('ventana "Editar despacho" y comisión de préstamos facturados', () => {
+    const e = readFileSync(path.resolve(__dirname, '../../..', 'src/components/despachos/EditDespachoModal.jsx'), 'utf8')
+    const srv = readFileSync(path.resolve(__dirname, '../../..', 'api/handlers/despachos.js'), 'utf8')
+    it('Editar despacho tampoco exige método de pago con total $0 y guarda sin pagos', () => {
+      expect(e).toContain('const sinCobro = !esCod && totalConFlete <= 0.015')
+      expect(e).toContain('(pagoInmediatoCuadrado || sinCobro)')
+      expect(e).toContain('JSON.stringify(sinCobro ? [] : formasPagoFinales)')
+    })
+    it('editar el pago no borra la comisión sumada por un préstamo facturado', () => {
+      expect(srv).toContain('cliente_prestamos?despacho_id=eq.${despachoId}&cantidad_facturada=gt.0')
+      expect(srv).toContain('tienePrestamoFacturado && Array.isArray(comEntries)')
+    })
+  })
 })

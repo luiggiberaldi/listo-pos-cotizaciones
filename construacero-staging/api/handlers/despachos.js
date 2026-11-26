@@ -848,7 +848,17 @@ export async function handleEditarPagoDespacho(request, env) {
   // Recalcular comision si ya existe (porque pudo cambiar el total o forma de pago)
   const comRes = await fetch(`${env.SUPABASE_URL}/rest/v1/comisiones?despachoid=eq.${despachoId}&select=id`, { headers: h });
   const comEntries = await comRes.json();
-  if (Array.isArray(comEntries) && comEntries.length > 0) {
+  // OP-2026-092: si ya se facturó algún préstamo de este despacho, su comisión (OP-2026-091) está sumada
+  // en la fila de comisión. Borrar y recalcular desde cero la haría desaparecer, así que en ese caso
+  // NO se recalcula: la comisión queda como está y se anota en el registro del servidor.
+  let tienePrestamoFacturado = false;
+  try {
+    const pfRes = await fetch(`${env.SUPABASE_URL}/rest/v1/cliente_prestamos?despacho_id=eq.${despachoId}&cantidad_facturada=gt.0&select=id&limit=1`, { headers: h });
+    if (pfRes.ok) tienePrestamoFacturado = ((await pfRes.json()) || []).length > 0;
+  } catch { /* si no se puede comprobar, se sigue como antes */ }
+  if (tienePrestamoFacturado && Array.isArray(comEntries) && comEntries.length > 0) {
+    console.warn('[COMISION][EDITAR_PAGO] No se recalcula: el despacho tiene préstamos facturados con comisión sumada');
+  } else if (Array.isArray(comEntries) && comEntries.length > 0) {
     const vendedorIdComision = await obtenerVendedorComisionId(despacho, h, env);
     const vendRolRes2 = await fetch(
       `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${vendedorIdComision}&select=rol,markup_pct`,

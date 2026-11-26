@@ -16,9 +16,17 @@
 - Se comprobó en la base que el motor de comisiones trata un despacho de $0 con pagos vacíos sin pedir revisión manual (`comision_238b_pago_split`), así que guardar así es seguro para las comisiones.
 - Prueba: `src/utils/__tests__/op092DespachoPrestamoSinPago.test.js`. `vitest` 569/569; `vite build` OK.
 
+## Segunda parte (2026-11-25): ventana "Editar despacho" y una falla que apareció al revisar
+
+- **"Editar despacho" (pagos y flete)** tenía la misma regla. Se aplicó lo mismo: con total $0 (y sin cobro a destino) no se exige método de pago, se muestra el aviso verde y se guarda sin pagos anotados.
+- **Falla encontrada al revisar el servidor:** editar el pago de un despacho **borra y recalcula la comisión desde cero** (`editar-pago`). Eso habría hecho **desaparecer la comisión que OP-2026-091 suma al facturar un préstamo**. Ya era posible hoy con cualquier edición de pago en un despacho con préstamos facturados.
+- **Arreglo provisional:** si el despacho tiene algún préstamo facturado, el servidor **no recalcula** la comisión (queda como está y se anota en el registro del servidor). Efecto a conocer: en esos despachos, un cambio de pago ya no actualiza la comisión automáticamente.
+- **Arreglo definitivo (no hecho):** guardar cada comisión de préstamo facturado de forma durable y re-aplicarla tras un recálculo. Requiere decisión del dueño.
+- Pruebas: `vitest` 571/571; probador completo **123/123** después del cambio del servidor.
+
 ## Pendiente / sin verificar
 
 - No se vio en pantalla con el despacho DES-04967 del dueño.
-- **No cubierto:** la ventana "Editar despacho" (pagos y flete, `EditDespachoModal.jsx`) tiene la misma regla y seguiría pidiendo un pago en un despacho de $0. No se tocó porque su guardado no se pudo verificar; hay que revisarla aparte.
+- "Editar despacho": corregida en la segunda parte; tampoco se vio en pantalla. El servidor acepta guardar con pagos vacíos (no hay regla que lo impida), pero esa ruta no tiene prueba automática propia.
 - No se revisó la creación del despacho (cotización → despacho) con todos los artículos en préstamo.
 - El pago de $2.640 ya anotado en DES-04938 no se corrigió.

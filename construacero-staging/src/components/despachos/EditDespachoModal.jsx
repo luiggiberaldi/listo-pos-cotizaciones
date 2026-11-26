@@ -278,8 +278,12 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     : `DES-${String(despacho.numero).padStart(5, '0')}`
 
 
+  // OP-2026-092: sin nada que cobrar (total $0, todo préstamo) no se exige método de pago.
+  const sinCobro = !esCod && totalConFlete <= 0.015
+
   async function handleGuardar() {
-    const fpJson = JSON.stringify(formasPagoFinales)
+    // OP-2026-092: con total $0 (todo préstamo) no hay nada que cobrar: se guarda sin pagos anotados.
+    const fpJson = JSON.stringify(sinCobro ? [] : formasPagoFinales)
     await editarDespacho.mutateAsync({
       despachoId: despacho.id,
       formaPago: fpJson,
@@ -510,6 +514,13 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                 />
               </button>
             </div>
+
+            {sinCobro && (
+              <div data-testid="editar-despacho-sin-cobro" className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs leading-snug">
+                <p className="font-bold">Este despacho es 100 % préstamo: no se cobra nada ahora.</p>
+                <p className="mt-0.5 opacity-80">Por eso no hace falta elegir un método de pago. Lo prestado se factura después, desde la ficha del cliente → Préstamos.</p>
+              </div>
+            )}
 
             {/* SECCIÓN 1: PAGO INMEDIATO (ADELANTO) */}
             <div className="space-y-2.5">
@@ -911,7 +922,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
           </button>
           <button onClick={handleGuardar} disabled={
             cargando ||
-            !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) ||
+            !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : (pagoInmediatoCuadrado || sinCobro)) ||
             !cxcVencimientoValido ||
             (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)) ||
             !destinoFleteValido
