@@ -373,10 +373,13 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
       const diferencia = esCod
         ? Math.round((montoCodRequerido - totalPropuestaCod) * 100) / 100
         : Math.round((total - totalInmediato) * 100) / 100
+      // OP-2026-092: si el total es $0 (todo el despacho es préstamo) no hay nada que cobrar:
+      // no se exige ningún método de pago (antes el botón quedaba bloqueado hasta anotar uno).
+      const sinCobro = !esCod && total <= 0.015
       const estaCuadrado = esCod
         ? (montoCodRequerido <= 0.015 || propuestaCodCuadrado)
-        : pagoInmediatoCuadrado
-      return { subtotal, total, totalPagos, diferencia, estaCuadrado }
+        : (pagoInmediatoCuadrado || sinCobro)
+      return { subtotal, total, totalPagos, diferencia, estaCuadrado, sinCobro }
     }, [items, totalConFlete, esCod, totalInmediato, montoCodRequerido, totalPropuestaCod, propuestaCodCuadrado, pagoInmediatoCuadrado])
   
     const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
@@ -454,7 +457,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
           items: itemsApi,
           pagos: modoVendedor
             ? (pagosAjustadosVendedor(totales.total) ? JSON.stringify(pagosAjustadosVendedor(totales.total)) : undefined)
-            : JSON.stringify(formasPagoFinales),
+            : JSON.stringify(totales.sinCobro ? [] : formasPagoFinales),
           ...(typeof destinoPagos === 'string' ? { destinoPagos } : {}),
         })
         setDecisionPagos(null)
@@ -893,7 +896,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
 
             {totales.estaCuadrado ? (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full shrink-0">
-                <CheckCircle size={12} /> Pagos cuadrados ✓
+                <CheckCircle size={12} /> {totales.sinCobro ? 'Sin cobro: todo es préstamo ✓' : 'Pagos cuadrados ✓'}
               </span>
             ) : (
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full border shrink-0 ${
@@ -914,6 +917,12 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
             {(!esCod || tabActiva === 'inmediato') ? (
               // VISTA: PAGO INMEDIATO (ADELANTO)
               <div className="space-y-2">
+                {totales.sinCobro && (
+                  <div data-testid="edicion-sin-cobro" className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs leading-snug">
+                    <p className="font-bold">Este despacho es 100 % préstamo: no se cobra nada ahora.</p>
+                    <p className="mt-0.5 opacity-80">Por eso no hace falta elegir un método de pago. Lo prestado se factura después, desde la ficha del cliente → Préstamos, cuando el cliente se quede con la mercancía.</p>
+                  </div>
+                )}
                 {esCod && (
                   <p className="text-[10px] font-black text-indigo-500/80 uppercase tracking-widest pl-1">
                     1. Registrar abonos o adelantos inmediatos

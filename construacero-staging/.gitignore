@@ -139,3 +139,6 @@ scripts/*
 # OP-2026-091: pago, comision y tasa en prestamos
 !src/utils/__tests__/op091PrestamoCobro.test.js
 !scripts/op091-prueba-prestamo-cobro-staging.mjs
+
+# OP-2026-092: despacho solo prestamo sin pago
+!src/utils/__tests__/op092DespachoPrestamoSinPago.test.js
