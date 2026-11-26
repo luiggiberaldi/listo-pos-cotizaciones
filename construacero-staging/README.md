@@ -28,6 +28,12 @@ El proxy `/api/rates` responde con `Cache-Control: no-store`, cache interno máx
 
 Evidencia del 2026-08-18: USD `773.3125`, EUR `896.02946062`, fecha oficial `2026-08-18`; el fallback CDN coincidió con la publicación BCV cuando el TLS directo no estuvo disponible en Wrangler local. No se desplegó producción durante esta corrección.
 
+## Unidades "por aprobar" (OP-2026-087, 2026-11-25)
+
+- Un despacho **pendiente** (por aprobar) muestra sus unidades como etiqueta azul "N por aprobar" junto al stock: en Inventario (con detalle por vendedor y despacho), Venta rápida y los buscadores de productos de las cotizaciones.
+- Es **solo un aviso**: no resta del stock disponible (el despacho aún puede rechazarse). El "comprometido" sigue contando solo los despachos aprobados.
+- Base: migración `324_staging_stock_por_aprobar.sql`. Informe: `docs/operaciones/OP-2026-087_aviso-stock-por-aprobar-staging.md`.
+
 ## Preparación y batería de checks
 
 ```bash

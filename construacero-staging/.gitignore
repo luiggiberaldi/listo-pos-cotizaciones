@@ -113,3 +113,7 @@ scripts/*
 # OP-2026-061: pantallas de clientes al instante
 
 !src/utils/__tests__/realtimeSync061.test.js
+
+# OP-2026-087: stock por aprobar
+!src/utils/__tests__/op087StockPorAprobar.test.js
+!scripts/op087-prueba-por-aprobar-staging.mjs

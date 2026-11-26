@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Search, Plus, Package, X } from 'lucide-react'
 import { smartSearchProductos } from '../../utils/smartSearch'
 
-export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgregados = new Set(), placeholder = 'Búsqueda rápida por nombre o código...', stockComprometido = {} }) {
+export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgregados = new Set(), placeholder = 'Búsqueda rápida por nombre o código...', stockComprometido = {}, stockPorAprobar = {} }) {
   const [texto, setTexto] = useState('')
   const [focused, setFocused] = useState(false)
   const ref = useRef(null)
@@ -60,6 +60,7 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
             // El precio 0 es un precio válido ($0.00): no bloquea la selección.
             const bloqueado = sinStock
             const comprometido = stockComprometido[p.id] || 0
+            const porAprobar = stockPorAprobar[p.id] || 0
             return (
               <button
                 key={p.id}
@@ -87,6 +88,7 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
                       (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
                     }`}>
                       {sinStock ? 'Agotado' : comprometido > 0 ? `Stock: ${p.stock_actual} (${comprometido} comp.)` : `Stock: ${p.stock_actual}`}
+                      {porAprobar > 0 && !sinStock && <span className="ml-1.5 text-sky-600">· {porAprobar} por aprobar</span>}
                     </span>
                   </div>
                 </div>

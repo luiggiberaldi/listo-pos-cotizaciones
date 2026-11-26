@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
-import { useStockComprometido } from '../../hooks/useStockComprometido'
+import { useStockComprometido, useStockPorAprobar } from '../../hooks/useStockComprometido'
 import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
@@ -207,6 +207,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
   const { data: stockComprometido = {} } = useStockComprometido()
+  const { data: stockPorAprobar = {} } = useStockPorAprobar()
 
   const filtrados = useProductSearch(todosProductos, texto, catActiva)
 
@@ -350,6 +351,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
                   cantidad={itemInCart?.cantidad ?? null}
                   tasa={tasa}
                   comprometido={comprometido}
+                  porAprobar={stockPorAprobar[p.id] || 0}
                   onAgregar={agregarConReciente}
                   onMas={() => onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad + 1)}
                   onMenos={() => itemInCart.cantidad <= 1 ? onEliminarItem(itemInCart._idx) : onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad - 1)}

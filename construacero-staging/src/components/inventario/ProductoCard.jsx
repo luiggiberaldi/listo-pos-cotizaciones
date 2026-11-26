@@ -6,6 +6,7 @@ import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { fmtBs, usdToBs } from '../../utils/format'
 import StockComprometidoDetalle from './StockComprometidoDetalle'
+import StockPorAprobarDetalle from './StockPorAprobarDetalle'
 
 function fmtUsd(n) {
   if (n == null) return '—'
@@ -24,7 +25,7 @@ function colorCategoria(str = '') {
   return { fg, bg }
 }
 
-function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
+function StockBadge({ actual, minimo, comprometido = 0, porAprobar = 0, productoId }) {
   const negativo = actual < 0
   const agotado = actual === 0
   const bajo = !agotado && !negativo && minimo > 0 && actual <= minimo
@@ -66,11 +67,16 @@ function StockBadge({ actual, minimo, comprometido = 0, productoId }) {
           )}
         </div>
       )}
+      {porAprobar > 0 && (
+        <div>
+          <StockPorAprobarDetalle productoId={productoId} porAprobar={porAprobar} />
+        </div>
+      )}
     </div>
   )
 }
 
-export default function ProductoCard({ producto, onEditar, onClonar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0, index }) {
+export default function ProductoCard({ producto, onEditar, onClonar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, comprometido = 0, porAprobar = 0, index }) {
   const { perfil } = useAuthStore()
   const [copiado, setCopiado] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -290,6 +296,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
               actual={producto.stock_actual}
               minimo={producto.stock_minimo}
               comprometido={comprometido}
+              porAprobar={porAprobar}
               productoId={producto.id}
             />
           </div>

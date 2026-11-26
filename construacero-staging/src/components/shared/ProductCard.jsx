@@ -11,6 +11,7 @@ import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
  * @param {number|null} props.cantidad - Cantidad en cesta (si agregado)
  * @param {number} props.tasa - Tasa BCV
  * @param {number} props.comprometido - Stock comprometido
+ * @param {number} props.porAprobar - Unidades en despachos por aprobar (solo aviso, no resta del stock)
  * @param {function} props.onAgregar - Callback al hacer click (producto no agregado)
  * @param {function} props.onMas - Callback para incrementar cantidad
  * @param {function} props.onMenos - Callback para decrementar cantidad (o eliminar si qty=1)
@@ -22,6 +23,7 @@ export default function ProductCard({
   cantidad,
   tasa = 0,
   comprometido = 0,
+  porAprobar = 0,
   onAgregar,
   onMas,
   onMenos,
@@ -87,6 +89,12 @@ export default function ProductCard({
       }`}>
         {sinStock ? 'Agotado' : comprometido > 0 ? `${stock} (${comprometido} comp.)` : `${stock} disp.`}
       </p>
+
+      {porAprobar > 0 && (
+        <p data-testid="por-aprobar-aviso" className="text-[8px] font-semibold text-sky-600 leading-tight" title="Unidades en despachos por aprobar">
+          {Number(porAprobar).toLocaleString('es-VE')} por aprobar
+        </p>
+      )}
 
       {/* Stepper inline */}
       {agregado && cantidad != null && (

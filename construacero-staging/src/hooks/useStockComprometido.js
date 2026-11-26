@@ -47,3 +47,47 @@ export function useStockComprometidoDetalle(productoId) {
     staleTime: 60_000,
   })
 }
+
+// ── OP-2026-087: unidades en despachos "por aprobar" (pendientes) ──
+// NO restan del stock disponible: es un aviso para que nadie venda a ciegas.
+// Usan el mismo prefijo de clave que el comprometido, así se refrescan juntos.
+export const STOCK_POR_APROBAR_KEY = [...STOCK_COMPROMETIDO_KEY, 'por_aprobar']
+
+// Totales por producto: { [producto_id]: total_por_aprobar }
+export function useStockPorAprobar() {
+  const { perfil } = useAuthStore()
+
+  return useQuery({
+    queryKey: STOCK_POR_APROBAR_KEY,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('obtener_stock_por_aprobar')
+      if (error) {
+        console.warn('[STOCK_POR_APROBAR] error:', error.message)
+        return {}
+      }
+      return Object.fromEntries((data ?? []).map(c => [c.producto_id, Number(c.total_por_aprobar)]))
+    },
+    enabled: !!perfil,
+    staleTime: 30_000,
+  })
+}
+
+// Detalle por producto: quién tiene despachos por aprobar y cuántas unidades
+export function useStockPorAprobarDetalle(productoId) {
+  const { perfil } = useAuthStore()
+
+  return useQuery({
+    queryKey: [...STOCK_POR_APROBAR_KEY, 'detalle', productoId],
+    queryFn: async () => {
+      if (!productoId) return []
+      const { data, error } = await supabase.rpc('obtener_stock_por_aprobar_detalle', { p_producto_id: productoId })
+      if (error) {
+        console.warn('[STOCK_POR_APROBAR_DETALLE] error:', error.message)
+        return []
+      }
+      return data ?? []
+    },
+    enabled: !!perfil && !!productoId,
+    staleTime: 30_000,
+  })
+}
