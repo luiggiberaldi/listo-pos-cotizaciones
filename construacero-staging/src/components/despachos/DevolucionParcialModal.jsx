@@ -616,7 +616,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
             <div className="p-2.5 rounded-lg border flex items-center gap-2 text-xs bg-amber-50 border-amber-200 text-amber-900 leading-tight">
               <AlertCircle size={16} className="shrink-0 text-amber-600" />
               <span>
-                Registra el retorno de mercancía entregada. Se reintegrará el stock y se calcularán los ajustes en CxC.
+                Registra la mercancía que el cliente devuelve. Vuelve al inventario y se descuenta de lo que el cliente debe.
               </span>
             </div>
 
@@ -636,15 +636,25 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 <div className="space-y-3">
                   <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 text-xs flex items-start gap-2">
                     <AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
-                    <div>
-                      <p className="font-bold">Despacho totalmente devuelto — venta anulada económicamente.</p>
-                      <p className="mt-0.5 text-[11px] opacity-80">
-                        {deudaDespacho != null && deudaDespacho > 0.009
-                          ? `La deuda de este despacho quedó en $${deudaDespacho.toFixed(2)} tras los ajustes de devolución. Si lo que buscas es revertir la entrega por completo (devolver stock y anular estos ajustes), usa "Reabrir despacho" desde la tarjeta.`
-                          : 'Todos los productos fueron devueltos y la CxC de este despacho quedó saldada. Para revertir la entrega por completo, usa "Reabrir despacho" desde la tarjeta.'}
-                      </p>
-                      <p className="mt-1 text-[11px] opacity-80">No hay unidades disponibles para registrar una nueva devolución.</p>
-                    </div>
+                    {(() => {
+                      // OP-2026-089: explicar al usuario por qué no puede devolver aquí (sin términos internos).
+                      const todosPrestamo = itemsList.length > 0 && itemsList.every(i => i.es_prestamo)
+                      const hayPrestamo = itemsList.some(i => i.es_prestamo)
+                      const [titulo, cuerpo] = todosPrestamo
+                        ? ['Este despacho no admite devolución parcial',
+                           'Todos sus artículos están en préstamo y los préstamos no se devuelven desde aquí. Entra a la ficha del cliente, pestaña "Préstamos", y usa "Devolver" (la mercancía vuelve al inventario) o "Facturar" (se le cobra al cliente).']
+                        : hayPrestamo
+                          ? ['No queda nada por devolver desde aquí',
+                             'Lo que no era préstamo ya fue devuelto. Los artículos en préstamo se devuelven desde la ficha del cliente, pestaña "Préstamos".']
+                          : ['Ya se devolvió todo lo de este despacho',
+                             'No queda mercancía por devolver. Si necesitas deshacer la entrega completa, usa "Reabrir despacho" en la tarjeta del despacho.']
+                      return (
+                        <div data-testid="devolucion-sin-unidades">
+                          <p className="font-bold">{titulo}</p>
+                          <p className="mt-0.5 text-[11px] opacity-80">{cuerpo}</p>
+                        </div>
+                      )
+                    })()}
                   </div>
                   {itemsList.length > 0 && (
                     <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50 opacity-75">

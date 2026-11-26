@@ -132,3 +132,6 @@ scripts/*
 
 # OP-2026-088: modal de prestamos
 !src/utils/__tests__/op088PrestamosModal.test.js
+
+# OP-2026-089: mensaje de devolucion parcial
+!src/utils/__tests__/op089MensajeDevolucion.test.js
