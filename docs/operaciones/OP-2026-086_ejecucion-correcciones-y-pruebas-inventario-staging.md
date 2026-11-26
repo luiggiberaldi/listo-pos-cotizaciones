@@ -166,6 +166,11 @@ Todo contra la **base real de staging**, con el servidor y la página corriendo 
 - **Segunda revisión independiente.**
 - **Registros técnicos sin columna de empresa** (`system_logs`, `system_log_analysis`).
 
+## Staging en internet: desactualizado (hallazgo)
+
+- El servidor de staging publicado en Cloudflare (`construacero-staging`) **no se actualiza desde el 2026-09-07** y **no tiene secretos cargados**: `wrangler secret list` devuelve una lista vacía. Todas las pruebas de staging de estos meses, incluidas las de este caso, se hicieron con el servidor corriendo **en la PC** contra la base de staging.
+- No se publicó en este caso, porque haría falta cargar la clave del servidor (`SUPABASE_SERVICE_KEY` de staging) en Cloudflare, y esa decisión le toca al dueño. La revisión visual se puede hacer en esta PC: página en `http://localhost:5174` y servidor en `:8789`.
+
 ## Pendiente
 
 - Registros técnicos sin columna de empresa (`system_logs`, `system_log_analysis`).
