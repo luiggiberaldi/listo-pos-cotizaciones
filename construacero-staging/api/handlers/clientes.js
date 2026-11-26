@@ -917,12 +917,20 @@ export async function handleFacturarPrestamo(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
 
-  const { prestamoId, cantidad, tasaBcv } = body || {};
+  const { prestamoId, cantidad } = body || {};
+  // OP-2026-091: tasa principal del sistema (la que esté elegida: BCV, USDT o manual). Se sigue
+  // aceptando "tasaBcv" por compatibilidad con pantallas anteriores.
   const cant = Number(cantidad);
-  const tasa = Number(tasaBcv);
+  const tasa = Number(body?.tasa ?? body?.tasaBcv);
+  const tasaModo = String(body?.tasaModo || 'bcv').toLowerCase();
+  const pago = body?.pago && typeof body.pago === 'object' ? body.pago : null;
+  const pagoMetodo = pago ? String(pago.metodo || '').trim() : null;
+  const pagoReferencia = pago ? String(pago.referencia || '').trim().slice(0, 120) : null;
   if (!prestamoId || !isValidUuid(prestamoId)) return jsonError('prestamoId inválido', 400, request);
   if (isNaN(cant) || cant <= 0) return jsonError('Cantidad a facturar inválida', 400, request);
-  if (!Number.isFinite(tasa) || tasa <= 0) return jsonError('Falta la tasa BCV del día para facturar el préstamo', 400, request);
+  if (!Number.isFinite(tasa) || tasa <= 0) return jsonError('Falta la tasa del día para facturar el préstamo', 400, request);
+  if (!['bcv', 'usdt', 'manual'].includes(tasaModo)) return jsonError('Tipo de tasa inválido', 400, request);
+  if (pago && !pagoMetodo) return jsonError('Elige el método de pago', 400, request);
 
   // OP-2026-086 (A2): el mismo envío repetido (doble clic, reintento de red) usa la misma clave
   // y la base devuelve el mismo resultado sin crear un segundo cargo.
@@ -930,6 +938,22 @@ export async function handleFacturarPrestamo(request, env) {
   if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key obligatoria e inválida', 400, request);
 
   try {
+    // Control de sensatez: el servidor no puede saber qué tasa eligió el usuario en su pantalla, pero sí
+    // rechaza una tasa absurda comparándola con la del despacho original (entre 1/4 y 4 veces).
+    try {
+      const snapRes = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/cliente_prestamos?id=eq.${prestamoId}&select=despacho:notas_despacho(tasa_snapshot)`,
+        { headers }
+      );
+      if (snapRes.ok) {
+        const [fila] = await snapRes.json();
+        const snap = Number(fila?.despacho?.tasa_snapshot);
+        if (Number.isFinite(snap) && snap > 0 && (tasa < snap / 4 || tasa > snap * 4)) {
+          return jsonError('La tasa enviada no parece válida frente a la del despacho. Actualiza la tasa e intenta de nuevo.', 400, request);
+        }
+      }
+    } catch { /* si no se puede comprobar, la base igual valida que la tasa sea mayor que cero */ }
+
     // Todo ocurre en una sola transacción de la base: candado del préstamo, precio del despacho
     // original (decisión del dueño: mismo precio en dólares, tasa del día anotada), cargo en CxC
     // y actualización del préstamo. No mueve inventario (N27).
@@ -943,6 +967,9 @@ export async function handleFacturarPrestamo(request, env) {
         p_usuario_id: operador.actor_id || operador.id,
         p_tasa_bcv: tasa,
         p_idempotency_key: idempotencyKey,
+        p_tasa_modo: tasaModo,
+        p_pago_metodo: pagoMetodo,
+        p_pago_referencia: pagoReferencia || null,
       }),
     });
     const text = await rpcRes.text();
@@ -954,6 +981,8 @@ export async function handleFacturarPrestamo(request, env) {
       if (msg.includes('CANTIDAD_SUPERA_PENDIENTE_PRESTAMO')) return jsonError('La cantidad supera lo que queda pendiente del préstamo (puede que otra persona lo haya movido); recarga la ficha', 409, request);
       if (msg.includes('PRESTAMO_SIN_PRECIO')) return jsonError('La línea del despacho no tiene precio. No se puede facturar un préstamo sin valor de referencia.', 400, request);
       if (msg.includes('ROL_NO_AUTORIZADO')) return jsonError('Solo administración o jefes pueden facturar préstamos', 403, request);
+      if (msg.includes('PAGO_METODO_INVALIDO')) return jsonError('Ese método no sirve como pago. Elige efectivo, transferencia, Zelle, etc.', 400, request);
+      if (msg.includes('TASA_MODO_INVALIDO')) return jsonError('Tipo de tasa inválido', 400, request);
       if (msg.includes('IDEMPOTENCY_KEY_REUTILIZADA')) return jsonError('Idempotency-Key ya fue utilizada para otra operación.', 409, request);
       if (msg.includes('OPERACION_IDEMPOTENTE_SIN_RESULTADO')) return jsonError('La facturación está en proceso; espera unos segundos y recarga', 409, request);
       return jsonError(`No se pudo facturar el préstamo: ${msg}`, 400, request);
@@ -973,7 +1002,7 @@ export async function handleFacturarPrestamo(request, env) {
             tipo: 'seguimiento',
             prioridad: 'informativa',
             titulo: 'Conversión de préstamo a venta',
-            contenido: `Se facturaron y cargaron a cuenta ${r.cantidad} ${r.unidad || 'und'} de "${r.producto_nombre || 'Producto'}" a $${Number(r.precio_unit_usd).toFixed(2)} (precio del despacho ${r.despacho_ref}) por un total de $${Number(r.monto_usd).toFixed(2)} USD · tasa BCV del día ${r.tasa_bcv} (≈ Bs ${Number(r.monto_bs).toFixed(2)}).`,
+            contenido: `Se facturaron y cargaron a cuenta ${r.cantidad} ${r.unidad || 'und'} de "${r.producto_nombre || 'Producto'}" a $${Number(r.precio_unit_usd).toFixed(2)} (precio del despacho ${r.despacho_ref}) por un total de $${Number(r.monto_usd).toFixed(2)} USD · tasa principal (${String(r.tasa_modo || 'bcv').toUpperCase()}) ${r.tasa_bcv} (≈ Bs ${Number(r.monto_bs).toFixed(2)}) · ${r.pago_metodo ? `pagado ahora con ${r.pago_metodo}` : 'a crédito (a la cuenta del cliente)'}.`,
             imagenes: [],
             fijada: false,
             cuenta_id: user.id
@@ -984,14 +1013,14 @@ export async function handleFacturarPrestamo(request, env) {
         await registrarAuditoria(env, headers, {
           usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
           categoria: 'FINANZAS', accion: 'FACTURAR_PRESTAMO',
-          descripcion: `Facturación de préstamo #${prestamoId}: ${r.cantidad} ${r.unidad || 'und'} de ${r.producto_nombre} por $${r.monto_usd} (tasa ${r.tasa_bcv})`,
+          descripcion: `Facturación de préstamo #${prestamoId}: ${r.cantidad} ${r.unidad || 'und'} de ${r.producto_nombre} por $${r.monto_usd} (tasa ${String(r.tasa_modo || 'bcv').toUpperCase()} ${r.tasa_bcv}; ${r.pago_metodo ? `pagado con ${r.pago_metodo}` : 'a crédito'})`,
           entidadTipo: 'cliente', entidadId: r.cliente_id,
-          meta: { prestamo_id: prestamoId, cantidad: r.cantidad, monto: r.monto_usd, precio_unit_usd: r.precio_unit_usd, tasa_bcv: r.tasa_bcv, monto_bs: r.monto_bs, estado_nuevo: r.estado, cargo_id: r.cargo_id, idempotency_key: idempotencyKey }, ip
+          meta: { prestamo_id: prestamoId, cantidad: r.cantidad, monto: r.monto_usd, precio_unit_usd: r.precio_unit_usd, tasa_bcv: r.tasa_bcv, tasa_modo: r.tasa_modo, monto_bs: r.monto_bs, estado_nuevo: r.estado, cargo_id: r.cargo_id, abono_id: r.abono_id, pago_metodo: r.pago_metodo, comision: r.comision, idempotency_key: idempotencyKey }, ip
         });
       } catch { /* auditoría best-effort */ }
     }
 
-    return json({ ok: true, nuevoEstado: r.estado, cantidad_facturada: r.cantidad_facturada, cargo: r.monto_usd, precio_unit_usd: r.precio_unit_usd, tasa_bcv: r.tasa_bcv, monto_bs: r.monto_bs, idempotent: r.idempotent === true }, 200, request);
+    return json({ ok: true, nuevoEstado: r.estado, cantidad_facturada: r.cantidad_facturada, cargo: r.monto_usd, precio_unit_usd: r.precio_unit_usd, tasa_bcv: r.tasa_bcv, tasa_modo: r.tasa_modo, monto_bs: r.monto_bs, pago_metodo: r.pago_metodo || null, comision: r.comision || null, idempotent: r.idempotent === true }, 200, request);
   } catch (e) {
     return jsonError(e.message || 'Error al facturar préstamo', 500, request);
   }

@@ -7,13 +7,13 @@ const leer = f => readFileSync(path.resolve(__dirname, '../../..', f), 'utf8')
 
 describe('OP-2026-088 facturar préstamo desde la ficha', () => {
   const modal = leer('src/components/clientes/FichaClienteModal.jsx')
-  it('toma el número de la tasa desde tasaBcv.precio, nunca Number(tasaBcv)', () => {
-    expect(modal).toContain('Number(tasaBcv?.precio)')
+  it('usa la tasa principal (tasaEfectiva) como número, nunca Number(tasaBcv) (un objeto)', () => {
+    expect(modal).toContain('Number(tasaEfectiva)')
     expect(modal).not.toMatch(/Number\(tasaBcv\)/)
   })
-  it('envía la tasa del día al servidor', () => {
+  it('envía la tasa principal y su tipo al servidor (OP-2026-091)', () => {
     expect(modal).toContain('const tasa = tasaDelDia')
-    expect(modal).toContain('tasaBcv: tasa')
+    expect(modal).toContain("tasaModo: modoTasa || 'bcv'")
   })
   it('muestra vista previa del cobro y bloquea cantidades inválidas', () => {
     expect(modal).toContain('data-testid="prestamo-vista-previa"')

@@ -898,9 +898,14 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const [activeAction, setActiveAction] = useState(null)
   const [actionQty, setActionQty] = useState('')
   // OP-2026-086: tasa del día para facturar préstamos y sello único por envío (doble clic / reintento)
-  const { tasaBcv, refrescar: refrescarTasa } = useTasaCambio()
-  // tasaBcv es un objeto ({ precio, fecha, ... }): el número está en .precio
-  const tasaDelDia = Number(tasaBcv?.precio) > 0 ? Number(tasaBcv.precio) : 0
+  // OP-2026-091: se factura con la TASA PRINCIPAL elegida en el sistema (BCV, USDT o manual).
+  const { tasaEfectiva, modoTasa, refrescar: refrescarTasa } = useTasaCambio()
+  const tasaDelDia = Number(tasaEfectiva) > 0 ? Number(tasaEfectiva) : 0
+  const etiquetaTasa = modoTasa === 'usdt' ? 'USDT' : modoTasa === 'manual' ? 'manual' : 'BCV'
+  // Cómo se cobra al facturar: 'credito' (se suma a la deuda) o 'ahora' (paga en el momento)
+  const [pagoModo, setPagoModo] = useState('credito')
+  const [pagoMetodo, setPagoMetodo] = useState('Efectivo $')
+  const [pagoReferencia, setPagoReferencia] = useState('')
   const claveAccionPrestamoRef = useRef(null)
   if (!claveAccionPrestamoRef.current) claveAccionPrestamoRef.current = crearGeneradorClaveIdempotente()
   const [actionLoading, setActionLoading] = useState(false)
@@ -944,10 +949,10 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
       const url = type === 'devolver' ? '/api/clientes/prestamos/devolver' : '/api/clientes/prestamos/facturar'
       const tasa = tasaDelDia
       if (type === 'facturar' && !(tasa > 0)) {
-        showToast('Todavía no hay tasa BCV del día. Espera unos segundos o toca "Actualizar tasa" e intenta de nuevo.', 'error')
+        showToast('Todavía no hay tasa del día. Espera unos segundos o toca "Actualizar tasa" e intenta de nuevo.', 'error')
         return
       }
-      const firma = JSON.stringify({ type, prestamoId: prestamo.id, cantidad: qty })
+      const firma = JSON.stringify({ type, prestamoId: prestamo.id, cantidad: qty, pago: type === 'facturar' ? (pagoModo === 'ahora' ? pagoMetodo : 'credito') : null })
       const idempotencyKey = claveAccionPrestamoRef.current.resolver(firma)
       const res = await authFetch(url, {
         method: 'POST',
@@ -959,7 +964,11 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
           prestamoId: prestamo.id,
           cantidad: qty,
           idempotencyKey,
-          ...(type === 'facturar' ? { tasaBcv: tasa } : {})
+          ...(type === 'facturar' ? {
+            tasa,
+            tasaModo: modoTasa || 'bcv',
+            ...(pagoModo === 'ahora' ? { pago: { metodo: pagoMetodo, referencia: pagoReferencia } } : {}),
+          } : {})
         })
       })
       const result = await res.json()
@@ -969,7 +978,11 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
         showToast(result.error || 'Error al procesar la acción', 'error')
       } else {
         claveAccionPrestamoRef.current.limpiar(firma)
-        showToast(type === 'devolver' ? 'Devolución física registrada con éxito ✓' : 'Conversión a venta registrada con éxito ✓', 'success')
+        const com = result?.comision
+        const avisoCom = type === 'facturar' && com?.aplica
+          ? ` · Comisión del vendedor: $${Number(com.comision_usd).toFixed(2)}${com.liberada ? '' : ' (retenida hasta que se cobre)'}`
+          : ''
+        showToast(type === 'devolver' ? 'Devolución física registrada con éxito ✓' : `${result?.pago_metodo ? 'Facturado y cobrado' : 'Facturado a la cuenta del cliente'} ✓${avisoCom}`, 'success', 6000)
         setActiveAction(null)
         setActionQty('')
         fetchPrestamos()
@@ -1543,6 +1556,7 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                               onClick={() => {
                                 setActiveAction({ id: p.id, type: 'facturar' })
                                 setActionQty(String(restante))
+                                setPagoModo('credito'); setPagoReferencia('')
                               }}
                               className="flex-1 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold transition-all active:scale-[0.98]"
                             >
@@ -1615,19 +1629,46 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                                     <strong className="text-slate-700">{precioU > 0 ? `$${fmtN(precioU)} / ${unidad}` : 'sin precio'}</strong>
                                   </div>
                                   <div className="flex justify-between text-slate-500">
-                                    <span>Tasa BCV del día</span>
+                                    <span>Tasa principal ({etiquetaTasa})</span>
                                     {tasaDelDia > 0
                                       ? <strong className="text-slate-700">Bs {fmtN(tasaDelDia)}</strong>
                                       : <button type="button" onClick={() => refrescarTasa?.()} className="font-bold text-sky-700 underline">Actualizar tasa</button>}
                                   </div>
                                   <div className="flex justify-between items-baseline border-t border-slate-100 pt-1.5">
-                                    <span className="font-bold text-slate-600">Se sumará a su deuda</span>
+                                    <span className="font-bold text-slate-600">{pagoModo === 'ahora' ? 'Se cobra ahora' : 'Se sumará a su deuda'}</span>
                                     <span className="text-right">
                                       <strong className="block text-base text-sky-700">${fmtN(totalUsd)}</strong>
                                       {totalBs > 0 && <span className="block text-[10px] text-slate-400">≈ Bs {fmtN(totalBs)}</span>}
                                     </span>
                                   </div>
                                   {sinPrecio && <p className="text-[10px] text-rose-600 font-semibold">Este préstamo no tiene precio en el despacho; no se puede facturar desde aquí.</p>}
+                                </div>
+                              )}
+                              {isFacturar && (
+                                <div data-testid="prestamo-forma-cobro" className="space-y-1.5">
+                                  <p className="text-[10px] font-bold text-slate-500">¿Cómo se cobra?</p>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    <button type="button" onClick={() => setPagoModo('credito')} data-testid="prestamo-a-credito"
+                                      className={`py-1.5 rounded-lg text-[11px] font-bold border ${pagoModo === 'credito' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-600 border-slate-200'}`}>
+                                      A crédito
+                                    </button>
+                                    <button type="button" onClick={() => setPagoModo('ahora')} data-testid="prestamo-paga-ahora"
+                                      className={`py-1.5 rounded-lg text-[11px] font-bold border ${pagoModo === 'ahora' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'}`}>
+                                      Paga ahora
+                                    </button>
+                                  </div>
+                                  {pagoModo === 'ahora' ? (
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      <select value={pagoMetodo} onChange={e => setPagoMetodo(e.target.value)} aria-label="Método de pago" data-testid="prestamo-metodo"
+                                        className="px-2 py-1.5 text-[11px] border border-slate-300 rounded-lg bg-white">
+                                        {METODOS.filter(m => m !== 'Cruce').map(m => <option key={m} value={m}>{m}</option>)}
+                                      </select>
+                                      <input type="text" value={pagoReferencia} onChange={e => setPagoReferencia(e.target.value)} placeholder="Referencia (opcional)" aria-label="Referencia del pago"
+                                        className="px-2 py-1.5 text-[11px] border border-slate-300 rounded-lg bg-white" />
+                                    </div>
+                                  ) : (
+                                    <p className="text-[10px] text-slate-400">El monto se suma a lo que el cliente debe. Su comisión queda retenida hasta que se cobre.</p>
+                                  )}
                                 </div>
                               )}
                               {isDevolver && (
@@ -1651,7 +1692,7 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                                     isDevolver ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'
                                   }`}
                                 >
-                                  {actionLoading ? 'Procesando…' : isDevolver ? `Devolver ${qtyValida ? qtyNum : ''} ${unidad}` : (totalUsd > 0 ? `Facturar $${fmtN(totalUsd)}` : 'Facturar')}
+                                  {actionLoading ? 'Procesando…' : isDevolver ? `Devolver ${qtyValida ? qtyNum : ''} ${unidad}` : (totalUsd > 0 ? `${pagoModo === 'ahora' ? 'Facturar y cobrar' : 'Facturar'} $${fmtN(totalUsd)}` : 'Facturar')}
                                 </button>
                               </div>
                             </div>
