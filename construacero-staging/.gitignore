@@ -129,3 +129,6 @@ scripts/*
 !api/handlers/__tests__/seguridadIdempotencia071.test.js
 !api/handlers/__tests__/higieneDecimalesRespaldo071.test.js
 !src/utils/__tests__/op086Inventario.test.js
+
+# OP-2026-088: modal de prestamos
+!src/utils/__tests__/op088PrestamosModal.test.js

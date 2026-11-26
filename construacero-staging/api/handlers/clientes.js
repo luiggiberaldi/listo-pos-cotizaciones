@@ -624,6 +624,21 @@ export async function handleGetPrestamosCliente(request, env) {
       return jsonError(`Error al consultar préstamos: ${err}`, res.status, request);
     }
     const data = await res.json();
+    // OP-2026-088: precio al que se facturaría cada préstamo (el del despacho original, con su
+    // descuento), calculado por la misma función que usa el cobro, para la vista previa de la pantalla.
+    if (Array.isArray(data) && data.length > 0) {
+      try {
+        const rp = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/precios_unitarios_prestamos`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_ids: data.map(x => x.id) })
+        });
+        if (rp.ok) {
+          const precios = Object.fromEntries((await rp.json()).map(r => [r.prestamo_id, r.precio_unit_usd == null ? null : Number(r.precio_unit_usd)]));
+          for (const x of data) x.precio_facturacion_usd = precios[x.id] ?? null;
+        }
+      } catch { /* la vista previa es opcional: el cobro no depende de ella */ }
+    }
     return new Response(JSON.stringify(data), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders(request) }
     });

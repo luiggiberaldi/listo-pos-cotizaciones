@@ -898,7 +898,9 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const [activeAction, setActiveAction] = useState(null)
   const [actionQty, setActionQty] = useState('')
   // OP-2026-086: tasa del día para facturar préstamos y sello único por envío (doble clic / reintento)
-  const { tasaBcv } = useTasaCambio()
+  const { tasaBcv, refrescar: refrescarTasa } = useTasaCambio()
+  // tasaBcv es un objeto ({ precio, fecha, ... }): el número está en .precio
+  const tasaDelDia = Number(tasaBcv?.precio) > 0 ? Number(tasaBcv.precio) : 0
   const claveAccionPrestamoRef = useRef(null)
   if (!claveAccionPrestamoRef.current) claveAccionPrestamoRef.current = crearGeneradorClaveIdempotente()
   const [actionLoading, setActionLoading] = useState(false)
@@ -940,9 +942,9 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
     setActionLoading(true)
     try {
       const url = type === 'devolver' ? '/api/clientes/prestamos/devolver' : '/api/clientes/prestamos/facturar'
-      const tasa = Number(tasaBcv)
+      const tasa = tasaDelDia
       if (type === 'facturar' && !(tasa > 0)) {
-        showToast('No se pudo obtener la tasa BCV del día. Recarga e intenta de nuevo.', 'error')
+        showToast('Todavía no hay tasa BCV del día. Espera unos segundos o toca "Actualizar tasa" e intenta de nuevo.', 'error')
         return
       }
       const firma = JSON.stringify({ type, prestamoId: prestamo.id, cantidad: qty })
@@ -1504,7 +1506,10 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                               {restante > 0 && <span className="text-rose-500">Pendiente: <strong>{restante}</strong></span>}
                             </div>
                             <p className="text-[10px] text-slate-400 mt-1">
-                              Despacho: <span className="font-mono text-slate-600">DES-{String(p.despacho?.numero || '').padStart(5, '0')}</span> · Valor ref: ${p.producto?.precio_usd ? (restante * p.producto.precio_usd).toFixed(2) : '0.00'}
+                              Despacho: <span className="font-mono text-slate-600">DES-{String(p.despacho?.numero || '').padStart(5, '0')}</span>
+                              {Number(p.precio_facturacion_usd) > 0
+                                ? <> · Precio del despacho: <strong className="text-slate-600">${Number(p.precio_facturacion_usd).toFixed(2)}</strong>/{p.producto?.unidad || 'und'} · Pendiente vale: <strong className="text-slate-600">${(restante * Number(p.precio_facturacion_usd)).toFixed(2)}</strong></>
+                                : <> · Valor ref: ${p.producto?.precio_usd ? (restante * p.producto.precio_usd).toFixed(2) : '0.00'}</>}
                             </p>
                           </div>
                           <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase shrink-0 ${
@@ -1546,47 +1551,112 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                           </div>
                         )}
 
-                        {/* Formulario de Acción Inline */}
-                        {isActionActive && (
-                          <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2 animate-in slide-in-from-top-1 duration-150">
-                            <div className="flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              <span>{isDevolver ? 'Registrar devolución física' : 'Facturar a cuenta del cliente'}</span>
-                              <span className="text-slate-500 font-mono">Max: {restante}</span>
+                        {/* Formulario de Acción Inline (OP-2026-088: con vista previa del cobro) */}
+                        {isActionActive && (() => {
+                          const qtyNum = Number(actionQty)
+                          const qtyValida = Number.isFinite(qtyNum) && qtyNum > 0 && qtyNum <= restante + 0.0001
+                          const precioU = Number(p.precio_facturacion_usd) > 0 ? Number(p.precio_facturacion_usd) : 0
+                          const totalUsd = qtyValida && precioU > 0 ? Math.round(qtyNum * precioU * 100) / 100 : 0
+                          const totalBs = totalUsd > 0 && tasaDelDia > 0 ? totalUsd * tasaDelDia : 0
+                          const unidad = p.producto?.unidad || 'und'
+                          const faltaTasa = isFacturar && tasaDelDia <= 0
+                          const sinPrecio = isFacturar && precioU <= 0
+                          const puedeEnviar = qtyValida && !actionLoading && !faltaTasa && !sinPrecio
+                          const fmtN = (n, d = 2) => Number(n).toLocaleString('es-VE', { minimumFractionDigits: d, maximumFractionDigits: d })
+                          return (
+                            <div className={`mt-3 p-3 rounded-xl border space-y-2.5 animate-in slide-in-from-top-1 duration-150 ${isDevolver ? 'bg-emerald-50/40 border-emerald-200' : 'bg-sky-50/40 border-sky-200'}`}>
+                              <div className="flex items-center justify-between">
+                                <span className={`text-[11px] font-black uppercase tracking-wider ${isDevolver ? 'text-emerald-700' : 'text-sky-700'}`}>
+                                  {isDevolver ? 'Devolver mercancía física' : 'Cobrar a la cuenta del cliente'}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-500">Pendiente: {restante} {unidad}</span>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                                  {isDevolver ? '¿Cuántas devuelve?' : '¿Cuántas se cobran?'}
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="any"
+                                    min="0"
+                                    max={restante}
+                                    value={actionQty}
+                                    onChange={e => setActionQty(e.target.value)}
+                                    placeholder="0"
+                                    aria-label="Cantidad"
+                                    data-testid="prestamo-cantidad"
+                                    className={`w-24 px-2.5 py-2 text-sm font-bold border rounded-lg focus:outline-none bg-white ${qtyValida || actionQty === '' ? 'border-slate-300 focus:border-slate-500' : 'border-rose-400 focus:border-rose-500'}`}
+                                    autoFocus
+                                  />
+                                  <span className="text-xs text-slate-500">{unidad}</span>
+                                  <div className="ml-auto flex gap-1">
+                                    {restante > 1 && (
+                                      <button type="button" onClick={() => setActionQty(String(Math.round(restante / 2 * 10000) / 10000))}
+                                        className="px-2 py-1 text-[10px] font-bold rounded-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">Mitad</button>
+                                    )}
+                                    <button type="button" onClick={() => setActionQty(String(restante))}
+                                      className="px-2 py-1 text-[10px] font-bold rounded-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">Todo ({restante})</button>
+                                  </div>
+                                </div>
+                                {actionQty !== '' && !qtyValida && (
+                                  <p role="alert" className="text-[10px] text-rose-600 font-semibold mt-1">
+                                    {qtyNum > restante ? `Solo quedan ${restante} ${unidad} pendientes.` : 'Escribe una cantidad mayor que cero.'}
+                                  </p>
+                                )}
+                              </div>
+
+                              {isFacturar && (
+                                <div data-testid="prestamo-vista-previa" className="rounded-lg bg-white border border-slate-200 p-2.5 text-[11px] space-y-1">
+                                  <div className="flex justify-between text-slate-500">
+                                    <span>Precio del despacho original</span>
+                                    <strong className="text-slate-700">{precioU > 0 ? `$${fmtN(precioU)} / ${unidad}` : 'sin precio'}</strong>
+                                  </div>
+                                  <div className="flex justify-between text-slate-500">
+                                    <span>Tasa BCV del día</span>
+                                    {tasaDelDia > 0
+                                      ? <strong className="text-slate-700">Bs {fmtN(tasaDelDia)}</strong>
+                                      : <button type="button" onClick={() => refrescarTasa?.()} className="font-bold text-sky-700 underline">Actualizar tasa</button>}
+                                  </div>
+                                  <div className="flex justify-between items-baseline border-t border-slate-100 pt-1.5">
+                                    <span className="font-bold text-slate-600">Se sumará a su deuda</span>
+                                    <span className="text-right">
+                                      <strong className="block text-base text-sky-700">${fmtN(totalUsd)}</strong>
+                                      {totalBs > 0 && <span className="block text-[10px] text-slate-400">≈ Bs {fmtN(totalBs)}</span>}
+                                    </span>
+                                  </div>
+                                  {sinPrecio && <p className="text-[10px] text-rose-600 font-semibold">Este préstamo no tiene precio en el despacho; no se puede facturar desde aquí.</p>}
+                                </div>
+                              )}
+                              {isDevolver && (
+                                <p className="text-[10px] text-slate-500">La mercancía vuelve al inventario y no se cobra nada al cliente.</p>
+                              )}
+
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => { setActiveAction(null); setActionQty('') }}
+                                  className="px-3 py-2 text-xs text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg font-bold transition-all"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleActionSubmit(p, activeAction.type)}
+                                  disabled={!puedeEnviar}
+                                  data-testid="prestamo-confirmar"
+                                  className={`flex-1 py-2 text-xs font-black text-white rounded-lg transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
+                                    isDevolver ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'
+                                  }`}
+                                >
+                                  {actionLoading ? 'Procesando…' : isDevolver ? `Devolver ${qtyValida ? qtyNum : ''} ${unidad}` : (totalUsd > 0 ? `Facturar $${fmtN(totalUsd)}` : 'Facturar')}
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex gap-2">
-                              <input
-                                type="number"
-                                step="any"
-                                min="0.0001"
-                                max={restante}
-                                value={actionQty}
-                                onChange={e => setActionQty(e.target.value)}
-                                placeholder="0.00"
-                                className="w-20 px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400"
-                                autoFocus
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setActiveAction(null)}
-                                className="px-2.5 py-1 text-[10px] text-slate-500 hover:text-slate-700 font-bold transition-all"
-                              >
-                                Cancelar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleActionSubmit(p, activeAction.type)}
-                                disabled={actionLoading}
-                                className={`flex-1 py-1 text-[10px] font-black text-white rounded-lg transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95 ${
-                                  isDevolver 
-                                    ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100' 
-                                    : 'bg-sky-600 hover:bg-sky-700 shadow-sky-100'
-                                }`}
-                              >
-                                {actionLoading ? '...' : isDevolver ? 'Devolver ✓' : 'Facturar 💳'}
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                          )
+                        })()}
                       </div>
                     )
                   })}
