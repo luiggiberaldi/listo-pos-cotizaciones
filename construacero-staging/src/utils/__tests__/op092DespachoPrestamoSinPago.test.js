@@ -1,34 +1,41 @@
-// OP-2026-092 — un despacho 100 % préstamo (total $0) no exige método de pago al editar sus productos.
+// OP-2026-092 + OP-2026-095 Fase 4 — un despacho con total $0 no exige método de pago en ninguna pantalla.
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
-const s = readFileSync(path.resolve(__dirname, '../../..', 'src/components/despachos/EditarItemsDespachoModal.jsx'), 'utf8')
+const leer = f => readFileSync(path.resolve(__dirname, '../../..', f), 'utf8')
 
-describe('OP-2026-092 despacho solo préstamo sin método de pago', () => {
-  it('con total $0 los pagos se consideran cuadrados aunque no haya ninguno', () => {
-    expect(s).toContain('const sinCobro = !esCod && total <= 0.015')
-    expect(s).toContain(': (pagoInmediatoCuadrado || sinCobro)')
-  })
-  it('explica el motivo al usuario', () => {
-    expect(s).toContain('Este despacho es 100 % préstamo: no se cobra nada ahora.')
-    expect(s).toContain('Sin cobro: todo es préstamo')
-  })
-  it('al guardar sin cobro se limpian los pagos anotados que ya no corresponden', () => {
-    expect(s).toContain('JSON.stringify(totales.sinCobro ? [] : formasPagoFinales)')
+describe('OP-2026-092 / OP-2026-095 despacho sin cobro en todas las pantallas', () => {
+  const editarItems = leer('src/components/despachos/EditarItemsDespachoModal.jsx')
+  const editarDesp = leer('src/components/despachos/EditDespachoModal.jsx')
+  const cotizaciones = leer('src/views/CotizacionesView.jsx')
+  const ventaRapida = leer('src/views/VentaRapidaView.jsx')
+  const srv = leer('api/handlers/despachos.js')
+
+  it('EditarItemsDespachoModal usa evaluarSinCobro, guarda pagos vacíos y ya no deja avisos viejos', () => {
+    expect(editarItems).toContain('evaluarSinCobro({ esCod, total, items })')
+    expect(editarItems).toContain(': (pagoInmediatoCuadrado || sinCobro)')
+    expect(editarItems).toContain('JSON.stringify(totales.sinCobro ? [] : formasPagoFinales)')
+    expect(editarItems).toContain('!totales.estaCuadrado')
+    expect(editarItems).not.toContain('Lo prestado se factura después')
   })
 
-  describe('ventana "Editar despacho" y comisión de préstamos facturados', () => {
-    const e = readFileSync(path.resolve(__dirname, '../../..', 'src/components/despachos/EditDespachoModal.jsx'), 'utf8')
-    const srv = readFileSync(path.resolve(__dirname, '../../..', 'api/handlers/despachos.js'), 'utf8')
-    it('Editar despacho tampoco exige método de pago con total $0 y guarda sin pagos', () => {
-      expect(e).toContain('const sinCobro = !esCod && totalConFlete <= 0.015')
-      expect(e).toContain('(pagoInmediatoCuadrado || sinCobro)')
-      expect(e).toContain('JSON.stringify(sinCobro ? [] : formasPagoFinales)')
-    })
-    it('editar el pago no borra la comisión sumada por un préstamo facturado', () => {
-      expect(srv).toContain('cliente_prestamos?despacho_id=eq.${despachoId}&cantidad_facturada=gt.0')
-      expect(srv).toContain('tienePrestamoFacturado && Array.isArray(comEntries)')
-    })
+  it('EditDespachoModal usa evaluarSinCobro y guarda sin pagos con total $0', () => {
+    expect(editarDesp).toContain('evaluarSinCobro({ esCod, total: totalConFlete')
+    expect(editarDesp).toContain('(pagoInmediatoCuadrado || sinCobro)')
+    expect(editarDesp).toContain('JSON.stringify(sinCobro ? [] : formasPagoFinales)')
+    expect(editarDesp).not.toContain('Lo prestado se factura después')
+  })
+
+  it('CotizacionesView y VentaRapidaView permiten crear despacho con total $0 sin método de pago', () => {
+    expect(cotizaciones).toContain('evaluarSinCobro({ esCod, total: totalConFlete, items })')
+    expect(cotizaciones).toContain('(pagoInmediatoCuadrado || sinCobro)')
+    expect(cotizaciones).toContain('JSON.stringify(sinCobro ? [] : formasPagoFinales)')
+    expect(ventaRapida).toContain('sinCobroVentaRapida')
+  })
+
+  it('editar el pago no borra la comisión sumada por un préstamo facturado', () => {
+    expect(srv).toContain('cliente_prestamos?despacho_id=eq.${despachoId}&cantidad_facturada=gt.0')
+    expect(srv).toContain('tienePrestamoFacturado && Array.isArray(comEntries)')
   })
 })

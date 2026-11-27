@@ -7,6 +7,7 @@ import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import { useClientes } from '../../hooks/useClientes'
 import useClienteFresco from '../../hooks/useClienteFresco'
+import { evaluarSinCobro } from '../../utils/despachoSinCobro'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { useSaldoFavorOrigen } from '../../hooks/useCuentasCobrar'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
@@ -278,8 +279,9 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     : `DES-${String(despacho.numero).padStart(5, '0')}`
 
 
-  // OP-2026-092: sin nada que cobrar (total $0, todo préstamo) no se exige método de pago.
-  const sinCobro = !esCod && totalConFlete <= 0.015
+  // OP-2026-092 / OP-2026-095: sin nada que cobrar (total $0) no se exige método de pago.
+  const infoSinCobro = evaluarSinCobro({ esCod, total: totalConFlete, items: despacho?.items || [] })
+  const sinCobro = infoSinCobro.sinCobro
 
   async function handleGuardar() {
     // OP-2026-092: con total $0 (todo préstamo) no hay nada que cobrar: se guarda sin pagos anotados.
@@ -517,8 +519,8 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
 
             {sinCobro && (
               <div data-testid="editar-despacho-sin-cobro" className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs leading-snug">
-                <p className="font-bold">Este despacho es 100 % préstamo: no se cobra nada ahora.</p>
-                <p className="mt-0.5 opacity-80">Por eso no hace falta elegir un método de pago. Lo prestado se factura después, desde la ficha del cliente → Préstamos.</p>
+                <p className="font-bold">{infoSinCobro.titulo}</p>
+                <p className="mt-0.5 opacity-80">{infoSinCobro.descripcion}</p>
               </div>
             )}
 

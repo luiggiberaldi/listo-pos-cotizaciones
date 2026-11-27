@@ -769,7 +769,8 @@ export default function VentaRapidaView() {
     Number(cxcItem.diasVencimiento) > 0
   );
 
-  const step2Valid = (esPrestamoPuro || ((esCod
+  const sinCobroVentaRapida = !esCod && totalConFlete <= 0.015
+  const step2Valid = (esPrestamoPuro || sinCobroVentaRapida || ((esCod
     ? (pagoInmediatoCuadrado || (montoCodRequerido > 0.015 && propuestaCodCuadrado))
     : pagoInmediatoCuadrado) && cxcVencimientoValido))
     && (!direccionEnvioActiva || (direccionEnvioEstado && direccionEnvioCiudad))

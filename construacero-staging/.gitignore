@@ -153,3 +153,6 @@ scripts/*
 
 # OP-2026-095 Fase 2: seguridad de restauración y catálogo
 !api/handlers/__tests__/restauracionSeguridad095.test.js
+
+# OP-2026-095 Fase 4: despacho sin cobro (préstamo vs donación)
+!src/utils/__tests__/despachoSinCobro.test.js

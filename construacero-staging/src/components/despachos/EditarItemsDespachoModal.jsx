@@ -5,6 +5,7 @@ import { useLineItems } from '../../hooks/useLineItems'
 import { useInventario } from '../../hooks/useInventario'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useEditarItemsDespacho } from '../../hooks/useDespachos'
+import { evaluarSinCobro } from '../../utils/despachoSinCobro'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useSaldoFavorOrigen } from '../../hooks/useCuentasCobrar'
@@ -373,13 +374,13 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
       const diferencia = esCod
         ? Math.round((montoCodRequerido - totalPropuestaCod) * 100) / 100
         : Math.round((total - totalInmediato) * 100) / 100
-      // OP-2026-092: si el total es $0 (todo el despacho es préstamo) no hay nada que cobrar:
-      // no se exige ningún método de pago (antes el botón quedaba bloqueado hasta anotar uno).
-      const sinCobro = !esCod && total <= 0.015
+      // OP-2026-092 / OP-2026-095: si el total es $0 (préstamo o sin cobro) no se exige método de pago.
+      const infoSinCobro = evaluarSinCobro({ esCod, total, items })
+      const sinCobro = infoSinCobro.sinCobro
       const estaCuadrado = esCod
         ? (montoCodRequerido <= 0.015 || propuestaCodCuadrado)
         : (pagoInmediatoCuadrado || sinCobro)
-      return { subtotal, total, totalPagos, diferencia, estaCuadrado, sinCobro }
+      return { subtotal, total, totalPagos, diferencia, estaCuadrado, sinCobro, infoSinCobro }
     }, [items, totalConFlete, esCod, totalInmediato, montoCodRequerido, totalPropuestaCod, propuestaCodCuadrado, pagoInmediatoCuadrado])
   
     const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
@@ -896,7 +897,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
 
             {totales.estaCuadrado ? (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full shrink-0">
-                <CheckCircle size={12} /> {totales.sinCobro ? 'Sin cobro: todo es préstamo ✓' : 'Pagos cuadrados ✓'}
+                <CheckCircle size={12} /> {totales.sinCobro ? (totales.infoSinCobro?.etiquetaCorta || 'Sin cobro ✓') : 'Pagos cuadrados ✓'}
               </span>
             ) : (
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full border shrink-0 ${
@@ -919,8 +920,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
               <div className="space-y-2">
                 {totales.sinCobro && (
                   <div data-testid="edicion-sin-cobro" className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs leading-snug">
-                    <p className="font-bold">Este despacho es 100 % préstamo: no se cobra nada ahora.</p>
-                    <p className="mt-0.5 opacity-80">Por eso no hace falta elegir un método de pago. Lo prestado se factura después, desde la ficha del cliente → Préstamos, cuando el cliente se quede con la mercancía.</p>
+                    <p className="font-bold">{totales.infoSinCobro?.titulo}</p>
+                    <p className="mt-0.5 opacity-80">{totales.infoSinCobro?.descripcion}</p>
                   </div>
                 )}
                 {esCod && (
@@ -1009,7 +1010,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
                   })}
 
                   {/* Selector / Añadir pago inmediato */}
-                  {((!esCod && !pagoInmediatoCuadrado) || (esCod && totalInmediato < totalConFlete)) && (
+                  {((!esCod && !totales.estaCuadrado) || (esCod && totalInmediato < totalConFlete)) && (
                     <div className="flex flex-col h-full min-h-[62px]">
                       {mostrarSelectorInmediato ? (
                         <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-2.5 h-full flex flex-col justify-center">
@@ -1259,7 +1260,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
                     ? 'Días de vencimiento obligatorios para cuentas por cobrar'
                     : esCod
                     ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
-                    : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)
+                    : (!totales.estaCuadrado ? 'Los montos no cuadran con el total' : undefined)
                 }
                 className="flex-1 sm:flex-none px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
