@@ -1,6 +1,6 @@
 # OP-2026-102 — Optimización de tinta, encabezado y colores del PDF Base de Datos de Clientes (y Personal)
 
-**Fecha:** 2026-11-27 · **Estado:** **Listo para pasar a producción (solicitud [#90](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/90) abierta en `construacero-op-102`, rama `fix/op-102-pdf-clientes-optimizado`)**; producción intacta hasta tu aprobación final · **Pendiente:** aprobar y unir la solicitud #90.
+**Fecha:** 2026-11-27 · **Estado:** **Publicado y verificado en producción 2026-11-27** (solicitud [#90](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/90), unión `ddb8e2dd`). · **Pendiente:** imprimir una hoja real en papel desde producción.
 
 ## En resumen
 
@@ -79,8 +79,23 @@
 
 ---
 
+## Publicación y verificación en vivo (2026-11-27)
+
+- **Prueba en pantalla de staging antes de publicar:** se levantó servidor y web locales apuntando solo a **staging** (`spupqgkdsgohxxfoxydl`), se creó temporalmente el operador `Jefe de Prueba` (`J-PRUE`, PIN `000000`), el dueño probó la vista `/clientes` directamente en staging y al aprobar se retiró ese usuario temporal y se apagaron los servidores locales.
+- **Solicitud unida a `main`:** [#90](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/90) · commit de unión `ddb8e2dd`.
+- **Despliegue automático:**
+  - **Cloudflare Worker (`Deploy Worker a Cloudflare`):** ejecución `46037222301` terminada en verde (`success`, 58 s).
+  - **Vercel (Frontend):** despliegue en verde (`success`).
+- **Comprobaciones en vivo (`https://listo-pos-cotizaciones.vercel.app`):**
+  - Página principal responde `200`; paquete activo servido en producción confirmado (`assets/index-RqvjGefF.js` → `assets/ClientesView-BMsg48dr.js` → `assets/clientesPDF-tbwDPjgS.js` con el nuevo logo y texto `(Cont.)` / `Reporte_de_Personal`).
+  - `/api/ping` responde `200` apuntando a producción (`x-supabase-project-ref: oyfyuszgjwcepjpngclv`).
+  - Worker directo (`/api/ping`) responde `200`.
+  - `/api/clientes` sin sesión responde `401` (`"No autenticado"`).
+
+---
+
 ## Pendiente
 
-- **Tu aprobación para unir la solicitud de cambio a `main`** (y opcionalmente revisar la vista previa de Vercel con solo lectura antes de unir).
-- *(Opcional al cerrar el caso)* Retirar las carpetas `construacero-op-102` y la antigua `construacero-work`, pues su ajuste de textos largos sin recorte quedó integrado aquí.
+- Imprimir una hoja real en papel desde producción (`Clientes` y `Personal`) para dar el visto bueno final físico. *(Si alguien ya tenía la app abierta, recargar o aceptar el aviso de nueva versión).*
+- *(Opcional al ordenar el escritorio)* Retirar la carpeta antigua `construacero-work`, pues su ajuste de textos largos sin recorte quedó integrado aquí.
 - *(Nota de numeración)* Los números `OP-2026-098` a `OP-2026-101` corresponden a trabajos previos que aún viven en sus propias carpetas locales antes de unirse a `main`.
