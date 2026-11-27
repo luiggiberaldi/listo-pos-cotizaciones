@@ -80,7 +80,7 @@ describe('OP-2026-071 Fase 4 (N33 historial, N34 4 decimales y consolidación, N
     expect(json.tablas.inventario_movimientos).toHaveLength(TOTAL)
     expect(new Set(json.tablas.inventario_movimientos.map(r => r.id)).size).toBe(TOTAL)
     expect(json.completo).toBe(true)
-    expect(json.version).toBe('1.2')
+    expect(json.version).toBe('1.3')
   })
 
   it('C2 (OP-086): si la base dice que hay más filas de las que se leyeron, el respaldo queda marcado incompleto', async () => {
@@ -135,7 +135,7 @@ describe('OP-2026-071 Fase 4 (N33 historial, N34 4 decimales y consolidación, N
     expect(f).not.toHaveBeenCalled()
     const ajeno = await handleRestore(new Request('https://x/api/admin/restore', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tablas: { productos: [{ id: PROD_ID }] } }),
+      body: JSON.stringify({ completo: true, tablas: { productos: [{ id: PROD_ID }] } }),
     }), ENV)
     expect(ajeno.status).toBe(409)
   })

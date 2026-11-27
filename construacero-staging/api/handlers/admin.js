@@ -361,11 +361,22 @@ export async function handleBackup(request, env) {
     cotizacion_items,
     notas_despacho,
     notas_despacho_items,
+    despacho_descuentos,
     inventario_movimientos,
     inventario_operaciones,
     cuentas_por_cobrar,
+    cxc_movimientos_borrados,
     comisiones,
+    comision_liberaciones,
+    comision_designacion_diaria,
     transportistas,
+    vehiculos,
+    proveedores,
+    ordenes_compra,
+    orden_compra_items,
+    cuentas_por_pagar,
+    pagos_transportistas,
+    pagos_transportistas_despachos,
     usuarios,
     configuracion_negocio,
     auditoria,
@@ -376,11 +387,22 @@ export async function handleBackup(request, env) {
     fetchTable('cotizacion_items', '&order=cotizacion_id.asc,orden.asc'),
     fetchTable('notas_despacho', '&order=numero.asc'),
     fetchTable('notas_despacho_items', '&order=despacho_id.asc,orden.asc'),
+    fetchTable('despacho_descuentos', '&order=creado_en.asc'),
     fetchTable('inventario_movimientos', '&order=numero.asc'),
     fetchTable('inventario_operaciones', '&order=creado_en.asc'),
     fetchTable('cuentas_por_cobrar', '&order=creado_en.asc'),
-    fetchTable('comisiones', '&order=creado_en.asc'),
+    fetchTable('cxc_movimientos_borrados', '&order=id.asc'),
+    fetchTable('comisiones', '&order=creadoen.asc'),
+    fetchTable('comision_liberaciones', '&order=creado_en.asc'),
+    fetchTable('comision_designacion_diaria', '&order=creado_en.asc'),
     fetchTable('transportistas', '&order=nombre.asc'),
+    fetchTable('vehiculos', '&order=creado_en.asc'),
+    fetchTable('proveedores', '&order=creado_en.asc'),
+    fetchTable('ordenes_compra', '&order=creado_en.asc'),
+    fetchTable('orden_compra_items', '&order=id.asc'),
+    fetchTable('cuentas_por_pagar', '&order=creado_en.asc'),
+    fetchTable('pagos_transportistas', '&order=creado_en.asc'),
+    fetchTable('pagos_transportistas_despachos', '&order=creado_en.asc'),
     fetchTable('usuarios', '&order=nombre.asc'),
     fetchTable('configuracion_negocio'),
     fetchTable('auditoria', '&order=ts.desc&limit=5000'),
@@ -409,7 +431,7 @@ export async function handleBackup(request, env) {
   const negocio = configuracion_negocio?.[0]?.nombre_negocio || 'sistema';
 
   const backup = {
-    version: '1.2',
+    version: '1.3',
     generado_en: new Date().toISOString(),
     negocio,
     errores: errors.length > 0 ? errors : undefined,
@@ -421,14 +443,25 @@ export async function handleBackup(request, env) {
       cotizacion_items,
       notas_despacho,
       notas_despacho_items,
+      despacho_descuentos,
       cliente_prestamos,
       despacho_devoluciones,
       despacho_devolucion_intercambios,
       cuentas_por_cobrar,
+      cxc_movimientos_borrados,
       comisiones,
+      comision_liberaciones,
+      comision_designacion_diaria,
       inventario_movimientos,
       inventario_operaciones,
       transportistas,
+      vehiculos,
+      proveedores,
+      ordenes_compra,
+      orden_compra_items,
+      cuentas_por_pagar,
+      pagos_transportistas,
+      pagos_transportistas_despachos,
       usuarios,
       configuracion_negocio,
       auditoria,
@@ -439,14 +472,25 @@ export async function handleBackup(request, env) {
       cotizaciones: cotizaciones.length,
       notas_despacho: notas_despacho.length,
       notas_despacho_items: notas_despacho_items.length,
+      despacho_descuentos: despacho_descuentos.length,
       cliente_prestamos: cliente_prestamos.length,
       despacho_devoluciones: despacho_devoluciones.length,
       despacho_devolucion_intercambios: despacho_devolucion_intercambios.length,
       cuentas_por_cobrar: cuentas_por_cobrar.length,
+      cxc_movimientos_borrados: cxc_movimientos_borrados.length,
       comisiones: comisiones.length,
+      comision_liberaciones: comision_liberaciones.length,
+      comision_designacion_diaria: comision_designacion_diaria.length,
       inventario_movimientos: inventario_movimientos.length,
       inventario_operaciones: inventario_operaciones.length,
       transportistas: transportistas.length,
+      vehiculos: vehiculos.length,
+      proveedores: proveedores.length,
+      ordenes_compra: ordenes_compra.length,
+      orden_compra_items: orden_compra_items.length,
+      cuentas_por_pagar: cuentas_por_pagar.length,
+      pagos_transportistas: pagos_transportistas.length,
+      pagos_transportistas_despachos: pagos_transportistas_despachos.length,
       usuarios: usuarios.length,
     },
   };
@@ -497,17 +541,23 @@ export async function handleRestore(request, env) {
     return jsonError(`Backup incompleto: faltan tablas ${missingTables.join(', ')}`, 400, request);
   }
 
-  // OP-2026-086 (A1/B3): la restauración ocurre en UNA transacción de la base
-  // (restaurar_respaldo_atomico): todo o nada, sin chocar con el disparador de préstamos,
-  // conservando los números originales y rechazando filas de otra empresa.
-  if (backup.completo === false || (Array.isArray(backup.errores) && backup.errores.length > 0)) {
-    return jsonError(`Este respaldo está marcado como incompleto (${(backup.errores || []).join('; ')}). No se restaura para no mezclar datos parciales.`, 400, request);
+  // OP-2026-086 / OP-2026-095 (C3): exigir respaldo explícitamente completo (rechaza v1.0/v1.1
+  // antiguos que salían recortados a 1000 filas sin la marca completo: true).
+  if (backup.completo !== true || (Array.isArray(backup.errores) && backup.errores.length > 0)) {
+    const detalle = (backup.errores || []).length > 0
+      ? (backup.errores || []).join('; ')
+      : 'respaldo antiguo o sin verificación de integridad (puede estar recortado a 1000 filas)';
+    return jsonError(`Este respaldo no está verificado como completo (${detalle}). No se restaura para no mezclar datos parciales.`, 400, request);
   }
   const TABLAS_RESTORE = [
-    'configuracion_negocio', 'transportistas', 'productos', 'clientes', 'cotizaciones',
-    'cotizacion_items', 'notas_despacho', 'notas_despacho_items', 'cliente_prestamos',
-    'despacho_devoluciones', 'despacho_devolucion_intercambios', 'cuentas_por_cobrar',
-    'comisiones', 'inventario_movimientos', 'inventario_operaciones',
+    'configuracion_negocio', 'transportistas', 'vehiculos', 'proveedores', 'productos', 'clientes',
+    'cotizaciones', 'cotizacion_items', 'notas_despacho', 'notas_despacho_items',
+    'despacho_descuentos', 'cliente_prestamos', 'despacho_devoluciones',
+    'despacho_devolucion_intercambios', 'cuentas_por_cobrar', 'cxc_movimientos_borrados',
+    'comisiones', 'comision_liberaciones', 'comision_designacion_diaria',
+    'inventario_movimientos', 'inventario_operaciones',
+    'ordenes_compra', 'orden_compra_items', 'cuentas_por_pagar',
+    'pagos_transportistas', 'pagos_transportistas_despachos',
   ];
   const tablas = {};
   for (const t of TABLAS_RESTORE) if (Array.isArray(backup.tablas[t])) tablas[t] = backup.tablas[t];
