@@ -5,7 +5,7 @@ import { LOGO_DESPACHO } from './logoDespachoBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE,
-  fmtFecha, fmtTelefono,
+  fmtFecha, fmtTelefono, fechaArchivoCaracas,
   fmtBsShort, fmtBcvUsd, fmtUsd,
   drawWatermark, drawAnuladaWatermark,
 } from './pdfShared'
@@ -205,8 +205,8 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
   }
   doc.text(displayLine1, col1X, pY1)
 
-  // Fila 2: R.F.I/C.I.
-  const line2 = `R.F.I/C.I. : ${formattedRif}`
+  // Fila 2: R.I.F./C.I.
+  const line2 = `R.I.F./C.I. : ${formattedRif}`
   let displayLine2 = line2
   if (doc.getTextWidth(displayLine2) > maxLeftColW) {
     while (displayLine2.length > 1 && doc.getTextWidth(displayLine2 + '…') > maxLeftColW) displayLine2 = displayLine2.slice(0, -1)
@@ -621,7 +621,7 @@ export async function generarFacturaPDF({ despacho, items = [], config = {}, for
 
   // ── Guardar o devolver blob ──
   const clienteNombreDes = ((despacho.cliente_factura || despacho.cliente)?.nombre || 'cliente').replace(/[^a-zA-Z0-9à-ÿ\s]/g, '').trim().replace(/\s+/g, '_').toUpperCase()
-  const fechaDes = (despacho.creado_en || new Date().toISOString()).slice(0, 10)
+  const fechaDes = fechaArchivoCaracas(despacho.creado_en || new Date())
   const filename = `FACTURA_${numFac.replace(/ /g, '_')}_${clienteNombreDes}_${fechaDes}.pdf`
   if (returnBlob) return { blob: doc.output('blob'), filename }
   doc.save(filename)

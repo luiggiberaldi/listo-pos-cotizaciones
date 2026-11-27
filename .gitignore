@@ -273,3 +273,6 @@ construacero-backups/
 
 # OP-2026-101: plan integral de arreglo de los 19 PDFs en staging
 !docs/plans/OP-2026-101_plan-fixeo-integral-pdfs-staging.md
+!src/services/__tests__/
+!src/services/__tests__/listaPreciosPDF.test.js
+!src/services/__tests__/op101Fase1Operativos.test.js

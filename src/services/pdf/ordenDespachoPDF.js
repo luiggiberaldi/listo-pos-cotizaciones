@@ -7,7 +7,7 @@ import { LOGO_DESPACHO } from './logoDespachoBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE,
-  fmtUsd, fmtBs, fmtBcvUsd, fmtPrecio, fmtTotal, fmtFecha, fmtTelefono,
+  fmtUsd, fmtBs, fmtBcvUsd, fmtPrecio, fmtTotal, fmtFecha, fmtTelefono, fechaArchivoCaracas,
   drawCheck, drawWatermark, drawAnuladaWatermark, drawAprobadoWatermark,
 } from './pdfShared'
 
@@ -566,12 +566,12 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
     }
   }
 
-  // Sumar pagos originales para calcular diferencia exacta si hubo devolución/intercambio
+  // Sumar pagos originales (ajustados por factor si hay porcentaje != 100) para evitar casillas falsas
   let sumOriginalPagos = 0
   let hasExplicitMontos = false
   formasPagoArr.forEach(fp => {
     if (fp.monto != null && Number(fp.monto) > 0) {
-      sumOriginalPagos += Number(fp.monto)
+      sumOriginalPagos += Number(fp.monto) * factor
       hasExplicitMontos = true
     }
   })
@@ -776,7 +776,7 @@ export async function generarOrdenDespachoPDF({ despacho, items = [], config = {
 
   // ── Guardar o devolver blob ──────────────────────────────────────────────
   const clienteNombreODC = ((despacho.cliente_factura || despacho.cliente)?.nombre || 'cliente').replace(/[^a-zA-Z0-9à-ÿ\s]/g, '').trim().replace(/\s+/g, '_').toUpperCase()
-  const fechaODC = (despacho.creado_en || new Date().toISOString()).slice(0, 10)
+  const fechaODC = fechaArchivoCaracas(despacho.creado_en || new Date())
   const filename = `ODC_${numDes.replace(/ /g, '_')}_${clienteNombreODC}_${fechaODC}.pdf`
   if (returnBlob) return { blob: doc.output('blob'), filename }
   doc.save(filename)

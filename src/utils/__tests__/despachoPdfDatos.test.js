@@ -45,10 +45,12 @@ describe('combinarDespachoFresco', () => {
     expect(() => combinarDespachoFresco(tarjeta, { cliente_id: 'c1', vendedor_id: 'v9' })).toThrow(/el vendedor/)
   })
 
-  it('cliente de factura: solo se verifica si la tarjeta tenía uno', () => {
+  it('cliente de factura: detecta cambio, alta nueva y limpieza si se quitó', () => {
     const conFactura = { ...tarjeta, cliente_factura_id: 'f1', cliente_factura: { id: 'f1', nombre: 'EMPRESA' } }
     expect(() => combinarDespachoFresco(conFactura, { cliente_id: 'c1', vendedor_id: 'v1', cliente_factura_id: 'f2' })).toThrow(/factura/)
-    expect(() => combinarDespachoFresco(tarjeta, { cliente_id: 'c1', vendedor_id: 'v1', cliente_factura_id: 'f2' })).not.toThrow()
+    expect(() => combinarDespachoFresco(tarjeta, { cliente_id: 'c1', vendedor_id: 'v1', cliente_factura_id: 'f2' })).toThrow(/factura/)
+    const sinFactura = combinarDespachoFresco(conFactura, { cliente_id: 'c1', vendedor_id: 'v1', cliente_factura_id: null })
+    expect(sinFactura.cliente_factura).toBeNull()
   })
 
   it('objetos enriquecidos sin id no bloquean la impresión', () => {

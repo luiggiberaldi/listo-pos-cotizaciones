@@ -63,7 +63,7 @@ export default function InventarioView() {
   const puedeGestionarInventario = esAdministracion || esDesarrollador || perfil?.rol === 'jefe'
   // Supervisor, admin y desarrollador ven costo, tabs, kardex, etc.
   const esPrivilegiado = esSupervisor || esAdministracion || esDesarrollador
-  const { tasaEfectiva } = useTasaCambio()
+  const { tasaEfectiva, tasaBcv, refrescar: refrescarTasa } = useTasaCambio()
   const { data: configNeg = {} } = useConfigNegocio()
 
   // URL params (para navegación desde notificaciones)
@@ -581,6 +581,11 @@ export default function InventarioView() {
         onClose={() => setShowListaPrecios(false)}
         productos={productosFiltrados}
         tasa={tasaEfectiva}
+        tasaBcv={Number(tasaBcv?.precio) || 0}
+        refetchProductos={refetch}
+        refrescarTasa={refrescarTasa}
+        catalogoTruncado={catalogoTruncado}
+        hayFiltrosPantalla={Boolean(busqueda.trim() || categoria || stockBajo || stockNegativo || sinPeso || soloDesactivados)}
         config={configNeg}
       />
 

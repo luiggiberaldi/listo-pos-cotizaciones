@@ -18,6 +18,7 @@ import {
   useEliminarOrdenCompra
 } from '../hooks/useOrdenesCompra'
 import { useClientes } from '../hooks/useClientes'
+import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import ClienteForm from '../components/clientes/ClienteForm'
 import { showToast } from '../components/ui/Toast'
 import PageHeader from '../components/ui/PageHeader'
@@ -176,19 +177,30 @@ const OrdenCompraCard = memo(({ orden, onVerDetalle, onDescargarPdf, onEditar, o
 // ─── Componente de Detalle de Orden de Compra ──────────────────────────────────
 function DetalleOrdenModal({ orden, isOpen, onClose }) {
   const { data: items = [], isLoading } = useOrdenCompraItems(orden?.id)
+  const { data: configNeg = {} } = useConfigNegocio()
   const [downloading, setDownloading] = useState(false)
   const { perfil } = useAuthStore()
 
   const handleDownload = async () => {
-    if (!orden) return
+    if (!orden || isLoading) return
     setDownloading(true)
     try {
-      const { generarOrdenCompraPDF } = await import('../services/pdf/ordenCompraPDF')
-      await generarOrdenCompraPDF({ orden, items, config: { supervisorNombre: perfil?.nombre } })
+      const [ordenRes, itemsRes, { generarOrdenCompraPDF }] = await Promise.all([
+        supabase.from('ordenes_compra').select('*').eq('id', orden.id).single(),
+        supabase.from('orden_compra_items').select('*').eq('orden_compra_id', orden.id).order('orden'),
+        import('../services/pdf/ordenCompraPDF'),
+      ])
+      if (ordenRes.error || !ordenRes.data) throw new Error(ordenRes.error?.message || 'No se pudo cargar la orden actualizada')
+      if (itemsRes.error) throw itemsRes.error
+      await generarOrdenCompraPDF({
+        orden: { ...orden, ...ordenRes.data },
+        items: itemsRes.data ?? [],
+        config: { ...configNeg, supervisorNombre: perfil?.nombre },
+      })
       showToast('PDF descargado con éxito', 'success')
     } catch (err) {
       console.error(err)
-      showToast('Error al generar el PDF', 'error')
+      showToast('Error al generar el PDF: ' + (err?.message || 'Error desconocido'), 'error')
     } finally {
       setDownloading(false)
     }
@@ -321,7 +333,7 @@ function DetalleOrdenModal({ orden, isOpen, onClose }) {
           <button
             type="button"
             onClick={handleDownload}
-            disabled={downloading}
+            disabled={downloading || isLoading}
             className="flex items-center gap-2 font-bold text-sm px-5 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white transition-all shadow-md active:scale-95 disabled:opacity-50"
           >
             {downloading ? (
@@ -379,6 +391,7 @@ function clearDraft(userId) {
 // ─── Vista Principal del Módulo ────────────────────────────────────────────────
 export default function OrdenCompraView() {
   const { data: ordenes = [], isLoading, error, refetch } = useOrdenesCompra()
+  const { data: configNeg = {} } = useConfigNegocio()
   const crearOrden = useCrearOrdenCompra()
   const actualizarOrden = useActualizarOrdenCompra()
   const actualizarEstado = useActualizarEstadoOrdenCompra()
@@ -1039,12 +1052,21 @@ export default function OrdenCompraView() {
                   onVerDetalle={setOrdenSeleccionada}
                   onDescargarPdf={async (orden) => {
                     try {
-                      const { data: itms } = await supabase.from('orden_compra_items').select('*').eq('orden_compra_id', orden.id).order('orden')
-                      const { generarOrdenCompraPDF } = await import('../services/pdf/ordenCompraPDF')
-                      await generarOrdenCompraPDF({ orden, items: itms, config: { supervisorNombre: perfil?.nombre } })
+                      const [ordenRes, itemsRes, { generarOrdenCompraPDF }] = await Promise.all([
+                        supabase.from('ordenes_compra').select('*').eq('id', orden.id).single(),
+                        supabase.from('orden_compra_items').select('*').eq('orden_compra_id', orden.id).order('orden'),
+                        import('../services/pdf/ordenCompraPDF'),
+                      ])
+                      if (ordenRes.error || !ordenRes.data) throw new Error(ordenRes.error?.message || 'No se pudo leer la orden actualizada')
+                      if (itemsRes.error) throw itemsRes.error
+                      await generarOrdenCompraPDF({
+                        orden: { ...orden, ...ordenRes.data },
+                        items: itemsRes.data ?? [],
+                        config: { ...configNeg, supervisorNombre: perfil?.nombre },
+                      })
                       showToast('PDF generado correctamente', 'success')
                     } catch (err) {
-                      showToast('Error al descargar PDF', 'error')
+                      showToast('Error al descargar PDF: ' + (err?.message || 'Error desconocido'), 'error')
                     }
                   }}
                   onEditar={handleEditarOrden}

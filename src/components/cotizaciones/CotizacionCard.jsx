@@ -88,22 +88,48 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
 
   const monedaLabel = MONEDA_OPTIONS.find(o => o.key === monedaPdf)?.label || 'USDT ($)'
 
+  // OP-2026-101: re-leer cabecera fresca de `cotizaciones` junto con ítems, cliente y vendedor
+  // para evitar mezclar artículos nuevos con totales/flete/corte/notas viejos de la tarjeta.
+  async function cargarCotizacionFrescaParaPdf() {
+    const [cotRes, itemsRes] = await Promise.all([
+      supabase
+        .from('cotizaciones')
+        .select('id, numero, version, cotizacion_raiz_id, cliente_id, vendedor_id, transportista_id, estado, subtotal_usd, descuento_global_pct, descuento_usd, costo_envio_usd, corte_usd, total_usd, tasa_bcv_snapshot, total_bs_snapshot, notas_cliente, creado_en, actualizado_en, enviada_en, exportada_en')
+        .eq('id', cotizacion.id)
+        .single(),
+      supabase
+        .from('cotizacion_items')
+        .select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden')
+        .eq('cotizacion_id', cotizacion.id)
+        .order('orden'),
+    ])
+    if (cotRes.error || !cotRes.data) throw new Error(cotRes.error?.message || 'No se pudo verificar la cotización actualizada.')
+    if (itemsRes.error) throw itemsRes.error
+    const cotFresca = cotRes.data
+    const [clienteData, vendedorRes] = await Promise.all([
+      cotFresca.cliente_id ? fetchClienteViaAPI(cotFresca.cliente_id) : Promise.resolve(null),
+      cotFresca.vendedor_id
+        ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo, codigo').eq('id', cotFresca.vendedor_id).single()
+        : Promise.resolve({ data: null }),
+    ])
+    const cliente = clienteData || (cotFresca.cliente_id === cotizacion.cliente_id ? cotizacion.cliente : null)
+    const vendedor = vendedorRes?.data || (cotFresca.vendedor_id === cotizacion.vendedor_id ? cotizacion.vendedor : null)
+    return {
+      cotConDatos: { ...cotizacion, ...cotFresca, cliente, vendedor },
+      items: itemsRes.data ?? [],
+      cliente,
+      vendedor,
+    }
+  }
+
   async function descargarPDF() {
     setPdfLoading(true)
     try {
-      const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
+      const [{ generarPDF }, { cotConDatos, items }] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
-        fetchClienteViaAPI(cotizacion.cliente_id),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo, codigo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cargarCotizacionFrescaParaPdf(),
       ])
-      if (itemsRes.error) throw itemsRes.error
-      const cotConDatos = {
-        ...cotizacion,
-        cliente: clienteData || cotizacion.cliente,
-        vendedor: vendedorRes.data || cotizacion.vendedor,
-      }
-      await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, conIVA: conIva })
+      await generarPDF({ cotizacion: cotConDatos, items, config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, conIVA: conIva })
     } catch (err) {
       showToast('Error al generar PDF: ' + (err.message || 'Error desconocido'), 'error')
     } finally {
@@ -143,19 +169,11 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   async function imprimirCotizacion() {
     setPrintLoading(true)
     try {
-      const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
+      const [{ generarPDF }, { cotConDatos, items }] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
-        fetchClienteViaAPI(cotizacion.cliente_id),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo, codigo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cargarCotizacionFrescaParaPdf(),
       ])
-      if (itemsRes.error) throw itemsRes.error
-      const cotConDatos = {
-        ...cotizacion,
-        cliente: clienteData || cotizacion.cliente,
-        vendedor: vendedorRes.data || cotizacion.vendedor,
-      }
-      const blob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true, conIVA: conIva })
+      const blob = await generarPDF({ cotizacion: cotConDatos, items, config, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, returnBlob: true, conIVA: conIva })
       printOrDownloadPdf(blob, `${numDisplay.replace(/\s+/g, '_')}.pdf`)
     } catch (err) {
       showToast('Error al imprimir: ' + (err.message || 'Error desconocido'), 'error')
@@ -167,27 +185,21 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
   async function handleWhatsApp() {
     setWaLoading(true)
     try {
-      const [{ generarPDF }, itemsRes, clienteData, vendedorRes] = await Promise.all([
+      const [{ generarPDF }, { cotConDatos, items, cliente, vendedor }] = await Promise.all([
         import('../../services/pdf/cotizacionPDF'),
-        supabase.from('cotizacion_items').select('cantidad, codigo_snap, nombre_snap, unidad_snap, precio_unit_usd, descuento_pct, total_linea_usd, orden').eq('cotizacion_id', cotizacion.id).order('orden'),
-        fetchClienteViaAPI(cotizacion.cliente_id),
-        cotizacion.vendedor_id ? supabase.from('usuarios').select('id, nombre, color, telefono, markup_pct, es_externo, codigo').eq('id', cotizacion.vendedor_id).single() : Promise.resolve({ data: null }),
+        cargarCotizacionFrescaParaPdf(),
       ])
-      if (itemsRes.error) throw itemsRes.error
-      const cliente = clienteData || cotizacion.cliente
-      const vendedor = vendedorRes.data || cotizacion.vendedor
-      const cotConDatos = { ...cotizacion, cliente, vendedor }
-      const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items: itemsRes.data ?? [], config, returnBlob: true, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, conIVA: conIva })
+      const pdfBlob = await generarPDF({ cotizacion: cotConDatos, items, config, returnBlob: true, monedaPDF: monedaPdf, tasa, tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio, conIVA: conIva })
       const totalConIva = conIva 
-        ? (cotizacion.total_usd + (cotizacion.subtotal_usd - cotizacion.descuento_usd) * 0.16)
-        : cotizacion.total_usd
+        ? (Number(cotConDatos.total_usd || 0) + (Number(cotConDatos.subtotal_usd || 0) - Number(cotConDatos.descuento_usd || 0)) * 0.16)
+        : Number(cotConDatos.total_usd || 0)
       const mensajeParams = {
         nombreNegocio: config.nombre_negocio,
         nombreCliente: cliente?.nombre,
         nombreVendedor: vendedor?.nombre,
         numDisplay,
         totalUsd: totalConIva,
-        items: itemsRes.data ?? [],
+        items,
       }
       const mensaje = generarMensaje(mensajeParams)
       await compartirPorWhatsApp({
@@ -198,16 +210,7 @@ export default memo(function CotizacionCard({ cotizacion, onEditar, onAnular, on
         mensajeParams,
       })
     } catch (err) {
-      const totalConIva = conIva 
-        ? (cotizacion.total_usd + (cotizacion.subtotal_usd - cotizacion.descuento_usd) * 0.16)
-        : cotizacion.total_usd
-      const texto = generarMensaje({
-        nombreNegocio: config.nombre_negocio,
-        nombreCliente: cotizacion.cliente?.nombre,
-        numDisplay,
-        totalUsd: totalConIva,
-      })
-      window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')
+      showToast('No se pudo compartir la cotización por WhatsApp: ' + (err?.message || 'Error desconocido'), 'error')
     } finally {
       setWaLoading(false)
     }

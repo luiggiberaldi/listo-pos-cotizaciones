@@ -1015,7 +1015,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       cot = {
         id: cotizacionId, numero: 'PENDIENTE', cliente_id: clienteId, vendedor_id: vendedor?.id,
         transportista_id: transportistaId, estado: 'borrador', 
-        subtotal_usd: subtotal, descuento_global_pct: descuentoGlobalPct, descuento_usd,
+        subtotal_usd: subtotal, descuento_global_pct: descuentoGlobalPct, descuento_usd: descuentoUsd,
         costo_envio_usd: costoEnvioUsd, corte_usd: corteUsd, total_usd: totalUsd,
         notas_cliente: notasCliente, cliente: clienteHidratado, vendedor
       }
@@ -1033,7 +1033,8 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       if (itemsRes.error) throw itemsRes.error
       if (cotRes.error) throw cotRes.error
       
-      const vendedor = esSupervisor ? vendedores.find(v => v.id === vendedorId) || perfil : perfil
+      const vendedor = vendedores.find(v => v.id === cotRes.data.vendedor_id)
+        || (esSupervisor ? vendedores.find(v => v.id === vendedorId) || perfil : perfil)
       cot = { ...cotRes.data, cliente: clienteHidratado, vendedor }
       itms = itemsRes.data ?? []
     }
@@ -1058,6 +1059,7 @@ export default function CotizacionBuilder({ cotizacionExistente = null, clienteP
       })
     } catch (e) {
       console.error(e)
+      showToast('Error al generar PDF: ' + (e?.message || 'Error desconocido'), 'error')
     } finally {
       setPdfLoading(false)
     }

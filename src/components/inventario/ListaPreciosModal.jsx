@@ -4,12 +4,18 @@ import { useState } from 'react'
 import { FileText, Loader2, DollarSign, Check, X, PackageCheck } from 'lucide-react'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
+import { showToast } from '../ui/Toast'
 
 export default function ListaPreciosModal({
   isOpen,
   onClose,
   productos = [],
   tasa = 0,
+  tasaBcv = 0,
+  refetchProductos = null,
+  refrescarTasa = null,
+  catalogoTruncado = false,
+  hayFiltrosPantalla = false,
   config = {},
 }) {
   const { aplicarMarkup } = usePrecioVendedor()
@@ -42,19 +48,51 @@ export default function ListaPreciosModal({
     setColumnas(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
+  // Excluir siempre productos desactivados de la lista de precios
+  const productosActivos = productos.filter(p => p && p.activo !== false)
+  const factorBcv = (Number(tasa) > 0 && Number(tasaBcv) > 0) ? Number(tasa) / Number(tasaBcv) : 0
+
   const productosFiltrados = (() => {
     let lista = modoCats === 'todas'
-      ? productos
-      : productos.filter(p => catsSeleccionadas.has(p.categoria || 'Sin categoría'))
+      ? productosActivos
+      : productosActivos.filter(p => catsSeleccionadas.has(p.categoria || 'Sin categoría'))
     if (soloConStock) lista = lista.filter(p => Number(p.stock_actual) > 0)
     return lista
   })()
 
   const handleGenerar = async () => {
+    if (productosFiltrados.length === 0) return
+    if (moneda === 'bs' && !(Number(tasa) > 0)) {
+      showToast('No hay tasa vigente disponible para generar la lista en Bolívares.', 'error')
+      return
+    }
+    if (moneda === 'bcv' && !(factorBcv > 0)) {
+      showToast('No hay tasa BCV disponible para generar la lista en Dólar BCV.', 'error')
+      return
+    }
     setGenerando(true)
     try {
-      const pAj = Number(ajustePorcentaje) || 0
-      const productosFinales = productosFiltrados.map(p => {
+      // Refrescar precios/stock y tasa justo antes de armar el PDF para evitar datos viejos
+      let listaBase = productosFiltrados
+      const idsSeleccionados = new Set(productosFiltrados.map(p => p.id).filter(Boolean))
+      if (typeof refetchProductos === 'function' || typeof refrescarTasa === 'function') {
+        const [invRes] = await Promise.all([
+          typeof refetchProductos === 'function' ? refetchProductos() : Promise.resolve(null),
+          typeof refrescarTasa === 'function' ? refrescarTasa() : Promise.resolve(null),
+        ])
+        if (invRes?.isError) {
+          throw new Error('No se pudo actualizar el inventario antes de generar el PDF.')
+        }
+        const frescos = invRes?.data?.productos ?? invRes?.data
+        if (Array.isArray(frescos) && frescos.length > 0 && idsSeleccionados.size > 0) {
+          listaBase = frescos.filter(p =>
+            p && p.activo !== false && idsSeleccionados.has(p.id) && (!soloConStock || Number(p.stock_actual) > 0)
+          )
+        }
+      }
+
+      const pAj = Math.max(-99, Number(ajustePorcentaje) || 0)
+      const productosFinales = listaBase.map(p => {
         const baseP1 = p.precio_usd != null ? (Number(p.precio_usd) * (1 + (pAj / 100))) : p.precio_usd
         const baseP2 = precio2Visible(p) ? (Number(p.precio_2) * (1 + (pAj / 100))) : null
         const baseP3 = precio3Visible(p) ? (Number(p.precio_3) * (1 + (pAj / 100))) : null
@@ -70,17 +108,18 @@ export default function ListaPreciosModal({
       await generarListaPreciosPDF({
         productos: productosFinales,
         config,
-        opciones: { moneda, tasa, columnas, formato },
+        opciones: { moneda, tasa, factorBcv, columnas, formato },
       })
       onClose()
     } catch (e) {
       console.error('Error generando PDF:', e)
+      showToast('No se pudo generar la Lista de Precios: ' + (e?.message || 'Error desconocido'), 'error')
     } finally {
       setGenerando(false)
     }
   }
 
-  const tieneP2 = productos.some(p => precio2Visible(p))
+  const tieneP2 = productosActivos.some(p => precio2Visible(p))
 
   const MONEDAS = [
     { value: '$', label: 'USDT ($)', icon: '$' },
@@ -147,16 +186,23 @@ export default function ListaPreciosModal({
                       ? 'bg-blue-50 border-2 border-blue-400 text-blue-700'
                       : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
                   }`}>
-                  {m === 'todas' ? `Todos (${productos.length})` : 'Por categoría'}
+                  {m === 'todas' ? `Todos (${productosActivos.length})` : 'Por categoría'}
                 </button>
               ))}
             </div>
+            {(hayFiltrosPantalla || catalogoTruncado) && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                {hayFiltrosPantalla && 'Estás exportando solo los productos visibles con los filtros actuales de Inventario.'}
+                {hayFiltrosPantalla && catalogoTruncado && ' '}
+                {catalogoTruncado && 'El catálogo superó el tope de carga; revisa que no falten productos.'}
+              </p>
+            )}
 
             {modoCats === 'seleccionar' && (
               <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pt-1">
-                {Array.from(new Set(productos.map(p => p.categoria || 'Sin categoría'))).sort().map(cat => {
+                {Array.from(new Set(productosActivos.map(p => p.categoria || 'Sin categoría'))).sort().map(cat => {
                   const sel = catsSeleccionadas.has(cat)
-                  const count = productos.filter(p => (p.categoria || 'Sin categoría') === cat).length
+                  const count = productosActivos.filter(p => (p.categoria || 'Sin categoría') === cat).length
                   return (
                     <button key={cat} type="button" onClick={() => toggleCat(cat)}
                       className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${
@@ -255,11 +301,14 @@ export default function ListaPreciosModal({
                 </button>
               ))}
             </div>
-            {['bs', 'mixto', 'mixto_bcv', 'bcv'].includes(moneda) && tasa > 0 && (
+            {moneda === 'bs' && tasa > 0 && (
               <p className="text-xs text-slate-400 ml-1">Tasa vigente: Bs {tasa.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             )}
-            {['bs', 'mixto', 'mixto_bcv', 'bcv'].includes(moneda) && tasa <= 0 && (
-              <p className="text-xs text-amber-600 font-medium ml-1">No hay tasa disponible — se mostrará en USD</p>
+            {moneda === 'bcv' && factorBcv > 0 && (
+              <p className="text-xs text-slate-400 ml-1">Conversión BCV activa (Tasa BCV: Bs {Number(tasaBcv).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Factor ×{factorBcv.toFixed(4)})</p>
+            )}
+            {((moneda === 'bs' && tasa <= 0) || (moneda === 'bcv' && factorBcv <= 0)) && (
+              <p className="text-xs text-red-600 font-semibold ml-1">No hay tasa disponible para esta moneda — recarga la tasa antes de generar</p>
             )}
           </div>
 
@@ -270,10 +319,14 @@ export default function ListaPreciosModal({
               <span className="text-sm font-bold text-slate-400">%</span>
               <input 
                 type="number" 
+                min="-99"
                 className="flex-1 bg-transparent border-none p-0 text-sm font-bold text-slate-700 focus:ring-0 outline-none"
                 placeholder="0"
                 value={ajustePorcentaje === 0 ? '' : ajustePorcentaje}
-                onChange={(e) => setAjustePorcentaje(e.target.value ? Number(e.target.value) : 0)}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : 0
+                  setAjustePorcentaje(Math.max(-99, val))
+                }}
               />
             </div>
             <p className="text-[11px] text-slate-400 ml-1">Ej: <strong className="text-slate-600">10</strong> para aumentar 10%, <strong className="text-slate-600">-5</strong> para descontar 5%</p>
@@ -310,7 +363,13 @@ export default function ListaPreciosModal({
           </button>
           <button
             onClick={handleGenerar}
-            disabled={generando || (modoCats === 'seleccionar' && catsSeleccionadas.size === 0)}
+            disabled={
+              generando
+              || productosFiltrados.length === 0
+              || (modoCats === 'seleccionar' && catsSeleccionadas.size === 0)
+              || (moneda === 'bs' && !(Number(tasa) > 0))
+              || (moneda === 'bcv' && !(factorBcv > 0))
+            }
             className="flex-1 py-3 text-sm font-bold text-white rounded-xl active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2 min-h-[48px]"
             style={{ background: 'linear-gradient(135deg, #3a63a8, #1B365D)', boxShadow: '0 4px 12px rgba(58,99,168,0.3)' }}
           >

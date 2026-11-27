@@ -5,7 +5,7 @@ import { LOGO_DESPACHO } from './logoDespachoBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE, C_PRIMARY,
-  fmtPrecio, fmtFecha, fmtTelefono,
+  fmtPrecio, fmtFecha, fmtTelefono, fechaArchivoCaracas,
   drawWatermark, drawAnuladaWatermark,
 } from './pdfShared'
 
@@ -218,7 +218,7 @@ export async function generarOrdenCompraPDF({ orden, items = [], config = {}, re
   doc.rect(MARGIN + contLblW, f7Y, contValW, rowH, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  const contactoStr = (orden.vendedor?.nombre || config?.supervisorNombre || '—').toUpperCase()
+  const contactoStr = (orden.proveedor_contacto || orden.vendedor?.nombre || config?.supervisorNombre || '—').toUpperCase()
   const maxContW = contValW - 4
   let contText = contactoStr
   if (doc.getTextWidth(contText) > maxContW) {
@@ -457,8 +457,8 @@ export async function generarOrdenCompraPDF({ orden, items = [], config = {}, re
     doc.setFont('helvetica', 'normal')
     doc.text('Parcela MB-6 y Mb7, Urb. Industrial Aeropuerto Vía Flor Amarillo, Valencia, Edo. Carabobo, Zona Postal 2003', PAGE_W / 2, footerY + 9, { align: 'center' })
 
-    const tel = fmtTelefono(config.telefono_negocio) || ''
-    const email = config.email_negocio || ''
+    const tel = fmtTelefono(config?.telefono_negocio) || ''
+    const email = config?.email_negocio || ''
     const contactLine = [tel, email].filter(Boolean).join('     |     ')
     if (contactLine) {
       doc.setFontSize(8)
@@ -468,7 +468,7 @@ export async function generarOrdenCompraPDF({ orden, items = [], config = {}, re
 
   // ── Guardar o devolver blob ──────────────────────────────────────────────
   const provNombreOC = (orden.proveedor_nombre || 'PROVEEDOR').replace(/[^a-zA-Z0-9à-ÿ\s]/g, '').trim().replace(/\s+/g, '_').toUpperCase()
-  const fechaOC = (orden.fecha_emision || new Date().toISOString()).slice(0, 10)
+  const fechaOC = fechaArchivoCaracas(orden.fecha_emision || new Date())
   const filename = `OC_${numOC}_${provNombreOC}_${fechaOC}.pdf`
   
   if (returnBlob) return { blob: doc.output('blob'), filename }

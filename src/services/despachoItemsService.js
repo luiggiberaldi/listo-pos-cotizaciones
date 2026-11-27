@@ -45,6 +45,8 @@ export async function fetchDespachoConsolidado(despachoId, despacho) {
       .select('id, producto_id, nombre_snap, codigo_snap, unidad_snap, cantidad, precio_unit_usd, total_usd, productos(codigo)')
       .eq('despacho_id', despachoId)
   ])
+  if (devRes.error) throw new Error(devRes.error.message || 'Error al cargar devoluciones del despacho')
+  if (intRes.error) throw new Error(intRes.error.message || 'Error al cargar intercambios del despacho')
 
   // 3. Mapear cantidades devueltas separando ítems originales de intercambios.
   //    La edición profunda reescribe las líneas del despacho y la FK con

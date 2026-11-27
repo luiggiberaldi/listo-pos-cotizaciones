@@ -23,12 +23,19 @@ export const MENSAJE_SIN_LECTURA = 'No se pudo verificar el monto actualizado de
 
 export function combinarDespachoFresco(tarjeta, fresco) {
   if (!fresco) throw new Error(MENSAJE_SIN_LECTURA)
+  const combinado = { ...tarjeta, ...fresco }
   for (const [columna, clave, nombre] of RELACIONES_A_VERIFICAR) {
-    const idTarjeta = tarjeta?.[clave]?.id
-    const idFresco = fresco[columna]
+    const idTarjeta = tarjeta?.[clave]?.id || null
+    const idFresco = fresco[columna] || null
     if (idTarjeta && idFresco && idTarjeta !== idFresco) {
       throw new Error(`Cambió ${nombre} de este despacho desde que abriste la tarjeta. Actualiza la lista e intenta de nuevo.`)
     }
+    if (!idTarjeta && idFresco && columna === 'cliente_factura_id') {
+      throw new Error(`Se asignó ${nombre} después de abrir la tarjeta. Actualiza la lista e intenta de nuevo.`)
+    }
+    if (idTarjeta && !idFresco) {
+      combinado[clave] = null
+    }
   }
-  return { ...tarjeta, ...fresco }
+  return combinado
 }

@@ -487,26 +487,19 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     }))
   }
 
-  // Helper: fetch ítems consolidados para PDFs (descuenta devoluciones, añade intercambios)
-  async function fetchItemsParaPdf() {
-    const { itemsConsolidados } = await fetchDespachoConsolidado(despacho.id, despacho)
-    return itemsConsolidados
-  }
-
   // Helper para TODOS los PDFs: vuelve a leer el despacho de la base de datos
-  // justo antes de imprimir. La tarjeta en pantalla puede tener una copia vieja
-  // (p. ej. tras una edición profunda hecha en otro equipo o sin refrescar), y
-  // los ítems siempre se leen frescos: mezclar ambos imprimía líneas nuevas con
-  // total / monto COD viejos (caso despacho #4567). Si no se puede leer, NO se
-  // imprime: es preferible un error a un PDF con un monto equivocado.
+  // ANTES de pedir los ítems consolidados. Así `tiene_devoluciones`, totales,
+  // forma_pago y relaciones salen 100 % frescos y nunca se omiten devoluciones
+  // registradas en otro equipo sin recargar (OP-2026-012 + OP-2026-101).
   async function fetchDatosParaPdf() {
-    const [freshRes, items] = await Promise.all([
-      supabase.from('notas_despacho').select(SELECT_DESPACHO_PARA_PDF).eq('id', despacho.id).single(),
-      fetchItemsParaPdf(),
-    ])
-    // Si falla la lectura, combinarDespachoFresco lanza el aviso y NO se imprime.
-    // También verifica que cliente / vendedor no hayan cambiado respecto a la tarjeta.
-    return { despacho: combinarDespachoFresco(despacho, freshRes.error ? null : freshRes.data), items }
+    const freshRes = await supabase
+      .from('notas_despacho')
+      .select(SELECT_DESPACHO_PARA_PDF)
+      .eq('id', despacho.id)
+      .single()
+    const despachoFresco = combinarDespachoFresco(despacho, freshRes.error ? null : freshRes.data)
+    const { itemsConsolidados } = await fetchDespachoConsolidado(despacho.id, despachoFresco)
+    return { despacho: despachoFresco, items: itemsConsolidados }
   }
 
   async function descargarPDF() {
