@@ -270,3 +270,8 @@ construacero-backups/
 !src/utils/__tests__/despachoSinCobro.test.js
 !src/utils/__tests__/op087StockPorAprobar.test.js
 !api/handlers/__tests__/produccion097SeguridadYRespaldo.test.js
+
+# OP-2026-102: optimización de impresión PDF de Clientes y Personal
+!src/services/__tests__/
+!src/services/__tests__/clientesPersonalPdf.test.js
+!src/utils/__tests__/clientesListado.test.js

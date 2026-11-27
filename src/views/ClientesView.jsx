@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { Users, Plus, Search, RefreshCw, X, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useVendedores, useBorrarCliente, useActivarCliente } from '../hooks/useClientes'
-import { buscarClientes } from '../utils/clienteSearch'
+import { filtrarClientes, resumenFiltrosClientes } from '../utils/clientesListado'
 import { limpiarVistaListaGuardada } from '../utils/vistaCuadricula'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import ClienteCard       from '../components/clientes/ClienteCard'
@@ -142,7 +142,7 @@ export default function ClientesView() {
   // Data + mutations
   // La búsqueda se hace en pantalla (buscarClientes) sobre la lista ya cargada:
   // no se vuelve a pedir la lista completa al servidor en cada búsqueda.
-  const { data: clientes = [], isLoading, isError, refetch } = useClientes()
+  const { data: clientes = [], isLoading, isFetching, isError, refetch } = useClientes()
   const { data: vendedores = [] } = useVendedores()
   const borrarCliente = useBorrarCliente()
   const activarCliente = useActivarCliente()
@@ -150,12 +150,35 @@ export default function ClientesView() {
   const [exportandoPDF, setExportandoPDF] = useState(false)
   const [imprimiendoPDF, setImprimiendoPDF] = useState(false)
 
+  const opcionesFiltro = useMemo(() => ({
+    esPersonal: false,
+    mostrarToggle,
+    verTodos,
+    perfilId: perfil?.id,
+    busqueda,
+    filtroTipo,
+    filtroVendedor,
+    filtroConDeuda,
+    filtroConPrestamo,
+    filtroSaldoFavor,
+    filtroEstado,
+  }), [mostrarToggle, verTodos, perfil?.id, busqueda, filtroTipo, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado])
+
   async function exportarClientesPDF(accion = 'download') {
     if (accion === 'print') setImprimiendoPDF(true)
     else setExportandoPDF(true)
     try {
+      let listaBase = clientes
+      try {
+        const fresh = await refetch()
+        if (Array.isArray(fresh?.data)) listaBase = fresh.data
+      } catch {
+        // En modo offline se exporta con la lista ya cargada en pantalla
+      }
+      const itemsExport = filtrarClientes(listaBase, opcionesFiltro)
+      const filtroResumen = resumenFiltrosClientes({ ...opcionesFiltro, vendedores, esExterno })
       const { generarClientesPDF } = await import('../services/pdf/clientesPDF')
-      await generarClientesPDF({ items: clientesFiltrados, config, action: accion })
+      await generarClientesPDF({ items: itemsExport, config, action: accion, filtroResumen })
     } catch (err) {
       import('../components/ui/Toast').then(({ showToast }) =>
         showToast('Error al generar el PDF: ' + err.message, 'error')
@@ -167,52 +190,10 @@ export default function ClientesView() {
   }
 
   // Filtrado local y ordenamiento (clientes con deuda o préstamos activos primero)
-  const clientesFiltrados = useMemo(() => {
-    const list = clientes.filter(c => {
-      // Excluir personal de la lista general de clientes
-      if (c.tipo_cliente === 'personal') return false
-      // Supervisor/dev con toggle en "Mis datos": solo ver propios (a menos que haya una búsqueda activa)
-      if (mostrarToggle && !verTodos && !busqueda.trim() && c.vendedor_id !== perfil?.id) return false
-      if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
-      if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
-      if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0)) return false
-      if (filtroConPrestamo && !c.tiene_prestamos_activos) return false
-      if (filtroSaldoFavor && !(Number(c.saldo_a_favor || 0) > 0)) return false
-      
-      if (filtroEstado === 'activos' && !c.activo) return false
-      if (filtroEstado === 'desactivados' && c.activo) return false
-      
-      return true
-    })
-
-    const listaConBusqueda = busqueda ? buscarClientes(list, busqueda) : list
-
-    // Ordenar: Clientes con deuda o préstamos activos primero, luego relevancia/nombre
-    return [...listaConBusqueda].sort((a, b) => {
-      const deudaA = Number(a.saldo_pendiente || 0)
-      const deudaB = Number(b.saldo_pendiente || 0)
-      const prestamoA = !!a.tiene_prestamos_activos
-      const prestamoB = !!b.tiene_prestamos_activos
-
-      const esDeudorA = deudaA > 0 || prestamoA
-      const esDeudorB = deudaB > 0 || prestamoB
-
-      if (esDeudorA && !esDeudorB) return -1
-      if (!esDeudorA && esDeudorB) return 1
-
-      if (esDeudorA && esDeudorB) {
-        // Priorizar por mayor deuda de dinero
-        if (deudaA !== deudaB) {
-          return deudaB - deudaA
-        }
-        // Desempatar poniendo primero al que tiene préstamos
-        if (prestamoA && !prestamoB) return -1
-        if (!prestamoA && prestamoB) return 1
-      }
-
-      return (a.nombre || '').localeCompare(b.nombre || '')
-    })
-  }, [clientes, busqueda, filtroTipo, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado, mostrarToggle, verTodos, perfil?.id])
+  const clientesFiltrados = useMemo(
+    () => filtrarClientes(clientes, opcionesFiltro),
+    [clientes, opcionesFiltro]
+  )
 
   const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda || filtroConPrestamo || filtroSaldoFavor || filtroEstado !== 'activos'
 
@@ -335,7 +316,7 @@ export default function ClientesView() {
               <>
                 <button 
                   onClick={() => exportarClientesPDF('print')} 
-                  disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                  disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || clientesFiltrados.length === 0}
                   className="flex items-center gap-1.5 sm:gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
                   <Printer size={15} />
@@ -343,7 +324,7 @@ export default function ClientesView() {
                 </button>
                 <button 
                   onClick={() => exportarClientesPDF('download')} 
-                  disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                  disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || clientesFiltrados.length === 0}
                   className="flex items-center gap-1.5 sm:gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
                   <FileText size={15} />

@@ -41,27 +41,31 @@ export function fmtBcvUsd(n) {
   return `$${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-/** Formatea fecha corta dd/mm/yyyy. Variante 'short-month' usa mes abreviado. */
+/** Formatea fecha corta dd/mm/yyyy en hora Venezuela. Variante 'short-month' usa mes abreviado. */
 export function fmtFecha(f, variant) {
   if (!f) return '—'
+  const raw = String(f)
+  const hasTime = f instanceof Date || raw.includes('T')
   let dateObj
   if (f instanceof Date) {
     dateObj = f
   } else {
-    const dateStr = String(f).includes('T') ? String(f) : `${f}T12:00:00`
+    const dateStr = hasTime ? raw : `${raw}T12:00:00-04:00`
     dateObj = new Date(dateStr)
     if (isNaN(dateObj.getTime())) {
       dateObj = new Date(f)
     }
   }
+  if (isNaN(dateObj.getTime())) return '—'
 
+  const tzOpt = { timeZone: 'America/Caracas' }
   if (variant === 'short-month') {
-    return dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
+    return dateObj.toLocaleDateString('es-VE', { ...tzOpt, day: '2-digit', month: 'short', year: 'numeric' })
   }
   if (variant === 'short') {
-    return dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })
+    return dateObj.toLocaleDateString('es-VE', { ...tzOpt, day: '2-digit', month: '2-digit', year: '2-digit' })
   }
-  return dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return dateObj.toLocaleDateString('es-VE', { ...tzOpt, day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 export function fmtFechaCorta(f) {
@@ -284,7 +288,7 @@ export function drawSimplifiedHeader(doc, logoData, config, rightTitle = '', cus
     }
   }
 
-  let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
+  let n = config?.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
   if (!n || n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
 
   doc.setFont('times', 'bold')
@@ -405,7 +409,7 @@ export function drawPremiumHeader({
   }
 
   // Títulos de negocio centrado
-  let n = config.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
+  let n = config?.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
   if (!n || n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
   const words = n.split(' ')
   const main = (words[0] || 'CONSTRUACERO').toUpperCase()
@@ -512,8 +516,8 @@ export function drawPremiumFooter(doc, config, customBgColor = [255, 255, 255], 
       doc.setFont('helvetica', 'normal')
       doc.text(addr2, pw / 2, ph - 15, { align: 'center' })
 
-      const tel = fmtTelefono(config.telefono_negocio) || ''
-      const email = config.email_negocio || ''
+      const tel = fmtTelefono(config?.telefono_negocio) || ''
+      const email = config?.email_negocio || ''
       if (tel && tel !== '—' || email) {
         const parts = []
         if (tel && tel !== '—') parts.push({ icon: 'phone', text: tel })
@@ -583,4 +587,29 @@ export function drawPremiumFooter(doc, config, customBgColor = [255, 255, 255], 
       doc.text(`Página ${p} de ${totalPages}`, pw - 10, ph - 2.5, { align: 'right' })
     }
   }
+}
+
+// ─── Fechas de archivo y ajuste de texto en tablas ───────────────────────────
+/** Fecha YYYY-MM-DD en hora de Venezuela (America/Caracas) para nombres de archivo. */
+export function fechaArchivoCaracas(fecha = new Date()) {
+  const d = fecha instanceof Date ? fecha : new Date(fecha)
+  const valida = Number.isNaN(d.getTime()) ? new Date() : d
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Caracas',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(valida)
+}
+
+/** Parte un texto en líneas que caben en `width` mm con la fuente actual del doc. */
+export function wrapLines(doc, text, width) {
+  const t = String(text ?? '')
+  return doc.splitTextToSize(t === '' ? '—' : t, Math.max(width, 4))
+}
+
+/** Alto de una fila de tabla según la celda con más líneas. */
+export function rowHeight(cellsLines, minH = 6, lineH = 2.9, pad = 3) {
+  const n = Math.max(1, ...cellsLines.map(l => l.length))
+  return Math.max(minH, n * lineH + pad)
 }
