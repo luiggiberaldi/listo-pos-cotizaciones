@@ -4,6 +4,8 @@
 // Construacero Carabobo
 import { useState, useEffect, useCallback, useRef } from 'react'
 import supabase from '../services/supabase/client'
+import { apiUrl } from '../services/apiBase'
+import { getValidAccessToken } from '../services/sessionManager'
 import { useConfigNegocio, useActualizarConfig } from './useConfigNegocio'
 import useAuthStore from '../store/useAuthStore'
 
@@ -184,15 +186,57 @@ async function fetchTasaGlobal(esAutoUpdate = false, forceRefresh = false) {
   return { bcvData, usdtData }
 }
 
+let _inflightPrePinConfig = null
+let _lastPrePinConfigTs = 0
+let _lastPrePinAccountId = null
+let _lastPrePinConfig = null
+const _prePinConfigSubscribers = new Set()
+
+async function fetchPrePinTasaConfig(userId, forceRefresh = false) {
+  if (!userId) return null
+  if (!forceRefresh && _lastPrePinAccountId === userId && Date.now() - _lastPrePinConfigTs < MIN_DEDUP_INTERVAL) {
+    return _lastPrePinConfig
+  }
+  if (_inflightPrePinConfig) return _inflightPrePinConfig
+  _inflightPrePinConfig = (async () => {
+    try {
+      const token = await getValidAccessToken({ timeoutMs: 4000, allowStale: true })
+      if (!token) return null
+      const data = await fetchConTimeout(apiUrl('/api/auth/tasa-config'), 8000, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      })
+      if (data && typeof data === 'object') {
+        _lastPrePinAccountId = userId
+        _lastPrePinConfigTs = Date.now()
+        _lastPrePinConfig = data
+        _prePinConfigSubscribers.forEach(cb => cb({ userId, data }))
+        return data
+      }
+      return null
+    } catch {
+      return null
+    } finally {
+      _inflightPrePinConfig = null
+    }
+  })()
+  return _inflightPrePinConfig
+}
+
 export function useTasaCambio() {
   const user = useAuthStore(s => s.user)
+  const perfil = useAuthStore(s => s.perfil)
   const userId = user?.id
-  const suffix = userId ? `-${userId}` : ''
-  const STORAGEKEYMODE = `${STORAGEKEYMODE_BASE}${suffix}`
-  const STORAGEKEYMANUAL = `${STORAGEKEYMANUAL_BASE}${suffix}`
+  const hasOperator = Boolean(perfil?.id)
+  const STORAGEKEYMODE = userId ? `${STORAGEKEYMODE_BASE}-${userId}` : null
+  const STORAGEKEYMANUAL = userId ? `${STORAGEKEYMANUAL_BASE}-${userId}` : null
 
   // Config de BD (fuente de verdad para modo + tasa manual)
-  const { data: config } = useConfigNegocio()
+  // Antes del PIN (en el menú de login) usamos la ruta ligera /api/auth/tasa-config.
+  const { data: config } = useConfigNegocio({ enabled: hasOperator })
+  const [prePinConfig, setPrePinConfig] = useState(() => (
+    userId && !hasOperator && _lastPrePinAccountId === userId ? _lastPrePinConfig : null
+  ))
   const actualizarConfig = useActualizarConfig()
 
   // Tasa BCV
@@ -224,6 +268,7 @@ export function useTasaCambio() {
 
   // Modo: 'usdt' | 'manual' (bcv se mantiene internamente pero no como modo visible)
   const [modoTasa, setModoTasa] = useState(() => {
+    if (!STORAGEKEYMODE) return 'usdt'
     const saved = localStorage.getItem(STORAGEKEYMODE)
     if (saved && MODOS_VALIDOS.includes(saved)) {
       if (saved === 'bcv') {
@@ -242,26 +287,45 @@ export function useTasaCambio() {
 
   // Tasa manual
   const [tasaManual, setTasaManual] = useState(() => {
-    const saved = localStorage.getItem('construacero_tasa_manual') // legacy check
-    if (saved && parseFloat(saved) > 0) return saved
+    if (!STORAGEKEYMANUAL) return ''
     const namespaced = localStorage.getItem(STORAGEKEYMANUAL)
-    return namespaced && parseFloat(namespaced) > 0 ? namespaced : ''
+    if (namespaced && parseFloat(namespaced) > 0) return namespaced
+    const saved = localStorage.getItem('construacero_tasa_manual') // legacy check
+    return saved && parseFloat(saved) > 0 ? saved : ''
   })
 
-  // ─── Sincronizar estado cuando cambia el userId (cambio de cuenta) ──────────
+  // ─── Sincronizar estado cuando cambia el userId (cambio/cierre de cuenta) ─
   useEffect(() => {
-    if (!userId) return
+    if (!userId) {
+      setPrePinConfig(null)
+      setModoTasa('usdt')
+      setTasaManual('')
+      return
+    }
 
-    const savedModo = localStorage.getItem(STORAGEKEYMODE)
+    const savedModo = STORAGEKEYMODE ? localStorage.getItem(STORAGEKEYMODE) : null
     if (savedModo && MODOS_VALIDOS.includes(savedModo)) {
-      setModoTasa(savedModo)
+      setModoTasa(savedModo === 'bcv' ? 'usdt' : savedModo)
+    } else {
+      setModoTasa('usdt')
     }
 
-    const savedManual = localStorage.getItem(STORAGEKEYMANUAL)
-    if (savedManual && parseFloat(savedManual) > 0) {
-      setTasaManual(savedManual)
-    }
+    const savedManual = STORAGEKEYMANUAL ? localStorage.getItem(STORAGEKEYMANUAL) : null
+    setTasaManual(savedManual && parseFloat(savedManual) > 0 ? savedManual : '')
   }, [userId, STORAGEKEYMODE, STORAGEKEYMANUAL])
+
+  // Consultar tasa manual configurada cuando hay cuenta de empresa pero aún sin PIN
+  useEffect(() => {
+    if (!userId || hasOperator) return undefined
+    const onPrePinConfig = ({ userId: targetId, data }) => {
+      if (targetId === userId) setPrePinConfig(data)
+    }
+    _prePinConfigSubscribers.add(onPrePinConfig)
+    void fetchPrePinTasaConfig(userId)
+    return () => {
+      _prePinConfigSubscribers.delete(onPrePinConfig)
+    }
+  }, [userId, hasOperator])
 
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
@@ -277,8 +341,9 @@ export function useTasaCambio() {
   // ─── Sincronizar desde config BD (fuente de verdad) ──────────────────────────
   // Cuando useRealtimeSync detecta cambio en configuracion_negocio, refetch config,
   // y este effect actualiza modo + tasa manual para TODOS los usuarios en tiempo real
-  const configTasaManual = config?.tasa_bcv_manual
-  const configActualizadoEn = config?.actualizado_en
+  const effectiveConfig = hasOperator ? config : prePinConfig
+  const configTasaManual = effectiveConfig?.tasa_bcv_manual
+  const configActualizadoEn = effectiveConfig?.actualizado_en
 
   useEffect(() => {
     if (configTasaManual === undefined) return
@@ -391,7 +456,10 @@ export function useTasaCambio() {
     setError('')
 
     try {
-      const result = await fetchTasaGlobal(esAutoUpdate, forceRefresh)
+      const [result] = await Promise.all([
+        fetchTasaGlobal(esAutoUpdate, forceRefresh),
+        userId && !hasOperator ? fetchPrePinTasaConfig(userId, forceRefresh) : null,
+      ])
       // Si fetchTasaGlobal fue deduplicado (retornó null), los datos
       // llegarán vía el suscriptor; no hacer nada aquí
       if (result) handleFetchResult({ ...result, esAutoUpdate })
@@ -400,7 +468,7 @@ export function useTasaCambio() {
     } finally {
       if (!esAutoUpdate) setCargando(false)
     }
-  }, [handleFetchResult])
+  }, [handleFetchResult, userId, hasOperator])
 
   // Auto-fetch al montar + intervalo de 5 min + refresco al volver al foco
   useEffect(() => {
@@ -490,6 +558,7 @@ export function useTasaCambio() {
   // Escuchar broadcast de otros dispositivos (sync instantáneo)
   // Canal singleton compartido — ver acquireTasaChannel() arriba
   useEffect(() => {
+    if (!userId) return undefined
     const onTasaChange = (payload) => {
       if (!payload) return
       // Ignorar si el broadcast viene de esta misma pestaña
@@ -514,7 +583,7 @@ export function useTasaCambio() {
       channelRef.current = null
       releaseTasaChannel()
     }
-  }, [STORAGEKEYMODE, STORAGEKEYMANUAL])
+  }, [userId, STORAGEKEYMODE, STORAGEKEYMANUAL])
 
   return {
     tasaBcv,

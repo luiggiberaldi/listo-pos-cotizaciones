@@ -110,6 +110,49 @@ scripts/*
 !src/components/auth/__tests__/
 !src/components/auth/__tests__/LoginPinModal.test.js
 
-# OP-2026-061: pantallas de clientes al instante
+# OP-2026-030: pruebas y verificación de la creación de usuarios
+!api/handlers/__tests__/crearUsuario.test.js
+!src/utils/__tests__/usuarioValidacion.test.js
+!scripts/verify-op030-usuarios-staging.mjs
 
+# OP-2026-036: calendario mensual de sábados para vendedor designado
+!src/utils/__tests__/calendarioSabados.test.js
+!api/handlers/__tests__/designacionSabados.test.js
+!scripts/verify-op036-calendario-sabados-staging.mjs
+
+# OP-2026-061: pantallas de clientes al instante
 !src/utils/__tests__/realtimeSync061.test.js
+
+# OP-2026-071/086: pruebas de inventario en staging
+!api/handlers/__tests__/fichaYConteoKardex071.test.js
+!api/handlers/__tests__/prestamosYDevoluciones071.test.js
+!api/handlers/__tests__/seguridadIdempotencia071.test.js
+!api/handlers/__tests__/higieneDecimalesRespaldo071.test.js
+!src/utils/__tests__/op086Inventario.test.js
+
+# OP-2026-088: modal de prestamos
+!src/utils/__tests__/op088PrestamosModal.test.js
+
+# OP-2026-089: mensaje de devolucion parcial
+!src/utils/__tests__/op089MensajeDevolucion.test.js
+
+# OP-2026-091: pago, comision y tasa en prestamos
+!src/utils/__tests__/op091PrestamoCobro.test.js
+!scripts/op091-prueba-prestamo-cobro-staging.mjs
+
+# OP-2026-092: despacho solo prestamo sin pago
+!src/utils/__tests__/op092DespachoPrestamoSinPago.test.js
+
+# OP-2026-084: programas de prueba en staging (rescatados en OP-2026-095 Fase 0)
+!scripts/op084-pruebas-staging.mjs
+!scripts/op084-restauracion-real-staging.mjs
+
+# OP-2026-087 / OP-2026-095 Fase 1: stock por aprobar integrado en staging
+!src/utils/__tests__/op087StockPorAprobar.test.js
+!scripts/op087-prueba-por-aprobar-staging.mjs
+
+# OP-2026-095 Fase 2: seguridad de restauración y catálogo
+!api/handlers/__tests__/restauracionSeguridad095.test.js
+
+# OP-2026-095 Fase 4: despacho sin cobro (préstamo vs donación)
+!src/utils/__tests__/despachoSinCobro.test.js

@@ -3,12 +3,12 @@
 // Cuenta única de negocio en auth.users — operadores se identifican con PIN
 // Cada pestaña usa una sesión de operador validada; app_metadata no concede permisos.
 import { create } from 'zustand'
-import supabase from '../services/supabase/client'
+import supabase, { supabaseStorageKey } from '../services/supabase/client'
 import { apiUrl, fetchConTimeout } from '../services/apiBase'
 import { getValidAccessToken, refreshSessionSingleFlight, resetSessionState } from '../services/sessionManager'
 import queryClient from '../lib/queryClient'
 import { indexedDbPersister } from '../lib/queryPersister'
-import { setOperatorSession, getOperatorSession, getOperatorSessionHeaders, clearOperatorSession, subscribeOperatorSession, checkOperatorSessionExpiry } from '../services/operatorSession'
+import { setOperatorSession, restoreOperatorSession, getOperatorSession, getOperatorSessionHeaders, clearOperatorSession, subscribeOperatorSession, checkOperatorSessionExpiry, OPERATOR_STORAGE_KEY } from '../services/operatorSession'
 
 let operatorAttempt = 0
 
@@ -132,10 +132,22 @@ function purgeOperatorState() {
   void indexedDbPersister.removeClient().catch(() => {})
 }
 
+function getSupabaseAuthStorageKey() {
+  try {
+    if (supabaseStorageKey && localStorage.getItem(supabaseStorageKey)) return supabaseStorageKey
+    return Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token')) || null
+  } catch {
+    return null
+  }
+}
+
 function adoptAccount(authUser) {
   const previousAccountId = useAuthStore.getState().user?.id
   const sessionAccountId = getOperatorSession()?.accountId
-  if (previousAccountId !== authUser?.id || (sessionAccountId && sessionAccountId !== authUser?.id)) {
+  const accountChanged = (previousAccountId && previousAccountId !== authUser?.id)
+    || (!authUser?.id && sessionAccountId)
+    || (sessionAccountId && sessionAccountId !== authUser?.id)
+  if (accountChanged) {
     purgeOperatorState()
   }
   useAuthStore.setState({ user: authUser || null })
@@ -168,28 +180,25 @@ const useAuthStore = create((set, get) => ({
     console.log('[AUTH] initialize() llamado')
     // Detectar si hay sesión guardada para dar más tiempo
     let haySession = false
+    let currentUserId = null
     try {
-      const keys = Object.keys(localStorage)
-      const sbKey = keys.find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
-      if (sbKey && localStorage.getItem(sbKey)) haySession = true
+      const sbKey = getSupabaseAuthStorageKey()
+      if (sbKey) {
+        const raw = localStorage.getItem(sbKey)
+        if (raw) {
+          haySession = true
+          const sbData = JSON.parse(raw)
+          currentUserId = sbData?.user?.id || sbData?.currentSession?.user?.id || null
+        }
+      }
     } catch { /* ignorar */ }
     console.log('[AUTH] haySession:', haySession)
 
-    // ── Offline awareness ──
-    // Obtener userId de la sesión (si existe) para leer cache correcto
-    let currentUserId = null
-    try {
-      const keys = Object.keys(localStorage)
-      const sbKey = keys.find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
-      if (sbKey) {
-        const sbData = JSON.parse(localStorage.getItem(sbKey))
-        currentUserId = sbData?.user?.id
-      }
-    } catch { /* ignorar */ }
-
+    // ── Offline / persistent 12h session awareness ──
     const estaOffline = !navigator.onLine
+    const restoredOnBoot = currentUserId ? restoreOperatorSession(currentUserId) : null
     const perfilCacheado = leerPerfilCache(currentUserId)
-    set({ offline: estaOffline })
+    set({ offline: estaOffline, _cargandoPerfil: Boolean(restoredOnBoot) })
 
     if (estaOffline && perfilCacheado) {
       console.log('[AUTH] offline detectado con perfil cacheado — modo sin conexión activado')
@@ -242,17 +251,17 @@ const useAuthStore = create((set, get) => ({
         console.log('[AUTH] forzando initialized=true por timeout')
         set({ initialized: true })
       }
-    }, haySession ? 3000 : 1500)
+    }, haySession ? 5000 : 1500)
 
-    // Segundo timeout: si hay user pero no perfil después de 12s, limpiar para evitar loop
+    // Segundo timeout: si hay user pero no perfil después de 10s, limpiar para evitar loop
     const safetyTimeoutId = setTimeout(() => {
       const { user, perfil, initialized } = get()
       console.log('[AUTH] safety timeout — initialized:', initialized, 'user:', !!user, 'perfil:', !!perfil)
       if (user && !perfil) {
         console.log('[AUTH] safety: user sin perfil, forzando perfil=null')
-        set({ initialized: true, perfil: null })
+        set({ initialized: true, perfil: null, _cargandoPerfil: false })
       }
-    }, 6000)
+    }, 10000)
 
     console.log('[AUTH] registrando onAuthStateChange...')
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -282,17 +291,8 @@ const useAuthStore = create((set, get) => ({
         if (event === 'INITIAL_SESSION') {
           try {
             if (session?.user) {
-              console.log('[AUTH] INITIAL_SESSION con user, seteando user...')
-              // Si estamos offline y hay perfil cacheado válido, restaurarlo
-              // El usuario ya se autentricó con PIN antes — puede continuar offline
-              const offline = !navigator.onLine
-              const cached = leerPerfilCache(session.user.id)
-              if (offline && cached && getOperatorSession()?.accountId === session.user.id && getOperatorSession()?.operatorId === cached.id) {
-                set({ user: session.user, perfil: cached, _cargandoPerfil: false })
-              } else {
-                // Online: solo setear user, NO cargar perfil automáticamente (requiere PIN)
-                set({ user: session.user, _cargandoPerfil: false })
-              }
+              console.log('[AUTH] INITIAL_SESSION con user, restaurando operador si sigue vigente...')
+              await get()._restaurarOperador(session)
             } else {
               console.log('[AUTH] INITIAL_SESSION sin user (no hay sesión)')
             }
@@ -337,6 +337,99 @@ const useAuthStore = create((set, get) => ({
       document.removeEventListener('visibilitychange', handleVisible)
       window.removeEventListener('focus', handleFocus)
       subscription.unsubscribe()
+    }
+  },
+
+  // ─── Restaurar sesión de operador persistida (12h) al abrir/recargar ──────
+  _restaurarOperador: async (session) => {
+    const authUser = session?.user
+    if (!authUser?.id) return
+    const restored = restoreOperatorSession(authUser.id)
+    if (!restored) {
+      set({ user: authUser, perfil: null, _cargandoPerfil: false })
+      return
+    }
+
+    set({ user: authUser, _cargandoPerfil: true })
+    const cached = leerPerfilCache(authUser.id)
+
+    if (!navigator.onLine) {
+      if (cached && cached.id === restored.operatorId) {
+        set({ user: authUser, perfil: cached, _cargandoPerfil: false })
+      } else {
+        set({ user: authUser, perfil: null, _cargandoPerfil: false })
+      }
+      return
+    }
+
+    const fetchCurrent = (token) => fetchConTimeout(apiUrl('/api/auth/current-operator'), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Operator-Id': restored.operatorId,
+        'X-Operator-Session': restored.token,
+      },
+      cache: 'no-store',
+    }, 6000)
+
+    try {
+      let token = await getValidAccessToken({ timeoutMs: 5000, allowStale: false })
+      let res = await fetchCurrent(token)
+
+      if (res.status === 401) {
+        const { data: refreshData } = await refreshSessionSingleFlight()
+        const freshToken = refreshData?.session?.access_token
+        const refreshedUser = refreshData?.session?.user || refreshData?.user
+        if (!freshToken || refreshedUser?.id !== authUser.id) {
+          purgeOperatorState()
+          return
+        }
+        token = freshToken
+        try { supabase.realtime.setAuth(freshToken) } catch { /* noop */ }
+        res = await fetchCurrent(freshToken)
+      }
+
+      if (getOperatorSession()?.id !== restored.id || get().user?.id !== authUser.id) return
+
+      if (res.status === 401 || res.status === 403) {
+        purgeOperatorState()
+        return
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      const result = await res.json()
+      const op = result?.operator
+      if (!op || op.id !== restored.operatorId) {
+        purgeOperatorState()
+        return
+      }
+      if (getOperatorSession()?.id !== restored.id || get().user?.id !== authUser.id) return
+
+      const perfilOp = {
+        id: op.id,
+        nombre: op.nombre,
+        email: authUser.email,
+        rol: op.rol,
+        activo: true,
+        color: op.color ?? null,
+        markup_pct: op.markup_pct ?? null,
+        comision_pct: op.comision_pct ?? null,
+        comision_pct_cabilla: op.comision_pct_cabilla ?? null,
+        es_externo: !!op.es_externo,
+        ...(op.id === '00000000-0000-0000-0000-000000000000' ? { _isSuperAdmin: true } : {}),
+      }
+      guardarPerfilCache(perfilOp, authUser.id)
+      set({ user: authUser, perfil: perfilOp, _cargandoPerfil: false, error: null })
+    } catch (err) {
+      if (getOperatorSession()?.id !== restored.id || get().user?.id !== authUser.id) return
+      if (err?.code === 'SESSION_EXPIRED') {
+        purgeOperatorState()
+        return
+      }
+      if (cached && cached.id === restored.operatorId) {
+        set({ user: authUser, perfil: cached, _cargandoPerfil: false })
+      } else {
+        set({ user: authUser, perfil: null, _cargandoPerfil: false })
+      }
     }
   },
 
@@ -733,7 +826,7 @@ const useAuthStore = create((set, get) => ({
         if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
           localStorage.removeItem(k)
         }
-        if (k.startsWith('listo_perfil_cache')) {
+        if (k.startsWith('listo_perfil_cache') || k === OPERATOR_STORAGE_KEY || k.startsWith('construacero_operator_session')) {
           localStorage.removeItem(k)
         }
       }

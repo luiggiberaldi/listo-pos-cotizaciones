@@ -5,6 +5,7 @@ import { useLineItems } from '../../hooks/useLineItems'
 import { useInventario } from '../../hooks/useInventario'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useEditarItemsDespacho } from '../../hooks/useDespachos'
+import { evaluarSinCobro } from '../../utils/despachoSinCobro'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useSaldoFavorOrigen } from '../../hooks/useCuentasCobrar'
@@ -83,6 +84,8 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
   }
 
     const [busqueda, setBusqueda] = useState('')
+    // OP-2026-053: pregunta "¿qué hacemos con ese dinero?" cuando la edición deja pagos sin deuda
+    const [decisionPagos, setDecisionPagos] = useState(null)
     const [cargandoItems, setCargandoItems] = useState(false)
     const [error, setError] = useState(null)
   
@@ -371,10 +374,13 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
       const diferencia = esCod
         ? Math.round((montoCodRequerido - totalPropuestaCod) * 100) / 100
         : Math.round((total - totalInmediato) * 100) / 100
+      // OP-2026-092 / OP-2026-095: si el total es $0 (préstamo o sin cobro) no se exige método de pago.
+      const infoSinCobro = evaluarSinCobro({ esCod, total, items })
+      const sinCobro = infoSinCobro.sinCobro
       const estaCuadrado = esCod
         ? (montoCodRequerido <= 0.015 || propuestaCodCuadrado)
-        : pagoInmediatoCuadrado
-      return { subtotal, total, totalPagos, diferencia, estaCuadrado }
+        : (pagoInmediatoCuadrado || sinCobro)
+      return { subtotal, total, totalPagos, diferencia, estaCuadrado, sinCobro, infoSinCobro }
     }, [items, totalConFlete, esCod, totalInmediato, montoCodRequerido, totalPropuestaCod, propuestaCodCuadrado, pagoInmediatoCuadrado])
   
     const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
@@ -410,7 +416,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
       }
     }, [esCod, pagosInmediatos, propuestaCod, totalConFlete, totalInmediato, montoCodRequerido, pagosInmediatosHayVuelto, vueltoComoSaldoFavor])
 
-    async function handleSave() {
+    async function handleSave(destinoPagos = null) {
       if (items.length === 0) {
         showToast('El despacho debe tener al menos un producto', 'error')
         return
@@ -447,16 +453,22 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
         }
       })
       try {
-        await editarItems.mutateAsync({ 
-          despachoId: despacho.id, 
-          items: itemsApi, 
+        await editarItems.mutateAsync({
+          despachoId: despacho.id,
+          items: itemsApi,
           pagos: modoVendedor
             ? (pagosAjustadosVendedor(totales.total) ? JSON.stringify(pagosAjustadosVendedor(totales.total)) : undefined)
-            : JSON.stringify(formasPagoFinales)
+            : JSON.stringify(totales.sinCobro ? [] : formasPagoFinales),
+          ...(typeof destinoPagos === 'string' ? { destinoPagos } : {}),
         })
+        setDecisionPagos(null)
         onClose()
-      } catch {
-        // El hook ya muestra el toast
+      } catch (e) {
+        // OP-2026-053: si el cambio deja pagos del cliente sin deuda, se pregunta qué hacer
+        if (e?.code === 'DECISION_PAGOS_REQUERIDA') {
+          setDecisionPagos({ monto: Number(e?.pagos?.pagado_de_mas_nuevo || 0), mensaje: e.message })
+        }
+        // Los demás errores ya los muestra el hook con un mensaje
       }
     }
   
@@ -885,7 +897,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
 
             {totales.estaCuadrado ? (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full shrink-0">
-                <CheckCircle size={12} /> Pagos cuadrados ✓
+                <CheckCircle size={12} /> {totales.sinCobro ? (totales.infoSinCobro?.etiquetaCorta || 'Sin cobro ✓') : 'Pagos cuadrados ✓'}
               </span>
             ) : (
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full border shrink-0 ${
@@ -906,6 +918,12 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
             {(!esCod || tabActiva === 'inmediato') ? (
               // VISTA: PAGO INMEDIATO (ADELANTO)
               <div className="space-y-2">
+                {totales.sinCobro && (
+                  <div data-testid="edicion-sin-cobro" className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs leading-snug">
+                    <p className="font-bold">{totales.infoSinCobro?.titulo}</p>
+                    <p className="mt-0.5 opacity-80">{totales.infoSinCobro?.descripcion}</p>
+                  </div>
+                )}
                 {esCod && (
                   <p className="text-[10px] font-black text-indigo-500/80 uppercase tracking-widest pl-1">
                     1. Registrar abonos o adelantos inmediatos
@@ -973,10 +991,10 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
                         )}
 
                         {/* Referencia para Transferencia y Pago Móvil */}
-                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(p.metodo) && (
+                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(p.metodo) && (
                           <div className="flex items-center gap-2 mt-1 pt-1 border-t border-slate-50">
                             <span className="text-[9px] font-bold text-slate-400 uppercase whitespace-nowrap">
-                              Referencia (opcional):
+                              {p.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                             </span>
                             <input
                               type="text"
@@ -992,7 +1010,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
                   })}
 
                   {/* Selector / Añadir pago inmediato */}
-                  {((!esCod && !pagoInmediatoCuadrado) || (esCod && totalInmediato < totalConFlete)) && (
+                  {((!esCod && !totales.estaCuadrado) || (esCod && totalInmediato < totalConFlete)) && (
                     <div className="flex flex-col h-full min-h-[62px]">
                       {mostrarSelectorInmediato ? (
                         <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-2.5 h-full flex flex-col justify-center">
@@ -1134,10 +1152,10 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
                                 </button>
                               )}
                             </div>
-                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(p.metodo) && (
+                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(p.metodo) && (
                               <div className="flex items-center gap-2 mt-1 pt-1 border-t border-rose-50">
                                 <span className="text-[9px] font-bold text-rose-400 uppercase">
-                                  Referencia (opcional):
+                                  {p.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                                 </span>
                                 <input
                                   type="text"
@@ -1234,14 +1252,15 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
                 Cancelar
               </button>
               <button
-                onClick={handleSave}
+                onClick={() => handleSave()}
+                data-testid="editar-items-guardar"
                 disabled={editarItems.isPending || items.length === 0 || (modoVendedor ? !planSimpleVendedor : (!totales.estaCuadrado || !cxcVencimientoValido))}
                 title={
                   !cxcVencimientoValido
                     ? 'Días de vencimiento obligatorios para cuentas por cobrar'
                     : esCod
                     ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
-                    : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)
+                    : (!totales.estaCuadrado ? 'Los montos no cuadran con el total' : undefined)
                 }
                 className="flex-1 sm:flex-none px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
@@ -1252,6 +1271,31 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, mo
           </div>
         </div>
       </div>
+
+      {decisionPagos && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="edicion-decision-pagos">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-3">
+            <h3 className="text-base font-black text-slate-900">¿Qué hacemos con ese dinero?</h3>
+            <p className="text-sm text-slate-700">{decisionPagos.mensaje}</p>
+            <button type="button" data-testid="edicion-destino-mantener" disabled={editarItems.isPending}
+              onClick={() => handleSave('mantener')}
+              className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50 disabled:opacity-50">
+              <b className="text-sm text-slate-900">Dejarlo en la cuenta del cliente</b>
+              <span className="block text-xs text-slate-600">Los abonos no se borran. Se ven como “pagado de más” y se aplican solos a la próxima deuda del cliente.</span>
+            </button>
+            <button type="button" data-testid="edicion-destino-saldo-favor" disabled={editarItems.isPending}
+              onClick={() => handleSave('saldo_favor')}
+              className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50 disabled:opacity-50">
+              <b className="text-sm text-slate-900">Pasarlo a saldo a favor del cliente</b>
+              <span className="block text-xs text-slate-600">El cliente puede usarlo en otra compra o se le puede devolver.</span>
+            </button>
+            <button type="button" onClick={() => setDecisionPagos(null)} disabled={editarItems.isPending}
+              className="w-full py-2 text-sm font-bold text-slate-600 rounded-xl border border-slate-300 hover:bg-slate-50">
+              Cancelar (no guardar todavía)
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal editar externo */}
       <ModalEditarExterno

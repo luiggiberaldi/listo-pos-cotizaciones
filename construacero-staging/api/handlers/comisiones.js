@@ -1,4 +1,11 @@
 // api/handlers/comisiones.js
+// NOTA IMPORTANTE (OP-2026-095 Fase 3):
+// En producción (desde agosto 2026, migración 238) el sistema NO registra si una comisión está pagada
+// ni tiene botón "Liberar comisión CxC": solo genera comisiones en estado único 'generada' para que
+// administración sepa cuánto pagar. Los handlers handleMarcarComisionPagada, handleLiberarComisionCxc
+// y handleActualizarEstadoComision se conservan AQUÍ SOLO COMO LEGADO DE STAGING para compatibilidad
+// con los pasos históricos de scripts/test-e2e-staging.mjs; NO deben usarse para lógica nueva ni
+// portarse a producción.
 import { json, jsonError, isValidUuid } from '../lib/utils.js'
 import { verifyAuth, validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'

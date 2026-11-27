@@ -964,9 +964,9 @@ export default function OrdenCompraView() {
       {!modoCrear && !dbMigracionFaltante && (
         <div className="space-y-4">
           {/* Barra de Filtros */}
-          <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex flex-col md:flex-row gap-3 min-w-0">
             {/* Buscador Inteligente */}
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-0">
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -983,10 +983,10 @@ export default function OrdenCompraView() {
             </div>
 
             {/* Selector de Estado y Botón Recargar */}
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-0.5 self-start">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 w-full md:w-auto min-w-0 pb-0.5 self-start">
               <button
                 onClick={() => refetch()}
-                className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-[#1B365D] rounded-xl transition-all shadow-sm shrink-0 mr-1"
+                className="p-2.5 min-h-9 min-w-9 flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-[#1B365D] rounded-xl transition-all shadow-sm shrink-0 mr-1"
                 title="Recargar órdenes"
               >
                 <RefreshCw size={16} className={isLoading ? 'animate-spin text-[#1B365D]' : ''} />
@@ -995,7 +995,7 @@ export default function OrdenCompraView() {
                 <button
                   key={est}
                   onClick={() => setFiltroEstado(est)}
-                  className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all border whitespace-nowrap uppercase ${
+                  className={`px-3 sm:px-3.5 py-2 min-h-9 rounded-full text-xs font-semibold transition-all border whitespace-nowrap uppercase ${
                     filtroEstado === est
                       ? 'bg-[#1B365D] text-white border-[#1B365D] shadow-sm font-bold'
                       : 'bg-white text-slate-700 border-slate-200 hover:border-[#1B365D]/40'

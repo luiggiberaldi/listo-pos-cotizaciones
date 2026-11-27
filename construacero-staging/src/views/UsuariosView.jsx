@@ -1,7 +1,7 @@
 // src/views/UsuariosView.jsx
 // Gestión de usuarios — solo supervisores
 // Construacero Carabobo (avatares con inicial, Crown para supervisor)
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { UserCog, Plus, Pencil, UserCheck, UserX, RefreshCw, Crown, Eye, EyeOff, Trash2, Phone, ArrowLeftRight, X, Loader2 } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import CustomSelect from '../components/ui/CustomSelect'
@@ -23,6 +23,7 @@ import EmptyState  from '../components/ui/EmptyState'
 import PageHeader  from '../components/ui/PageHeader'
 import { showToast } from '../components/ui/Toast'
 import { apiUrl } from '../services/apiBase'
+import { largoPin, validarNuevoUsuario } from '../utils/usuarioValidacion'
 
 const ROL_CONFIG = {
   supervisor: {
@@ -89,9 +90,9 @@ const COLOR_PLATEADO = '#E2E8F0' // slate-200 (plateado brillante)
 const COLOR_DORADO = '#B8860B' // Metallic gold base
 
 // ─── Formulario crear usuario ─────────────────────────────────────────────────
-function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
+function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [], usuarios = [] }) {
   const primerColorLibre = COLORES_VENDEDOR.find(c => !coloresUsados.includes(c)) ?? COLORES_VENDEDOR[0]
-  const [campos, setCampos] = useState({ nombre: '', pin: '', rol: 'vendedor', color: primerColorLibre, telefono: '', es_externo: false })
+  const [campos, setCampos] = useState({ nombre: '', pin: '', pinConfirm: '', rol: 'vendedor', color: primerColorLibre, telefono: '', es_externo: false })
   const [mostrarPass, setMostrarPass] = useState(false)
   const [error, setError] = useState('')
 
@@ -99,10 +100,9 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
 
   function submit(e) {
     e.preventDefault()
-    const pinLen = (campos.rol === 'vendedor' || campos.rol === 'vendedor_sin_comision') ? 4 : 6
-    if (!campos.nombre.trim())                   { setError('El nombre es obligatorio'); return }
-    if (!new RegExp(`^\\d{${pinLen}}$`).test(campos.pin)) { setError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`); return }
-    if (coloresUsados.includes(campos.color))    { setError('Ese color ya está en uso por otro usuario'); return }
+    // OP-2026-030: mismas reglas que el servidor (nombre repetido, PIN y su confirmación)
+    const problema = validarNuevoUsuario(campos, { usuarios, coloresUsados })
+    if (problema) { setError(problema); return }
     onGuardar({ nombre: campos.nombre, pin: campos.pin, rol: campos.rol, color: campos.color, telefono: campos.telefono.trim() || undefined, es_externo: campos.es_externo })
   }
 
@@ -137,20 +137,40 @@ function FormCrear({ onGuardar, onCancelar, cargando, coloresUsados = [] }) {
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">#</div>
         <input type={mostrarPass ? 'text' : 'password'} value={campos.pin}
-          onChange={e => cambiar('pin', e.target.value.replace(/\D/g, '').slice(0, (campos.rol === 'vendedor' || campos.rol === 'vendedor_sin_comision') ? 4 : 6))}
-          placeholder={`PIN de ${(campos.rol === 'vendedor' || campos.rol === 'vendedor_sin_comision') ? 4 : 6} dígitos (solo números)`}
-          inputMode="numeric"
+          onChange={e => cambiar('pin', e.target.value.replace(/\D/g, '').slice(0, largoPin(campos.rol)))}
+          placeholder={`PIN de ${largoPin(campos.rol)} dígitos (solo números)`}
+          inputMode="numeric" aria-label="PIN"
           className={`${inputCls} pr-11`} disabled={cargando} />
         <button type="button" onClick={() => setMostrarPass(p => !p)}
           className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-sky-500 transition-colors">
           {mostrarPass ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>
       </div>
+      {/* Confirmar PIN (OP-2026-030): evita que un error de dedo deje al usuario sin poder entrar */}
+      {(() => {
+        const pl = largoPin(campos.rol)
+        const completo = campos.pinConfirm.length === pl
+        const coincide = completo && campos.pinConfirm === campos.pin
+        return (<>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-xs font-bold">#</div>
+            <input type={mostrarPass ? 'text' : 'password'} value={campos.pinConfirm}
+              onChange={e => cambiar('pinConfirm', e.target.value.replace(/\D/g, '').slice(0, pl))}
+              placeholder="Repite el PIN" inputMode="numeric" aria-label="Confirmar PIN"
+              className={`${inputCls} ${completo && !coincide ? 'border-red-300 ring-1 ring-red-200' : coincide ? 'border-emerald-300 ring-1 ring-emerald-200' : ''}`}
+              disabled={cargando} />
+          </div>
+          {completo && !coincide && <p className="text-xs text-red-500 font-medium ml-1">Los PIN no coinciden</p>}
+          {coincide && campos.pin.length === pl && <p className="text-xs text-emerald-600 font-medium ml-1">PIN confirmado</p>}
+        </>)
+      })()}
       {/* Rol */}
       <CustomSelect
         value={campos.rol}
         onChange={v => {
           cambiar('rol', v)
+          // Si cambia el largo del PIN (4↔6), vaciar ambos para no dejar uno a medias
+          if (largoPin(v) !== largoPin(campos.rol)) { cambiar('pin', ''); cambiar('pinConfirm', '') }
           if (v === 'jefe') cambiar('color', COLOR_DORADO)
           else if (['administracion', 'logistica'].includes(v)) cambiar('color', COLOR_PLATEADO)
           else if (campos.color === COLOR_PLATEADO || campos.color === COLOR_DORADO) cambiar('color', primerColorLibre)
@@ -442,22 +462,27 @@ function FormEditar({ usuario, onGuardar, onCancelar, cargando, coloresUsados = 
 }
 
 // ─── Modal crear/editar ───────────────────────────────────────────────────────
-function UsuarioModal({ usuario = null, onClose, coloresUsados = [] }) {
+function UsuarioModal({ usuario = null, onClose, coloresUsados = [], usuarios = [] }) {
   const crear      = useCrearUsuario()
   const actualizar = useActualizarUsuario()
   const esEdicion  = !!usuario
   const [err, setErr] = useState('')
+  // OP-2026-030: freno al doble clic. El botón se apaga al guardar, pero dos clics
+  // muy seguidos alcanzan a salir antes de que la pantalla se actualice.
+  const enviando = useRef(false)
 
   async function guardar(campos) {
+    if (enviando.current) return
+    enviando.current = true
     setErr('')
     try {
       if (esEdicion) await actualizar.mutateAsync({ id: usuario.id, ...campos })
       else           await crear.mutateAsync(campos)
       onClose()
     } catch (e) {
-      setErr(e.message === 'NO_SERVICE_KEY'
-        ? 'Falta VITE_SUPABASE_SERVICE_KEY en el .env para crear usuarios'
-        : (e.message ?? 'Error al guardar'))
+      setErr(e.message ?? 'Error al guardar')
+    } finally {
+      enviando.current = false
     }
   }
 
@@ -486,7 +511,7 @@ function UsuarioModal({ usuario = null, onClose, coloresUsados = [] }) {
 
           {esEdicion
             ? <FormEditar usuario={usuario} onGuardar={guardar} onCancelar={onClose} cargando={cargando} coloresUsados={coloresUsados} />
-            : <FormCrear  onGuardar={guardar} onCancelar={onClose} cargando={cargando} coloresUsados={coloresUsados} />
+            : <FormCrear  onGuardar={guardar} onCancelar={onClose} cargando={cargando} coloresUsados={coloresUsados} usuarios={usuarios} />
           }
         </div>
       </div>
@@ -919,7 +944,7 @@ export default function UsuariosView() {
         </div>
       )}
 
-      {modalAbierto && <UsuarioModal usuario={editando} onClose={cerrarModal} coloresUsados={coloresUsados} />}
+      {modalAbierto && <UsuarioModal usuario={editando} onClose={cerrarModal} coloresUsados={coloresUsados} usuarios={usuarios} />}
 
       {reasignando && (
         <ModalReasignarBulk

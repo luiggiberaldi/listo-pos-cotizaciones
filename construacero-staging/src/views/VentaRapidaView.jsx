@@ -41,6 +41,7 @@ import PageHeader from '../components/ui/PageHeader'
 import ProductCard from '../components/shared/ProductCard'
 import CategoryPills from '../components/shared/CategoryPills'
 import { usePrecioVendedor } from '../hooks/usePrecioVendedor'
+import { useStockPorAprobar } from '../hooks/useStockPorAprobar'
 
 import { FORMAS_PAGO } from '../constants/formasPago'
 import { PREFIJOS_RIF, parsearRif as parsearRifVR, formatearRif as formatearRifVR } from '../utils/rif'
@@ -415,6 +416,7 @@ export default function VentaRapidaView() {
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const navigate = useNavigate()
   const { data: clientes = [] } = useClientes()
+  const { data: stockPorAprobar = {} } = useStockPorAprobar()
   const { data: inventarioData } = useInventario({ pageSize: 1000 })
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
@@ -767,7 +769,8 @@ export default function VentaRapidaView() {
     Number(cxcItem.diasVencimiento) > 0
   );
 
-  const step2Valid = (esPrestamoPuro || ((esCod
+  const sinCobroVentaRapida = !esCod && totalConFlete <= 0.015
+  const step2Valid = (esPrestamoPuro || sinCobroVentaRapida || ((esCod
     ? (pagoInmediatoCuadrado || (montoCodRequerido > 0.015 && propuestaCodCuadrado))
     : pagoInmediatoCuadrado) && cxcVencimientoValido))
     && (!direccionEnvioActiva || (direccionEnvioEstado && direccionEnvioCiudad))
@@ -1099,6 +1102,7 @@ export default function VentaRapidaView() {
             setEditItemIdx={setEditItemIdx}
             esVendedorSinComision={esVendedorSinComision}
             togglePrestamo={togglePrestamo}
+            stockPorAprobar={stockPorAprobar}
           />
         )}
 
@@ -1329,6 +1333,7 @@ function Step1Productos({
   setEditItemIdx,
   esVendedorSinComision,
   togglePrestamo,
+  stockPorAprobar = {},
 }) {
   const { aplicarMarkup, esExterno } = usePrecioVendedor()
   const [sheetState, setSheetState] = useState('closed')
@@ -1635,7 +1640,7 @@ function Step1Productos({
                 agregado={added}
                 cantidad={itemInCart?.cantidad ?? null}
                 tasa={tasa}
-                comprometido={0}
+                porAprobar={stockPorAprobar[p.id] || 0}
                 onAgregar={agregarProducto}
                 onMas={() => cambiarCantidad(p.id, 1)}
                 onMenos={() => itemInCart.cantidad <= 1 ? quitarItem(p.id) : cambiarCantidad(p.id, -1)}
@@ -2426,10 +2431,10 @@ function Step2Pago({
                         )}
 
                         {/* Opción de Referencia para Transferencia y Pago Móvil */}
-                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                        {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                           <div className="flex items-center gap-2 px-3 py-1.5 bg-teal-50/50 border border-teal-200/50 rounded-lg ml-6">
                             <span className="text-[11px] font-semibold text-teal-700 whitespace-nowrap">
-                              Referencia (opcional):
+                              {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                             </span>
                             <input
                               type="text"
@@ -2558,10 +2563,10 @@ function Step2Pago({
                                 </button>
                               </div>
                               {/* Opción de Referencia para Transferencia y Pago Móvil (COD) */}
-                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                              {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                                 <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-50/50 border border-rose-200/50 rounded-lg ml-6 mt-1.5">
                                   <span className="text-[11px] font-semibold text-rose-700 whitespace-nowrap">
-                                    Referencia (opcional):
+                                    {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                                   </span>
                                   <input
                                     type="text"

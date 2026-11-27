@@ -309,13 +309,11 @@ export default function TesterFlowView() {
         }
         addLog(id, `  Eliminadas ${cotIds.length} cotizaciones residuales`)
       }
-      // Use RPC to bypass RLS (SECURITY DEFINER) — direct .delete() is silently blocked
-      const { error: rpcErr } = await supabase.rpc('borrar_producto_con_kardex_staging', { p_producto_id: prodId })
-      if (rpcErr) {
-        // Fallback: try direct delete (might work if no stock)
-        await supabase.from('inventario_movimientos').delete().eq('producto_id', prodId)
-        await supabase.from('productos').delete().eq('id', prodId)
-      }
+      // Limpiar fixture TEST- via Worker tenant-safe (permite borrar productos de prueba tras Fase 3/4)
+      await apiCall('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        productoIds: [prodId],
+        idempotencyKey: crypto.randomUUID(),
+      })
     }
 
     // 1. Buscar producto test por código
@@ -361,31 +359,29 @@ export default function TesterFlowView() {
   }
 
   async function stepCreateProduct(id) {
-    addLog(id, `RPC crear_producto_con_kardex(codigo=${TEST.producto.codigo}, stock=${TEST.producto.stock_inicial})`)
-    const rpcParams = {
-      p_codigo: TEST.producto.codigo,
-      p_nombre: TEST.producto.nombre,
-      p_descripcion: null,
-      p_categoria: TEST.producto.categoria,
-      p_unidad: TEST.producto.unidad,
-      p_precio_usd: TEST.producto.precio_usd,
-      p_costo_usd: TEST.producto.costo_usd,
-      p_stock_actual: TEST.producto.stock_inicial,
-      p_stock_minimo: TEST.producto.stock_minimo,
-      p_imagen_url: null,
-      p_precio_2: null,
-      p_precio_3: null,
-      // Incluir explícitamente la firma vigente para evitar ambigüedad
-      // mientras se limpia el overload legado en la migración 233.
-      p_precio1_porcentaje: null,
-      p_precio2_porcentaje: null,
-      p_precio3_porcentaje: null,
+    addLog(id, `POST /api/productos/crear(codigo=${TEST.producto.codigo}, stock=${TEST.producto.stock_inicial})`)
+    const productPayload = {
+      codigo: TEST.producto.codigo,
+      nombre: TEST.producto.nombre,
+      descripcion: null,
+      categoria: TEST.producto.categoria,
+      unidad: TEST.producto.unidad,
+      precio_usd: TEST.producto.precio_usd,
+      costo_usd: TEST.producto.costo_usd,
+      stock_actual: TEST.producto.stock_inicial,
+      stock_minimo: TEST.producto.stock_minimo,
+      imagen_url: null,
+      precio_2: null,
+      precio_3: null,
+      precio1_porcentaje: null,
+      precio2_porcentaje: null,
+      precio3_porcentaje: null,
+      idempotencyKey: crypto.randomUUID(),
     }
-    addLog(id, `Params: ${JSON.stringify(rpcParams)}`)
-    const { data: result, error } = await supabase.rpc('crear_producto_con_kardex_staging', rpcParams)
-    if (error) throw error
+    addLog(id, `Params: ${JSON.stringify(productPayload)}`)
+    const result = await apiCall('/api/productos/crear', 'POST', productPayload)
     addLog(id, `Raw result: ${JSON.stringify(result)}`)
-    const productoId = typeof result === 'object' ? result.id : result
+    const productoId = result?.id
     dataRef.current.productoId = productoId
     addLog(id, `OK → productoId=${productoId}`, 'success')
   }
@@ -592,13 +588,12 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertStockComprometidoPre(id) {
-    const { data: sc } = await supabase.rpc('obtener_stock_comprometido')
-    const entry = (sc || []).find(s => s.producto_id === dataRef.current.productoId)
-    const comprometido = entry ? Number(entry.total_comprometido) : 0
-    addLog(id, `  stock comprometido = ${comprometido} und`)
-    assert(comprometido === 0, 0, comprometido, 'comprometido en borrador')
-    dataRef.current.stockComprometidoPre = comprometido
-    addLog(id, 'El borrador no compromete stock ✓', 'success')
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', dataRef.current.productoId).single()
+    const stock = Number(prod?.stock_actual || 0)
+    addLog(id, `  stock físico = ${stock} und`)
+    assert(stock === TEST.producto.stock_inicial, TEST.producto.stock_inicial, stock, 'stock en borrador sin cambios')
+    dataRef.current.stockComprometidoPre = stock
+    addLog(id, 'El borrador no altera el stock físico ✓', 'success')
   }
 
   async function stepSendQuote(id) {
@@ -634,13 +629,12 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertStockComprometidoAceptada(id) {
-    const { data: sc } = await supabase.rpc('obtener_stock_comprometido')
-    const entry = (sc || []).find(s => s.producto_id === dataRef.current.productoId)
-    const comprometido = entry ? Number(entry.total_comprometido) : 0
-    addLog(id, `  stock comprometido = ${comprometido} und`)
-    assert(comprometido === 0, 0, comprometido, 'comprometido tras aceptar sin despacho')
-    dataRef.current.stockComprometidoAceptada = comprometido
-    addLog(id, 'Aceptar la cotización sin despacho no compromete stock ✓', 'success')
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', dataRef.current.productoId).single()
+    const stock = Number(prod?.stock_actual || 0)
+    addLog(id, `  stock físico = ${stock} und`)
+    assert(stock === TEST.producto.stock_inicial, TEST.producto.stock_inicial, stock, 'stock tras aceptar sin cambios')
+    dataRef.current.stockComprometidoAceptada = stock
+    addLog(id, 'Aceptar la cotización sin despacho no descuenta stock ✓', 'success')
   }
 
   async function stepCreateDespacho(id) {
@@ -718,11 +712,10 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertStockComprometidoPost(id) {
-    const { data: sc } = await supabase.rpc('obtener_stock_comprometido')
-    const entry = (sc || []).find(s => s.producto_id === dataRef.current.productoId)
-    const comprometido = entry ? Number(entry.total_comprometido) : 0
-    assert(comprometido === 0, 0, comprometido, 'comprometido con despacho pendiente')
-    addLog(id, 'El despacho pendiente todavía no compromete stock ✓', 'success')
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', dataRef.current.productoId).single()
+    const stock = Number(prod?.stock_actual || 0)
+    assert(stock === TEST.producto.stock_inicial, TEST.producto.stock_inicial, stock, 'stock intacto con despacho pendiente')
+    addLog(id, 'El despacho pendiente no descuenta inventario físico ✓', 'success')
   }
 
   async function stepAssertCxCCargo(id) {
@@ -819,12 +812,12 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertStockComprometidoAprobado(id) {
-    const { data: sc, error: stockError } = await supabase.rpc('obtener_stock_comprometido')
+    const { data: prod, error: stockError } = await supabase.from('productos').select('stock_actual').eq('id', dataRef.current.productoId).single()
     if (stockError) throw stockError
-    const entry = (sc || []).find(s => s.producto_id === dataRef.current.productoId)
-    const comprometido = entry ? Number(entry.total_comprometido) : 0
-    addLog(id, `  stock comprometido = ${comprometido} und`)
-    assert(comprometido === TEST.cotizacion.cantidad, TEST.cotizacion.cantidad, comprometido, 'comprometido tras aprobar despacho')
+    const stock = Number(prod?.stock_actual || 0)
+    const esperado = TEST.producto.stock_inicial - TEST.cotizacion.cantidad
+    addLog(id, `  stock físico = ${stock} und (esperado: ${esperado})`)
+    assert(stock === esperado, esperado, stock, 'egreso al aprobar despacho')
 
     const totalConDescuento = dataRef.current.totalConDescuento || TEST.cotizacion.total_usd
     const { data: cargos, error: cxcError } = await supabase.from('cuentas_por_cobrar').select('monto_usd, tipo')
@@ -836,7 +829,7 @@ export default function TesterFlowView() {
     if (clientError) throw clientError
     assert(Number(cliente.saldo_pendiente) === totalConDescuento, totalConDescuento, cliente.saldo_pendiente, 'saldo CxC al aprobar')
     addLog(id, `  cargo CxC = $${cargos[0].monto_usd}; saldo = $${cliente.saldo_pendiente} ✓`)
-    addLog(id, 'El despacho aprobado compromete el stock y crea CxC neto del descuento ✓', 'success')
+    addLog(id, 'El despacho aprobado egresa inventario y crea CxC neto del descuento ✓', 'success')
   }
 
   async function stepMarkDelivered(id) {
@@ -855,12 +848,12 @@ export default function TesterFlowView() {
   }
 
   async function stepAssertStockComprometidoEntregado(id) {
-    const { data: sc } = await supabase.rpc('obtener_stock_comprometido')
-    const entry = (sc || []).find(s => s.producto_id === dataRef.current.productoId)
-    const comprometido = entry ? Number(entry.total_comprometido) : 0
-    addLog(id, `  stock comprometido = ${comprometido} und`)
-    assert(comprometido === 0, 0, comprometido, 'comprometido tras entrega')
-    addLog(id, 'La entrega libera el stock comprometido ✓', 'success')
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', dataRef.current.productoId).single()
+    const stock = Number(prod?.stock_actual || 0)
+    const esperado = TEST.producto.stock_inicial - TEST.cotizacion.cantidad
+    addLog(id, `  stock físico = ${stock} und`)
+    assert(stock === esperado, esperado, stock, 'entrega sin doble descuento')
+    addLog(id, 'La entrega no duplica el descuento (egreso ya aplicado al aprobar) ✓', 'success')
   }
 
   async function stepAssertCommission(id) {
@@ -1034,28 +1027,28 @@ export default function TesterFlowView() {
   }
 
   async function stepCreateProduct2(id) {
-    addLog(id, `RPC crear_producto_con_kardex(codigo=${TEST.producto2.codigo}, stock=${TEST.producto2.stock_inicial})`)
-    const rpcParams = {
-      p_codigo: TEST.producto2.codigo,
-      p_nombre: TEST.producto2.nombre,
-      p_descripcion: null,
-      p_categoria: TEST.producto2.categoria,
-      p_unidad: TEST.producto2.unidad,
-      p_precio_usd: TEST.producto2.precio_usd,
-      p_precio_2: TEST.producto2.precio_2,
-      p_precio_3: TEST.producto2.precio_3,
-      p_costo_usd: TEST.producto2.costo_usd,
-      p_stock_actual: TEST.producto2.stock_inicial,
-      p_stock_minimo: TEST.producto2.stock_minimo,
-      p_imagen_url: null,
-      p_precio1_porcentaje: null,
-      p_precio2_porcentaje: null,
-      p_precio3_porcentaje: null,
+    addLog(id, `POST /api/productos/crear(codigo=${TEST.producto2.codigo}, stock=${TEST.producto2.stock_inicial})`)
+    const productPayload = {
+      codigo: TEST.producto2.codigo,
+      nombre: TEST.producto2.nombre,
+      descripcion: null,
+      categoria: TEST.producto2.categoria,
+      unidad: TEST.producto2.unidad,
+      precio_usd: TEST.producto2.precio_usd,
+      precio_2: TEST.producto2.precio_2,
+      precio_3: TEST.producto2.precio_3,
+      costo_usd: TEST.producto2.costo_usd,
+      stock_actual: TEST.producto2.stock_inicial,
+      stock_minimo: TEST.producto2.stock_minimo,
+      imagen_url: null,
+      precio1_porcentaje: null,
+      precio2_porcentaje: null,
+      precio3_porcentaje: null,
+      idempotencyKey: crypto.randomUUID(),
     }
-    addLog(id, `Params: ${JSON.stringify(rpcParams)}`)
-    const { data: result, error } = await supabase.rpc('crear_producto_con_kardex_staging', rpcParams)
-    if (error) throw error
-    const producto2Id = typeof result === 'object' ? result.id : result
+    addLog(id, `Params: ${JSON.stringify(productPayload)}`)
+    const result = await apiCall('/api/productos/crear', 'POST', productPayload)
+    const producto2Id = result?.id
     dataRef.current.producto2Id = producto2Id
     addLog(id, `OK → producto2Id=${producto2Id}`, 'success')
   }
@@ -1481,13 +1474,12 @@ export default function TesterFlowView() {
     await cleanCot(d.cotizacionRecicladaId, 'cotización reciclada')
     await cleanCot(d.cotizacion2Id, 'cotización para anular')
 
-    // Limpiar producto 2 (via RPC to bypass RLS)
+    // Limpiar producto 2 vía Worker tenant-safe (permite fixture TEST-/E2E-)
     if (d.producto2Id) {
-      const { error: rpc2 } = await supabase.rpc('borrar_producto_con_kardex_staging', { p_producto_id: d.producto2Id })
-      if (rpc2) {
-        await supabase.from('inventario_movimientos').delete().eq('producto_id', d.producto2Id)
-        await supabase.from('productos').delete().eq('id', d.producto2Id)
-      }
+      await apiCall('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        productoIds: [d.producto2Id],
+        idempotencyKey: crypto.randomUUID(),
+      })
       addLog(id, 'DELETE producto 2 + movimientos ✓')
     }
 
@@ -1499,7 +1491,10 @@ export default function TesterFlowView() {
 
     // Limpiar movimientos de lote
     if (d.loteId) {
-      await supabase.from('inventario_movimientos').delete().eq('lote_id', d.loteId)
+      await apiCall('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        loteIds: [d.loteId],
+        idempotencyKey: crypto.randomUUID(),
+      })
       addLog(id, 'DELETE movimientos lote ✓')
     }
 
@@ -1513,11 +1508,10 @@ export default function TesterFlowView() {
     await cleanCot(d.cotizacionId, 'cotización principal + deps')
 
     if (d.productoId) {
-      const { error: rpc1 } = await supabase.rpc('borrar_producto_con_kardex_staging', { p_producto_id: d.productoId })
-      if (rpc1) {
-        await supabase.from('inventario_movimientos').delete().eq('producto_id', d.productoId)
-        await supabase.from('productos').delete().eq('id', d.productoId)
-      }
+      await apiCall('/api/admin/tester/cleanup-fixtures', 'DELETE', {
+        productoIds: [d.productoId],
+        idempotencyKey: crypto.randomUUID(),
+      })
       addLog(id, 'DELETE inventario_movimientos + productos ✓')
     }
     if (d.clienteId) {
