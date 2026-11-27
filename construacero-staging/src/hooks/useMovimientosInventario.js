@@ -54,7 +54,7 @@ export function useKardex(productoId, { limite = 200 } = {}) {
     queryFn: async () => {
       const { data, error, count } = await supabase
         .from('inventario_movimientos')
-        .select('id, numero, lote_id, producto_id, producto_nombre, tipo, cantidad, stock_anterior, stock_nuevo, motivo, motivo_tipo, usuario_nombre, usuario_color, creado_en', { count: 'exact' })
+        .select('id, numero, lote_id, producto_id, producto_nombre, tipo, cantidad, stock_anterior, stock_nuevo, motivo, motivo_tipo, origen_tipo, origen_id, origen_referencia, usuario_nombre, usuario_color, creado_en', { count: 'exact' })
         .eq('producto_id', productoId)
         .order('creado_en', { ascending: false })
         .order('numero', { ascending: false })
@@ -70,16 +70,15 @@ export function useKardex(productoId, { limite = 200 } = {}) {
 }
 
 // ─── Aplicar movimiento por lotes (via Worker API) ──────────────────────────
-// FIX idempotencia: UNA clave por submit; authFetch reutiliza la misma en su reintento.
 export function useAplicarMovimientoLote() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ tipo, motivo, motivo_tipo = 'otro', items }) => {
-      const idempotencyKey = crypto.randomUUID()
+    mutationFn: async ({ tipo, motivo, motivo_tipo = 'otro', items, idempotencyKey }) => {
+      const idemKey = idempotencyKey || crypto.randomUUID()
       const res = await authFetch('/api/inventario/movimiento', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
-        body: JSON.stringify({ tipo, motivo, motivo_tipo, items, idempotencyKey }),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idemKey },
+        body: JSON.stringify({ tipo, motivo, motivo_tipo, items, idempotencyKey: idemKey }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Error al aplicar movimiento')
@@ -121,7 +120,6 @@ export function useAplicarMovimientoLote() {
             const reabastecidos = productos.filter(p =>
               p.stock_minimo > 0 && p.stock_actual > p.stock_minimo
             )
-            // Solo notificar los que probablemente estaban bajos antes (heurística: el ingreso los subió por encima)
             for (const p of reabastecidos) {
               const item = variables.items.find(i => i.producto_id === p.id)
               if (item) {
@@ -141,16 +139,55 @@ export function useAplicarMovimientoLote() {
   })
 }
 
+// ─── Conteo físico atómico (N25: unitario o por lotes con concurrencia) ──────
+export function useConteoFisico() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ motivo, items, idempotencyKey }) => {
+      const idemKey = idempotencyKey || crypto.randomUUID()
+      const res = await authFetch('/api/inventario/conteo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idemKey },
+        body: JSON.stringify({ motivo, items, idempotencyKey: idemKey }),
+      })
+      const result = await res.json().catch(() => null)
+      if (!res.ok) {
+        const err = new Error(result?.error || 'Error al aplicar conteo físico')
+        err.status = res.status
+        throw err
+      }
+      return result
+    },
+    onSuccess: async (data) => {
+      await qc.cancelQueries({ queryKey: INVENTARIO_KEY })
+      await qc.cancelQueries({ queryKey: MOVIMIENTOS_KEY })
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: INVENTARIO_KEY, exact: false })
+        qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY, exact: false })
+        qc.invalidateQueries({ queryKey: KARDEX_KEY, exact: false })
+      }, 400)
+      const ajustes = Number(data?.movimientos) || 0
+      const sinCambios = Number(data?.sin_cambios) || 0
+      if (ajustes > 0) {
+        const corr = data?.numero ? formatCorrelativo(data.numero) : ''
+        showToast(`${corr ? corr + ' — ' : ''}Conteo aplicado (${ajustes} ajuste${ajustes > 1 ? 's' : ''})`, 'success')
+      } else {
+        showToast(`Conteo verificado sin diferencias (${sinCambios})`, 'info')
+      }
+    },
+  })
+}
+
 // ─── Revertir movimiento manual de inventario (Kardex) ──────────────────────
 export function useRevertirMovimiento() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ movimiento_id }) => {
-      const idempotencyKey = crypto.randomUUID()
+    mutationFn: async ({ movimiento_id, idempotencyKey }) => {
+      const idemKey = idempotencyKey || crypto.randomUUID()
       const res = await authFetch('/api/inventario/movimiento/revertir', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
-        body: JSON.stringify({ movimiento_id, idempotencyKey }),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idemKey },
+        body: JSON.stringify({ movimiento_id, idempotencyKey: idemKey }),
         timeout: 30000,
       })
       const result = await res.json()

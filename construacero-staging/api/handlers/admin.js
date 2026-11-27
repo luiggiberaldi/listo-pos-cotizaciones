@@ -3,6 +3,26 @@ import { json, jsonError, corsHeaders, isValidUuid, isRateLimited } from '../lib
 import { verifyAuth, verifySupervisor, verifyPrivileged, SUPER_ADMIN_UUID, validateOperator, invalidateOperatorCache } from '../lib/auth.js'
 import { hashPinPBKDF2, generateSalt } from '../lib/crypto.js'
 import { registrarAuditoria } from '../lib/audit.js'
+import { buscarNombreRepetido, limpiarNombreUsuario, mensajeNombreRepetido } from '../../src/utils/usuarioValidacion.js'
+import { getFechaCaracasISO, validarLoteDesignaciones } from '../../src/utils/calendarioSabados.js'
+
+// OP-2026-030: ¿ya hay en esta empresa un usuario con ese nombre?
+// Devuelve { error } si no se pudo comprobar (se rechaza: mejor reintentar que duplicar),
+// { existente } si está repetido, o {} si el nombre está libre.
+async function comprobarNombreLibre(env, cuentaId, nombre, excluirId = null) {
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/usuarios?cuenta_id=eq.${cuentaId}&select=id,nombre,activo`,
+      { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } },
+    )
+    if (!res.ok) return { error: true }
+    const filas = await res.json()
+    const existente = buscarNombreRepetido(Array.isArray(filas) ? filas : [], nombre, excluirId)
+    return existente ? { existente } : {}
+  } catch {
+    return { error: true }
+  }
+}
 
 export async function handleAdmin(request, env, url) {
   // Solo POST/PUT/DELETE
@@ -38,7 +58,8 @@ export async function handleAdmin(request, env, url) {
 
   // ── Crear usuario (solo en tabla usuarios, sin auth.users) ───────────
   if (route === 'users' && request.method === 'POST') {
-    const { nombre, rol, pin, color, telefono, es_externo } = body;
+    const { rol, pin, color, telefono, es_externo } = body;
+    const nombre = typeof body.nombre === 'string' ? limpiarNombreUsuario(body.nombre) : '';
     if (!nombre || !rol || !pin) {
       return jsonError('Faltan campos: nombre, rol, pin', 400, request);
     }
@@ -52,6 +73,16 @@ export async function handleAdmin(request, env, url) {
     const pinLen = (rol === 'vendedor' || rol === 'vendedor_sin_comision') ? 4 : 6;
     if (!/^\d+$/.test(pin) || pin.length !== pinLen) {
       return jsonError(`El PIN debe ser exactamente ${pinLen} dígitos numéricos`, 400, request);
+    }
+
+    // OP-2026-030: no permitir dos usuarios con el mismo nombre en la empresa
+    // (también frena el duplicado cuando se reintenta tras una conexión lenta).
+    const chequeoNombre = await comprobarNombreLibre(env, user.id, nombre);
+    if (chequeoNombre.error) {
+      return jsonError('No se pudo comprobar si el nombre ya existe. Intenta de nuevo.', 503, request);
+    }
+    if (chequeoNombre.existente) {
+      return jsonError(mensajeNombreRepetido(chequeoNombre.existente), 409, request);
     }
 
     // Hash PIN with PBKDF2
@@ -70,7 +101,7 @@ export async function handleAdmin(request, env, url) {
       },
       body: JSON.stringify({
         id: newId,
-        nombre: nombre.trim(),
+        nombre,
         rol,
         activo: true,
         pin_hash: hash,
@@ -91,8 +122,8 @@ export async function handleAdmin(request, env, url) {
     try {
       await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
         usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Supervisor', usuarioRol: user.operator_rol || 'supervisor',
-        categoria: 'USUARIO', accion: 'CREAR_USUARIO', descripcion: `Usuario "${nombre.trim()}" creado con rol ${rol}`,
-        entidadTipo: 'usuario', entidadId: newId, meta: { nombre: nombre.trim(), rol, color }, ip,
+        categoria: 'USUARIO', accion: 'CREAR_USUARIO', descripcion: `Usuario "${nombre}" creado con rol ${rol}`,
+        entidadTipo: 'usuario', entidadId: newId, meta: { nombre, rol, color }, ip,
       });
     } catch {
       // La auditoría es best-effort y no debe bloquear la operación principal.
@@ -114,7 +145,18 @@ export async function handleAdmin(request, env, url) {
 
     // Build update data
     const updateData = {};
-    if (nombre) updateData.nombre = nombre.trim();
+    const nombreLimpio = typeof nombre === 'string' ? limpiarNombreUsuario(nombre) : '';
+    if (nombreLimpio) {
+      // OP-2026-030: renombrar tampoco puede dejar dos usuarios con el mismo nombre
+      const chequeoNombre = await comprobarNombreLibre(env, user.id, nombreLimpio, userId);
+      if (chequeoNombre.error) {
+        return jsonError('No se pudo comprobar si el nombre ya existe. Intenta de nuevo.', 503, request);
+      }
+      if (chequeoNombre.existente) {
+        return jsonError(mensajeNombreRepetido(chequeoNombre.existente), 409, request);
+      }
+      updateData.nombre = nombreLimpio;
+    }
     if (rol) updateData.rol = rol;
     if (color !== undefined) updateData.color = color;
     if (telefono !== undefined) updateData.telefono = telefono ? telefono.trim() : null;
@@ -247,13 +289,69 @@ export async function handleBackup(request, env) {
 
   const errors = [];
 
-  async function fetchTable(tabla, query = '') {
-    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}?limit=100000&cuenta_id=eq.${user.id}${query}`, { headers: h });
-    if (!res.ok) {
-      errors.push(`Error al leer ${tabla}: ${res.status}`);
-      return [];
+  // OP-2026-086 (C2): el servidor de datos entrega como máximo 1000 filas por consulta. Se lee
+  // página por página y se compara contra el conteo real de la base; si no cuadra, el respaldo se
+  // marca como incompleto en vez de salir "bien" con datos faltantes.
+  const PAGINA = 1000;
+  function conOrdenEstable(query) {
+    if (/(^|&)order=/.test(query)) return query.replace(/(^|&)order=([^&]*)/, (m, pre, ord) => (/(^|,)id\./.test(ord) ? m : `${pre}order=${ord},id.asc`));
+    return `${query}&order=id.asc`;
+  }
+  async function leerPaginado(tabla, filtro, query = '', { maximo = Infinity, ordenarPorId = true } = {}) {
+    const q = ordenarPorId ? conOrdenEstable(query) : query;
+    const filas = [];
+    let total = null;
+    for (let offset = 0; offset < maximo; offset += PAGINA) {
+      const limite = Math.min(PAGINA, maximo - offset);
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}?${filtro}${q}&limit=${limite}&offset=${offset}`, {
+        headers: offset === 0 ? { ...h, Prefer: 'count=exact' } : h,
+      });
+      if (!res.ok) {
+        errors.push(`Error al leer ${tabla}: ${res.status}`);
+        return filas;
+      }
+      if (offset === 0) {
+        const rango = res.headers.get('content-range') || '';
+        const t = Number(rango.split('/')[1]);
+        total = Number.isFinite(t) ? t : null;
+      }
+      const pagina = await res.json();
+      filas.push(...pagina);
+      if (pagina.length < limite) break;
     }
-    return res.json();
+    const esperado = total === null ? null : Math.min(total, maximo);
+    if (esperado !== null && filas.length !== esperado) {
+      errors.push(`${tabla}: se leyeron ${filas.length} de ${esperado} filas`);
+    }
+    conteos[tabla] = (conteos[tabla] || 0) + filas.length;
+    return filas;
+  }
+  const conteos = {};
+
+  async function fetchTable(tabla, query = '') {
+    // auditoria: se conservan solo las 5000 más recientes (decisión previa del respaldo).
+    if (tabla === 'auditoria') {
+      return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query.replace(/&limit=\d+/, ''), { maximo: 5000 });
+    }
+    // configuracion_negocio: una fila por empresa.
+    if (tabla === 'configuracion_negocio') return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query, { ordenarPorId: false });
+    // comisiones usa columnas sin guion bajo (cuentaid, creadoen). Antes el respaldo pedía
+    // cuenta_id, la base respondía 400 y las comisiones quedaban SIEMPRE vacías (OP-2026-086).
+    if (tabla === 'comisiones') return leerPaginado(tabla, `cuentaid=eq.${user.id}`, '&order=creadoen.asc');
+    // inventario_operaciones no tiene columna id (su llave es empresa + clave única).
+    if (tabla === 'inventario_operaciones') return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query.includes('order=') ? `${query},idempotency_key.asc` : '&order=idempotency_key.asc', { ordenarPorId: false });
+    return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query);
+  }
+
+  async function fetchChildTableByIds(tabla, col, ids, order = '') {
+    const cleanIds = [...new Set((ids || []).filter(Boolean))];
+    if (cleanIds.length === 0) return [];
+    const rows = [];
+    for (let i = 0; i < cleanIds.length; i += 150) {
+      const chunk = cleanIds.slice(i, i + 150);
+      rows.push(...(await leerPaginado(tabla, `${col}=in.(${chunk.join(',')})`, order)));
+    }
+    return rows;
   }
 
   const [
@@ -262,7 +360,23 @@ export async function handleBackup(request, env) {
     cotizaciones,
     cotizacion_items,
     notas_despacho,
+    notas_despacho_items,
+    despacho_descuentos,
+    inventario_movimientos,
+    inventario_operaciones,
+    cuentas_por_cobrar,
+    cxc_movimientos_borrados,
+    comisiones,
+    comision_liberaciones,
+    comision_designacion_diaria,
     transportistas,
+    vehiculos,
+    proveedores,
+    ordenes_compra,
+    orden_compra_items,
+    cuentas_por_pagar,
+    pagos_transportistas,
+    pagos_transportistas_despachos,
     usuarios,
     configuracion_negocio,
     auditoria,
@@ -272,27 +386,82 @@ export async function handleBackup(request, env) {
     fetchTable('cotizaciones', '&order=numero.asc'),
     fetchTable('cotizacion_items', '&order=cotizacion_id.asc,orden.asc'),
     fetchTable('notas_despacho', '&order=numero.asc'),
+    fetchTable('notas_despacho_items', '&order=despacho_id.asc,orden.asc'),
+    fetchTable('despacho_descuentos', '&order=creado_en.asc'),
+    fetchTable('inventario_movimientos', '&order=numero.asc'),
+    fetchTable('inventario_operaciones', '&order=creado_en.asc'),
+    fetchTable('cuentas_por_cobrar', '&order=creado_en.asc'),
+    fetchTable('cxc_movimientos_borrados', '&order=id.asc'),
+    fetchTable('comisiones', '&order=creadoen.asc'),
+    fetchTable('comision_liberaciones', '&order=creado_en.asc'),
+    fetchTable('comision_designacion_diaria', '&order=creado_en.asc'),
     fetchTable('transportistas', '&order=nombre.asc'),
+    fetchTable('vehiculos', '&order=creado_en.asc'),
+    fetchTable('proveedores', '&order=creado_en.asc'),
+    fetchTable('ordenes_compra', '&order=creado_en.asc'),
+    fetchTable('orden_compra_items', '&order=id.asc'),
+    fetchTable('cuentas_por_pagar', '&order=creado_en.asc'),
+    fetchTable('pagos_transportistas', '&order=creado_en.asc'),
+    fetchTable('pagos_transportistas_despachos', '&order=creado_en.asc'),
     fetchTable('usuarios', '&order=nombre.asc'),
     fetchTable('configuracion_negocio'),
     fetchTable('auditoria', '&order=ts.desc&limit=5000'),
   ]);
 
+  const clienteIds = clientes.map(c => c.id);
+  const despachoIds = notas_despacho.map(d => d.id);
+  const [
+    prestamosPorCliente,
+    prestamosPorDespacho,
+    despacho_devoluciones,
+    despacho_devolucion_intercambios,
+  ] = await Promise.all([
+    fetchChildTableByIds('cliente_prestamos', 'cliente_id', clienteIds, '&order=creado_en.asc'),
+    fetchChildTableByIds('cliente_prestamos', 'despacho_id', despachoIds, '&order=creado_en.asc'),
+    fetchChildTableByIds('despacho_devoluciones', 'despacho_id', despachoIds, '&order=creado_en.asc'),
+    fetchChildTableByIds('despacho_devolucion_intercambios', 'despacho_id', despachoIds, '&order=creado_en.asc'),
+  ]);
+  const prestamosMap = new Map();
+  for (const row of [...prestamosPorCliente, ...prestamosPorDespacho]) {
+    if (row?.id && !prestamosMap.has(row.id)) prestamosMap.set(row.id, row);
+  }
+  const cliente_prestamos = [...prestamosMap.values()];
+
   // If any table failed to load, warn in the backup
   const negocio = configuracion_negocio?.[0]?.nombre_negocio || 'sistema';
 
   const backup = {
-    version: '1.0',
+    version: '1.3',
     generado_en: new Date().toISOString(),
     negocio,
     errores: errors.length > 0 ? errors : undefined,
+    completo: errors.length === 0,
     tablas: {
       productos,
       clientes,
       cotizaciones,
       cotizacion_items,
       notas_despacho,
+      notas_despacho_items,
+      despacho_descuentos,
+      cliente_prestamos,
+      despacho_devoluciones,
+      despacho_devolucion_intercambios,
+      cuentas_por_cobrar,
+      cxc_movimientos_borrados,
+      comisiones,
+      comision_liberaciones,
+      comision_designacion_diaria,
+      inventario_movimientos,
+      inventario_operaciones,
       transportistas,
+      vehiculos,
+      proveedores,
+      ordenes_compra,
+      orden_compra_items,
+      cuentas_por_pagar,
+      pagos_transportistas,
+      pagos_transportistas_despachos,
       usuarios,
       configuracion_negocio,
       auditoria,
@@ -302,7 +471,26 @@ export async function handleBackup(request, env) {
       clientes: clientes.length,
       cotizaciones: cotizaciones.length,
       notas_despacho: notas_despacho.length,
+      notas_despacho_items: notas_despacho_items.length,
+      despacho_descuentos: despacho_descuentos.length,
+      cliente_prestamos: cliente_prestamos.length,
+      despacho_devoluciones: despacho_devoluciones.length,
+      despacho_devolucion_intercambios: despacho_devolucion_intercambios.length,
+      cuentas_por_cobrar: cuentas_por_cobrar.length,
+      cxc_movimientos_borrados: cxc_movimientos_borrados.length,
+      comisiones: comisiones.length,
+      comision_liberaciones: comision_liberaciones.length,
+      comision_designacion_diaria: comision_designacion_diaria.length,
+      inventario_movimientos: inventario_movimientos.length,
+      inventario_operaciones: inventario_operaciones.length,
       transportistas: transportistas.length,
+      vehiculos: vehiculos.length,
+      proveedores: proveedores.length,
+      ordenes_compra: ordenes_compra.length,
+      orden_compra_items: orden_compra_items.length,
+      cuentas_por_pagar: cuentas_por_pagar.length,
+      pagos_transportistas: pagos_transportistas.length,
+      pagos_transportistas_despachos: pagos_transportistas_despachos.length,
       usuarios: usuarios.length,
     },
   };
@@ -353,75 +541,47 @@ export async function handleRestore(request, env) {
     return jsonError(`Backup incompleto: faltan tablas ${missingTables.join(', ')}`, 400, request);
   }
 
-  const h = {
-    apikey: env.SUPABASE_SERVICE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-    Prefer: 'resolution=merge-duplicates',
-  };
-
-  // Tablas a restaurar en orden (respetando FK)
+  // OP-2026-086 / OP-2026-095 (C3): exigir respaldo explícitamente completo (rechaza v1.0/v1.1
+  // antiguos que salían recortados a 1000 filas sin la marca completo: true).
+  if (backup.completo !== true || (Array.isArray(backup.errores) && backup.errores.length > 0)) {
+    const detalle = (backup.errores || []).length > 0
+      ? (backup.errores || []).join('; ')
+      : 'respaldo antiguo o sin verificación de integridad (puede estar recortado a 1000 filas)';
+    return jsonError(`Este respaldo no está verificado como completo (${detalle}). No se restaura para no mezclar datos parciales.`, 400, request);
+  }
   const TABLAS_RESTORE = [
-    'configuracion_negocio',
-    'transportistas',
-    'productos',
-    'clientes',
-    'cotizaciones',
-    'cotizacion_items',
-    'notas_despacho',
+    'configuracion_negocio', 'transportistas', 'vehiculos', 'proveedores', 'productos', 'clientes',
+    'cotizaciones', 'cotizacion_items', 'notas_despacho', 'notas_despacho_items',
+    'despacho_descuentos', 'cliente_prestamos', 'despacho_devoluciones',
+    'despacho_devolucion_intercambios', 'cuentas_por_cobrar', 'cxc_movimientos_borrados',
+    'comisiones', 'comision_liberaciones', 'comision_designacion_diaria',
+    'inventario_movimientos', 'inventario_operaciones',
+    'ordenes_compra', 'orden_compra_items', 'cuentas_por_pagar',
+    'pagos_transportistas', 'pagos_transportistas_despachos',
   ];
+  const tablas = {};
+  for (const t of TABLAS_RESTORE) if (Array.isArray(backup.tablas[t])) tablas[t] = backup.tablas[t];
 
-  const resumen = {};
-  const errores = [];
-
-  for (const tabla of TABLAS_RESTORE) {
-    const filas = backup.tablas[tabla];
-    if (!Array.isArray(filas) || filas.length === 0) {
-      resumen[tabla] = 0;
-      continue;
-    }
-
-    // Upsert en lotes de 500
-    let restaurados = 0;
-    for (let i = 0; i < filas.length; i += 500) {
-      const lote = filas.slice(i, i + 500).map(fila => ({ ...fila, cuenta_id: user.id }));
-      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}`, {
-        method: 'POST',
-        headers: h,
-        body: JSON.stringify(lote),
-      });
-      if (res.ok) {
-        restaurados += lote.length;
-      } else {
-        const errText = await res.text().catch(() => 'unknown');
-        errores.push(`${tabla} lote ${i}-${i + lote.length}: ${errText}`);
-      }
-    }
-    resumen[tabla] = restaurados;
-  }
-
-  // Un restore inserta números explícitos y no avanza las secuencias usadas por
-  // los RPCs. Repararlas al final evita colisiones en la siguiente operación.
-  let secuencias = null;
-  const sequenceRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/sync_sequences_after_restore`, {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/restaurar_respaldo_atomico`, {
     method: 'POST',
-    headers: h,
-    body: '{}',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_cuenta_id: user.id, p_tablas: tablas }),
   });
-  if (sequenceRes.ok) {
-    secuencias = await sequenceRes.json().catch(() => null);
-  } else {
-    const errText = await sequenceRes.text().catch(() => 'unknown');
-    errores.push(`secuencias: ${errText}`);
+  const text = await res.text();
+  let r = null;
+  try { r = text ? JSON.parse(text) : null; } catch { r = null; }
+  if (!res.ok || !r?.ok) {
+    const msg = r?.message || text || `HTTP ${res.status}`;
+    if (msg.includes('RESPALDO_CON_FILAS_DE_OTRA_EMPRESA')) {
+      return jsonError('El respaldo contiene datos de otra empresa. No se restauró nada.', 409, request);
+    }
+    return jsonError(`No se restauró nada (la operación se deshizo completa): ${msg}`, 400, request);
   }
-
-  return json({
-    ok: errores.length === 0,
-    resumen,
-    secuencias: secuencias || undefined,
-    errores: errores.length > 0 ? errores : undefined,
-    advertencia: errores.length > 0 ? `Restore parcial: ${errores.length} lote(s) fallaron` : undefined,
-  }, 200, request);
+  return json({ ok: true, resumen: r.resumen, secuencias: r.secuencias }, 200, request);
 }
 
 async function getExistingColumns(env, cuentaId) {
@@ -625,8 +785,122 @@ export async function handleDesignacion(request, env, url) {
   let body;
   try { body = await request.json(); } catch { body = {}; }
 
-  // POST: designar (upsert por cuenta+fecha)
+  // POST: designar (individual o lote mensual de sábados OP-2026-036)
   if (request.method === 'POST') {
+    const supaHeaders = {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    };
+
+    // ── Modo lote mensual de sábados (OP-2026-036) ──
+    if (Array.isArray(body?.cambios)) {
+      const validacion = validarLoteDesignaciones(body.cambios, { hoyISO: getFechaCaracasISO() });
+      if (!validacion.ok) {
+        return jsonError(validacion.error, 400, request);
+      }
+
+      const cambios = validacion.cambios;
+      const idsSolicitados = [...new Set(cambios.map(c => c.designado_id).filter(Boolean))];
+      const vendedoresPorId = new Map();
+
+      // Guardarraíl: pre-validar TODOS los vendedores antes de tocar ninguna fecha
+      if (idsSolicitados.length > 0) {
+        const disRes = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/usuarios?id=in.(${idsSolicitados.join(',')})&activo=eq.true&cuenta_id=eq.${user.id}&rol=in.(vendedor,supervisor)&es_externo=is.false&select=id,nombre,color,rol`,
+          { headers: supaHeaders }
+        );
+        if (!disRes.ok) return jsonError('Error al validar los vendedores designados', 500, request);
+        const dis = await disRes.json();
+        for (const u of (Array.isArray(dis) ? dis : [])) {
+          vendedoresPorId.set(u.id, u);
+        }
+        for (const id of idsSolicitados) {
+          if (!vendedoresPorId.has(id)) {
+            return jsonError('El designado debe ser un vendedor o supervisor activo (no externo) de esta cuenta', 400, request);
+          }
+        }
+      }
+
+      const actualizadas = [];
+      const eliminadas = [];
+
+      const paraAsignar = cambios.filter(c => Boolean(c.designado_id));
+      const paraQuitar = cambios.filter(c => !c.designado_id);
+
+      // 1) Upsert en un solo bloque atómico (1 viaje a Supabase en vez de N)
+      if (paraAsignar.length > 0) {
+        const filasUpsert = paraAsignar.map(item => ({
+          cuenta_id: user.id,
+          fecha: item.fecha,
+          designado_id: item.designado_id,
+          creado_por: user.operator_id || user.id,
+        }));
+        const res = await fetch(`${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?on_conflict=cuenta_id,fecha`, {
+          method: 'POST',
+          headers: {
+            ...supaHeaders,
+            'Content-Type': 'application/json',
+            Prefer: 'resolution=merge-duplicates,return=representation',
+          },
+          body: JSON.stringify(filasUpsert),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          const msg = text.includes('DESIGNADO_INVALIDO')
+            ? 'El designado debe ser un vendedor o supervisor activo (no externo)'
+            : (text || `Error ${res.status} al guardar el calendario de sábados`);
+          return jsonError(msg, res.status, request);
+        }
+        const rows = await res.json();
+        for (const row of (Array.isArray(rows) ? rows : [])) {
+          const vendedor = vendedoresPorId.get(row.designado_id);
+          actualizadas.push({ ...row, designado: vendedor || null });
+          try {
+            await registrarAuditoria(env, { ...supaHeaders, 'Content-Type': 'application/json' }, {
+              usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
+              categoria: 'COMISIONES', accion: 'DESIGNAR_VENDEDOR_DIA',
+              descripcion: `Designó a ${vendedor?.nombre || row.designado_id} como vendedor del día ${row.fecha}`,
+              entidadTipo: 'comision_designacion_diaria', entidadId: row?.id || row.fecha,
+              meta: { fecha: row.fecha, designado_id: row.designado_id, designado_nombre: vendedor?.nombre || null, rol_designado: vendedor?.rol || null, origen: 'calendario_mensual' },
+              ip: request.headers.get('CF-Connecting-IP') || null,
+            });
+          } catch { /* best-effort */ }
+        }
+      }
+
+      // 2) Borrado en un solo bloque atómico para sábados vaciados
+      if (paraQuitar.length > 0) {
+        const fechasQuitar = paraQuitar.map(item => item.fecha);
+        const res = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${user.id}&fecha=in.(${fechasQuitar.join(',')})`,
+          {
+            method: 'DELETE',
+            headers: { ...supaHeaders, Prefer: 'return=representation' },
+          }
+        );
+        if (!res.ok) {
+          return jsonError('Error al quitar las designaciones seleccionadas', res.status, request);
+        }
+        const rows = await res.json();
+        eliminadas.push(...fechasQuitar);
+        for (const row of (Array.isArray(rows) ? rows : [])) {
+          try {
+            await registrarAuditoria(env, { ...supaHeaders, 'Content-Type': 'application/json' }, {
+              usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
+              categoria: 'COMISIONES', accion: 'QUITAR_DESIGNACION_DIA',
+              descripcion: `Quitó la designación del día ${row.fecha}`,
+              entidadTipo: 'comision_designacion_diaria', entidadId: row.id,
+              meta: { fecha: row.fecha, designado_id: row.designado_id, origen: 'calendario_mensual' },
+              ip: request.headers.get('CF-Connecting-IP') || null,
+            });
+          } catch { /* best-effort */ }
+        }
+      }
+
+      return json({ ok: true, actualizadas, eliminadas }, 200, request);
+    }
+
+    // ── Modo individual (compatibilidad) ──
     const { fecha, designado_id: designadoId } = body || {};
     if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
       return jsonError('fecha inválida (formato YYYY-MM-DD)', 400, request);
@@ -634,22 +908,21 @@ export async function handleDesignacion(request, env, url) {
     if (!designadoId || !isValidUuid(String(designadoId))) {
       return jsonError('designado_id inválido', 400, request);
     }
-    // El designado debe ser vendedor o supervisor activo de la misma cuenta
+    // El designado debe ser vendedor o supervisor activo y NO externo de la misma cuenta
     const disRes = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${designadoId}&activo=eq.true&cuenta_id=eq.${user.id}&rol=in.(vendedor,supervisor)&select=id,nombre,rol`,
-      { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } }
+      `${env.SUPABASE_URL}/rest/v1/usuarios?id=eq.${designadoId}&activo=eq.true&cuenta_id=eq.${user.id}&rol=in.(vendedor,supervisor)&es_externo=is.false&select=id,nombre,color,rol`,
+      { headers: supaHeaders }
     );
     if (!disRes.ok) return jsonError('Error al validar el designado', 500, request);
     const dis = await disRes.json();
     if (!dis.length) {
-      return jsonError('El designado debe ser un vendedor o supervisor activo de esta cuenta', 400, request);
+      return jsonError('El designado debe ser un vendedor o supervisor activo (no externo) de esta cuenta', 400, request);
     }
 
     const res = await fetch(`${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?on_conflict=cuenta_id,fecha`, {
       method: 'POST',
       headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        ...supaHeaders,
         'Content-Type': 'application/json',
         Prefer: 'resolution=merge-duplicates,return=representation',
       },
@@ -663,14 +936,14 @@ export async function handleDesignacion(request, env, url) {
     if (!res.ok) {
       const text = await res.text();
       const msg = text.includes('DESIGNADO_INVALIDO')
-        ? 'El designado debe ser un vendedor o supervisor activo'
+        ? 'El designado debe ser un vendedor o supervisor activo (no externo)'
         : (text || `Error ${res.status}`);
       return jsonError(msg, res.status, request);
     }
     const [row] = await res.json();
 
     try {
-      await registrarAuditoria(env, { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' }, {
+      await registrarAuditoria(env, { ...supaHeaders, 'Content-Type': 'application/json' }, {
         usuarioId: user.operator_id || user.id, usuarioNombre: user.operator_nombre || 'Jefe', usuarioRol: rol,
         categoria: 'COMISIONES', accion: 'DESIGNAR_VENDEDOR_DIA',
         descripcion: `Designó a ${dis[0].nombre} como vendedor del día ${fecha}`,
@@ -680,7 +953,7 @@ export async function handleDesignacion(request, env, url) {
       });
     } catch { /* best-effort */ }
 
-    return json({ ok: true, designacion: row }, 200, request);
+    return json({ ok: true, designacion: { ...row, designado: dis[0] } }, 200, request);
   }
 
   // DELETE: quitar la designación de una fecha
@@ -688,6 +961,9 @@ export async function handleDesignacion(request, env, url) {
     const fecha = body?.fecha;
     if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
       return jsonError('fecha inválida (formato YYYY-MM-DD)', 400, request);
+    }
+    if (String(fecha) < getFechaCaracasISO()) {
+      return jsonError(`No se puede quitar la designación de una fecha pasada (${fecha})`, 400, request);
     }
     const res = await fetch(
       `${env.SUPABASE_URL}/rest/v1/comision_designacion_diaria?cuenta_id=eq.${user.id}&fecha=eq.${fecha}`,
@@ -761,6 +1037,15 @@ export async function handleResetOperacional(request, env) {
     await supaDelete(env, 'comisiones', user.id, logStep);
     logStep('Eliminando cuentas_por_cobrar...');
     await supaDelete(env, 'cuentas_por_cobrar', user.id, logStep);
+    const despachosTenant = await supaQuery(env, 'notas_despacho', `?cuenta_id=eq.${user.id}&select=id&limit=10000`).catch(() => []);
+    const despachoIdsReset = Array.isArray(despachosTenant) ? despachosTenant.map(d => d.id).filter(Boolean) : [];
+    for (let i = 0; i < despachoIdsReset.length; i += 150) {
+      const chunk = despachoIdsReset.slice(i, i + 150).join(',');
+      const delHeaders = { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` };
+      await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devolucion_intercambios?despacho_id=in.(${chunk})`, { method: 'DELETE', headers: delHeaders });
+      await fetch(`${env.SUPABASE_URL}/rest/v1/despacho_devoluciones?despacho_id=in.(${chunk})`, { method: 'DELETE', headers: delHeaders });
+      await fetch(`${env.SUPABASE_URL}/rest/v1/cliente_prestamos?despacho_id=in.(${chunk})`, { method: 'DELETE', headers: delHeaders });
+    }
     logStep('Eliminando notas_despacho_items...');
     await supaDelete(env, 'notas_despacho_items', user.id, logStep);
     logStep('Eliminando notas_despacho...');
@@ -849,6 +1134,167 @@ export async function handleTesterClearAll(request, env) {
   } catch (e) {
     logStep(`✗ ERROR: ${e.message}`);
     return json({ ok: false, error: e.message, log }, 500, request);
+  }
+}
+
+export async function handleTesterCleanupFixtures(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonError('Server misconfigured', 500, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers } = v;
+  if (operador.rol !== 'desarrollador') {
+    return jsonError('Solo el rol desarrollador puede limpiar fixtures del Tester', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+  const idempotencyKey = body?.idempotencyKey || request.headers.get('Idempotency-Key');
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
+
+  const normalizeIds = (value, field) => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.length > 20) {
+      throw new Error(`${field} debe ser un arreglo de máximo 20 UUIDs`);
+    }
+    const ids = [...new Set(value)];
+    if (ids.some(id => !isValidUuid(id))) throw new Error(`${field} contiene un UUID inválido`);
+    return ids;
+  };
+
+  let clienteIds;
+  let loteIds;
+  let transportistaIds;
+  let productoIds;
+  let prestamoIds;
+  try {
+    clienteIds = normalizeIds(body?.clienteIds, 'clienteIds');
+    loteIds = normalizeIds(body?.loteIds, 'loteIds');
+    transportistaIds = normalizeIds(body?.transportistaIds, 'transportistaIds');
+    productoIds = normalizeIds(body?.productoIds, 'productoIds');
+    prestamoIds = normalizeIds(body?.prestamoIds, 'prestamoIds');
+  } catch (error) {
+    return jsonError(error.message, 400, request);
+  }
+
+  if (clienteIds.length === 0 && loteIds.length === 0 && transportistaIds.length === 0 && productoIds.length === 0 && prestamoIds.length === 0) {
+    return json({ ok: true, idempotency_key: idempotencyKey, deleted: 0, deactivated: 0 }, 200, request);
+  }
+
+  const accountId = user.id;
+  const TEST_CLIENT_RIF = 'J-88888888-0';
+  const TEST_TRANSPORTISTA_NAME = 'Transportista Determinista Test';
+  const TEST_MOVEMENT_MOTIVE = 'Ajuste de inventario por tester determinista';
+  const TEST_PRODUCT_PREFIX_RE = /^(TEST-|E2E-)/;
+  const rest = async (table, query, method = 'GET', payload = undefined) => {
+    const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}${query}`, {
+      method,
+      headers: {
+        ...headers,
+        ...(method === 'GET' ? {} : { Prefer: 'return=representation' }),
+      },
+      ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+    });
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!response.ok) {
+      const detail = typeof data === 'string' ? data : data?.message || data?.hint || JSON.stringify(data);
+      const error = new Error(`${method} ${table} falló (${response.status}): ${detail}`);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  };
+
+  const result = {
+    ok: true,
+    idempotency_key: idempotencyKey,
+    clientes_procesados: 0,
+    prestamos_eliminados: 0,
+    cxc_eliminadas: 0,
+    reasignaciones_eliminadas: 0,
+    lotes_procesados: 0,
+    movimientos_eliminados: 0,
+    transportistas_procesados: 0,
+    transportistas_desactivados: 0,
+    productos_eliminados: 0,
+  };
+
+  try {
+    for (const prestamoId of prestamoIds) {
+      const lpRows = await rest('cliente_prestamos', `?id=eq.${prestamoId}&select=id,cliente_id`);
+      const lp = Array.isArray(lpRows) ? lpRows[0] : null;
+      if (!lp) continue;
+      const clRows = await rest('clientes', `?id=eq.${lp.cliente_id}&cuenta_id=eq.${accountId}&select=id,rif_cedula`);
+      const cl = Array.isArray(clRows) ? clRows[0] : null;
+      if (!cl || cl.rif_cedula !== TEST_CLIENT_RIF) {
+        return jsonError('El préstamo no coincide con el fixture determinista', 409, request);
+      }
+      await rest('cliente_prestamos', `?id=eq.${prestamoId}&select=id`, 'DELETE');
+      result.prestamos_eliminados += 1;
+    }
+    for (const productoId of productoIds) {
+      const rows = await rest('productos', `?id=eq.${productoId}&cuenta_id=eq.${accountId}&select=id,codigo`);
+      const prod = Array.isArray(rows) ? rows[0] : null;
+      if (!prod) continue;
+      if (!TEST_PRODUCT_PREFIX_RE.test(String(prod.codigo || ''))) {
+        return jsonError('El producto no coincide con un fixture de pruebas (TEST-/E2E-)', 409, request);
+      }
+      const movsDel = await rest('inventario_movimientos', `?cuenta_id=eq.${accountId}&producto_id=eq.${productoId}&select=id`, 'DELETE');
+      await rest('productos', `?id=eq.${productoId}&cuenta_id=eq.${accountId}&select=id`, 'DELETE');
+      result.productos_eliminados += 1;
+      result.movimientos_eliminados += Array.isArray(movsDel) ? movsDel.length : 0;
+    }
+    for (const clienteId of clienteIds) {
+      const rows = await rest('clientes', `?id=eq.${clienteId}&cuenta_id=eq.${accountId}&select=id,nombre,rif_cedula`);
+      const client = Array.isArray(rows) ? rows[0] : null;
+      if (!client) continue;
+      if (client.rif_cedula !== TEST_CLIENT_RIF) {
+        return jsonError('El cliente no coincide con el fixture determinista', 409, request);
+      }
+      const lpDel = await rest('cliente_prestamos', `?cliente_id=eq.${clienteId}&select=id`, 'DELETE');
+      const cxc = await rest('cuentas_por_cobrar', `?cliente_id=eq.${clienteId}&cuenta_id=eq.${accountId}&select=id`, 'DELETE');
+      const reasignaciones = await rest('reasignaciones_clientes', `?cliente_id=eq.${clienteId}&select=id`, 'DELETE');
+      await rest('clientes', `?id=eq.${clienteId}&cuenta_id=eq.${accountId}`, 'PATCH', {
+        activo: false,
+        saldo_pendiente: 0,
+        actualizado_en: new Date().toISOString(),
+      });
+      result.clientes_procesados += 1;
+      result.prestamos_eliminados += Array.isArray(lpDel) ? lpDel.length : 0;
+      result.cxc_eliminadas += Array.isArray(cxc) ? cxc.length : 0;
+      result.reasignaciones_eliminadas += Array.isArray(reasignaciones) ? reasignaciones.length : 0;
+    }
+
+    for (const loteId of loteIds) {
+      const movements = await rest('inventario_movimientos', `?cuenta_id=eq.${accountId}&lote_id=eq.${loteId}&select=id,motivo`);
+      if (!Array.isArray(movements) || movements.length === 0) continue;
+      if (movements.some(row => String(row.motivo || '').trim() !== TEST_MOVEMENT_MOTIVE)) {
+        return jsonError(`El lote ${loteId} no coincide con un movimiento del Tester`, 409, request);
+      }
+      const deleted = await rest('inventario_movimientos', `?cuenta_id=eq.${accountId}&lote_id=eq.${loteId}&select=id`, 'DELETE');
+      result.lotes_procesados += 1;
+      result.movimientos_eliminados += Array.isArray(deleted) ? deleted.length : movements.length;
+    }
+
+    for (const transportistaId of transportistaIds) {
+      const rows = await rest('transportistas', `?id=eq.${transportistaId}&cuenta_id=eq.${accountId}&select=id,nombre,activo`);
+      const transportista = Array.isArray(rows) ? rows[0] : null;
+      if (!transportista) continue;
+      if (transportista.nombre !== TEST_TRANSPORTISTA_NAME) {
+        return jsonError('El transportista no coincide con el fixture determinista', 409, request);
+      }
+      await rest('transportistas', `?id=eq.${transportistaId}&cuenta_id=eq.${accountId}`, 'PATCH', {
+        activo: false,
+        actualizado_en: new Date().toISOString(),
+      });
+      result.transportistas_procesados += 1;
+      if (transportista.activo !== false) result.transportistas_desactivados += 1;
+    }
+
+    return json({ ...result, cleanup_replay_safe: true }, 200, request);
+  } catch (error) {
+    return jsonError(error.message || 'Error al limpiar fixtures del Tester', error.status || 500, request);
   }
 }
 

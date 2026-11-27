@@ -22,7 +22,6 @@ import { INVENTARIO_KEY } from './useInventario'
 import { COTIZACIONES_KEY } from './useCotizaciones'
 import { COMISIONES_KEY } from './useComisiones'
 import { CXC_KEY } from './useCuentasCobrar'
-import { STOCK_COMPROMETIDO_KEY } from './useStockComprometido'
 
 function posponer(mensaje) {
   const err = new Error(mensaje)
@@ -125,7 +124,6 @@ export function useMutationQueue() {
         qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
         qc.invalidateQueries({ queryKey: COMISIONES_KEY })
         qc.invalidateQueries({ queryKey: COTIZACIONES_KEY })
-        qc.invalidateQueries({ queryKey: STOCK_COMPROMETIDO_KEY })
         qc.invalidateQueries({ queryKey: CXC_KEY })
         if (!silent) showToast(`${done} pendiente${done > 1 ? 's' : ''} subida${done > 1 ? 's' : ''} al sistema. Las cotizaciones quedan como borrador: ábrelas y pulsa Enviar.`, 'success', 8000)
       }

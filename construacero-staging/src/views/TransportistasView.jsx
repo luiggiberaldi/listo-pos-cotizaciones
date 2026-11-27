@@ -234,7 +234,7 @@ function TransportistaModal({ transportista = null, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-[calc(100vw-1.5rem)] sm:max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center">
             <Truck size={18} className="text-primary" />
@@ -535,9 +535,9 @@ export default function TransportistasView() {
           ? `${vehiculosActivos} vehículo${vehiculosActivos !== 1 ? 's' : ''} activo${vehiculosActivos !== 1 ? 's' : ''}`
           : isLoading ? 'Cargando...' : `${totalCount} visible${totalCount !== 1 ? 's' : ''}`}
         action={pestana !== 'choferes' ? null : (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 min-w-0">
             {/* Buscador optimizado */}
-            <div className="relative group">
+            <div className="relative group min-w-0">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-primary transition-colors">
                 <Truck size={14} className="opacity-50" />
               </div>
@@ -558,8 +558,8 @@ export default function TransportistasView() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <button onClick={() => refetch()} className="p-2 rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <button onClick={() => refetch()} className="p-2 min-h-9 min-w-9 flex items-center justify-center rounded-xl transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100">
                 <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
               </button>
               {(perfil?.rol === 'administracion' || perfil?.rol === 'jefe' || perfil?.rol === 'desarrollador') && (
@@ -567,25 +567,25 @@ export default function TransportistasView() {
                   <button 
                     onClick={() => exportarTransportistasPDF('print')}
                     disabled={imprimiendoPDF || exportandoPDF || isLoading}
-                    className="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
+                    className="flex items-center gap-1.5 sm:gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                   >
-                    <Printer size={16} />
+                    <Printer size={15} />
                     {imprimiendoPDF ? 'Imprimiendo...' : 'Imprimir'}
                   </button>
                   <button 
                     onClick={() => exportarTransportistasPDF('download')}
                     disabled={imprimiendoPDF || exportandoPDF || isLoading}
-                    className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
+                    className="flex items-center gap-1.5 sm:gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                   >
-                    <FileText size={16} />
+                    <FileText size={15} />
                     {exportandoPDF ? 'Generando...' : 'Descargar PDF'}
                   </button>
                 </>
               )}
               {puedeCrear && (
-                <button onClick={abrirNuevo} className="flex items-center gap-2 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-[0.98] whitespace-nowrap"
+                <button onClick={abrirNuevo} className="flex items-center gap-1.5 sm:gap-2 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] whitespace-nowrap"
                   style={{ background: 'linear-gradient(135deg, #1B365D, #B8860B)' }}>
-                  <Plus size={16} />Nuevo
+                  <Plus size={15} />Nuevo
                 </button>
               )}
             </div>

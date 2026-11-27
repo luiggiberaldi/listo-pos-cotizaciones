@@ -9,10 +9,10 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const stagingRoot = path.resolve(here, '..')
 const repoRoot = path.resolve(stagingRoot, '..')
 const AUDIT_PAGE_SIZE = 1000
-const EPSILON = 0.01
+const EPSILON = 0.001
 
-function round2(value) {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100
+function round4(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 10000) / 10000
 }
 
 function signedDelta(row) {
@@ -22,7 +22,7 @@ function signedDelta(row) {
 
 function numberOrNull(value) {
   const number = Number(value)
-  return Number.isFinite(number) ? round2(number) : null
+  return Number.isFinite(number) ? round4(number) : null
 }
 
 function classifyReason(row) {
@@ -95,8 +95,8 @@ export function auditKardex(products = [], movements = []) {
     const productAnomalies = []
 
     for (const row of chronological) {
-      const expectedNew = round2(Number(row.stock_anterior) + signedDelta(row))
-      const actualNew = round2(Number(row.stock_nuevo))
+      const expectedNew = round4(Number(row.stock_anterior) + signedDelta(row))
+      const actualNew = round4(Number(row.stock_nuevo))
       const internalMathError = compareNumber(expectedNew, actualNew)
       const continuityGap = previous && compareNumber(previous.stock_nuevo, row.stock_anterior)
       const missingRowProvenance = !row.cuenta_id || !row.usuario_id || !row.usuario_nombre || !row.motivo || !row.motivo_tipo
@@ -134,7 +134,7 @@ export function auditKardex(products = [], movements = []) {
           idempotency_key: row.idempotency_key || null,
           internal_math_error: internalMathError,
           continuity_gap: continuityGap,
-          continuity_delta: continuityGap ? round2(Number(row.stock_anterior) - Number(previous.stock_nuevo)) : 0,
+          continuity_delta: continuityGap ? round4(Number(row.stock_anterior) - Number(previous.stock_nuevo)) : 0,
           missing_provenance: missingRowProvenance,
           missing_structured_provenance: missingStructuredRowProvenance,
           previous_movement: previous ? {
@@ -168,7 +168,7 @@ export function auditKardex(products = [], movements = []) {
         reason_type: 'stock_actual_vs_kardex',
         stock_actual: stockCurrent,
         last_kardex_stock: lastKardexStock,
-        difference: round2(stockCurrent - lastKardexStock),
+        difference: round4(stockCurrent - lastKardexStock),
         internal_math_error: false,
         continuity_gap: false,
         missing_provenance: false,
@@ -327,15 +327,23 @@ export async function main() {
     tenantId = login.data.user?.id || null
   }
 
-  const [products, movements] = await Promise.all([
+  const [products, movements, loans] = await Promise.all([
     fetchAll(client, 'productos', 'id,codigo,nombre,stock_actual,cuenta_id,activo', 'id'),
     fetchAll(client, 'inventario_movimientos', 'id,numero,lote_id,producto_id,producto_nombre,tipo,cantidad,stock_anterior,stock_nuevo,motivo,motivo_tipo,usuario_id,usuario_nombre,usuario_color,cuenta_id,origen_tipo,origen_id,origen_referencia,idempotency_key,creado_en', 'id'),
+    fetchAll(client, 'cliente_prestamos', 'id,cliente_id,despacho_id,producto_id,cantidad_prestada,cantidad_devuelta,cantidad_facturada,estado', 'id').catch(() => []),
   ])
   const scopedProducts = tenantId ? products.filter(row => row.cuenta_id === tenantId) : products
   const scopedProductIds = new Set(scopedProducts.map(row => row.id))
   const scopedMovements = movements.filter(row => scopedProductIds.has(row.producto_id) && (!tenantId || row.cuenta_id === tenantId))
   const excludedMovements = movements.filter(row => !scopedProductIds.has(row.producto_id) || (tenantId && row.cuenta_id !== tenantId))
   const report = auditKardex(scopedProducts, scopedMovements)
+  const loanAnomalies = (loans || []).filter((l) => {
+    const p = Number(l.cantidad_prestada || 0)
+    const d = Number(l.cantidad_devuelta || 0)
+    const f = Number(l.cantidad_facturada || 0)
+    return d < -0.001 || f < -0.001 || (d + f) > p + 0.001 || (l.estado === 'devuelto' && (p - d - f) > 0.001)
+  })
+  report.loan_anomalies_total = loanAnomalies.length
   report.tenant_id = id8(tenantId)
   report.credentials_mode = config.serviceKey ? 'service_role_local' : 'authenticated_read_only'
   report.movements_fetched = movements.length
@@ -357,6 +365,7 @@ export async function main() {
     movementsExcludedMissingCurrentProduct: report.movements_excluded_missing_current_product,
     productsWithAnomalies: report.products_with_anomalies,
     anomalies: report.anomalies_total,
+    loanAnomalies: report.loan_anomalies_total,
     movementsMissingStructuredProvenance: report.movements_missing_structured_provenance,
     summaryByReason: report.summary_by_reason,
     jsonPath,

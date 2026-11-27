@@ -1,7 +1,7 @@
 // src/views/ProveedoresView.jsx
 // Vista principal del módulo de Proveedores y Cuentas por Pagar (CxP)
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Briefcase, Plus, Search, RefreshCw, X, LayoutGrid, List, Filter, ChevronDown, Check, AlertCircle, Trash2, ArrowUpCircle, ArrowDownCircle, PlusCircle, User, Hash, Phone, Mail, MapPin, StickyNote, Clock, Pencil } from 'lucide-react'
+import { Briefcase, Plus, Search, RefreshCw, X, Filter, ChevronDown, Check, AlertCircle, Trash2, ArrowUpCircle, ArrowDownCircle, PlusCircle, User, Hash, Phone, Mail, MapPin, StickyNote, Clock, Pencil } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useProveedores, useBorrarProveedor, useCuentasPorPagar, useRegistrarTransaccionCxP, useActualizarTransaccionCxP } from '../hooks/useProveedores'
 import ProveedorForm from '../components/proveedores/ProveedorForm'
@@ -584,7 +584,7 @@ function ProveedorCard({ proveedor, onEditar, onBorrar, onVerFicha }) {
         
         <button
           onClick={e => { e.stopPropagation(); onEditar(proveedor) }}
-          className="text-xs font-bold text-slate-400 hover:text-slate-800 transition-colors p-1"
+          className="inline-flex items-center min-h-9 px-3 py-1.5 rounded-lg bg-slate-100/80 hover:bg-slate-200/80 text-xs font-bold text-slate-600 hover:text-slate-900 transition-colors"
         >
           Editar
         </button>

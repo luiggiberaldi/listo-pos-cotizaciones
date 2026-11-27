@@ -8,6 +8,7 @@ export function evaluateKardexReport(report) {
     project_ref: report?.project_ref === STAGING_PROJECT_REF,
     read_only: report?.read_only === true,
     anomalies: Number(report?.anomalies_total || 0) === 0,
+    loan_anomalies: Number(report?.loan_anomalies_total || 0) === 0,
     products_with_anomalies: Number(report?.products_with_anomalies || 0) === 0,
     structured_provenance: Number(report?.movements_missing_structured_provenance || 0) === 0,
   }

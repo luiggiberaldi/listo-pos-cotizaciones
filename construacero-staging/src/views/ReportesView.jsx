@@ -154,7 +154,7 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = fals
           </div>
         </div>
         <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-slate-900 relative z-10 truncate">{value}</p>
-        {sub && <p className="text-[11px] sm:text-xs relative z-10 truncate text-slate-400">{sub}</p>}
+        {sub && <p className="text-[11px] sm:text-xs relative z-10 leading-snug line-clamp-2 text-slate-400">{sub}</p>}
       </div>
     )
   }
@@ -173,7 +173,7 @@ function KpiCard({ icon: Icon, label, value, sub, gradient, border, light = fals
         </div>
       </div>
       <p className="text-base sm:text-xl md:text-2xl font-black leading-tight text-white relative z-10 truncate">{value}</p>
-      {sub && <p className="text-[11px] sm:text-xs relative z-10 truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
+      {sub && <p className="text-[11px] sm:text-xs relative z-10 leading-snug line-clamp-2" style={{ color: 'rgba(255,255,255,0.4)' }}>{sub}</p>}
     </div>
   )
 }
@@ -1256,10 +1256,10 @@ function TabComisiones({ configNeg }) {
         rango={rango}
         onCambiarRango={setRango}
         filtros={(
-<div className="flex flex-wrap items-end gap-3">
-<div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3 w-full min-w-0">
+            <div className="flex flex-wrap items-end gap-3 w-full sm:w-auto min-w-0">
               {esAdmin && (
-                <div className="w-full sm:w-52">
+                <div className="w-full sm:w-52 min-w-0">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Vendedor</label>
                   <CustomSelect
                     options={[
@@ -1273,7 +1273,7 @@ function TabComisiones({ configNeg }) {
                 </div>
               )}
 
-              <div className="w-44">
+              <div className="w-full sm:w-44 min-w-0">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block tracking-wider">Formato Reporte</label>
                 <div className="flex p-0.5 bg-slate-100/80 rounded-xl h-9">
                   <button
@@ -1289,31 +1289,32 @@ function TabComisiones({ configNeg }) {
                 </div>
               </div>
             </div>
-<div className="flex w-full sm:w-auto sm:ml-auto self-end">
-<div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold h-9 flex-1 sm:flex-none min-w-0">
+            <div className="flex w-full sm:w-auto sm:ml-auto self-end min-w-0">
+              <div className="flex flex-wrap sm:flex-nowrap items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold min-h-9 flex-1 sm:flex-none min-w-0">
                 <button
                   type="button"
                   onClick={() => setTipoTasaComision('euro')}
-                  className={`flex-1 sm:flex-none justify-center px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 sm:flex-none justify-center px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg transition-all flex items-center gap-1 min-w-0 ${tipoTasaComision === 'euro' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Calcular comisiones con tasa Euro Oficial BCV"
                 >
                   <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">€</span>
                   <span className="hidden sm:inline">Euro BCV:</span>
-                  <b>{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
+                  <span className="sm:hidden">Euro:</span>
+                  <b className="truncate">{tasaEuro?.precio > 0 ? fmtBs(tasaEuro.precio) : 'N/D'}</b>
                 </button>
                 <button
                   type="button"
                   onClick={() => setTipoTasaComision('usdt')}
-                  className={`flex-1 sm:flex-none justify-center px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 sm:flex-none justify-center px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg transition-all flex items-center gap-1 min-w-0 ${tipoTasaComision === 'usdt' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Calcular comisiones con tasa USDT (Binance P2P)"
                 >
                   <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black shrink-0 font-mono">₮</span>
-                  <span className="hidden sm:inline">USDT:</span>
-                  <b>{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
+                  <span>USDT:</span>
+                  <b className="truncate">{tasaUsdt?.precio > 0 ? fmtBs(tasaUsdt.precio) : 'N/D'}</b>
                 </button>
               </div>
-</div>
-</div>
+            </div>
+          </div>
         )}
         opciones={filtroVendedor
           ? [{ id: 'todos', label: 'del vendedor', icon: FileText }]
@@ -1706,6 +1707,8 @@ function TabCredito() {
   const kpis = cxcData?.kpis || { totalDeuda: 0, numClientesConDeuda: 0, promedioDeuda: 0, diasMasAntiguo: 0, numCargos: 0 }
   const clientesConDeuda = cxcData?.clientesConDeuda || []
   const aging = cxcData?.aging || []
+  // OP-2026-042: clientes cuyos abonos superan sus cargos (antes no se veían)
+  const clientesPagadoDeMas = cxcData?.clientesPagadoDeMas || []
   const alertasVencimiento = cxcData?.alertasVencimiento || []
   const abonos = cxcData?.abonos || []
 
@@ -1784,10 +1787,10 @@ function TabCredito() {
           </div>
           <div className="space-y-2">
             {alertasVencimiento.map(alerta => (
-              <div key={alerta.id} className="flex items-center justify-between bg-white border border-orange-100 rounded-lg p-2.5">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="text-xs font-bold text-slate-800">{alerta.cliente_nombre}</div>
+              <div key={alerta.id} className="flex items-center justify-between gap-2 min-w-0 bg-white border border-orange-100 rounded-lg p-2.5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="text-xs font-bold text-slate-800 truncate">{alerta.cliente_nombre}</div>
                     {alerta.metodo_pago === 'cod' && (
                       <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-1.5 py-0.5 rounded uppercase border border-blue-200 shrink-0">
                         COD
@@ -1798,7 +1801,7 @@ function TabCredito() {
                     Cargo: {new Date(alerta.creado_en).toLocaleDateString()}
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <div className="text-xs font-black text-orange-600">
                     {fmtUsd(alerta.saldo_usd)}
                   </div>
@@ -1852,7 +1855,7 @@ function TabCredito() {
       </div>
 
       {/* Selector de Sección: CxC Clientes vs CxP Proveedores */}
-      <div className="flex p-0.5 bg-slate-100/80 rounded-xl max-w-md h-9">
+      <div className="flex p-0.5 bg-slate-100/80 rounded-xl w-full max-w-md min-h-10">
         <button
           onClick={() => setSeccionCredito('cxc')}
           className={`flex-1 text-xs font-bold rounded-lg transition-all ${seccionCredito === 'cxc' ? 'bg-white shadow-md text-primary font-black' : 'text-slate-500 hover:text-slate-700'}`}
@@ -1871,6 +1874,37 @@ function TabCredito() {
         <>
           {/* Aging con barras */}
           <AgingBars aging={aging} />
+
+          {/* OP-2026-042 (falla G3): pagos de más que no corresponden a ninguna deuda */}
+          {clientesPagadoDeMas.length > 0 && (
+            <details className="bg-amber-50 border border-amber-200 rounded-xl sm:rounded-2xl overflow-hidden" data-testid="cxc-pagado-de-mas">
+              <summary className="px-4 py-3 cursor-pointer select-none flex items-center gap-2">
+                <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                <span className="text-xs sm:text-sm font-black text-amber-900">Pagos de más sin deuda</span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">{clientesPagadoDeMas.length}</span>
+                <span className="ml-auto text-xs sm:text-sm font-black text-amber-900">{fmtUsd(kpis.totalPagadoDeMas || 0)}</span>
+              </summary>
+              <div className="px-4 pb-3 space-y-2">
+                <p className="text-[11px] text-amber-800 leading-snug">
+                  Estos clientes tienen registrados más pagos que deudas. El sistema no lo muestra como deuda ni como saldo a favor,
+                  pero si vuelven a comprar a crédito, ese exceso se descontará solo de la nueva deuda. Revisa cada caso con administración.
+                </p>
+                <div className="divide-y divide-amber-100 bg-white rounded-lg border border-amber-100">
+                  {clientesPagadoDeMas.map(c => (
+                    <div key={c.id} className="flex items-center gap-3 px-3 py-2 text-xs">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-800 truncate">{c.nombre}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {c.vendedor?.nombre ? `${c.vendedor.nombre} · ` : ''}Deudas {fmtUsd(c.cargos)} · Pagos {fmtUsd(c.abonos)}
+                        </p>
+                      </div>
+                      <span className="font-black text-amber-700 shrink-0">{fmtUsd(c.pagadoDeMas)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </details>
+          )}
 
           {/* Tabla de clientes mejorada */}
           <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden">
@@ -2209,7 +2243,7 @@ function TabCredito() {
           </div>
 
           {/* Footer resumen */}
-          <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+          <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
             <span className="text-[10px] text-slate-400">{proveedoresConDeuda.length} proveedor{proveedoresConDeuda.length !== 1 ? 'es' : ''} con saldo pendiente</span>
             <span className="text-xs font-black text-purple-600">
               Total por pagar: {fmtUsd(totalCxP)}

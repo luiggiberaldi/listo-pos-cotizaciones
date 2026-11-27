@@ -32,7 +32,7 @@ export const ACCIONES = {
     supervisor: {
       label: 'Anular cotización',
       confirmTitle: '¿Anular esta cotización?',
-      confirmMessage: 'Quedará anulada permanentemente. Si tiene stock comprometido, se liberará.',
+      confirmMessage: 'Quedará anulada permanentemente.',
       confirmText: 'Sí, anular',
       variant: 'danger',
     },

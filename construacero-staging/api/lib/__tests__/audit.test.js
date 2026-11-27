@@ -87,6 +87,25 @@ describe('registrarAuditoria — sin fallos silenciosos', () => {
     expect(avisos()).toContain('ACCION_PRUEBA')
   })
 
+  it('OP-2026-050: anotación rechazada → se rescata como SISTEMA con la categoría original en meta', async () => {
+    const cuerpos = []
+    stubFetch((url, init) => {
+      const b = JSON.parse(init.body)
+      cuerpos.push(b)
+      if (b.categoria === 'DESPACHO') return Promise.resolve(respuesta(400, 'invalid input value for enum categoria_auditoria: "DESPACHO"'))
+      return Promise.resolve(respuesta(201, ''))
+    })
+
+    const res = await registrarAuditoria(ENV, {}, { ...DATOS, categoria: 'DESPACHO', accion: 'DEVOLUCION_PARCIAL', meta: { despacho: 'D-1' } })
+
+    expect(res.status).toBe(400)
+    expect(cuerpos).toHaveLength(2)
+    expect(cuerpos[1]).toMatchObject({ categoria: 'SISTEMA', accion: 'DEVOLUCION_PARCIAL' })
+    expect(cuerpos[1].meta).toMatchObject({ despacho: 'D-1', categoria_original: 'DESPACHO' })
+    expect(cuerpos[1].descripcion).toContain('[Categoría DESPACHO rechazada]')
+    expect(avisos()).toContain('guardada como SISTEMA')
+  })
+
   it('error de red: no lanza excepción y deja aviso', async () => {
     stubFetch((url) => {
       if (url.includes('/rest/v1/system_logs')) return Promise.resolve(respuesta(201, ''))

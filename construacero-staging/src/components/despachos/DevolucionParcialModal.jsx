@@ -7,6 +7,10 @@ import { useDevolucionParcialDespacho } from '../../hooks/useDespachos'
 import { useInventario } from '../../hooks/useInventario'
 import ProductoAutocomplete from '../cotizaciones/ProductoAutocomplete'
 import { showToast } from '../ui/Toast'
+import { authFetch } from '../../services/authFetch'
+import useAuthStore from '../../store/useAuthStore'
+import { valorDevolucionAcreditable } from '../../utils/donacionDevolucion'
+import { crearGeneradorClaveIdempotente } from '../../utils/idempotencyKey'
 
 // Métodos permitidos para cobrar la diferencia. Se excluyen 'Donación' y
 // 'Cta por cobrar': no cobrar ya deja el cargo completo como deuda en CxC.
@@ -40,6 +44,14 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const [deudaDespacho, setDeudaDespacho] = useState(null)
   // Guardarraíl: confirmación explícita del reembolso (doble beneficio o monto grande)
   const [confirmarReembolso, setConfirmarReembolso] = useState(false)
+  // OP-2026-042: vista previa del servidor (mismo reparto que CxC) y abono a anular
+  const [previewCxc, setPreviewCxc] = useState(null)
+  const [abonoAnularId, setAbonoAnularId] = useState('')
+  // OP-2026-054 (N2): lo donado que se devuelve no da crédito, salvo autorización con motivo
+  const [acreditarDonacion, setAcreditarDonacion] = useState(false)
+  const [motivoDonacion, setMotivoDonacion] = useState('')
+  const rolActual = useAuthStore(s => s.perfil?.rol)
+  const puedeAutorizarDonacion = ['administracion', 'jefe', 'desarrollador'].includes(rolActual)
 
   const lastValuesRef = useRef({})
   const mutation = useDevolucionParcialDespacho()
@@ -67,8 +79,20 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
         setClienteInfo(clRes.data)
       }
 
-      // Deuda a nivel despacho: Σ cargo − Σ abono (misma fórmula de la RPC). Si falla, degrada a null.
-      if (cxcRes && !cxcRes.error && Array.isArray(cxcRes.data)) {
+      // OP-2026-042: la deuda del despacho se pide al servidor, que usa el MISMO
+      // reparto que la pantalla de CxC y la RPC (incluye abonos sin enlace).
+      let preview = null
+      try {
+        const pr = await authFetch(`/api/despachos/devolucion-preview-cxc?despachoId=${despacho.id}`)
+        if (pr.ok) preview = await pr.json()
+      } catch (e) {
+        console.warn('[DEVOLUCION_MODAL] Vista previa CxC no disponible:', e?.message)
+      }
+      setPreviewCxc(preview)
+      if (preview && Number.isFinite(Number(preview.pendienteDespacho))) {
+        setDeudaDespacho(Math.round(Number(preview.pendienteDespacho) * 100) / 100)
+      } else if (cxcRes && !cxcRes.error && Array.isArray(cxcRes.data)) {
+        // Respaldo (regla vieja: solo movimientos enlazados) si el servidor no respondió
         const deuda = cxcRes.data.reduce(
           (s, c) => s + (c.tipo === 'cargo' ? (Number(c.monto_usd) || 0) : -(Number(c.monto_usd) || 0)), 0
         )
@@ -96,17 +120,36 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
         const maxReturnable = Number(item.cantidad) - alreadyReturned
         return {
           ...item,
+          es_prestamo: !!item.es_prestamo,
           alreadyReturned,
-          maxReturnable: Math.max(0, maxReturnable),
+          maxReturnable: item.es_prestamo ? 0 : Math.max(0, maxReturnable),
           cantidad_devolver: '',
           selected: false,
           es_intercambio: false
         }
       })
 
-      const mappedExchangeItems = exchangePrevData.map(item => {
+      // N31: consolidar múltiples intercambios previos del mismo producto
+      const exchangeAggMap = {}
+      exchangePrevData.forEach(item => {
+        if (!item.producto_id) return
+        const prev = exchangeAggMap[item.producto_id] || {
+          ...item,
+          cantidad: 0,
+          valorTotal: 0,
+        }
+        const qtyItem = Number(item.cantidad || 0)
+        prev.cantidad += qtyItem
+        prev.valorTotal += qtyItem * Number(item.precio_unit_usd || 0)
+        exchangeAggMap[item.producto_id] = prev
+      })
+
+      const mappedExchangeItems = Object.values(exchangeAggMap).map(item => {
         const alreadyReturned = returnedExchangeQtyMap[item.producto_id] || 0
         const maxReturnable = Number(item.cantidad) - alreadyReturned
+        const precioUnitPonderado = item.cantidad > 0
+          ? Math.round((item.valorTotal / item.cantidad) * 10000) / 10000
+          : Number(item.precio_unit_usd || 0)
         return {
           id: item.id,
           despacho_id: item.despacho_id,
@@ -115,8 +158,9 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
           codigo_snap: item.codigo_snap,
           unidad_snap: item.unidad_snap,
           cantidad: item.cantidad,
-          precio_unit_usd: item.precio_unit_usd,
+          precio_unit_usd: precioUnitPonderado,
           descuento_pct: 0,
+          es_prestamo: false,
           alreadyReturned,
           maxReturnable: Math.max(0, maxReturnable),
           cantidad_devolver: '',
@@ -149,14 +193,21 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
       setPagosReembolso([])
       setDeudaDespacho(null)
       setConfirmarReembolso(false)
+      setPreviewCxc(null)
+      setAbonoAnularId('')
       lastValuesRef.current = {}
+      idempotencyGenRef.current.reiniciar()
       fetchItemsAndDevoluciones()
     }
   }, [isOpen, despacho])
 
+  const idempotencyGenRef = useRef(null)
+  if (!idempotencyGenRef.current) idempotencyGenRef.current = crearGeneradorClaveIdempotente()
+
   const handleCheckboxChange = (id) => {
     setItemsList(prev => prev.map(item => {
       if (item.id === id) {
+        if (item.es_prestamo) return item
         const nextSelected = !item.selected
         const qty = nextSelected ? String(item.maxReturnable) : ''
         if (nextSelected) {
@@ -251,6 +302,11 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   }, 0)
 
   const roundedTotalDevolverUsd = Math.round(totalDevolverUsd * 100) / 100
+  // OP-2026-054: parte donada (misma regla que el servidor, src/utils/donacionDevolucion.js)
+  const donacionInfo = valorDevolucionAcreditable(totalDevolverUsd, despacho?.forma_pago_cliente || despacho?.forma_pago, { autorizado: acreditarDonacion })
+  const fraccionDonadaDespacho = valorDevolucionAcreditable(1, despacho?.forma_pago_cliente || despacho?.forma_pago).fraccion
+  const totalAcreditableUsd = donacionInfo.acreditable
+  const motivoDonacionValido = !acreditarDonacion || motivoDonacion.trim().length >= 10
 
   // Calcular el total de intercambio
   const totalIntercambioUsd = exchangeItems.reduce((sum, item) => {
@@ -260,17 +316,27 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   }, 0)
 
   const roundedTotalIntercambioUsd = Math.round(totalIntercambioUsd * 100) / 100
-  const balanceNetoUsd = Math.round((totalIntercambioUsd - totalDevolverUsd) * 100) / 100
+  const balanceNetoUsd = Math.round((totalIntercambioUsd - totalAcreditableUsd) * 100) / 100
+
+  // OP-2026-042: abonos manuales que ya cubren este despacho (p. ej. un "Cruce").
+  const abonosQueCubren = previewCxc?.abonosQueCubren || []
+  const mostrarAvisoCubierto = balanceNetoUsd < 0 && destinoSaldo === 'saldo_a_favor' && abonosQueCubren.length > 0
+  const abonoAnular = mostrarAvisoCubierto ? (abonosQueCubren.find(a => a.id === abonoAnularId && a.anulable) || null) : null
+  // Si el operador confirma que un abono era esta misma devolución, ese abono se
+  // anula y su parte vuelve a ser deuda del despacho (tope: el cargo del despacho).
+  const deudaParaCalculo = deudaDespacho == null ? null : (abonoAnular
+    ? Math.round(Math.min(Number(previewCxc?.cargoDespacho || 0), deudaDespacho + Number(abonoAnular.aplicado || 0)) * 100) / 100
+    : deudaDespacho)
 
   // Desglose del reintegro según la RPC: primero compensa la deuda del despacho
   // (abono), el excedente queda como saldo a favor (credito).
-  const aporteADeuda = balanceNetoUsd < 0 && deudaDespacho != null
-    ? Math.round(Math.min(Math.abs(balanceNetoUsd), Math.max(0, deudaDespacho)) * 100) / 100
+  const aporteADeuda = balanceNetoUsd < 0 && deudaParaCalculo != null
+    ? Math.round(Math.min(Math.abs(balanceNetoUsd), Math.max(0, deudaParaCalculo)) * 100) / 100
     : 0
   const saldoAFavorNuevo = balanceNetoUsd < 0
     ? Math.round((Math.abs(balanceNetoUsd) - aporteADeuda) * 100) / 100
     : 0
-  const deudaDespues = deudaDespacho != null ? Math.max(0, Math.round((deudaDespacho - aporteADeuda) * 100) / 100) : null
+  const deudaDespues = deudaParaCalculo != null ? Math.max(0, Math.round((deudaParaCalculo - aporteADeuda) * 100) / 100) : null
 
   // ─── Cobro de la diferencia (solo cuando el intercambio supera lo devuelto) ───
   const metodosPagoOriginal = useMemo(() => {
@@ -429,7 +495,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
     (aporteADeuda > 0 || montoAFavorUsd > UMBRAL_REEMBOLSO_GRANDE)
 
   const isFormValid = hasSelectedItems && allQtyValid && hasMotivo && confirmarKardex && allExchangeValid && cobroDiferenciaValido && reembolsoValido &&
-    (!requiereConfirmacionReembolso || confirmarReembolso)
+    (!requiereConfirmacionReembolso || confirmarReembolso) && motivoDonacionValido
 
   const handleConfirm = async () => {
     if (!isFormValid) return
@@ -444,42 +510,51 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
 
     const motivoFinal = motivoSelect === 'Otro' ? motivoText.trim() : motivoSelect
 
-    try {
-      await mutation.mutateAsync({
-        despachoId: despacho.id,
-        items: itemsPayload,
-        motivo: motivoFinal,
-        generarReemplazo,
-        exchangeItems: realizarIntercambio
-          ? exchangeItems.map(it => ({
-              producto_id: it.id,
-              cantidad: Number(it.cantidad),
-              precio_unit_usd: Number(it.precio_unit_usd)
+    const payloadEnvio = {
+      despachoId: despacho.id,
+      items: itemsPayload,
+      motivo: motivoFinal,
+      generarReemplazo,
+      exchangeItems: realizarIntercambio
+        ? exchangeItems.map(it => ({
+            producto_id: it.id,
+            cantidad: Number(it.cantidad),
+            precio_unit_usd: Number(it.precio_unit_usd)
+          }))
+        : [],
+      pagosDiferencia: balanceNetoUsd > 0
+        ? pagosDiferencia
+            .filter(p => METODOS_COBRO_DIFERENCIA.includes(p.metodo) && Number(p.monto) > 0)
+            .map(p => ({
+              metodo: p.metodo,
+              monto: Math.round(Number(p.monto) * 100) / 100,
+              referencia: String(p.referencia || '').trim() || null,
             }))
-          : [],
-        pagosDiferencia: balanceNetoUsd > 0
-          ? pagosDiferencia
-              .filter(p => METODOS_COBRO_DIFERENCIA.includes(p.metodo) && Number(p.monto) > 0)
-              .map(p => ({
-                metodo: p.metodo,
-                monto: Math.round(Number(p.monto) * 100) / 100,
-                referencia: String(p.referencia || '').trim() || null,
-              }))
-          : [],
-        destinoSaldo: balanceNetoUsd < 0 ? destinoSaldo : 'saldo_a_favor',
-        pagosReembolso: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso')
-          ? pagosReembolso
-              .filter(p => METODOS_REEMBOLSO.includes(p.metodo) && Number(p.monto) > 0)
-              .map(p => ({
-                metodo: p.metodo,
-                monto: Math.round(Number(p.monto) * 100) / 100,
-                referencia: String(p.referencia || '').trim() || null,
-              }))
-          : [],
-        reembolsoMetodo: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? pagosReembolso[0]?.metodo : null,
-        reembolsoReferencia: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? pagosReembolso[0]?.referencia : null,
-        reembolsoMonto: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? reembolsadoTotal : 0
-      })
+        : [],
+      destinoSaldo: balanceNetoUsd < 0 ? destinoSaldo : 'saldo_a_favor',
+      pagosReembolso: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso')
+        ? pagosReembolso
+            .filter(p => METODOS_REEMBOLSO.includes(p.metodo) && Number(p.monto) > 0)
+            .map(p => ({
+              metodo: p.metodo,
+              monto: Math.round(Number(p.monto) * 100) / 100,
+              referencia: String(p.referencia || '').trim() || null,
+            }))
+        : [],
+      reembolsoMetodo: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? pagosReembolso[0]?.metodo : null,
+      reembolsoReferencia: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? pagosReembolso[0]?.referencia : null,
+      reembolsoMonto: (balanceNetoUsd < 0 && destinoSaldo === 'reembolso') ? reembolsadoTotal : 0,
+      // OP-2026-042: abono manual que el operador confirma que era esta devolución
+      anularAbonoId: abonoAnular ? abonoAnular.id : null,
+      // OP-2026-054: crédito por lo donado solo con autorización y motivo
+      acreditarDonacion: fraccionDonadaDespacho > 0 && acreditarDonacion,
+      motivoAcreditarDonacion: acreditarDonacion ? motivoDonacion.trim() : null,
+    }
+    const idempotencyKey = idempotencyGenRef.current.resolver(payloadEnvio)
+
+    try {
+      await mutation.mutateAsync({ ...payloadEnvio, idempotencyKey })
+      idempotencyGenRef.current.limpiar(payloadEnvio)
       onClose()
     } catch (err) {
       console.error('[DEVOLUCION_MODAL] Error al confirmar:', err)
@@ -541,7 +616,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
             <div className="p-2.5 rounded-lg border flex items-center gap-2 text-xs bg-amber-50 border-amber-200 text-amber-900 leading-tight">
               <AlertCircle size={16} className="shrink-0 text-amber-600" />
               <span>
-                Registra el retorno de mercancía entregada. Se reintegrará el stock y se calcularán los ajustes en CxC.
+                Registra la mercancía que el cliente devuelve. Vuelve al inventario y se descuenta de lo que el cliente debe.
               </span>
             </div>
 
@@ -561,15 +636,25 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 <div className="space-y-3">
                   <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 text-xs flex items-start gap-2">
                     <AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
-                    <div>
-                      <p className="font-bold">Despacho totalmente devuelto — venta anulada económicamente.</p>
-                      <p className="mt-0.5 text-[11px] opacity-80">
-                        {deudaDespacho != null && deudaDespacho > 0.009
-                          ? `La deuda de este despacho quedó en $${deudaDespacho.toFixed(2)} tras los ajustes de devolución. Si lo que buscas es revertir la entrega por completo (devolver stock y anular estos ajustes), usa "Reabrir despacho" desde la tarjeta.`
-                          : 'Todos los productos fueron devueltos y la CxC de este despacho quedó saldada. Para revertir la entrega por completo, usa "Reabrir despacho" desde la tarjeta.'}
-                      </p>
-                      <p className="mt-1 text-[11px] opacity-80">No hay unidades disponibles para registrar una nueva devolución.</p>
-                    </div>
+                    {(() => {
+                      // OP-2026-089: explicar al usuario por qué no puede devolver aquí (sin términos internos).
+                      const todosPrestamo = itemsList.length > 0 && itemsList.every(i => i.es_prestamo)
+                      const hayPrestamo = itemsList.some(i => i.es_prestamo)
+                      const [titulo, cuerpo] = todosPrestamo
+                        ? ['Este despacho no admite devolución parcial',
+                           'Todos sus artículos están en préstamo y los préstamos no se devuelven desde aquí. Entra a la ficha del cliente, pestaña "Préstamos", y usa "Devolver" (la mercancía vuelve al inventario).']
+                        : hayPrestamo
+                          ? ['No queda nada por devolver desde aquí',
+                             'Lo que no era préstamo ya fue devuelto. Los artículos en préstamo se devuelven desde la ficha del cliente, pestaña "Préstamos".']
+                          : ['Ya se devolvió todo lo de este despacho',
+                             'No queda mercancía por devolver. Si necesitas deshacer la entrega completa, usa "Reabrir despacho" en la tarjeta del despacho.']
+                      return (
+                        <div data-testid="devolucion-sin-unidades">
+                          <p className="font-bold">{titulo}</p>
+                          <p className="mt-0.5 text-[11px] opacity-80">{cuerpo}</p>
+                        </div>
+                      )
+                    })()}
                   </div>
                   {itemsList.length > 0 && (
                     <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50 opacity-75">
@@ -597,32 +682,42 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {itemsList.some(i => i.es_prestamo) && (
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800">
+                      Los productos marcados como <strong>PRÉSTAMO</strong> salen de almacén al despacharse y deben devolverse o facturarse desde la <strong>Ficha del Cliente</strong>, no por devolución parcial.
+                    </div>
+                  )}
                   {/* Ítems activos para devolución */}
                   <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50 shadow-xs">
-                    {itemsList.filter(i => i.maxReturnable > 0).map(item => {
+                    {itemsList.filter(i => i.es_prestamo || i.maxReturnable > 0).map(item => {
                       const priceAfterDiscount = Number(item.precio_unit_usd) * (1 - Number(item.descuento_pct || 0) / 100)
+                      const isLoan = !!item.es_prestamo
                       return (
                         <div
                           key={item.id}
-                          className={`py-2 px-3 flex items-center gap-3 transition-colors ${item.selected ? 'bg-amber-50/30' : 'bg-white'}`}
+                          className={`py-2 px-3 flex items-center gap-3 transition-colors ${isLoan ? 'bg-emerald-50/40 opacity-75' : item.selected ? 'bg-amber-50/30' : 'bg-white'}`}
                         >
                           <input
                             type="checkbox"
-                            checked={item.selected}
+                            disabled={isLoan}
+                            checked={!isLoan && item.selected}
                             onChange={() => handleCheckboxChange(item.id)}
-                            className="w-4 h-4 rounded text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer shrink-0"
+                            className="w-4 h-4 rounded text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 shrink-0"
                           />
 
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <p className="text-xs font-semibold text-slate-800 truncate leading-snug">{item.nombre_snap}</p>
+                              {isLoan && (
+                                <span className="px-1.5 py-0.2 text-[9px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded shrink-0">PRÉSTAMO (FICHA CLIENTE)</span>
+                              )}
                               {item.es_intercambio && (
                                 <span className="px-1.5 py-0.2 text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded shrink-0">INTERCAMBIO PREVIO</span>
                               )}
                             </div>
                             <div className="flex flex-wrap gap-x-2.5 text-[10px] text-slate-400 mt-0.5">
                               <span>Cód: {item.codigo_snap || 'N/A'}</span>
-                              <span>Precio: ${priceAfterDiscount.toFixed(2)}</span>
+                              {!isLoan && <span>Precio: ${priceAfterDiscount.toFixed(2)}</span>}
                               <span>Entregado: {Number(item.cantidad)} {item.unidad_snap}</span>
                               {item.alreadyReturned > 0 && (
                                 <span className="text-amber-700 font-medium">Devuelto previo: {item.alreadyReturned}</span>
@@ -630,6 +725,11 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                             </div>
                           </div>
 
+                          {isLoan ? (
+                            <span className="px-2 py-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 rounded-lg shrink-0">
+                              Solo desde Ficha Cliente
+                            </span>
+                          ) : (
                           <div className="flex flex-col items-end gap-1 shrink-0">
                             <div className="flex items-center gap-1.5">
                               <button
@@ -677,17 +777,18 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                               Máx: {item.maxReturnable} {item.unidad_snap}
                             </span>
                           </div>
+                          )}
                         </div>
                       )
                     })}
                   </div>
 
                   {/* Sección secundaria de ítems devueltos al 100% */}
-                  {itemsList.some(i => i.maxReturnable <= 0) && (
+                  {itemsList.some(i => !i.es_prestamo && i.maxReturnable <= 0) && (
                     <div className="pt-2 border-t border-slate-100">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Historial de productos devueltos al 100%</p>
                       <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50/60 opacity-80">
-                        {itemsList.filter(i => i.maxReturnable <= 0).map(item => (
+                        {itemsList.filter(i => !i.es_prestamo && i.maxReturnable <= 0).map(item => (
                           <div key={item.id} className="py-2 px-3 flex items-center justify-between gap-3 bg-white">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
@@ -881,6 +982,34 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 <span className="font-bold text-slate-800">${roundedTotalDevolverUsd.toFixed(2)} USD</span>
               </div>
               
+              {fraccionDonadaDespacho > 0 && (
+                <div data-testid="devolucion-donacion" className="rounded-xl border border-amber-300 bg-amber-50 p-2.5 space-y-2 text-xs text-amber-900">
+                  <p>
+                    <b>Este despacho fue {fraccionDonadaDespacho >= 0.9999 ? 'donado' : `donado en un ${Math.round(fraccionDonadaDespacho * 100)}%`}.</b>{' '}
+                    Lo devuelto vuelve al inventario, pero la parte donada no da crédito ni reembolso al cliente.
+                  </p>
+                  {!acreditarDonacion && donacionInfo.donado > 0 && (
+                    <div className="flex justify-between font-bold">
+                      <span>Parte donada (sin crédito)</span>
+                      <span data-testid="devolucion-donacion-sin-credito">-${donacionInfo.donado.toFixed(2)} USD</span>
+                    </div>
+                  )}
+                  {puedeAutorizarDonacion && (
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input type="checkbox" data-testid="devolucion-donacion-autorizar" checked={acreditarDonacion}
+                        onChange={e => setAcreditarDonacion(e.target.checked)} className="mt-0.5" />
+                      <span>Autorizo dar crédito por lo donado (queda en la auditoría)</span>
+                    </label>
+                  )}
+                  {acreditarDonacion && (
+                    <input type="text" data-testid="devolucion-donacion-motivo" value={motivoDonacion}
+                      onChange={e => setMotivoDonacion(e.target.value)}
+                      placeholder="Por qué se da crédito (mínimo 10 caracteres)"
+                      className="w-full px-2 py-1.5 rounded-lg border border-amber-300 bg-white text-xs" />
+                  )}
+                </div>
+              )}
+
               {realizarIntercambio && (
                 <div className="flex justify-between items-center text-slate-600">
                   <span>Subtotal Intercambio ({exchangeItems.length} {exchangeItems.length === 1 ? 'producto' : 'productos'})</span>
@@ -987,12 +1116,55 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                   </div>
                 </div>
 
+                {/* OP-2026-042 (falla G1): el crédito de este despacho ya lo cubrió un abono manual */}
+                {mostrarAvisoCubierto && (
+                  <div className="px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-950 leading-relaxed space-y-2" data-testid="devolucion-aviso-cubierto">
+                    <p className="font-bold flex items-start gap-1.5">
+                      <AlertCircle size={13} className="text-amber-600 shrink-0 mt-0.5" />
+                      <span>
+                        Lo que este despacho tenía a crédito ({`$${Number(previewCxc?.cargoDespacho || 0).toFixed(2)}`}) ya fue cubierto por {abonosQueCubren.length === 1 ? 'este abono' : 'estos abonos'}.
+                        ¿Alguno era por esta misma devolución?
+                      </span>
+                    </p>
+                    <div className="space-y-1.5">
+                      {abonosQueCubren.map(a => (
+                        <label key={a.id} className={`flex items-start gap-2 p-2 rounded-md border bg-white ${a.anulable ? 'cursor-pointer border-amber-200' : 'opacity-60 border-slate-200'}`}>
+                          <input
+                            type="radio"
+                            name="abonoAnular"
+                            className="mt-0.5"
+                            disabled={!a.anulable}
+                            checked={abonoAnularId === a.id}
+                            onChange={() => setAbonoAnularId(a.id)}
+                          />
+                          <span className="flex-1 min-w-0">
+                            <b>${Number(a.aplicado).toFixed(2)}</b>{Number(a.aplicado) < Number(a.monto_usd) - 0.005 ? ` (de un abono de $${Number(a.monto_usd).toFixed(2)})` : ''}
+                            {' · '}{a.creado_en ? new Date(a.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                            {a.referencia ? ` · Ref: ${a.referencia}` : ''}
+                            {a.descripcion ? <span className="block text-slate-500 truncate">{a.descripcion}</span> : null}
+                            {!a.anulable && <span className="block text-slate-500">No se puede anular desde aquí</span>}
+                          </span>
+                        </label>
+                      ))}
+                      <label className="flex items-start gap-2 p-2 rounded-md border border-amber-200 bg-white cursor-pointer">
+                        <input type="radio" name="abonoAnular" className="mt-0.5" checked={!abonoAnularId} onChange={() => setAbonoAnularId('')} />
+                        <span>No, ninguno era esta devolución: el dinero va completo a saldo a favor</span>
+                      </label>
+                    </div>
+                    {abonoAnular && (
+                      <p className="text-amber-800">
+                        Al confirmar, ese abono se anula y la devolución queda como el registro correcto. El sistema guarda una copia del abono anulado en la auditoría.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Vista previa del resultado (misma fórmula de la RPC) */}
                 <div className="px-3 py-2 rounded-lg bg-white border border-emerald-200 text-[11px] text-slate-700 leading-relaxed">
                   <span className="font-bold text-emerald-950 uppercase tracking-wide text-[9px] block mb-0.5">Resultado esperado</span>
                   {deudaDespues != null ? (
                     <>
-                      Deuda de este despacho: <b>${deudaDespacho.toFixed(2)}</b> → <b>${deudaDespues.toFixed(2)}</b>
+                      Deuda de este despacho: <b>${deudaParaCalculo.toFixed(2)}</b> → <b>${deudaDespues.toFixed(2)}</b>
                       {' · '}Saldo a favor: <b>${saldoAFavorNuevo.toFixed(2)}</b>
                       {destinoSaldo === 'reembolso' && montoAFavorUsd > 0 && (
                         <> · <b className="text-red-700">Sale efectivo: ${montoAFavorUsd.toFixed(2)}</b></>
