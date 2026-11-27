@@ -41,6 +41,7 @@ import PageHeader from '../components/ui/PageHeader'
 import ProductCard from '../components/shared/ProductCard'
 import CategoryPills from '../components/shared/CategoryPills'
 import { usePrecioVendedor } from '../hooks/usePrecioVendedor'
+import { useStockPorAprobar } from '../hooks/useStockPorAprobar'
 
 import { FORMAS_PAGO } from '../constants/formasPago'
 import { PREFIJOS_RIF, parsearRif as parsearRifVR, formatearRif as formatearRifVR } from '../utils/rif'
@@ -415,6 +416,7 @@ export default function VentaRapidaView() {
   const esSupervisor = (perfil?.rol === 'supervisor' || perfil?.rol === 'jefe')
   const navigate = useNavigate()
   const { data: clientes = [] } = useClientes()
+  const { data: stockPorAprobar = {} } = useStockPorAprobar()
   const { data: inventarioData } = useInventario({ pageSize: 1000 })
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
@@ -1099,6 +1101,7 @@ export default function VentaRapidaView() {
             setEditItemIdx={setEditItemIdx}
             esVendedorSinComision={esVendedorSinComision}
             togglePrestamo={togglePrestamo}
+            stockPorAprobar={stockPorAprobar}
           />
         )}
 
@@ -1329,6 +1332,7 @@ function Step1Productos({
   setEditItemIdx,
   esVendedorSinComision,
   togglePrestamo,
+  stockPorAprobar = {},
 }) {
   const { aplicarMarkup, esExterno } = usePrecioVendedor()
   const [sheetState, setSheetState] = useState('closed')
@@ -1635,6 +1639,7 @@ function Step1Productos({
                 agregado={added}
                 cantidad={itemInCart?.cantidad ?? null}
                 tasa={tasa}
+                porAprobar={stockPorAprobar[p.id] || 0}
                 onAgregar={agregarProducto}
                 onMas={() => cambiarCantidad(p.id, 1)}
                 onMenos={() => itemInCart.cantidad <= 1 ? quitarItem(p.id) : cambiarCantidad(p.id, -1)}
