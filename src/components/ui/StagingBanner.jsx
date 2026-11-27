@@ -45,7 +45,7 @@ export default function StagingBanner() {
         role="status"
         aria-live="polite"
         data-testid="staging-banner"
-        className="sticky top-0 z-[100] w-full bg-amber-400 text-slate-950 border-b-2 border-amber-600 shadow-md px-3 py-1.5 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 text-center"
+        className="sticky top-0 z-[100] w-full min-h-8 bg-amber-400 text-slate-950 border-b-2 border-amber-600 shadow-md px-3 py-1 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 text-center"
       >
         <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-black uppercase tracking-wider">
           <AlertTriangle size={14} className="shrink-0 text-amber-950" />
