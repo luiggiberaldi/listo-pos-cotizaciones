@@ -192,9 +192,7 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
     ? cxcData.kpis.totalDeuda
     : ((fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0))
 
-  const fpDonacion = data.find(fp => fp.formaPago === 'Donación')
-  const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0
-  const totalSaldoFavor = data.filter(fp => fp.formaPago === 'Saldo a favor').reduce((s, fp) => s + fp.totalUsd, 0)
+  const totalSaldoFavor = data.filter(fp => String(fp.formaPago || '').toLowerCase() === 'saldo a favor').reduce((s, fp) => s + fp.totalUsd, 0)
   const totalDeducciones = totalCxc + totalSaldoFavor
   const recaudacionDineroFresco = Math.max(0, total - totalDeducciones)
   const COLORS = {
@@ -534,8 +532,16 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
   const comisionCabilla2 = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionCabilla2 || 0), 0)
   const comisionCabilla3 = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionCabilla3 || 0), 0)
   const comisionOtros = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionOtros || 0), 0)
+  const totalComisionesSplit = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionSplit || 0), 0)
 
-  // 4. Recalcular Formas de Pago
+  // 3.5 Filtrar devoluciones por los vendedores del filtro
+  const filteredDevoluciones = (reporte.devoluciones || []).filter(dev => {
+    const vid = dev.vendedor_id || dev.asesor_id || 'unassigned'
+    return sellerIds.has(vid)
+  })
+  const totalDevoluciones = filteredDevoluciones.reduce((s, dev) => s + Number(dev.monto_usd || 0), 0)
+
+  // 4. Recalcular Formas de Pago (restando devoluciones igual que useReporteVentas)
   const formaPagoMap = {}
   filteredDespachos.forEach(d => {
     const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
@@ -577,6 +583,35 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
       })
     }
   })
+
+  filteredDevoluciones.forEach(dev => {
+    const montoDev = Number(dev.monto_usd || 0)
+    if (montoDev <= 0) return
+    let metodo = 'Reembolso'
+    if (Array.isArray(dev.forma_pago_abono) && dev.forma_pago_abono[0]?.metodo) {
+      metodo = dev.forma_pago_abono[0].metodo
+    } else if (typeof dev.forma_pago_abono === 'string' && dev.forma_pago_abono.trim()) {
+      try {
+        const parsed = JSON.parse(dev.forma_pago_abono)
+        if (Array.isArray(parsed) && parsed[0]?.metodo) metodo = parsed[0].metodo
+        else metodo = dev.forma_pago_abono.trim()
+      } catch {
+        metodo = dev.forma_pago_abono.trim()
+      }
+    }
+    if (!formaPagoMap[metodo]) formaPagoMap[metodo] = { formaPago: metodo, count: 0, totalUsd: 0, pagos: [] }
+    formaPagoMap[metodo].totalUsd -= montoDev
+    formaPagoMap[metodo].pagos.push({
+      cliente: `${dev.cliente_nombre || 'Sin cliente'} (Devolución)`,
+      numero: 'DEV',
+      monto: -montoDev,
+      tasa: null,
+      montoBs: null,
+      referencia: dev.referencia || null,
+      es_devolucion: true,
+    })
+  })
+
   const porFormaPago = Object.values(formaPagoMap).sort((a, b) => b.totalUsd - a.totalUsd)
 
   return {
@@ -585,9 +620,11 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
       totalVentas,
       totalFlete,
       totalDescuentos,
+      totalDevoluciones,
       numDespachos,
       ticketPromedio,
       totalComisiones,
+      totalComisionesSplit,
       comisionesPagadas,
       comisionesPendientes,
       comisionCabilla2,
@@ -601,6 +638,32 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
     porVendedor: filteredPorVendedor,
     porFormaPago,
     despachos: filteredDespachos,
+    devoluciones: filteredDevoluciones,
+  }
+}
+
+function filtrarCxcPorVendedores(cxcData, sellerIds, tipoFiltro) {
+  if (!cxcData || tipoFiltro === 'todos') return cxcData
+  const clientesFiltrados = (cxcData.clientesConDeuda || []).filter(c => {
+    const vid = c.vendedor?.id || 'unassigned'
+    return sellerIds.has(vid)
+  })
+  const clienteIds = new Set(clientesFiltrados.map(c => c.id))
+  const abonosFiltrados = (cxcData.abonos || []).filter(a => {
+    const vid = a.cliente?.vendedor_id || a.vendedor_id || null
+    if (vid) return sellerIds.has(vid)
+    return clienteIds.has(a.cliente_id || a.cliente?.id)
+  })
+  const totalDeuda = clientesFiltrados.reduce((s, c) => s + Number(c.saldo_pendiente || 0), 0)
+  return {
+    ...cxcData,
+    clientesConDeuda: clientesFiltrados,
+    abonos: abonosFiltrados,
+    kpis: {
+      ...(cxcData.kpis || {}),
+      totalDeuda,
+      numClientesConDeuda: clientesFiltrados.length,
+    },
   }
 }
 
@@ -639,6 +702,8 @@ function TabVentas({ configNeg }) {
       const { generarReporteVentasPDF } = await import('../services/pdf/comisionesPDF')
       
       const reporteFiltrado = filtrarReporteVentas(reporteFresco, tipoFiltro)
+      const sellerIdsFiltrados = new Set((reporteFiltrado.porVendedor || []).map(v => v.id))
+      const cxcParaPdf = filtrarCxcPorVendedores(cxcFresco, sellerIdsFiltrados, tipoFiltro)
 
       const reportePDF = {
         ...reporteFiltrado,
@@ -661,7 +726,7 @@ function TabVentas({ configNeg }) {
         rango, 
         config: configNeg, 
         action: accion === 'imprimir' ? 'print' : 'download',
-        cxcData: cxcFresco
+        cxcData: cxcParaPdf
       })
     } catch (e) {
       console.error('Error generando reporte de ventas:', e)
@@ -2079,12 +2144,22 @@ function TabCredito() {
         </section>
       )}
 
-      {vistaCredito === 'resumen' && esAdmin && alertasVencimiento.length > 0 && (
-        <button type="button" onClick={() => { setPaginaAlertas(1); setVistaCredito('alertas') }} className="flex w-full items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-left hover:bg-orange-100">
-          <span className="flex min-w-0 items-center gap-2"><AlertTriangle size={17} className="shrink-0 text-orange-600" /><span className="truncate text-xs font-bold text-orange-900">{alertasVencimiento.length} alertas de vencimiento · {alertasVencimiento.filter(alerta => alerta.diasRestantes < 0).length} vencidas</span></span>
-          <span className="shrink-0 text-xs font-bold text-orange-800">Ver alertas →</span>
-        </button>
-      )}
+      {vistaCredito === 'resumen' && esAdmin && alertasVencimiento.length > 0 && (() => {
+        const clientesEnAlerta = new Set(alertasVencimiento.map(a => a.cliente_id || a.cliente_nombre)).size
+        const notasVencidas = alertasVencimiento.filter(alerta => alerta.diasRestantes < 0).length
+        const montoAlertas = alertasVencimiento.reduce((s, a) => s + Number(a.saldo_usd || 0), 0)
+        return (
+          <button type="button" onClick={() => { setPaginaAlertas(1); setVistaCredito('alertas') }} className="flex w-full items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-left hover:bg-orange-100">
+            <span className="flex min-w-0 items-center gap-2">
+              <AlertTriangle size={17} className="shrink-0 text-orange-600" />
+              <span className="truncate text-xs font-bold text-orange-900">
+                {alertasVencimiento.length} notas en alerta (de {clientesEnAlerta} {clientesEnAlerta === 1 ? 'cliente' : 'clientes'}) · {notasVencidas} vencidas · {fmtUsd(montoAlertas)}
+              </span>
+            </span>
+            <span className="shrink-0 text-xs font-bold text-orange-800">Ver alertas →</span>
+          </button>
+        )
+      })()}
 
       {/* Resumen CxC para las fechas seleccionadas */}
       {vistaCredito === 'resumen' && <>
@@ -2523,6 +2598,12 @@ function TabArticulosExternos({ configNeg }) {
     return Object.values(map).sort((a, b) => a.nombre.localeCompare(b.nombre))
   }, [items])
 
+  useEffect(() => {
+    if (filtroAsesor && !asesores.some(a => a.nombre === filtroAsesor)) {
+      setFiltroAsesor('')
+    }
+  }, [asesores, filtroAsesor])
+
   const itemsFiltrados = useMemo(() => {
     const porAsesor = items.filter(item => !filtroAsesor || item.asesor_nombre === filtroAsesor)
     if (!busqueda.trim()) return porAsesor
@@ -2540,7 +2621,7 @@ function TabArticulosExternos({ configNeg }) {
     const totalVentas = itemsFiltrados.reduce((sum, item) => sum + Number(item.total_usd || 0), 0)
     const cantidadTotal = itemsFiltrados.reduce((sum, item) => sum + Number(item.cantidad || 0), 0)
     const pedidosUnicos = new Set(itemsFiltrados.map(item => item.despacho_id)).size
-    const clientesUnicos = new Set(itemsFiltrados.map(item => item.cliente_rif)).size
+    const clientesUnicos = new Set(itemsFiltrados.map(item => item.cliente_id || item.cliente_rif || item.cliente_nombre)).size
 
     return {
       totalVentas,

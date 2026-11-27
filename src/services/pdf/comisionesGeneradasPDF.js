@@ -14,6 +14,7 @@ import {
   fmtBs,
   fmtFecha,
   fmtFechaCorta,
+  fechaArchivoCaracas,
   hexToRgb,
   drawWatermark,
   drawPremiumHeader,
@@ -327,7 +328,23 @@ export function expandCommissionRows(rows, options = {}) {
     const allocations = new Map()
 
     buckets.forEach(bucket => {
-      if (bucket.items.length === 0) return
+      if (bucket.items.length === 0) {
+        if (bucket.total > 0.005) {
+          expanded.push({
+            ...normalized,
+            codigo: '',
+            descripcion: bucket.key === 'cabilla'
+              ? 'COMISIÓN SIN ARTÍCULOS CLASIFICADOS (CABILLA)'
+              : 'COMISIÓN SIN ARTÍCULOS CLASIFICADOS (OTROS)',
+            valor: 0,
+            pct: bucket.key === 'cabilla' ? (normalized.pctcabilla || 0) : (normalized.pctotros || 0),
+            totalcomision: round2(bucket.total),
+            comisioncabilla: bucket.key === 'cabilla' ? round2(bucket.total) : 0,
+            comisionotros: bucket.key === 'otros' ? round2(bucket.total) : 0,
+          })
+        }
+        return
+      }
       const bucketValue = bucket.items.reduce((sum, product) => sum + Math.max(0, asNumber(product.total_linea_usd ?? product.total_linea_neto ?? product.total)), 0)
       let allocated = 0
       bucket.items.forEach((product, index) => {
@@ -700,7 +717,7 @@ function finishPdf(doc, config, action, filename) {
 export async function generarComisionesPDF({
   comisiones = [],
   vendedor = null,
-  _tipoVendedor = null,
+  tipoVendedor = null,
   rango = null,
   config = {},
   action = 'download',
@@ -719,11 +736,19 @@ export async function generarComisionesPDF({
     .filter(row => row.totalcomision > 0)
   const rows = expandCommissionRows(normalized, { vendedor, rate, config })
   const uniqueDispatchCount = countUniqueDispatches(normalized)
-  const title = modoCorteSemanal ? 'Corte semanal de comisiones' : vendedor ? `Comisiones - ${vendedor.nombre}` : 'Reporte de Comisiones'
+  const tipoLabel = tipoVendedor === 'internos' ? 'Internos' : tipoVendedor === 'externos' ? 'Externos' : null
+  const baseTitle = modoCorteSemanal
+    ? 'Corte semanal de comisiones'
+    : vendedor
+      ? `Comisiones - ${vendedor.nombre}`
+      : 'Reporte de Comisiones'
+  const title = !vendedor && tipoLabel ? `${baseTitle} (${tipoLabel})` : baseTitle
   const titleWithRate = `${title} · ${String(tipoTasa || 'Euro BCV')}`
-  const filenameBase = vendedor ? vendedor.nombre.replace(/\s+/g, '_') : 'General'
+  const filenameBase = vendedor
+    ? vendedor.nombre.replace(/\s+/g, '_')
+    : (tipoLabel || 'General')
   const suffix = formato === 'resumido' ? 'Resumido' : modoCorteSemanal ? 'Detallado' : 'General'
-  const filename = `Comisiones_${suffix}_${filenameBase}_${new Date().toISOString().slice(0, 10)}.pdf`
+  const filename = `Comisiones_${suffix}_${filenameBase}_${fechaArchivoCaracas()}.pdf`
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   if (formato === 'resumido') {

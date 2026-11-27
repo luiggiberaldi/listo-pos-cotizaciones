@@ -427,7 +427,19 @@ export function construirReportePeriodoCxC({ clientes = [], transacciones = [], 
   })
 
   const totalDeuda = Math.round(clientesReporte.reduce((suma, cliente) => suma + cliente.saldo_pendiente, 0) * 100) / 100
-  const clientesAlCierre = clientesReporte.filter(cliente => cliente.saldo_pendiente > TOLERANCIA_SALDO)
+  const clientesAlCierre = clientesReporte
+    .filter(cliente => cliente.saldo_pendiente > TOLERANCIA_SALDO)
+    .sort((a, b) => b.saldo_pendiente - a.saldo_pendiente)
+  const clientesPagadoDeMas = clientesReporte
+    .filter(cliente => cliente.saldo_credito_neto > TOLERANCIA_SALDO)
+    .map(cliente => ({
+      ...cliente,
+      pagadoDeMas: Math.round(cliente.saldo_credito_neto * 100) / 100,
+      cargos: cliente.monto_otorgado,
+      abonos: cliente.total_abonado_periodo,
+    }))
+    .sort((a, b) => b.pagadoDeMas - a.pagadoDeMas)
+  const totalPagadoDeMas = Math.round(clientesPagadoDeMas.reduce((suma, c) => suma + c.pagadoDeMas, 0) * 100) / 100
   const clientesConDeuda = clientesAlCierre.length
   const promedioDeuda = clientesConDeuda > 0 ? totalDeuda / clientesConDeuda : 0
   aging.forEach(bucket => { bucket.totalUsd = Math.round(bucket.totalUsd * 100) / 100 })
@@ -435,6 +447,7 @@ export function construirReportePeriodoCxC({ clientes = [], transacciones = [], 
 
   return {
     clientesConDeuda: clientesAlCierre,
+    clientesPagadoDeMas,
     revisionesSaldoActual,
     clientesDelPeriodo: clientesReporte,
     aging,
@@ -443,6 +456,7 @@ export function construirReportePeriodoCxC({ clientes = [], transacciones = [], 
     movimientosDelPeriodo: movimientosDelPeriodo.sort((a, b) => fechaMovimientoMs(a) - fechaMovimientoMs(b)),
     kpis: {
       totalDeuda,
+      totalPagadoDeMas,
       totalOtorgado: Math.round((tienePeriodo ? totalCargos : totalDeuda) * 100) / 100,
       totalCargos: Math.round(totalCargos * 100) / 100,
       totalAbonos: Math.round(totalAbonos * 100) / 100,

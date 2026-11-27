@@ -8,6 +8,7 @@ import { agruparPor } from '../utils/agruparPor'
 import useAuthStore from '../store/useAuthStore'
 import { shouldIncludeReporteVendedor } from '../utils/reporteVendedoresAccess'
 import { construirComisionesGuardadas } from '../utils/reporteVendedoresComisiones'
+import { aplicarDescuentosItems } from '../utils/reporteDescuentos'
 
 export const REPORTE_VENDEDORES_KEY = ['reporte-vendedores']
 
@@ -60,7 +61,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
       ]))
       const pUsuarios = arrancar(() => supabase
         .from('usuarios')
-        .select('id, nombre, color, activo, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo'))
+        .select('id, nombre, codigo, color, activo, rol, markup_pct, comision_pct, comision_pct_cabilla, es_externo'))
 
       // ── 2. Cotizaciones del período por vendedor ─────────────────────────
       // Todas las páginas: .limit(5000) NO alcanzaba, la base igual corta en 1.000.
@@ -181,13 +182,19 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         const esDonacion = fp.some(f => f.metodo === 'Donación')
 
         if (dispatchItems.length > 0) {
-          dispatchItems.forEach(it => {
-            const esItemPrestamo = !!it.es_prestamo || tienePrestamoFp
-            itemsFinales.push({
+          const itemsConDescuento = aplicarDescuentosItems(
+            dispatchItems.map(it => ({
               ...it,
               cotizacion_id: d.cotizacion_id,
-              total_linea_usd: esItemPrestamo ? 0 : Number(it.total_linea_usd || 0),
-              es_prestamo: esItemPrestamo,
+              total_linea_usd: Number(it.total_linea_usd || 0),
+              es_prestamo: !!it.es_prestamo || tienePrestamoFp,
+            })),
+            Number(d.descuento_usd || 0)
+          )
+          itemsConDescuento.forEach(it => {
+            itemsFinales.push({
+              ...it,
+              total_linea_usd: it.es_prestamo ? 0 : Number(it.total_linea_usd || 0),
               es_donacion: esDonacion
             })
           })
@@ -227,6 +234,7 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
           vendedorMap[vid] = {
             id: vid,
             nombre: info.nombre ?? 'Sin nombre',
+            codigo: info.codigo ?? null,
             color: info.color ?? '#64748b',
             activo: info.activo ?? true,
             rol: info.rol ?? 'vendedor',

@@ -186,7 +186,17 @@ export function generarVentasDiaPDF({ reporte, tasa = 0, config = {}, comprimir 
     doc.text('TOTAL $', xTot, y + 3, { align: 'right' }); doc.text('CREADA', xCre, y + 3); doc.text('ENTREGADA', xEnt, y + 3)
     y += 4.2
     filas.forEach(f => {
-      if (y + 4.2 > H - 14) { doc.addPage(); y = M + 4 }
+      if (y + 4.2 > H - 14) {
+        doc.addPage()
+        y = M + 4
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(146, 64, 14)
+        doc.text(`${titulo} (Cont.)`, M + 3, y + 3)
+        y += 5
+        doc.setFontSize(6.5)
+        doc.text('NOTA N°', xN, y + 3); doc.text('CLIENTE', xCli, y + 3); doc.text('ESTADO', xEst, y + 3)
+        doc.text('TOTAL $', xTot, y + 3, { align: 'right' }); doc.text('CREADA', xCre, y + 3); doc.text('ENTREGADA', xEnt, y + 3)
+        y += 4.2
+      }
       doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(15, 23, 42)
       doc.text(pad(f.numero), xN, y + 3)
       doc.setFont('helvetica', 'normal')

@@ -1915,8 +1915,9 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       let seDibujoTituloGrupo = false;
 
       grupo.lista.forEach(v => {
-        // Encontrar despachos asociados al vendedor actual
+        // Encontrar despachos asociados al vendedor actual (incluye 'unassigned')
         const susDespachos = despachosReporte.filter(d => 
+          (!d.asesor_id && v.id === 'unassigned') ||
           (d.asesor_id && d.asesor_id === v.id) || 
           (d.asesor_nombre && String(d.asesor_nombre).trim().toLowerCase() === String(v.vendedor).trim().toLowerCase())
         );
@@ -2250,10 +2251,11 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     const totalCxC = (cxcData?.kpis?.totalDeuda !== undefined)
       ? cxcData.kpis.totalDeuda
       : totalCxCOtorgado;
-    const fpDonacion = porFormaPago.find(fp => fp.formaPago === 'Donación');
-    const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0;
-    const totalDeducciones = totalCxC;
-    const ventasSinCxc = fpTotal - totalDeducciones;
+    const totalSaldoFavor = porFormaPago
+      .filter(fp => String(fp.formaPago || '').toLowerCase() === 'saldo a favor')
+      .reduce((s, fp) => s + Number(fp.totalUsd || 0), 0);
+    const totalDeducciones = totalCxC + totalSaldoFavor;
+    const ventasSinCxc = Math.max(0, fpTotal - totalDeducciones);
     const tieneCxC = totalDeducciones > 0;
     const tieneDev = kpis.totalDevoluciones > 0;
     const boxH = (tieneCxC || tieneDev) ? 28 : 20;
@@ -2342,7 +2344,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
     if (tieneCxC) {
       let curX2 = MARGIN + 3.5;
       
-      const lblCxC = 'CxC y COD: ';
+      const lblCxC = totalSaldoFavor > 0 ? 'CxC, COD y Saldo a Favor: ' : 'CxC y COD: ';
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8.5)
       doc.text(lblCxC, curX2, y + 21)
@@ -2439,7 +2441,7 @@ export async function generarReporteVentasPDF({ reporte, rango, config = {}, act
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(10.5)
       doc.setTextColor(...C_DARK)
-      doc.text('Cuentas por Cobrar (Saldos Pendientes)', MARGIN, y + 4)
+      doc.text('Créditos otorgados en el período (saldos pendientes)', MARGIN, y + 4)
       y += 8
 
       // Tabla cabecera

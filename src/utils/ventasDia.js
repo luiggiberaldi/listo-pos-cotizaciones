@@ -113,14 +113,20 @@ export function construirVentasDia({ fecha, despachos = [], clientes = [] }) {
     const etiquetasOtros = []
     const pagos = leerPagos(d.forma_pago)
     for (const p of pagos) {
-      const col = columnaDeMetodo(p.metodo)
-      // Un pago sin monto (dato viejo con solo el nombre del método) se toma como el total.
-      const monto = p.monto === null || p.monto === undefined ? n(d.total_usd) : n(p.monto)
-      montos[col] += monto
-      if (Number(p.monto_bs) > 0) bsReales[col] += Number(p.monto_bs)
-      else if (monto) bsIncompleto.add(col)
-      if (col === 'otros' && p.metodo) etiquetasOtros.push(p.metodo)
-      if (p.referencia) referencias.push(String(p.referencia).trim())
+      // Si es Cobro a destino ya cobrado con metodos_pagados, acreditar en las columnas cobradas reales
+      const esCodPagado = p.cobro_destino_pagado === true && Array.isArray(p.metodos_pagados) && p.metodos_pagados.length > 0
+      const pagosEfectivos = esCodPagado ? p.metodos_pagados : [p]
+      for (const pe of pagosEfectivos) {
+        const col = columnaDeMetodo(pe.metodo)
+        // Un pago sin monto (dato viejo con solo el nombre del método) se toma como el total.
+        const monto = pe.monto === null || pe.monto === undefined ? n(d.total_usd) : n(pe.monto)
+        montos[col] += monto
+        if (Number(pe.monto_bs) > 0) bsReales[col] += Number(pe.monto_bs)
+        else if (monto) bsIncompleto.add(col)
+        if (col === 'otros' && pe.metodo) etiquetasOtros.push(pe.metodo)
+        if (pe.referencia) referencias.push(String(pe.referencia).trim())
+      }
+      if (esCodPagado && p.referencia) referencias.push(String(p.referencia).trim())
     }
     if (d.referencia_pago && !referencias.includes(String(d.referencia_pago).trim())) referencias.push(String(d.referencia_pago).trim())
 

@@ -10,10 +10,16 @@ import { fmtUsdSimple as fmtUsd, fmtFecha } from '../utils/format'
 import { shouldIncludeReporteVendedor } from '../utils/reporteVendedoresAccess'
 import IndicadorActualizando from '../components/reportes/IndicadorActualizando'
 
-// ─── Helpers de rango ─────────────────────────────────────────────────────────
+// ─── Helpers de rango (hora Venezuela, evita salto nocturno UTC) ──────────────
+function fechaCaracasISO(d) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(d)
+}
+
 function getRango(tipo) {
-  const hoy = new Date()
-  const iso = (d) => d.toISOString().split('T')[0]
+  const hoyIso = fechaCaracasISO(new Date())
+  const [y, m, day] = hoyIso.split('-').map(Number)
+  const hoy = new Date(y, m - 1, day, 12, 0, 0)
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
   if (tipo === 'hoy') {
     const ayer = new Date(hoy)

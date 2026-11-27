@@ -6,7 +6,7 @@ import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
-  fmtUsd, fmtFecha, hexToRgb, drawWatermark, checkPage,
+  fmtUsd, fmtFecha, fechaArchivoCaracas, hexToRgb, drawWatermark, checkPage,
   C_PRIMARY, C_ACCENT, drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter
 } from './pdfShared'
 
@@ -79,19 +79,22 @@ function obtenerRiesgo(dias) {
 export async function generarReporteCxCPDF({ data, config = {}, action = 'download', tipo = 'detallado', rango, printWindow = null }) {
   const { kpis = {}, clientesConDeuda = [], aging = [], abonos = [] } = data
 
-  // Filtrar abonos según rango de fechas si se proporciona, sino mostrar hoy
+  // Filtrar abonos según rango de fechas si se proporciona, sino mostrar hoy (hora Caracas)
   let abonosFiltrados = abonos
-  const isTodayOnly = !rango || (rango.from === rango.to && rango.from === new Date().toISOString().slice(0, 10))
+  const hoyCaracas = fechaArchivoCaracas()
+  const isTodayOnly = !rango || (rango.from === rango.to && rango.from === hoyCaracas)
   const abonosTitle = isTodayOnly
     ? 'Cobranza del Día (Abonos Recibidos Hoy)'
-    : `Cobranza del Periodo (${fmtFecha(rango.from)} al ${fmtFecha(rango.to)})`
+    : `Cobranza del Período (${fmtFecha(rango.from)} al ${fmtFecha(rango.to)})`
 
   if (isTodayOnly && !rango) {
-    const inicioHoy = new Date()
-    inicioHoy.setHours(0, 0, 0, 0)
-    abonosFiltrados = abonos.filter(a => a.creado_en && new Date(a.creado_en) >= inicioHoy)
+    abonosFiltrados = abonos.filter(a => a.creado_en && fechaArchivoCaracas(a.creado_en) === hoyCaracas)
   }
   const abonosDelDia = abonosFiltrados
+  const fechaCorteIso = rango?.to || hoyCaracas
+  const subtitleRango = rango?.from && rango?.to
+    ? `Período: ${fmtFecha(rango.from)} al ${fmtFecha(rango.to)} · Emitido: ${fmtFecha(new Date())}`
+    : `Fecha de Emisión: ${fmtFecha(new Date())}`
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = LOGO_LISTA_PRECIOS
   let y = 0
@@ -111,7 +114,7 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
     logoData,
     config,
     title: 'Reporte de Cuentas por Cobrar (CxC)',
-    subtitle: `Fecha de Emisión: ${new Date().toLocaleDateString('es-VE')}`,
+    subtitle: subtitleRango,
     customBgColor:       [255, 255, 255],
     customAccentColor:   [0, 0, 0],
     customTextColor:     [0, 0, 0],
@@ -155,7 +158,40 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
     doc.text(kpi.value, bx + 4, y + 14)
   })
 
-  y += kpiBoxH + 8
+  y += kpiBoxH + 5
+
+  // ═══ RESUMEN DEL PERÍODO (si viene del reporte por período) ═════════════════
+  if (kpis.saldoInicial !== undefined || kpis.totalCargos !== undefined) {
+    y = checkPage(doc, y, 14, onNewPage, 35)
+    doc.setFillColor(245, 248, 255)
+    doc.setDrawColor(199, 210, 254)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(MARGIN, y, CONTENT_W, 11, 1.5, 1.5, 'FD')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...C_CXC_PRIMARY)
+    doc.text('RESUMEN DEL PERÍODO:', MARGIN + 3, y + 4.3)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...C_DARK)
+    const lineaPeriodo = [
+      `Saldo inicial: ${fmtUsd(kpis.saldoInicial || 0)}`,
+      `+ Cargos: ${fmtUsd(kpis.totalCargos || 0)}`,
+      `- Abonos: ${fmtUsd(kpis.totalAbonos || 0)}`,
+      `= CxC al cierre: ${fmtUsd(kpis.totalDeuda || 0)}`,
+    ].join('   |   ')
+    doc.text(lineaPeriodo, MARGIN + 34, y + 4.3)
+    doc.setFontSize(6)
+    doc.setTextColor(71, 85, 105)
+    const desgloseAbonos = [
+      `Cobros en dinero: ${fmtUsd(kpis.totalCobrado || 0)}`,
+      `Cruces / Saldo a favor: ${fmtUsd(kpis.totalAbonosSaldoFavor || 0)}`,
+      ...(Number(kpis.totalAbonosAjuste || 0) > 0 ? [`Devoluciones/Ajustes: ${fmtUsd(kpis.totalAbonosAjuste)}`] : []),
+    ].join('   ·   ')
+    doc.text(desgloseAbonos, MARGIN + 3, y + 8.7)
+    y += 14
+  } else {
+    y += 3
+  }
 
   // ═══ TABLA DE ANTIGÜEDAD (AGING BREAKDOWN) ══════════════════════════════════
   y = drawSectionTitle(doc, 'Análisis de Antigüedad de Deuda', y)
@@ -235,10 +271,13 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
     doc.setTextColor(...C_GRAY)
     doc.text(String(idx + 1), MARGIN + 2.5, y + 4.5, { align: 'right' })
 
-    // Cliente y RIF
+    // Cliente y RIF (identifica personal/empleados)
     doc.setTextColor(...C_DARK)
     doc.setFont('helvetica', 'bold')
-    doc.text((c.nombre || '—').substring(0, 34).toUpperCase(), MARGIN + 8, y + 3)
+    const nombreConTag = c.tipo_cliente === 'personal'
+      ? `${(c.nombre || '—').substring(0, 24).toUpperCase()} [PERSONAL]`
+      : (c.nombre || '—').substring(0, 34).toUpperCase()
+    doc.text(nombreConTag, MARGIN + 8, y + 3)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(5.5)
     doc.setTextColor(...C_GRAY)
@@ -326,6 +365,23 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
     y += 9
   })
 
+  // Subtotal Clientes vs Personal si existen empleados con deuda
+  const personalConDeuda = clientesConDeuda.filter(c => c.tipo_cliente === 'personal')
+  if (personalConDeuda.length > 0) {
+    const deudaPersonal = personalConDeuda.reduce((s, c) => s + Number(c.saldo_pendiente || 0), 0)
+    const deudaComercial = Math.max(0, Number(kpis.totalDeuda || 0) - deudaPersonal)
+    y = checkPage(doc, y, 7, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.5)
+    doc.setTextColor(71, 85, 105)
+    doc.text(
+      `Desglose: Clientes comerciales (${clientesConDeuda.length - personalConDeuda.length}): ${fmtUsd(deudaComercial)}   |   Personal (${personalConDeuda.length}): ${fmtUsd(deudaPersonal)}`,
+      MARGIN + 8,
+      y + 3
+    )
+    y += 6
+  }
+
   // Total consolidado
   y = checkPage(doc, y, 9, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
   doc.setLineWidth(0.4)
@@ -399,9 +455,13 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
           estatusStr = 'COD (Cobro a destino)'
           estColor = C_CXC_PRIMARY
         } else if (car.fecha_vencimiento) {
-          const now = new Date()
-          const fv = new Date(car.fecha_vencimiento)
-          const diffDays = Math.ceil((fv - now) / (1000 * 60 * 60 * 24))
+          // Calcular contra la fecha de corte (rango.to) en hora Caracas, nunca contra new Date() UTC
+          const corteMs = new Date(`${fechaCorteIso}T12:00:00-04:00`).getTime()
+          const fvIso = String(car.fecha_vencimiento).length === 10
+            ? String(car.fecha_vencimiento)
+            : fechaArchivoCaracas(car.fecha_vencimiento)
+          const fvMs = new Date(`${fvIso}T12:00:00-04:00`).getTime()
+          const diffDays = Math.round((fvMs - corteMs) / (1000 * 60 * 60 * 24))
           
           if (diffDays < 0) {
             estatusStr = `Vencido hace ${Math.abs(diffDays)} días`
@@ -588,13 +648,30 @@ export async function generarReporteCxCPDF({ data, config = {}, action = 'downlo
 
       y += rowHeight
     })
+
+    // Fila TOTAL COBRANZA
+    const totalCobranzaPdf = abonosDelDia.reduce((s, a) => s + Number(a.monto_usd || 0), 0)
+    y = checkPage(doc, y, 9, onNewPage, doc.internal.getNumberOfPages() === 1 ? 35 : 22)
+    doc.setDrawColor(...C_CXC_PRIMARY)
+    doc.setLineWidth(0.35)
+    doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
+    doc.setFillColor(244, 252, 248)
+    doc.rect(MARGIN, y, CONTENT_W, 6.5, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...C_CXC_PRIMARY)
+    doc.text(`TOTAL COBRANZA (${abonosDelDia.length} ${abonosDelDia.length === 1 ? 'abono' : 'abonos'})`, MARGIN + 4, y + 4.2)
+    doc.setTextColor(16, 185, 129)
+    doc.text(`+${fmtUsd(totalCobranzaPdf)}`, MARGIN + 185, y + 4.2, { align: 'right' })
+    y += 9
   }
 
   // ═══ FOOTER EN TODAS LAS PÁGINAS ════════════════════════════════════════════
-  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0], `Generado: ${new Date().toLocaleString('es-VE')} — CONFIDENCIAL`)
+  drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0], `Generado: ${new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' })} — CONFIDENCIAL`)
 
   // Guardar o imprimir según acción
-  const safeName = `Reporte_CxC_${tipo.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.pdf`
+  const rangoNombre = rango?.from && rango?.to ? `${rango.from}_${rango.to}` : fechaArchivoCaracas()
+  const safeName = `Reporte_CxC_${tipo.toUpperCase()}_${rangoNombre}.pdf`
   
   if (action === 'print') {
     doc.autoPrint()

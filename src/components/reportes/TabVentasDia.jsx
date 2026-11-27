@@ -87,7 +87,7 @@ export default function TabVentasDia() {
   })
 
   const columnas = useMemo(() => COLUMNAS_PAGO.filter(c => data?.columnasUsadas?.includes(c.id)), [data])
-  const sinDatos = !data?.filas?.length
+  const sinDatos = !data?.filas?.length && !data?.sinEntregar?.length && !data?.entregadasOtroDia?.length
 
   async function exportar(accion) {
     if (!data) return
@@ -135,7 +135,7 @@ export default function TabVentasDia() {
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
         <label className="flex flex-col gap-1 text-[11px] font-bold text-slate-500">
           <span className="flex items-center gap-1"><CalendarDays size={12} /> Día</span>
-          <input type="date" value={fecha} onChange={e => e.target.value && setFecha(e.target.value)} data-testid="ventas-dia-fecha"
+          <input type="date" value={fecha} onChange={e => { if (e.target.value) { setFecha(e.target.value); setTasaEditada('') } }} data-testid="ventas-dia-fecha"
             className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-semibold text-slate-800" />
         </label>
         <label className="flex flex-col gap-1 text-[11px] font-bold text-slate-500">

@@ -15,7 +15,7 @@ import { construirReportePeriodoCxC } from '../utils/cxcPeriodReport'
 import { leerTodasLasPaginas } from '../utils/leerPaginas'
 
 const SELECT_CLIENTE = `
-  id, nombre, rif_cedula, telefono,
+  id, nombre, rif_cedula, telefono, tipo_cliente,
   saldo_pendiente,
   vendedor:usuarios!clientes_vendedor_id_fkey(id, nombre, color)
 `

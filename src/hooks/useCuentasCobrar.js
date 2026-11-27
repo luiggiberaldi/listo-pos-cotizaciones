@@ -129,24 +129,28 @@ export function useResumenCxC(rango) {
         // consumo_credito consume saldo a favor; nunca se aplica contra cargos CxC.
         const { cargos: clientCargos, abonos: clientAbonos } = repartirCxC(txsPorCliente[cid])
 
-        // Filtrar cargos: sin rango → solo pendientes; con rango → todos los del periodo
+        // Filtrar cargos: sin rango → solo pendientes; con rango → todos los del periodo (hora Caracas)
+        const fechaCaracas = (iso) => {
+          const d = new Date(iso)
+          return Number.isNaN(d.getTime()) ? '' : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(d)
+        }
         cargosPendientesPorCliente[cid] = clientCargos
           .filter(c => {
             if (!rango?.from && !rango?.to) {
               return c.saldo_pendiente_cargo > 0.005
             }
             if (!c.creado_en) return false
-            const fechaCargo = c.creado_en.split('T')[0]
+            const fechaCargo = fechaCaracas(c.creado_en)
             if (rango?.from && fechaCargo < rango.from) return false
             if (rango?.to && fechaCargo > rango.to) return false
             return true
           })
           .map(c => ({ ...c, saldo_usd: c.saldo_pendiente_cargo }))
 
-        // Abonos del cliente en el rango seleccionado
+        // Abonos del cliente en el rango seleccionado (hora Caracas)
         abonosPorCliente[cid] = clientAbonos.filter(a => {
           if (!a.creado_en) return false
-          const fechaAbono = a.creado_en.split('T')[0]
+          const fechaAbono = fechaCaracas(a.creado_en)
           if (rango?.from && fechaAbono < rango.from) return false
           if (rango?.to && fechaAbono > rango.to) return false
           return true
@@ -215,11 +219,15 @@ export function useResumenCxC(rango) {
             Object.keys(extraPorCliente).forEach(cid => {
               const { cargos: clientCargos, abonos: clientAbonos } = repartirCxC(extraPorCliente[cid])
 
-              // Solo cargos del periodo (pagados y no pagados)
+              const fechaCaracasExtra = (iso) => {
+                const d = new Date(iso)
+                return Number.isNaN(d.getTime()) ? '' : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(d)
+              }
+              // Solo cargos del periodo (pagados y no pagados, hora Caracas)
               cargosPendientesPorCliente[cid] = clientCargos
                 .filter(c => {
                   if (!c.creado_en) return false
-                  const fechaCargo = c.creado_en.split('T')[0]
+                  const fechaCargo = fechaCaracasExtra(c.creado_en)
                   if (rango?.from && fechaCargo < rango.from) return false
                   if (rango?.to && fechaCargo > rango.to) return false
                   return true
@@ -228,7 +236,7 @@ export function useResumenCxC(rango) {
 
               abonosPorCliente[cid] = clientAbonos.filter(a => {
                 if (!a.creado_en) return false
-                const fechaAbono = a.creado_en.split('T')[0]
+                const fechaAbono = fechaCaracasExtra(a.creado_en)
                 if (rango?.from && fechaAbono < rango.from) return false
                 if (rango?.to && fechaAbono > rango.to) return false
                 return true

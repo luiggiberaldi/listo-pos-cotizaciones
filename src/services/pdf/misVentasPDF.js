@@ -101,15 +101,21 @@ export function generarMisVentasPDF({ reporte, config = {}, comprimir = true }) 
     if (conComision && d.comisionUsd) doc.text(`Comisión ${fmtUsd(d.comisionUsd)}`, col.total, y + 4.8, { align: 'right' })
     y += 10
 
-    // artículos
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...C_GRAY)
-    doc.text('Código', col.cod, y); doc.text('Artículo', col.art, y); doc.text('Cant.', col.cant, y, { align: 'right' })
-    doc.text('Und.', col.und, y); doc.text('Precio', col.precio, y, { align: 'right' })
-    doc.text('Total', col.total, y, { align: 'right' })
-    y += 4
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C_DARK)
+    const dibujarHeaderArticulos = () => {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...C_GRAY)
+      doc.text('Código', col.cod, y); doc.text('Artículo', col.art, y); doc.text('Cant.', col.cant, y, { align: 'right' })
+      doc.text('Und.', col.und, y); doc.text('Precio', col.precio, y, { align: 'right' })
+      doc.text('Total', col.total, y, { align: 'right' })
+      y += 4
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C_DARK)
+    }
+    dibujarHeaderArticulos()
     for (const a of d.articulos) {
+      const pagAntes = doc.internal.getNumberOfPages()
       y = checkPage(doc, y, 6, nuevaPagina)
+      if (doc.internal.getNumberOfPages() !== pagAntes) {
+        dibujarHeaderArticulos()
+      }
       doc.text(cortar(doc, a.codigo, 20), col.cod, y)
       doc.text(cortar(doc, a.nombre, 92), col.art, y)
       doc.text(fmtNum(a.cantidad), col.cant, y, { align: 'right' })
@@ -119,6 +125,7 @@ export function generarMisVentasPDF({ reporte, config = {}, comprimir = true }) 
       y += 4.2
     }
     // montos del despacho
+    y = checkPage(doc, y, 10, nuevaPagina)
     const extras = []
     if (d.descuentoUsd) extras.push(`Descuento: -${fmtUsd(d.descuentoUsd)}`)
     if (d.fleteUsd) extras.push(`Flete: ${fmtUsd(d.fleteUsd)}`)
