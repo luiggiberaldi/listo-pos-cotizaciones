@@ -2,14 +2,15 @@
 
 - **Fecha:** 2026-11-26
 - **Antecedentes:** [OP-2026-095](OP-2026-095_plan-correccion-auditoria-traspaso-staging.md) (Fase 7), [OP-2026-096](../operaciones/OP-2026-096_ejecucion-plan-correccion-traspaso-staging.md), [INC-004](../incidentes/INC-004-funciones-de-dinero-abiertas-en-produccion.md)
-- **Carpeta y rama preparadas:** `construacero-op097` · rama `feat/op-097-inventario-seguridad-prod` (creada limpia desde `origin/main`)
-- **Estado:** 🟡 **Auditoría en solo lectura terminada y paquete listo para publicar (producción aún NO tocada).** Pendiente únicamente tu luz verde final para ejecutar la ventana de publicación antes del inventario físico del sábado.
+- **Carpeta y rama usadas:** `construacero-op097` (ya eliminada tras publicar) · rama `feat/op-097-inventario-seguridad-prod` · Solicitud de cambio [#88](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/88) (unión `9a0859d0`)
+- **Estado:** 🟢 **Publicado y verificado en producción el 2026-11-26 (`15/15` verificaciones en vivo OK).** Listo para el inventario físico del sábado.
 
 ---
 
 ## En resumen
 
-- **Auditamos la base real de producción (`oyfyuszgjwcepjpngclv`) en modo solo lectura estricto** (sin modificar un solo dato) y encontramos **5 hallazgos clave** que hicieron imprescindible preparar migraciones hechas a la medida de producción en vez de copiar las de pruebas:
+- **Publicado y verificado en producción (`oyfyuszgjwcepjpngclv`) el 2026-11-26** tras tu luz verde: las 6 actualizaciones de base de datos (`313` a `318`), el servidor en Cloudflare (`7ca7c29e-4389-4378-8756-ae4f18c21908`) y la web en Vercel (`9a0859d0`) están activos y pasaron **`15/15` comprobaciones en vivo** sin alterar un solo saldo ni unidad de inventario.
+- **Auditamos antes la base real de producción (`oyfyuszgjwcepjpngclv`) en modo solo lectura estricto** (sin modificar un solo dato) y encontramos **5 hallazgos clave** que hicieron imprescindible preparar migraciones hechas a la medida de producción en vez de copiar las de pruebas:
   1. Hoy producción tiene **481 productos** (25 en negativo), **97 despachos esperando aprobación** y **4 préstamos pendientes** (0 facturados, 0 devueltos).
   2. El respaldo completo de las tablas del negocio en producción pesa aproximadamente **23,8 MB en formato JSON** (en pruebas pesaba 3,1 MB), por lo que agregamos un margen de tiempo seguro (`180 segundos`) dentro de la restauración atómica.
   3. Hay **4 vistas** que dependen de las columnas de stock y cantidades (`despacho_pesos`, `despacho_items_peso`, `v_catalogo_publico`, `v_productos_vendedor`) y **8 disparadores** propios de producción (distintos a staging): todo se adaptó exactamente a producción, conservando la regla de producción de **precios 2 y 3 habilitables** (`precio2_habilitado` / `precio3_habilitado`).
@@ -139,3 +140,18 @@ Si aparece cualquier fallo inesperado después de publicar, se deshace **en orde
 4. **Verificación post-rollback:** comprobar en vivo que el sitio abre normal, los saldos/stocks siguen intactos y anotar el incidente en `docs/incidentes/`.
 
 *(Nota: si solo fallara la web o el Worker pero las migraciones de BD estuvieran sanas, basta con revertir la web o el Worker; las migraciones `313`–`318` son compatibles hacia atrás con el código anterior salvo el botón nuevo de Conteo físico.)*
+
+---
+
+## 5. Constancia de publicación en vivo (2026-11-26)
+
+| Elemento | Resultado real verificado |
+|---|---|
+| **Copia de seguridad oficial previa** | Guardada en `construacero-backups/prod-pre-op097-20261126/` (`datos_prod_pre_op097.json` de **23,91 MB**, `schema_snapshot_pre_op097.json` y `control_pre_op097.json`). |
+| **Migraciones aplicadas en producción (`oyfyuszgjwcepjpngclv`)** | **6/6 OK** en secuencia (`313` → `314` → `315` → `316` → `317` → `318`, 4,6 s total, 0 errores). |
+| **Solicitud de cambio en GitHub** | [#88](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/88) unida a `main` en commit **`9a0859d0`**. |
+| **Servidor (Cloudflare Worker + web compilada)** | Versión publicada: **`7ca7c29e-4389-4378-8756-ae4f18c21908`** (58 archivos estáticos nuevos). Versión anterior para vuelta atrás en 1 comando: **`27bdda35-61eb-45c4-afd9-d9571aa53201`**. |
+| **Web (Vercel)** | Estado `success` (*Deployment has completed*) sobre `9a0859d0`. |
+| **Verificación en vivo post-publicación** | **`15/15` OK**: `/api/ping` (`200`), `/api/rates` (`200`), `POST /api/clientes/prestamos/facturar` bloqueado (`403`), `POST /api/inventario/conteo` sin sesión bloqueado (`401`), funciones internas cerradas a anónimos (`404`/`401`), `cliente_prestamos` sin escritura directa (N30 cerrada), `despacho_devoluciones` y `despacho_devolucion_intercambios` con aislamiento restrictivo por empresa y 0 reglas `USING(true)` (INC-004 cerrada), `productos.stock_actual = numeric(12,4)`, `4/4` vistas dependientes recreadas y `0` disparadores desactivados. |
+| **Cuadre exacto antes vs. después** | `total_productos`: **481 → 481** · `suma_stock`: **265.928,0000 → 265.928,0000** · `suma_saldo_clientes`: **$79.732,0300 → $79.732,0300** (diferencia `0`). |
+| **Pendiente por decisión del dueño** | **1)** Confirmar con el cliente cómo quiere manejar "Facturar préstamo" antes de encender el interruptor (hoy oculto y bloqueado con HTTP 403). **2)** Opcional: probar una descarga de respaldo v1.3 desde **Configuración → Datos** con sesión de Jefe y realizar el conteo físico del sábado. |

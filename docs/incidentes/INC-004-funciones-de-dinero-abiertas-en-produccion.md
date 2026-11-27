@@ -55,5 +55,5 @@ Vuelta atrás: volver a dar `EXECUTE` a `PUBLIC`. Riesgo: muy bajo, porque ning�
 
 ## Pendiente
 
-- Revisión más fina (cruzar cada cargo y cada pago de comisión con la auditoría del sistema).
-- Avisar al dueño que no confíe en los respaldos descargados desde la app hasta arreglarlos; usar los respaldos completos de la base de datos.
+- ~~Avisar al dueño que no confíe en los respaldos descargados desde la app hasta arreglarlos~~ → **Resuelto en producción el 2026-11-26** en [OP-2026-097](../plans/OP-2026-097_plan-paso-a-produccion-inventario-y-seguridad.md) (solicitud #88, unión `9a0859d0`): respaldo paginado `v1.3` de 26 tablas + restauración atómica (`318`), cierre de todas las funciones internas restantes, cierre de escritura directa en `cliente_prestamos` (N30) y aislamiento restrictivo por empresa en `despacho_devoluciones` y `despacho_devolucion_intercambios` (`317`), verificado en vivo (`15/15` OK).
+- Opcional: revisión histórica más fina (cruzar cargos antiguos y pagos de comisión históricos con la auditoría del sistema).
