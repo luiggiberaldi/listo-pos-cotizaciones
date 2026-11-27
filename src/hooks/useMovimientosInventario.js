@@ -145,6 +145,45 @@ export function useAplicarMovimientoLote() {
   })
 }
 
+// ─── Conteo físico atómico (N25: unitario o por lotes con concurrencia) ──────
+export function useConteoFisico() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ motivo, items, idempotencyKey }) => {
+      const idemKey = idempotencyKey || crypto.randomUUID()
+      const res = await authFetch('/api/inventario/conteo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idemKey },
+        body: JSON.stringify({ motivo, items, idempotencyKey: idemKey }),
+      })
+      const result = await res.json().catch(() => null)
+      if (!res.ok) {
+        const err = new Error(result?.error || 'Error al aplicar conteo físico')
+        err.status = res.status
+        throw err
+      }
+      return result
+    },
+    onSuccess: async (data) => {
+      await qc.cancelQueries({ queryKey: INVENTARIO_KEY })
+      await qc.cancelQueries({ queryKey: MOVIMIENTOS_KEY })
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: INVENTARIO_KEY, exact: false })
+        qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY, exact: false })
+        qc.invalidateQueries({ queryKey: KARDEX_KEY, exact: false })
+      }, 400)
+      const ajustes = Number(data?.movimientos) || 0
+      const sinCambios = Number(data?.sin_cambios) || 0
+      if (ajustes > 0) {
+        const corr = data?.numero ? formatCorrelativo(data.numero) : ''
+        showToast(`${corr ? corr + ' — ' : ''}Conteo aplicado (${ajustes} ajuste${ajustes > 1 ? 's' : ''})`, 'success')
+      } else {
+        showToast(`Conteo verificado sin diferencias (${sinCambios})`, 'info')
+      }
+    },
+  })
+}
+
 // ─── Revertir movimiento manual de inventario (Kardex) ──────────────────────
 export function useRevertirMovimiento() {
   const qc = useQueryClient()

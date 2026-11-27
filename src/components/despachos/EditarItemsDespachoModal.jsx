@@ -5,6 +5,7 @@ import { useLineItems } from '../../hooks/useLineItems'
 import { useInventario } from '../../hooks/useInventario'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useEditarItemsDespacho } from '../../hooks/useDespachos'
+import { evaluarSinCobro } from '../../utils/despachoSinCobro'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { useSaldoFavorOrigen } from '../../hooks/useCuentasCobrar'
@@ -471,10 +472,12 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
       const diferencia = esCod
         ? Math.round((montoCodRequerido - totalPropuestaCod) * 100) / 100
         : Math.round((total - totalInmediato) * 100) / 100
+      const infoSinCobro = evaluarSinCobro({ esCod, total, items })
+      const sinCobro = infoSinCobro.sinCobro
       const estaCuadrado = esCod
         ? (montoCodRequerido <= 0.015 || propuestaCodCuadrado)
-        : pagoInmediatoCuadrado
-      return { subtotal, total, totalPagos, diferencia, estaCuadrado }
+        : (pagoInmediatoCuadrado || sinCobro)
+      return { subtotal, total, totalPagos, diferencia, estaCuadrado, sinCobro, infoSinCobro }
     }, [items, totalConFlete, esCod, totalInmediato, montoCodRequerido, totalPropuestaCod, propuestaCodCuadrado, pagoInmediatoCuadrado])
   
     const cxcItem = pagosInmediatos.find(f => f.metodo === 'Cta por cobrar');
@@ -589,7 +592,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
           items: itemsApi, 
           pagos: modoVendedor
             ? (pagosAjustadosVendedor(totales.total) ? JSON.stringify(pagosAjustadosVendedor(totales.total)) : undefined)
-            : JSON.stringify(formasPagoFinales),
+            : JSON.stringify(totales.sinCobro ? [] : formasPagoFinales),
           // OP-2026-053: decisión sobre pagos que quedarían sin deuda (solo si el servidor la pidió)
           ...(typeof destinoPagos === 'string' ? { destinoPagos } : {}),
         })
@@ -1035,7 +1038,7 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
 
             {totales.estaCuadrado ? (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full shrink-0">
-                <CheckCircle size={12} /> Pagos cuadrados ✓
+                <CheckCircle size={12} /> {totales.sinCobro ? (totales.infoSinCobro?.etiquetaCorta || 'Sin cobro ✓') : 'Pagos cuadrados ✓'}
               </span>
             ) : (
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full border shrink-0 ${
@@ -1057,6 +1060,12 @@ export default function EditarItemsDespachoModal({ isOpen, onClose, despacho, on
             {(!esCod || tabActiva === 'inmediato') ? (
               // VISTA: PAGO INMEDIATO (ADELANTO)
               <div className="space-y-2">
+                {totales.sinCobro && (
+                  <div data-testid="edicion-sin-cobro" className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs leading-snug">
+                    <p className="font-bold">{totales.infoSinCobro?.titulo}</p>
+                    <p className="mt-0.5 opacity-80">{totales.infoSinCobro?.descripcion}</p>
+                  </div>
+                )}
                 {esCod && (
                   <p className="text-[10px] font-black text-indigo-500/80 uppercase tracking-widest pl-1">
                     1. Registrar abonos o adelantos inmediatos

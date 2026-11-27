@@ -371,6 +371,7 @@ export function useCrearDespacho() {
 
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+      qc.invalidateQueries({ queryKey: ['stock_por_aprobar'], exact: false })
       qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
@@ -472,6 +473,7 @@ export function useActualizarEstadoDespacho() {
       setTimeout(() => {
         qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
         qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+        qc.invalidateQueries({ queryKey: ['stock_por_aprobar'], exact: false })
         qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
         qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
         qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
@@ -550,6 +552,7 @@ export function useEditarItemsDespacho() {
         : 'Ítems del despacho actualizados con éxito', 'success', 5000)
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+      qc.invalidateQueries({ queryKey: ['stock_por_aprobar'], exact: false })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
@@ -608,6 +611,7 @@ export function useReciclarDespacho() {
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
+      qc.invalidateQueries({ queryKey: ['stock_por_aprobar'], exact: false })
       broadcastEntidad(['despachos', 'cotizaciones'])
     },
   })

@@ -23,6 +23,7 @@ import EmptyState        from '../components/ui/EmptyState'
 import CustomSelect      from '../components/ui/CustomSelect'
 import Skeleton          from '../components/ui/Skeleton'
 import { useVendedores } from '../hooks/useClientes'
+import { evaluarSinCobro } from '../utils/despachoSinCobro'
 import { useFormasPago } from '../hooks/useFormasPago'
 import { useSaldoFavorOrigen } from '../hooks/useCuentasCobrar'
 import { useTransportistas, useCrearTransportista } from '../hooks/useTransportistas'
@@ -184,6 +185,8 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
   }, [detalle])
   const totalSinFlete = Number(cotizacion?.total_usd || 0) - Number(cotizacion?.costo_envio_usd || 0) - Number(cotizacion?.corte_usd || 0)
   const totalConFlete = totalSinFlete + Number(fleteUsd || 0) + Number(corteUsd || 0)
+  const infoSinCobro = evaluarSinCobro({ esCod, total: totalConFlete, items })
+  const sinCobro = infoSinCobro.sinCobro
   const transportistaSeleccionado = transportistas.find(t => t.id === transportistaId)
   // Regla del estado del destino (2026-10-25): el destino es el estado de la
   // ficha del cliente (estado/ciudad son obligatorios al registrarlo); solo con
@@ -924,8 +927,14 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
 
         {/* ── Footer — validación + botones ─────────────────────── */}
         <div className="border-t border-slate-100 shrink-0">
+          {sinCobro && (
+            <div data-testid="cotizacion-despacho-sin-cobro" className="px-5 py-2 bg-emerald-50 border-b border-emerald-100 text-emerald-900 text-xs">
+              <p className="font-bold">{infoSinCobro.titulo}</p>
+              <p className="text-[11px] opacity-80">{infoSinCobro.descripcion}</p>
+            </div>
+          )}
           {!esCod ? (
-            pagosInmediatos.length > 0 && (
+            !sinCobro && pagosInmediatos.length > 0 && (
               <div className={`flex items-center justify-between px-5 py-1.5 text-xs font-semibold ${
                 pagoInmediatoCuadrado ? 'bg-emerald-50 text-emerald-700'
                 : (totalInmediato - totalConFlete > 0.02) ? 'bg-amber-50 text-amber-700'
@@ -953,7 +962,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               Cancelar
             </button>
             <button onClick={() => {
-                const fpJson = JSON.stringify(formasPagoFinales)
+                const fpJson = JSON.stringify(sinCobro ? [] : formasPagoFinales)
                 onConfirm(
                   fpJson,
                   transportistaId || null,
@@ -972,7 +981,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
               }} disabled={
                 cargando ||
                 items.length === 0 ||
-                !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) ||
+                !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : (pagoInmediatoCuadrado || sinCobro)) ||
                 !cxcVencimientoValido ||
                 (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)) ||
                 !destinoFleteValido
@@ -986,7 +995,7 @@ function ModalDespachar({ cotizacion, onConfirm, onCancel, cargando, tasa = 0 })
                   ? 'Debe indicar el estado de destino para el flete del chofer local'
                   : esCod
                   ? (!propuestaCodCuadrado ? 'La propuesta COD no está cuadrada' : undefined)
-                  : (!pagoInmediatoCuadrado ? 'Los montos no cuadran con el total' : undefined)
+                  : (!(pagoInmediatoCuadrado || sinCobro) ? 'Los montos no cuadran con el total' : undefined)
               }
               className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 whitespace-nowrap">
               {cargando

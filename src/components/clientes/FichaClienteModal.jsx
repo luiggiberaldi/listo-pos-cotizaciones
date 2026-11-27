@@ -925,7 +925,15 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
     }
   }, [isOpen, cliente?.id])
 
+  // OP-2026-095/097: ocultar "Facturar préstamo" en producción hasta confirmar con el cliente.
+  // Solo queda visible y habilitada la devolución física ("Devolver").
+  const FACTURACION_PRESTAMOS_HABILITADA = false
+
   const handleActionSubmit = async (prestamo, type) => {
+    if (type !== 'devolver' && !FACTURACION_PRESTAMOS_HABILITADA) {
+      showToast('La facturación de préstamos está temporalmente deshabilitada.', 'error')
+      return
+    }
     const qty = Number(actionQty)
     if (isNaN(qty) || qty <= 0) {
       showToast('Cantidad inválida', 'error')
@@ -1514,16 +1522,18 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                             >
                               Devolver
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveAction({ id: p.id, type: 'facturar' })
-                                setActionQty(String(restante))
-                              }}
-                              className="flex-1 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold transition-all active:scale-[0.98]"
-                            >
-                              Facturar
-                            </button>
+                            {FACTURACION_PRESTAMOS_HABILITADA && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveAction({ id: p.id, type: 'facturar' })
+                                  setActionQty(String(restante))
+                                }}
+                                className="flex-1 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold transition-all active:scale-[0.98]"
+                              >
+                                Facturar
+                              </button>
+                            )}
                           </div>
                         )}
 

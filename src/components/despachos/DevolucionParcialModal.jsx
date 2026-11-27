@@ -141,8 +141,9 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
         const maxReturnable = Number(item.cantidad) - alreadyReturned
         return {
           ...item,
+          es_prestamo: !!item.es_prestamo,
           alreadyReturned,
-          maxReturnable: Math.max(0, maxReturnable),
+          maxReturnable: item.es_prestamo ? 0 : Math.max(0, maxReturnable),
           cantidad_devolver: '',
           selected: false,
           es_intercambio: false
@@ -162,6 +163,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
           cantidad: item.cantidad,
           precio_unit_usd: item.precio_unit_usd,
           descuento_pct: 0,
+          es_prestamo: false,
           alreadyReturned,
           maxReturnable: Math.max(0, maxReturnable),
           cantidad_devolver: '',
@@ -182,6 +184,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
   const handleCheckboxChange = (id) => {
     setItemsList(prev => prev.map(item => {
       if (item.id === id) {
+        if (item.es_prestamo) return item
         const nextSelected = !item.selected
         const qty = nextSelected ? String(item.maxReturnable) : ''
         if (nextSelected) {
@@ -606,15 +609,24 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 <div className="space-y-3">
                   <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 text-xs flex items-start gap-2">
                     <AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
-                    <div>
-                      <p className="font-bold">Despacho totalmente devuelto — venta anulada económicamente.</p>
-                      <p className="mt-0.5 text-[11px] opacity-80">
-                        {deudaDespacho != null && deudaDespacho > 0.009
-                          ? `La deuda de este despacho quedó en $${deudaDespacho.toFixed(2)} tras los ajustes de devolución. Si lo que buscas es revertir la entrega por completo (devolver stock y anular estos ajustes), usa "Reabrir despacho" desde la tarjeta.`
-                          : 'Todos los productos fueron devueltos y la CxC de este despacho quedó saldada. Para revertir la entrega por completo, usa "Reabrir despacho" desde la tarjeta.'}
-                      </p>
-                      <p className="mt-1 text-[11px] opacity-80">No hay unidades disponibles para registrar una nueva devolución.</p>
-                    </div>
+                    {(() => {
+                      const todosPrestamo = itemsList.length > 0 && itemsList.every(i => i.es_prestamo)
+                      const hayPrestamo = itemsList.some(i => i.es_prestamo)
+                      const [titulo, cuerpo] = todosPrestamo
+                        ? ['Este despacho no admite devolución parcial',
+                           'Todos sus artículos están en préstamo y los préstamos no se devuelven desde aquí. Entra a la ficha del cliente, pestaña "Préstamos", y usa "Devolver" (la mercancía vuelve al inventario).']
+                        : hayPrestamo
+                          ? ['No queda nada por devolver desde aquí',
+                             'Lo que no era préstamo ya fue devuelto. Los artículos en préstamo se devuelven desde la ficha del cliente, pestaña "Préstamos".']
+                          : ['Ya se devolvió todo lo de este despacho',
+                             'No queda mercancía por devolver. Si necesitas deshacer la entrega completa, usa "Reabrir despacho" en la tarjeta del despacho.']
+                      return (
+                        <div data-testid="devolucion-sin-unidades">
+                          <p className="font-bold">{titulo}</p>
+                          <p className="mt-0.5 text-[11px] opacity-80">{cuerpo}</p>
+                        </div>
+                      )
+                    })()}
                   </div>
                   {itemsList.length > 0 && (
                     <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50 opacity-75">
@@ -642,6 +654,11 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {itemsList.some(i => i.es_prestamo) && (
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800">
+                      Los productos marcados como <strong>PRÉSTAMO</strong> deben devolverse desde la <strong>Ficha del Cliente</strong> (pestaña Préstamos), no por devolución parcial.
+                    </div>
+                  )}
                   {/* Ítems activos para devolución */}
                   <div className="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden bg-slate-50 shadow-xs">
                     {itemsList.filter(i => i.maxReturnable > 0).map(item => {

@@ -23,6 +23,7 @@ export default function ProductCard({
   agregado,
   cantidad,
   tasa = 0,
+  porAprobar = 0,
   onAgregar,
   onMas,
   onMenos,
@@ -107,6 +108,11 @@ export default function ProductCard({
       )}
       {agregado && cantidad != null && stock <= 0 && (
         <p className="text-[8px] font-bold text-red-600 mt-0.5">⚠ sin stock físico</p>
+      )}
+      {porAprobar > 0 && (
+        <p data-testid="por-aprobar-aviso" className="text-[8px] font-semibold text-sky-600 leading-tight" title="Unidades en despachos por aprobar">
+          {Number(porAprobar).toLocaleString('es-VE')} por aprobar
+        </p>
       )}
       {/* Stepper inline */}
       {agregado && cantidad != null && (

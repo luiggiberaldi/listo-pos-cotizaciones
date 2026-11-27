@@ -7,6 +7,7 @@ import { useTasaCambio } from '../../hooks/useTasaCambio'
 import { fmtBs, usdToBs } from '../../utils/format'
 import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
 import ImgProducto from "./ImgProducto"
+import StockPorAprobarDetalle from './StockPorAprobarDetalle'
 
 function fmtUsd(n) {
   if (n == null) return '—'
@@ -25,22 +26,36 @@ function colorCategoria(str = '') {
   return { fg, bg }
 }
 
-function StockBadge({ actual, minimo }) {
+function StockBadge({ actual, minimo, porAprobar = 0, productoId }) {
   const negativo = actual < 0
   const agotado = actual === 0
   const bajo = !agotado && !negativo && minimo > 0 && actual <= minimo
 
   if (negativo) return (
-    <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100 border border-red-300 px-2.5 py-1 rounded-lg">
-      <AlertTriangle size={10} />
-      {Number(actual).toLocaleString('es-VE')} (negativo)
-    </span>
+    <div className="text-right space-y-0.5">
+      <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100 border border-red-300 px-2.5 py-1 rounded-lg">
+        <AlertTriangle size={10} />
+        {Number(actual).toLocaleString('es-VE')} (negativo)
+      </span>
+      {porAprobar > 0 && (
+        <div>
+          <StockPorAprobarDetalle productoId={productoId} porAprobar={porAprobar} />
+        </div>
+      )}
+    </div>
   )
 
   if (agotado) return (
-    <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100 border border-red-300 px-2.5 py-1 rounded-lg">
-      Sin stock
-    </span>
+    <div className="text-right space-y-0.5">
+      <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100 border border-red-300 px-2.5 py-1 rounded-lg">
+        Sin stock
+      </span>
+      {porAprobar > 0 && (
+        <div>
+          <StockPorAprobarDetalle productoId={productoId} porAprobar={porAprobar} />
+        </div>
+      )}
+    </div>
   )
 
   const cls = bajo
@@ -53,11 +68,16 @@ function StockBadge({ actual, minimo }) {
         {bajo && <AlertTriangle size={10} />}
         {Number(actual).toLocaleString('es-VE')}
       </span>
+      {porAprobar > 0 && (
+        <div>
+          <StockPorAprobarDetalle productoId={productoId} porAprobar={porAprobar} />
+        </div>
+      )}
     </div>
   )
 }
 
-export default function ProductoCard({ producto, onEditar, onClonar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, index }) {
+export default function ProductoCard({ producto, onEditar, onClonar, onDesactivar, onBorrar, onKardex, onDetalle, tasa = 0, porAprobar = 0, index }) {
   const { perfil } = useAuthStore()
   const [copiado, setCopiado] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -276,6 +296,7 @@ export default function ProductoCard({ producto, onEditar, onClonar, onDesactiva
             <StockBadge
               actual={producto.stock_actual}
               minimo={producto.stock_minimo}
+              porAprobar={porAprobar}
               productoId={producto.id}
             />
           </div>
