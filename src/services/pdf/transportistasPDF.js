@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf'
 import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
   PAGE_H, MARGIN, CONTENT_W,
-  C_DARK,
+  C_DARK, fechaArchivoCaracas,
   drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter, drawWatermark
 } from './pdfShared'
 
@@ -13,7 +13,7 @@ function limiteInferior(doc) {
   return doc.internal.getCurrentPageInfo().pageNumber === 1 ? PAGE_H - 35 : PAGE_H - 14
 }
 
-export async function generarTransportistasPDF({ items = [], config = {}, action = 'download' }) {
+export async function generarTransportistasPDF({ items = [], config = {}, filtroTexto = '', action = 'download' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = LOGO_LISTA_PRECIOS
 
@@ -26,12 +26,17 @@ export async function generarTransportistasPDF({ items = [], config = {}, action
     return doc
   }
 
+  const subtitulo = [
+    `Generado: ${new Date().toLocaleDateString('es-VE', { timeZone: 'America/Caracas', day: '2-digit', month: 'short', year: 'numeric' })}`,
+    filtroTexto || null,
+  ].filter(Boolean).join(' · ')
+
   let y = drawPremiumHeader({
     doc,
     logoData,
     config,
     title: 'Base de Datos de Choferes / Equipos',
-    subtitle: `Generado: ${new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+    subtitle: subtitulo,
     customBgColor: [255, 255, 255],
     customAccentColor: [0, 0, 0],
     customTextColor: [0, 0, 0],
@@ -95,7 +100,10 @@ export async function generarTransportistasPDF({ items = [], config = {}, action
     // Los textos largos se parten en varias líneas (nunca se recortan)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
-    const nombreL = doc.splitTextToSize((item.nombre || '—').toUpperCase(), cols[0].w - 2)
+    const nombreConTel = item.telefono
+      ? `${(item.nombre || '—').toUpperCase()}\nTel: ${item.telefono}`
+      : (item.nombre || '—').toUpperCase()
+    const nombreL = doc.splitTextToSize(nombreConTel, cols[0].w - 2)
     doc.setFont('helvetica', 'normal')
     const celdas = [
       nombreL,
@@ -130,7 +138,7 @@ export async function generarTransportistasPDF({ items = [], config = {}, action
 
   drawPremiumFooter(doc, config, [255, 255, 255], [0, 0, 0], [0, 0, 0])
 
-  const filename = `Base_de_Datos_Choferes_${new Date().toISOString().slice(0, 10)}`
+  const filename = `Base_de_Datos_Choferes_${fechaArchivoCaracas()}`
 
   if (action === 'print') {
     doc.autoPrint()

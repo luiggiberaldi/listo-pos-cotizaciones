@@ -234,7 +234,7 @@ export async function generarFlotaChoferesPDF({
     fmtUsd(v.empresa_usd),
     v.ultimo_viaje_en ? `${fecha(v.ultimo_viaje_en)} ${v.ultimo_chofer_nombre || ''}` : '—',
   ]), [
-    'TOTAL', '', viajesPdf({ total_viajes: totV.viajes, viajes_estimados: totV.estimados }), '100%', '',
+    'TOTAL', '', viajesPdf({ total_viajes: totV.viajes, viajes_estimados: totV.estimados }), totV.viajes > 0 ? '100%' : '0%', '',
     ...(hayPeso ? [textoToneladas(resPeso.toneladas * 1000)] : []),
     fmtUsd(totV.flete), fmtUsd(totChoferes), fmtUsd(totEmpresa), '',
   ])
@@ -278,23 +278,23 @@ export async function generarFlotaChoferesPDF({
     fmtUsd(num(c.total_flete_usd) - num(c.comision_generada_usd)),
     (c.desglose_vehiculos || []).map(d => `${d.vehiculo_nombre}: ${num(d.viajes)}`).join(' | ') || '—',
   ]), [
-    'TOTAL', String(totC.viajes), `${totC.enCarabobo}/${totC.fueraCarabobo}`,
+    'TOTAL', viajesPdf({ total_viajes: totC.viajes, viajes_estimados: totC.estimados }), `${totC.enCarabobo}/${totC.fueraCarabobo}`,
     fmtUsd(totC.flete), fmtUsd(totC.mercancia), fmtUsd(totC.comisionGenerada),
     fmtUsd(totC.flete - totC.comisionGenerada), '',
   ])
 
-  // Detalle viaje por viaje
+  // Detalle viaje por viaje (anchos calibrados para que montos >= $1.000,00 no se partan)
   const columnasViaje = [
     { label: 'FECHA', w: hayPeso ? 14 : 15 },
     { label: 'DESPACHO', w: hayPeso ? 18 : 20 },
-    { label: 'CLIENTE', w: hayPeso ? 21 : 36 },
-    { label: 'DESTINO', w: hayPeso ? 24 : 33 },
-    { label: 'CHOFER', w: hayPeso ? 20 : 26 },
+    { label: 'CLIENTE', w: hayPeso ? 19 : 34 },
+    { label: 'DESTINO', w: hayPeso ? 22 : 31 },
+    { label: 'CHOFER', w: hayPeso ? 18 : 24 },
     { label: 'CAMIÓN', w: hayPeso ? 13 : 16 },
-    ...(hayPeso ? [{ label: 'CARGA', w: 33, align: 'right' }] : []),
-    { label: 'FLETE', w: 14, align: 'right' },
-    { label: 'CHOFER', w: 14, align: 'right' },
-    { label: 'EMPRESA', w: CONTENT_W - (hayPeso ? 171 : 174), align: 'right' },
+    ...(hayPeso ? [{ label: 'CARGA', w: 30, align: 'right' }] : []),
+    { label: 'FLETE', w: 18, align: 'right' },
+    { label: 'CHOFER', w: 18, align: 'right' },
+    { label: 'EMPRESA', w: CONTENT_W - (hayPeso ? 170 : 176), align: 'right' },
   ]
   const filaViaje = (v) => [
     fecha(v.fecha),
@@ -309,7 +309,10 @@ export async function generarFlotaChoferesPDF({
     fmtUsd(v.empresa_usd),
   ]
   if (detallado && detalle.length > 0) {
-    y = tabla(doc, y, 'Detalle viaje por viaje (camiones de la empresa)', columnasViaje, detalle.map(filaViaje))
+    const tituloDetalle = detalle.length >= 1000
+      ? 'Detalle viaje por viaje (camiones de la empresa — mostrando primeros 1.000 viajes)'
+      : 'Detalle viaje por viaje (camiones de la empresa)'
+    y = tabla(doc, y, tituloDetalle, columnasViaje, detalle.map(filaViaje))
   }
   if (detallado && detalleSinCamion.length > 0) {
     y = tabla(doc, y, 'Viajes de choferes locales sin camión registrado', columnasViaje, detalleSinCamion.map(filaViaje))

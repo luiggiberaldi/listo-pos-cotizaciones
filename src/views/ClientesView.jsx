@@ -142,7 +142,7 @@ export default function ClientesView() {
   // Data + mutations
   // La búsqueda se hace en pantalla (buscarClientes) sobre la lista ya cargada:
   // no se vuelve a pedir la lista completa al servidor en cada búsqueda.
-  const { data: clientes = [], isLoading, isError, refetch } = useClientes()
+  const { data: clientes = [], isLoading, isFetching, isError, refetch } = useClientes()
   const { data: vendedores = [] } = useVendedores()
   const borrarCliente = useBorrarCliente()
   const activarCliente = useActivarCliente()
@@ -154,8 +154,33 @@ export default function ClientesView() {
     if (accion === 'print') setImprimiendoPDF(true)
     else setExportandoPDF(true)
     try {
+      const freshRes = await refetch()
+      if (freshRes?.isError) throw freshRes.error || new Error('No se pudo actualizar el listado de clientes.')
+      const base = Array.isArray(freshRes?.data) ? freshRes.data : clientes
+      const filtradosFrescos = base.filter(c => {
+        if (c.tipo_cliente === 'personal') return false
+        if (mostrarToggle && !verTodos && !busqueda.trim() && c.vendedor_id !== perfil?.id) return false
+        if (filtroTipo && c.tipo_cliente !== filtroTipo) return false
+        if (filtroVendedor && c.vendedor_id !== filtroVendedor) return false
+        if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0)) return false
+        if (filtroConPrestamo && !c.tiene_prestamos_activos) return false
+        if (filtroSaldoFavor && !(Number(c.saldo_a_favor || 0) > 0)) return false
+        if (filtroEstado === 'activos' && !c.activo) return false
+        if (filtroEstado === 'desactivados' && c.activo) return false
+        return true
+      })
+      const itemsExport = busqueda.trim() ? buscarClientes(filtradosFrescos, busqueda) : filtradosFrescos
+      const partesFiltro = [
+        mostrarToggle && !verTodos && !busqueda.trim() ? 'Solo mis clientes' : 'Todos los clientes',
+        filtroEstado === 'activos' ? 'Activos' : filtroEstado === 'desactivados' ? 'Desactivados' : null,
+        filtroConDeuda ? 'Con deuda' : null,
+        filtroConPrestamo ? 'Con préstamo' : null,
+        filtroSaldoFavor ? 'Con saldo a favor' : null,
+        busqueda.trim() ? `Búsqueda: "${busqueda.trim()}"` : null,
+      ].filter(Boolean)
+
       const { generarClientesPDF } = await import('../services/pdf/clientesPDF')
-      await generarClientesPDF({ items: clientesFiltrados, config, action: accion })
+      await generarClientesPDF({ items: itemsExport, config, filtroTexto: partesFiltro.join(' · '), action: accion })
     } catch (err) {
       import('../components/ui/Toast').then(({ showToast }) =>
         showToast('Error al generar el PDF: ' + err.message, 'error')
@@ -335,7 +360,7 @@ export default function ClientesView() {
               <>
                 <button 
                   onClick={() => exportarClientesPDF('print')} 
-                  disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                  disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || clientesFiltrados.length === 0}
                   className="flex items-center gap-1.5 sm:gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
                   <Printer size={15} />
@@ -343,7 +368,7 @@ export default function ClientesView() {
                 </button>
                 <button 
                   onClick={() => exportarClientesPDF('download')} 
-                  disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                  disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || clientesFiltrados.length === 0}
                   className="flex items-center gap-1.5 sm:gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
                   <FileText size={15} />

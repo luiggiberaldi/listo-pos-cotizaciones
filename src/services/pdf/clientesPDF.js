@@ -1,35 +1,23 @@
 // src/services/pdf/clientesPDF.js
-// Genera PDF profesional del Listado Detallado de Clientes — Construacero Carabobo
+// Genera PDF profesional del Listado Detallado de Clientes o Personal — Construacero Carabobo
 import { jsPDF } from 'jspdf'
 import { cargarLogo } from './pdfLogo'
 import { WATERMARK_LOGO } from './watermarkBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
-  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_RED, C_GRAY,
-  drawPremiumHeader, fmtFecha, fmtTelefono
+  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
+  drawPremiumHeader, drawSimplifiedHeader, fmtFecha, fmtTelefono, fechaArchivoCaracas
 } from './pdfShared'
 
-function checkPage(doc, y, needed = 30) {
-  if (y + needed > PAGE_H - 25) {
-    doc.addPage()
-    try {
-      const gState = new doc.GState({ opacity: 0.06 })
-      doc.setGState(gState)
-      doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-      doc.setGState(new doc.GState({ opacity: 1 }))
-    } catch (_) {}
-    return MARGIN + 10
-  }
-  return y
-}
-
-function drawHeader(doc, logoData, config, title = 'Base de Datos de Clientes') {
+function drawHeader(doc, logoData, config, title = 'Base de Datos de Clientes', filtroTexto = '') {
+  const fechaSub = `Generado: ${new Date().toLocaleDateString('es-VE', { timeZone: 'America/Caracas', day: '2-digit', month: 'short', year: 'numeric' })}`
+  const subtitle = filtroTexto ? `${fechaSub} · ${filtroTexto}` : fechaSub
   return drawPremiumHeader({
     doc,
     logoData,
     config,
     title,
-    subtitle: `Generado: ${new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })}`
+    subtitle,
   })
 }
 
@@ -43,44 +31,49 @@ function drawFooter(doc, config) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6)
     doc.setTextColor(...C_GRAY)
-    let footName = config.nombre_negocio || 'Construacero Carabobo C.A.'
+    let footName = config?.nombre_negocio || 'Construacero Carabobo C.A.'
     if (footName.trim().toUpperCase() === 'PRUEBA' || footName.trim() === '') footName = 'Construacero Carabobo C.A.'
     doc.text(footName, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, MARGIN, PAGE_H - 6)
+    doc.text(`Generado: ${new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' })}`, MARGIN, PAGE_H - 6)
     doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
   }
 }
 
-export async function generarClientesPDF({ items = [], config = {}, action = 'download', title = 'Base de Datos de Clientes' }) {
+export async function generarClientesPDF({
+  items = [],
+  config = {},
+  action = 'download',
+  title = 'Base de Datos de Clientes',
+  filtroTexto = '',
+}) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
-  const logoData = await cargarLogo(config.logo_url)
+  const logoData = await cargarLogo(config?.logo_url)
+  const isPersonalReport = title === 'Reporte de Personal'
 
-  let y = drawHeader(doc, logoData, config, title)
+  let y = drawHeader(doc, logoData, config, title, filtroTexto)
 
-  // Watermark
-  try {
-    const gState = new doc.GState({ opacity: 0.06 })
-    doc.setGState(gState)
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-    doc.setGState(new doc.GState({ opacity: 1 }))
-  } catch (_) {}
+  const dibujarWatermark = () => {
+    try {
+      const gState = new doc.GState({ opacity: 0.06 })
+      doc.setGState(gState)
+      doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
+      doc.setGState(new doc.GState({ opacity: 1 }))
+    } catch (_) {}
+  }
 
-  // KPIs de clientes (removidas deudas, añadidas métricas de registro)
+  dibujarWatermark()
+
+  // KPIs (calculados en hora America/Caracas)
   const totalClientes = items.length
   const activos = items.filter(c => c.activo).length
-  
-  const ahora = new Date()
-  const esteMes = ahora.getMonth()
-  const esteAnio = ahora.getFullYear()
+  const mesActualVe = fechaArchivoCaracas().slice(0, 7)
   const nuevosEsteMes = items.filter(c => {
     if (!c.creado_en) return false
-    const d = new Date(c.creado_en)
-    return d.getMonth() === esteMes && d.getFullYear() === esteAnio
+    return fechaArchivoCaracas(c.creado_en).slice(0, 7) === mesActualVe
   }).length
 
   const kpiBoxW = CONTENT_W / 3
   const kpiBoxH = 15
-  const isPersonalReport = title === 'Reporte de Personal'
 
   const kpis = [
     { label: isPersonalReport ? 'Total Personal' : 'Total Clientes', value: String(totalClientes), color: C_PRIMARY },
@@ -103,15 +96,15 @@ export async function generarClientesPDF({ items = [], config = {}, action = 'do
 
   y += kpiBoxH + 8
 
-  // Tabla
+  // Tabla con anchos calibrados
   const cols = isPersonalReport ? [
-    { label: 'CÓDIGO', x: MARGIN, w: 12 },
-    { label: 'CÉDULA / RIF', x: MARGIN + 12, w: 20 },
-    { label: 'NOMBRE Y APELLIDO', x: MARGIN + 32, w: 50 },
-    { label: 'ROL / CARGO', x: MARGIN + 82, w: 26 },
-    { label: 'TELÉFONO', x: MARGIN + 108, w: 22 },
-    { label: 'VENDEDOR ASIG.', x: MARGIN + 130, w: 28 },
-    { label: 'REGISTRO', x: MARGIN + 158, w: 30 },
+    { label: 'CÓDIGO', x: MARGIN, w: 13 },
+    { label: 'CÉDULA / RIF', x: MARGIN + 13, w: 21 },
+    { label: 'NOMBRE Y APELLIDO', x: MARGIN + 34, w: 48 },
+    { label: 'ROL / CARGO', x: MARGIN + 82, w: 28 },
+    { label: 'TELÉFONO', x: MARGIN + 110, w: 22 },
+    { label: 'VENDEDOR ASIG.', x: MARGIN + 132, w: 28 },
+    { label: 'REGISTRO', x: MARGIN + 160, w: 28 },
   ] : [
     { label: 'CÓDIGO', x: MARGIN, w: 14 },
     { label: 'RIF / CÉDULA', x: MARGIN + 14, w: 22 },
@@ -138,54 +131,58 @@ export async function generarClientesPDF({ items = [], config = {}, action = 'do
   y = drawTableHeaders(y)
 
   items.forEach((item, idx) => {
-    y = checkPage(doc, y, 7)
-    if (y < MARGIN + 12) y = drawTableHeaders(y)
+    const codStr = String(item.codigo_cliente || '—')
+    const rifStr = String(item.rif_cedula || '—')
+    const nombreStr = String(item.nombre || '—').toUpperCase()
+    const tipoStr = isPersonalReport
+      ? String(item.categoria || '—').toUpperCase()
+      : (item.tipo_cliente === 'juridico' ? 'JURÍDICO' : 'NATURAL')
+    const telStr = fmtTelefono(item.telefono)
+    const vendStr = String(item.vendedor?.nombre || item.vendedor_nombre || '—')
+    const fechaReg = item.creado_en ? fmtFecha(item.creado_en) : '—'
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    const nombreLines = doc.splitTextToSize(nombreStr, cols[2].w - 2)
+    doc.setFont('helvetica', 'normal')
+    const celdas = [
+      doc.splitTextToSize(codStr, cols[0].w - 2),
+      doc.splitTextToSize(rifStr, cols[1].w - 2),
+      nombreLines,
+      doc.splitTextToSize(tipoStr, cols[3].w - 2),
+      doc.splitTextToSize(telStr, cols[4].w - 2),
+      doc.splitTextToSize(vendStr, cols[5].w - 2),
+      doc.splitTextToSize(fechaReg, cols[6].w - 2),
+    ]
+    const nLineas = Math.max(1, ...celdas.map(l => l.length))
+    const rowH = Math.max(6, nLineas * 2.9 + 2.8)
+
+    if (y + rowH > PAGE_H - 22) {
+      doc.addPage()
+      dibujarWatermark()
+      y = drawSimplifiedHeader(doc, logoData, config, `${title} (Cont.)`)
+      y = drawTableHeaders(y + 2)
+    }
 
     if (idx % 2 === 0) {
       doc.setFillColor(252, 252, 253)
-      doc.rect(MARGIN, y - 1, CONTENT_W, 6, 'F')
+      doc.rect(MARGIN, y - 1, CONTENT_W, rowH, 'F')
     }
 
-    doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.5)
     doc.setTextColor(...C_DARK)
+    celdas.forEach((lineas, i) => {
+      doc.setFont('helvetica', i === 2 ? 'bold' : 'normal')
+      doc.text(lineas, cols[i].x + 1, y + 3, { lineHeightFactor: 1.15 })
+    })
 
-    // Código
-    const codStr = item.codigo_cliente || '—'
-    doc.text(String(codStr).substring(0, 12), cols[0].x + 1, y + 3)
-
-    // RIF / Cédula
-    const rifStr = item.rif_cedula || '—'
-    doc.text(String(rifStr).substring(0, 18), cols[1].x + 1, y + 3)
-
-    // Nombre
-    doc.setFont('helvetica', 'bold')
-    doc.text((item.nombre || '—').toUpperCase().substring(0, 40), cols[2].x + 1, y + 3)
-    doc.setFont('helvetica', 'normal')
-
-    // Tipo / Rol
-    const tipo = isPersonalReport 
-      ? (item.categoria || '—').toUpperCase()
-      : (item.tipo_cliente === 'juridico' ? 'JURÍDICO' : 'NATURAL')
-    doc.text(String(tipo).substring(0, 12), cols[3].x + 1, y + 3)
-
-    // Teléfono
-    doc.text(fmtTelefono(item.telefono), cols[4].x + 1, y + 3)
-
-    // Vendedor
-    const vend = item.vendedor?.nombre || item.vendedor_nombre || '—'
-    doc.text(vend.substring(0, 18), cols[5].x + 1, y + 3)
-
-    // Registro
-    const fechaReg = item.creado_en ? fmtFecha(item.creado_en) : '—'
-    doc.text(fechaReg, cols[6].x + 1, y + 3)
-
-    y += 6
+    y += rowH
   })
 
   drawFooter(doc, config)
 
-  const filename = `Base_de_Datos_Clientes_${new Date().toISOString().slice(0, 10)}`
+  const prefix = isPersonalReport ? 'Reporte_de_Personal' : 'Base_de_Datos_Clientes'
+  const filename = `${prefix}_${fechaArchivoCaracas()}`
 
   if (action === 'print') {
     doc.autoPrint()

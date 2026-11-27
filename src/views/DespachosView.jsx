@@ -77,60 +77,9 @@ function EstadoDropdown({ filtros, value, onChange }) {
   )
 }
 
-function PlantillaDropdown({ config }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm active:scale-[0.98] min-h-[44px]"
-        style={{ background: 'linear-gradient(135deg, rgba(27,54,93,0.06), rgba(184,134,11,0.06))', border: '1px solid rgba(27,54,93,0.18)', color: '#1B365D' }}
-      >
-        <_FileDown size={15} />
-        Plantilla vacía
-        <_ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
-          <button
-            onClick={async () => {
-              const { generarPlantillaNotaEntregaPDF } = await import('../services/pdf/plantillaNotaEntregaPDF')
-              generarPlantillaNotaEntregaPDF({ config })
-              setOpen(false)
-            }}
-            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-slate-700"
-          >
-            Nota de Entrega
-          </button>
-          <button
-            onClick={async () => {
-              const { generarPlantillaOrdenDespachoPDF } = await import('../services/pdf/plantillaOrdenDespachoPDF')
-              generarPlantillaOrdenDespachoPDF({ config, incluirTransporte: true })
-              setOpen(false)
-            }}
-            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-slate-700"
-          >
-            Orden de Despacho
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // Alias con prefijo para que el linter identifique los componentes usados en JSX.
 const _SkeletonDespachos = SkeletonDespachos
 const _EstadoDropdown = EstadoDropdown
-const _PlantillaDropdown = PlantillaDropdown
 
 export default function DespachosView() {
   const navigate = useNavigate()

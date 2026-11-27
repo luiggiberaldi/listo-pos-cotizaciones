@@ -30,7 +30,7 @@ export default function TabTransportistas() {
   const [exportando, setExportando] = useState(false)
   // Mismo arranque que las demás pestañas de Reportes: el día de hoy.
   const [rango, setRango] = useState(() => { const hoy = getDayRange(0); return { from: hoy.from, to: hoy.to } })
-  const { data: items = [], isLoading, isError, refetch } = useReporteTransportistas({
+  const { data: items = [], isLoading, isFetching, isError, refetch } = useReporteTransportistas({
     desde: rango.from || null,
     hasta: rango.to   || null,
   })
@@ -54,15 +54,25 @@ export default function TabTransportistas() {
       const hasta = rango.to || null
       const anterior = periodoAnterior(desde, hasta)
       const detallado = modo === 'detallado'
-      const [flota, flotaAnterior] = await Promise.all([
+      const [tablaRes, flota, flotaAnterior] = await Promise.all([
+        refetch(),
         cargarReporteFlota({ desde, hasta }),
         anterior ? cargarReporteFlota(anterior) : Promise.resolve(null),
       ])
-      // Peso de los viajes (si la base aún no lo entrega, el PDF sale sin esa parte)
+      if (tablaRes?.isError) {
+        throw tablaRes.error || new Error('No se pudo actualizar la tabla de choferes locales.')
+      }
+      const filasFrescas = (Array.isArray(tablaRes?.data) ? tablaRes.data : items)
+        .filter(t => t.activo !== false || Number(t.despachos) > 0)
+      // Peso de los viajes (si falla, avisamos en pantalla y en el PDF en vez de callar)
+      let errorPeso = false
       const [pesoViajes, pesoAnterior] = await Promise.all([
-        cargarPesoFlota({ desde, hasta }).catch(() => null),
+        cargarPesoFlota({ desde, hasta }).catch(() => { errorPeso = true; return null }),
         anterior ? cargarPesoFlota(anterior).catch(() => null) : Promise.resolve(null),
       ])
+      if (errorPeso) {
+        showToast('Aviso: datos de peso no disponibles temporalmente; el PDF sale sin columnas de peso.', 'warning')
+      }
       const [detalle, detalleSinCamion] = detallado
         ? await Promise.all([
           cargarDetalleViajesFlota({ desde, hasta }),
@@ -72,12 +82,13 @@ export default function TabTransportistas() {
       const { generarFlotaChoferesPDF } = await import('../../services/pdf/flotaChoferesPDF')
       await generarFlotaChoferesPDF({
         modo, action, desde, hasta,
-        tablaChoferes: filas,
+        tablaChoferes: filasFrescas,
         porVehiculo: flota.porVehiculo,
         porChofer: flota.porChofer.filter(c => c.activo !== false || num(c.total_viajes) > 0),
         sinCamion: flota.sinCamion,
         anterior: flotaAnterior ? flotaAnterior.porVehiculo : null,
         pesoViajes, pesoAnterior,
+        pesoNoDisponible: errorPeso,
         detalle, detalleSinCamion,
         config: configNegocio ?? {},
       })
@@ -99,7 +110,7 @@ export default function TabTransportistas() {
         opciones={OPCIONES_REPORTE}
         onExportar={generarReporte}
         exportando={exportando}
-        deshabilitado={isLoading}
+        deshabilitado={isLoading || isFetching || isError}
         acciones={(
           <button onClick={() => refetch()} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 mr-auto" title="Recargar">
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />

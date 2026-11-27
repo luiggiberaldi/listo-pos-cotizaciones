@@ -124,7 +124,7 @@ export async function handleReporteTransportistas(request, env) {
     despachos = await leerTodasLasPaginas(async (desde, hasta) => {
       const dRes = await fetch(
         `${env.SUPABASE_URL}/rest/v1/notas_despacho` +
-        `?${cuenta.filter}&transportista_id=not.is.null&estado=neq.anulada${fechaFiltro}` +
+        `?${cuenta.filter}&transportista_id=not.is.null&estado=in.(despachada,entregada)${fechaFiltro}` +
         `&select=id,transportista_id,flete_usd,flete_neto_transportista_usd,flete_comisionable,flete_regla_aplicada,flete_pagado,estado,creado_en` +
         `&order=id.asc&offset=${desde}&limit=${hasta - desde + 1}`,
         { headers }
