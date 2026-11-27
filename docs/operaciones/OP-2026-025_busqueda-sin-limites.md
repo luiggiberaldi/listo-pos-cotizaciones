@@ -1,6 +1,6 @@
 # OP-2026-025 — Búsquedas de despachos y cotizaciones sin recortes
 
-**Fecha inicial:** 2026-11-10 · **Retomado y preparado para producción:** 2026-11-25 · **Rama:** `feat/op-025-busqueda-sin-limites` (desde `main` `fa13d0c2`, en la carpeta aparte `construacero-op025`) · **Estado:** 🧪 Solicitud de cambio **#79** abierta (commit `8a7111a9`); pendiente de tu visto bueno final para publicar.
+**Fecha inicial:** 2026-11-10 · **Retomado y preparado para producción:** 2026-11-25 · **Rama:** `feat/op-025-busqueda-sin-limites` (desde `main` `fa13d0c2`, en la carpeta aparte `construacero-op025`) · **Estado:** ✅ **Publicado en producción el 2026-11-25** (solicitud #79, unión `eb73df7b`).
 
 ## En resumen
 
@@ -40,8 +40,17 @@
   - Errores ajenos al cambio en la prueba local: `/api/rates` (tasas; montaje local) y `/rest/v1/productos` 400 (staging ya no tiene la columna de stock comprometido que pide producción).
 - **Sin verificar:** staging tiene pocos datos, así que no se pudo ver en pantalla una búsqueda de más de 200 resultados; ese caso lo cubren las pruebas automáticas (`traerTodo` con 2350 filas y `lookupClientesPorIds` con 450 clientes).
 
-## Pendiente
+## Publicación (2026-11-25)
 
-1. ~~Tu visto bueno a la prueba en el navegador~~ (dado el 2026-11-25).
-2. ~~Guardar, subir y abrir la solicitud~~: hecho, solicitud #79 (https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/79). Falta mirar la vista previa (datos reales: solo mirar) y tu aprobación final para unir a `main`.
-3. Después de publicar: buscar un cliente con muchas cotizaciones/despachos y comprobar que aparecen los antiguos.
+| Paso | Resultado |
+|---|---|
+| Visto bueno | El dueño probó la pantalla de la rama con datos de staging y aprobó guardar, subir y publicar. |
+| Solicitud | #79 (commits `8a7111a9` y `52b08402`). Vista previa de Vercel construida sin errores. |
+| Revisión "Kilo Code Review" | No pudo ejecutarse: la cuenta del servicio no tiene créditos (igual que en #74, #75 y #77). No es un fallo del código. |
+| Unión | Visto bueno final del dueño → unida a `main` con el commit `eb73df7b`. |
+| Instalación | GitHub Actions "Deploy Worker a Cloudflare" (ejecución `45673467809`): **éxito**. Vercel producción: **éxito**. |
+
+## Pendiente / sin verificar
+
+- No se entró a producción con un usuario tras publicar. Quien tenga sesión abierta verá el cambio al cerrar sesión o recargar.
+- **Qué debes hacer tú:** en producción, en **Cotizaciones**, busca por nombre un cliente antiguo que no salga en la lista inicial: deben aparecer sus cotizaciones "del histórico" (antes no salía nada). En **Despachos**, elige "Todos" y busca un cliente con muchos despachos: deben salir también los antiguos.
