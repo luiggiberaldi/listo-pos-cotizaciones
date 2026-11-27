@@ -902,8 +902,15 @@ export async function handleDevolverPrestamo(request, env) {
 }
 
 */
+// OP-2026-095 Fase 3 (decisión del dueño): interruptor apagado hasta confirmar reglas con el cliente.
+export const FACTURACION_PRESTAMOS_HABILITADA = false;
+
 // Endpoint para facturar préstamo (convertir a venta con saldo en cuentas por cobrar)
 export async function handleFacturarPrestamo(request, env) {
+  const habilitada = env?.FACTURACION_PRESTAMOS_HABILITADA === 'true' || FACTURACION_PRESTAMOS_HABILITADA;
+  if (!habilitada) {
+    return jsonError('La facturación de préstamos está deshabilitada temporalmente. Usa "Devolver" desde la ficha del cliente.', 403, request);
+  }
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;

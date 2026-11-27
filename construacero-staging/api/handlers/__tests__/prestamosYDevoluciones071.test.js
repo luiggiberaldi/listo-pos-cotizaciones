@@ -215,7 +215,19 @@ describe('OP-2026-071 Fase 2 (N27 préstamos, N35 bloqueo devolución parcial, N
     expect(rpcCalls).toHaveLength(0)
   })
 
-  it('N27/A2: handleFacturarPrestamo usa la función atómica con sello único y tasa del día, sin tocar inventario', async () => {
+  it('OP-2026-095 Fase 3: handleFacturarPrestamo bloquea con 403 por defecto mientras facturación esté oculta', async () => {
+    const f = vi.fn(async () => mockJson({}))
+    vi.stubGlobal('fetch', f)
+    const res = await handleFacturarPrestamo(makeReq('/api/clientes/prestamos/facturar', {
+      prestamoId: PRESTAMO_ID, cantidad: 1, tasaBcv: 250,
+    }), ENV)
+    expect(res.status).toBe(403)
+    expect(f).not.toHaveBeenCalled()
+    expect((await res.json()).error).toMatch(/deshabilitada temporalmente/i)
+  })
+
+  it('N27/A2: handleFacturarPrestamo (cuando se habilite) usa la función atómica con sello único y tasa del día, sin tocar inventario', async () => {
+    const ENV_FACT = { ...ENV, FACTURACION_PRESTAMOS_HABILITADA: 'true' }
     const touched = []
     vi.stubGlobal('fetch', vi.fn(async (url, opts) => {
       touched.push({ url, method: opts?.method || 'GET', body: opts?.body ? JSON.parse(opts.body) : null })
@@ -232,7 +244,7 @@ describe('OP-2026-071 Fase 2 (N27 préstamos, N35 bloqueo devolución parcial, N
 
     const res = await handleFacturarPrestamo(makeReq('/api/clientes/facturar-prestamo', {
       prestamoId: PRESTAMO_ID, cantidad: 2, tasaBcv: 250.5,
-    }), ENV)
+    }), ENV_FACT)
     const body = await res.json()
 
     expect(res.status).toBe(200)
@@ -250,20 +262,22 @@ describe('OP-2026-071 Fase 2 (N27 préstamos, N35 bloqueo devolución parcial, N
     expect(touched.some(t => t.url.includes('/rest/v1/inventario_movimientos'))).toBe(false)
   })
 
-  it('A2: handleFacturarPrestamo exige tasa del día y sello único', async () => {
+  it('A2: handleFacturarPrestamo (cuando se habilite) exige tasa del día y sello único', async () => {
+    const ENV_FACT = { ...ENV, FACTURACION_PRESTAMOS_HABILITADA: 'true' }
     const f = vi.fn(async () => mockJson({}))
     vi.stubGlobal('fetch', f)
-    const sinTasa = await handleFacturarPrestamo(makeReq('/x', { prestamoId: PRESTAMO_ID, cantidad: 1 }), ENV)
+    const sinTasa = await handleFacturarPrestamo(makeReq('/x', { prestamoId: PRESTAMO_ID, cantidad: 1 }), ENV_FACT)
     expect(sinTasa.status).toBe(400)
     const sinClave = await handleFacturarPrestamo(new Request('https://staging.erp.test/x', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prestamoId: PRESTAMO_ID, cantidad: 1, tasaBcv: 250 }),
-    }), ENV)
+    }), ENV_FACT)
     expect(sinClave.status).toBe(400)
     expect(f).not.toHaveBeenCalled()
   })
 
   it('A2: reenvío con la misma clave no repite avisos y la cantidad mayor a lo pendiente responde 409', async () => {
+    const ENV_FACT = { ...ENV, FACTURACION_PRESTAMOS_HABILITADA: 'true' }
     const touched = []
     vi.stubGlobal('fetch', vi.fn(async (url, opts) => {
       touched.push(url)
@@ -272,13 +286,13 @@ describe('OP-2026-071 Fase 2 (N27 préstamos, N35 bloqueo devolución parcial, N
       }
       return mockJson({})
     }))
-    const replay = await handleFacturarPrestamo(makeReq('/x', { prestamoId: PRESTAMO_ID, cantidad: 2, tasaBcv: 250 }), ENV)
+    const replay = await handleFacturarPrestamo(makeReq('/x', { prestamoId: PRESTAMO_ID, cantidad: 2, tasaBcv: 250 }), ENV_FACT)
     expect(replay.status).toBe(200)
     expect((await replay.json()).idempotent).toBe(true)
     expect(touched.some(u => u.includes('seguimiento_operativo'))).toBe(false)
 
     vi.stubGlobal('fetch', vi.fn(async () => mockJson({ message: 'CANTIDAD_SUPERA_PENDIENTE_PRESTAMO: pendiente 1' }, 400)))
-    const excede = await handleFacturarPrestamo(makeReq('/x', { prestamoId: PRESTAMO_ID, cantidad: 9, tasaBcv: 250 }), ENV)
+    const excede = await handleFacturarPrestamo(makeReq('/x', { prestamoId: PRESTAMO_ID, cantidad: 9, tasaBcv: 250 }), ENV_FACT)
     expect(excede.status).toBe(409)
   })
 

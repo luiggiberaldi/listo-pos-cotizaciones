@@ -642,7 +642,7 @@ export default function DevolucionParcialModal({ isOpen, onClose, despacho }) {
                       const hayPrestamo = itemsList.some(i => i.es_prestamo)
                       const [titulo, cuerpo] = todosPrestamo
                         ? ['Este despacho no admite devolución parcial',
-                           'Todos sus artículos están en préstamo y los préstamos no se devuelven desde aquí. Entra a la ficha del cliente, pestaña "Préstamos", y usa "Devolver" (la mercancía vuelve al inventario) o "Facturar" (se le cobra al cliente).']
+                           'Todos sus artículos están en préstamo y los préstamos no se devuelven desde aquí. Entra a la ficha del cliente, pestaña "Préstamos", y usa "Devolver" (la mercancía vuelve al inventario).']
                         : hayPrestamo
                           ? ['No queda nada por devolver desde aquí',
                              'Lo que no era préstamo ya fue devuelto. Los artículos en préstamo se devuelven desde la ficha del cliente, pestaña "Préstamos".']

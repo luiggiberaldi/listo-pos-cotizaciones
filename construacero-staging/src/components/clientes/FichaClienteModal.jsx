@@ -897,6 +897,9 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const [busquedaPrestamos, setBusquedaPrestamos] = useState('')
   const [activeAction, setActiveAction] = useState(null)
   const [actionQty, setActionQty] = useState('')
+  // OP-2026-095 Fase 3 (decisión del dueño): ocultar "Facturar préstamo" y dejar solo "Devolver"
+  // hasta confirmar reglas de cobro y comisiones con el cliente.
+  const FACTURACION_PRESTAMOS_HABILITADA = false
   // OP-2026-086: tasa del día para facturar préstamos y sello único por envío (doble clic / reintento)
   // OP-2026-091: se factura con la TASA PRINCIPAL elegida en el sistema (BCV, USDT o manual).
   const { tasaEfectiva, modoTasa, refrescar: refrescarTasa } = useTasaCambio()
@@ -946,6 +949,10 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
     }
     setActionLoading(true)
     try {
+      if (type === 'facturar' && !FACTURACION_PRESTAMOS_HABILITADA) {
+        showToast('La facturación de préstamos está deshabilitada temporalmente.', 'error')
+        return
+      }
       const url = type === 'devolver' ? '/api/clientes/prestamos/devolver' : '/api/clientes/prestamos/facturar'
       const tasa = tasaDelDia
       if (type === 'facturar' && !(tasa > 0)) {
@@ -1551,17 +1558,19 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                             >
                               Devolver
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveAction({ id: p.id, type: 'facturar' })
-                                setActionQty(String(restante))
-                                setPagoModo('credito'); setPagoReferencia('')
-                              }}
-                              className="flex-1 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold transition-all active:scale-[0.98]"
-                            >
-                              Facturar
-                            </button>
+                            {FACTURACION_PRESTAMOS_HABILITADA && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveAction({ id: p.id, type: 'facturar' })
+                                  setActionQty(String(restante))
+                                  setPagoModo('credito'); setPagoReferencia('')
+                                }}
+                                className="flex-1 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold transition-all active:scale-[0.98]"
+                              >
+                                Facturar
+                              </button>
+                            )}
                           </div>
                         )}
 

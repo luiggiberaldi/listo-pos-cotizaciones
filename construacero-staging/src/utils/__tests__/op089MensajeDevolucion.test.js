@@ -11,9 +11,10 @@ describe('OP-2026-089 mensaje de devolución parcial bloqueada', () => {
     expect(s).toContain('Ya se devolvió todo lo de este despacho')
     expect(s).toContain('No queda nada por devolver desde aquí')
   })
-  it('no usa jerga interna ni confunde un préstamo con una venta anulada', () => {
+  it('no usa jerga interna ni promete "Facturar" mientras está oculto (OP-2026-095)', () => {
     expect(s).not.toContain('venta anulada económicamente')
     expect(s).not.toContain('ajustes de devolución')
     expect(s).not.toContain('ajustes en CxC')
+    expect(s).not.toContain('o "Facturar"')
   })
 })
