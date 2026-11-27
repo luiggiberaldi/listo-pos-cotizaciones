@@ -4,6 +4,22 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Plus, FileText, Zap, X } from 'lucide-react'
 
+// Pantallas donde realmente se cotiza o vende rápido (oculto en vistas administrativas o de consulta)
+export const QUICK_QUOTE_FAB_VISIBLE_PATHS = [
+  '/',
+  '/mis-ventas',
+  '/clientes',
+  '/despachos',
+  '/inventario',
+]
+
+export function isQuickQuoteFabVisible(pathname = '/') {
+  if (!pathname || pathname === '/') return true
+  return QUICK_QUOTE_FAB_VISIBLE_PATHS.some(
+    prefix => prefix !== '/' && (pathname === prefix || pathname.startsWith(`${prefix}/`))
+  )
+}
+
 export default function QuickQuoteFAB() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -29,10 +45,7 @@ export default function QuickQuoteFAB() {
     setOpen(false)
   }, [location.pathname])
 
-  // No mostrar en cotizaciones, venta rápida, ni en login
-  // En Reportes el botón tapaba montos de las tablas en el celular.
-  const hiddenPaths = ['/cotizaciones', '/venta-rapida', '/login', '/reportes']
-  if (hiddenPaths.some(p => location.pathname.startsWith(p))) return null
+  if (!isQuickQuoteFabVisible(location.pathname)) return null
 
   function go(path) {
     setOpen(false)

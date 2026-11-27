@@ -7,6 +7,7 @@ import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import { useClientes } from '../../hooks/useClientes'
 import useClienteFresco from '../../hooks/useClienteFresco'
+import { evaluarSinCobro } from '../../utils/despachoSinCobro'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { useSaldoFavorOrigen } from '../../hooks/useCuentasCobrar'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
@@ -278,8 +279,13 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     : `DES-${String(despacho.numero).padStart(5, '0')}`
 
 
+  // OP-2026-092 / OP-2026-095: sin nada que cobrar (total $0) no se exige método de pago.
+  const infoSinCobro = evaluarSinCobro({ esCod, total: totalConFlete, items: despacho?.items || [] })
+  const sinCobro = infoSinCobro.sinCobro
+
   async function handleGuardar() {
-    const fpJson = JSON.stringify(formasPagoFinales)
+    // OP-2026-092: con total $0 (todo préstamo) no hay nada que cobrar: se guarda sin pagos anotados.
+    const fpJson = JSON.stringify(sinCobro ? [] : formasPagoFinales)
     await editarDespacho.mutateAsync({
       despachoId: despacho.id,
       formaPago: fpJson,
@@ -303,7 +309,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={e => { e.stopPropagation(); if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-2xl p-4 sm:p-8 max-h-[90vh] flex flex-col gap-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-[calc(100vw-1.5rem)] sm:max-w-2xl p-4 sm:p-8 max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] flex flex-col gap-4 pb-[env(safe-area-inset-bottom)]">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -511,6 +517,13 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
               </button>
             </div>
 
+            {sinCobro && (
+              <div data-testid="editar-despacho-sin-cobro" className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs leading-snug">
+                <p className="font-bold">{infoSinCobro.titulo}</p>
+                <p className="mt-0.5 opacity-80">{infoSinCobro.descripcion}</p>
+              </div>
+            )}
+
             {/* SECCIÓN 1: PAGO INMEDIATO (ADELANTO) */}
             <div className="space-y-2.5">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -586,10 +599,10 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                         </div>
                       )}
 
-                      {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                      {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                         <div className="flex items-center gap-2 pl-28">
                           <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
-                            Referencia (opcional):
+                            {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                           </span>
                           <input
                             type="text"
@@ -746,10 +759,10 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                                 <X size={15} />
                               </button>
                             </div>
-                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil'].includes(fp.metodo) && (
+                            {['Transf. / Pago Móvil', 'Transferencia', 'Pago Móvil', 'Cruce'].includes(fp.metodo) && (
                               <div className="flex items-center gap-2 pl-28 mt-1">
                                 <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
-                                  Referencia (opcional):
+                                  {fp.metodo === 'Cruce' ? 'Contra qué se cruzó (obligatorio):' : 'Referencia (opcional):'}
                                 </span>
                                 <input
                                   type="text"
@@ -911,7 +924,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
           </button>
           <button onClick={handleGuardar} disabled={
             cargando ||
-            !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) ||
+            !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : (pagoInmediatoCuadrado || sinCobro)) ||
             !cxcVencimientoValido ||
             (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)) ||
             !destinoFleteValido

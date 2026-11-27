@@ -259,5 +259,8 @@ construacero-backups/
 !src/utils/__tests__/operatorSessionPersistence12h.test.js
 !docs/plans/OP-2026-072_tasa-login-y-sesion-12h.md
 
+# OP-2026-084: plan de pruebas completo de inventario (rescatado en OP-2026-095 Fase 0)
+!docs/plans/OP-2026-084_plan-testeo-completo-inventario.md
+
 # OP-2026-095: plan de corrección tras auditoría OP-2026-094
 !docs/plans/OP-2026-095_plan-correccion-auditoria-traspaso-staging.md

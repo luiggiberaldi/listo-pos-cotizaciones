@@ -1,7 +1,7 @@
 // src/hooks/useDespachos.js
 // Queries y mutations para notas de despacho
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders, chunkIds } from '../services/apiBase'
 import useAuthStore from '../store/useAuthStore'
@@ -10,6 +10,7 @@ import { broadcastEntidad } from '../services/supabase/realtimeBus'
 import { notifyDespachoCreado, notifyStockBajo, notifyDespachoEnRuta, notifyDespachoEntregado, notifyDespachoCancelado } from '../services/notificationService'
 import { showToast } from '../components/ui/Toast'
 import { getOperatorSessionHeaders } from '../services/operatorSession'
+import { crearGeneradorClaveIdempotente } from '../utils/idempotencyKey'
 
 export const DESPACHOS_KEY = ['despachos']
 
@@ -278,42 +279,19 @@ export function useStockCheckDespachos(despachos = [], { enabled = true } = {}) 
         itemsPorDespacho[it.despacho_id].push(mapped)
       }
 
-      // 2. Stock actual + comprometido de todos los productos referenciados.
-      // Comprometido = items de despachos APROBADOS (estado 'despachada') según
-      // la regla 222 — mismo criterio que usa la RPC de aprobación v2, para que
-      // el aviso de la UI diga lo mismo que dirá la BD (disponible = físico − comprometido).
+      // 2. Stock físico actual (Release 17: el egreso ocurre al aprobar, así que
+      // stock_actual ya refleja el disponible real sin restar stock comprometido).
       const pids = [...new Set(items.map(it => it.producto_id).filter(Boolean))]
       const prodsMap = {}
       if (pids.length) {
         const pBatches = []
         for (let i = 0; i < pids.length; i += 200) pBatches.push(pids.slice(i, i + 200))
         const pResults = await Promise.all(pBatches.map(batch =>
-          supabase.from('productos').select('id, stock_actual, categoria').in('id', batch)
+          supabase.from('productos').select('id, stock_actual, stock_minimo, categoria').in('id', batch)
         ))
         for (const r of pResults) {
           if (r.error) throw r.error
           for (const p of (r.data ?? [])) prodsMap[p.id] = p
-        }
-        // Comprometido por despacho aprobado, en lotes por producto
-        const cBatches = []
-        for (let i = 0; i < pids.length; i += 200) cBatches.push(pids.slice(i, i + 200))
-        const cResults = await Promise.all(cBatches.map(batch =>
-          supabase
-            .from('notas_despacho_items')
-            .select('producto_id, cantidad, notas_despacho!inner(estado)')
-            .in('producto_id', batch)
-            .eq('notas_despacho.estado', 'despachada')
-        ))
-        const comprometido = {}
-        for (const r of cResults) {
-          if (r.error) throw r.error
-          for (const row of (r.data ?? [])) {
-            comprometido[row.producto_id] = (comprometido[row.producto_id] || 0) + Number(row.cantidad || 0)
-          }
-        }
-        for (const pid of Object.keys(comprometido)) {
-          if (prodsMap[pid]) prodsMap[pid] = { ...prodsMap[pid], stock_comprometido: comprometido[pid] }
-          else prodsMap[pid] = { id: pid, stock_actual: 0, categoria: '', stock_comprometido: comprometido[pid] }
         }
       }
 
@@ -371,9 +349,9 @@ export function useCrearDespacho() {
 
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+      qc.invalidateQueries({ queryKey: ['stock_por_aprobar'], exact: false })
       qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
-      qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'] })
       broadcastEntidad(['despachos', 'inventario', 'comisiones', 'cotizaciones', 'cuentas'])
       showToast('Nota de despacho creada', 'success')
@@ -387,25 +365,50 @@ const ESTADO_LABELS = { pendiente: 'Pendiente', despachada: 'Despachada', entreg
 
 export function useActualizarEstadoDespacho() {
   const qc = useQueryClient()
-  const perfil = useAuthStore.getState().perfil
+  const perfil = useAuthStore(useCallback(s => s.perfil, []))
   const rol = perfil?.rol
   const usuarioNombre = perfil?.nombre ?? 'usuario'
+  const claveGenRef = useRef(null)
+  const obtenerClaveGen = () => (claveGenRef.current ??= crearGeneradorClaveIdempotente())
+
+  const firmaEstado = (vars) => JSON.stringify({
+    despachoId: vars?.despachoId || '',
+    nuevoEstado: vars?.nuevoEstado || '',
+    motivoDevolucion: vars?.motivoDevolucion || '',
+    motivoAnulacion: vars?.motivoAnulacion || '',
+    destinoPagos: vars?.destinoPagos || '',
+    destinoPagoAnotado: vars?.destinoPagoAnotado || '',
+  })
 
   return useMutation({
-    mutationFn: async ({ despachoId, nuevoEstado, numeroCotizacion, clienteNombre, vendedorId = null, motivoDevolucion = null, motivoAnulacion = null, tasaBcv = null }) => {
-      const body = { despachoId, nuevoEstado }
+    mutationFn: async (vars) => {
+      const { despachoId, nuevoEstado, numeroCotizacion, clienteNombre, vendedorId = null, motivoDevolucion = null, motivoAnulacion = null, tasaBcv = null, destinoPagos = null, destinoPagoAnotado = null, idempotencyKey: explicitKey = null } = vars
+      const firma = firmaEstado(vars)
+      const claveGen = obtenerClaveGen()
+      const idempotencyKey = explicitKey || claveGen.resolver(firma)
+      const body = { despachoId, nuevoEstado, idempotencyKey }
       if (motivoDevolucion) body.motivo_devolucion = motivoDevolucion
       if (motivoAnulacion) body.motivo_anulacion = motivoAnulacion
+      // OP-2026-052: decisión sobre los pagos al reabrir (destinoPagos) o anular (destinoPagoAnotado)
+      if (destinoPagos) body.destinoPagos = destinoPagos
+      if (destinoPagoAnotado) body.destinoPagoAnotado = destinoPagoAnotado
       if (tasaBcv && Number(tasaBcv) > 0) body.tasaBcv = Number(tasaBcv)
 
       const res = await authFetch('/api/despachos/estado', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
         body: JSON.stringify(body),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al cambiar estado del despacho')
-      return { nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados: result.abonos_devolucion_anulados ?? null, creditoAnuladoUsd: result.credito_anulado_usd ?? null }
+      if (!res.ok) {
+        if ([400, 403, 404, 409].includes(res.status)) claveGen.limpiar(firma)
+        const e = new Error(result.error || 'Error al cambiar estado del despacho')
+        e.code = result.code || null
+        e.pagos = result.pagos || null
+        throw e
+      }
+      claveGen.limpiar(firma)
+      return { nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados: result.abonos_devolucion_anulados ?? null, creditoAnuladoUsd: result.credito_anulado_usd ?? null, pagosReabrir: result.pagos_reabrir ?? null, pagosAnular: result.pagos_anular ?? null }
     },
     // Optimistic update: reflect state change immediately in UI
     onMutate: async ({ despachoId, nuevoEstado }) => {
@@ -427,9 +430,18 @@ export function useActualizarEstadoDespacho() {
       if (context?.previousQueries) {
         context.previousQueries.forEach(([key, data]) => qc.setQueryData(key, data))
       }
-      showToast(error.message || 'Error al cambiar estado del despacho', 'error')
+      // La decisión sobre los pagos la muestra el propio modal (OP-2026-052)
+      if (error?.code !== 'DECISION_PAGOS_REQUERIDA') showToast(error.message || 'Error al cambiar estado del despacho', 'error')
     },
-    onSuccess: ({ nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados, creditoAnuladoUsd }) => {
+    onSuccess: ({ nuevoEstado, numeroCotizacion, clienteNombre, vendedorId, abonosDevolucionAnulados, creditoAnuladoUsd, pagosReabrir, pagosAnular }) => {
+      if (pagosReabrir?.destino === 'saldo_favor' && Number(pagosReabrir.pasado_a_saldo_favor) > 0) {
+        showToast(`Despacho reabierto · $${Number(pagosReabrir.pasado_a_saldo_favor).toFixed(2)} pasados a saldo a favor del cliente`, 'success', 6000)
+      } else if (pagosReabrir?.destino === 'mantener') {
+        showToast('Despacho reabierto · los pagos siguen en la cuenta del cliente', 'success', 6000)
+      }
+      if (pagosAnular?.destino === 'saldo_favor') {
+        showToast(`Despacho anulado · $${Number(pagosAnular.total_anotado).toFixed(2)} pasados a saldo a favor del cliente`, 'success', 6000)
+      }
       // Reversión consciente de devoluciones (release 06): toast con el efecto exacto en CxC.
       if (['pendiente', 'anulada'].includes(nuevoEstado) && (abonosDevolucionAnulados > 0 || (creditoAnuladoUsd ?? 0) > 0)) {
         const partes = []
@@ -456,9 +468,9 @@ export function useActualizarEstadoDespacho() {
       setTimeout(() => {
         qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
         qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+        qc.invalidateQueries({ queryKey: ['stock_por_aprobar'], exact: false })
         qc.invalidateQueries({ queryKey: ['comisiones'], exact: false })
         qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })
-        qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
         qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
         qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
         qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
@@ -487,7 +499,6 @@ export function useEditarDespacho() {
     onSuccess: async () => {
       showToast('Despacho actualizado', 'success')
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
-      qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
       qc.invalidateQueries({ queryKey: ['reporte-ventas'] })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
@@ -505,10 +516,11 @@ export function useEditarItemsDespacho() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ despachoId, items, pagos }) => {
+    mutationFn: async ({ despachoId, items, pagos, destinoPagos = null }) => {
       console.group('[DEEP_EDIT][NETWORK_TRACE]')
       console.log('Request body at mutation boundary', { despachoId, itemCount: Array.isArray(items) ? items.length : null, items, pagos })
-      const body = JSON.stringify({ despachoId, items, pagos })
+      // OP-2026-053: destinoPagos ('mantener' | 'saldo_favor') cuando la edición deja pagos sin deuda
+      const body = JSON.stringify({ despachoId, items, pagos, ...(destinoPagos ? { destinoPagos } : {}) })
       console.log('Serialized request body', JSON.parse(body))
       const res = await authFetch('/api/despachos/editar-items', {
         method: 'POST',
@@ -516,21 +528,30 @@ export function useEditarItemsDespacho() {
         body,
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al editar ítems del despacho')
+      if (!res.ok) {
+        const e = new Error(result.error || 'Error al editar ítems del despacho')
+        e.code = result.code || null
+        e.pagos = result.pagos || null
+        throw e
+      }
       return result
     },
-    onSuccess: async () => {
-      showToast('Ítems del despacho actualizados con éxito', 'success', 5000)
+    onSuccess: async (result) => {
+      const pasado = Number(result?.cxc?.pasado_a_saldo_favor || 0)
+      showToast(pasado > 0
+        ? `Ítems del despacho actualizados · $${pasado.toFixed(2)} pasados a saldo a favor del cliente`
+        : 'Ítems del despacho actualizados con éxito', 'success', 5000)
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
-      qc.invalidateQueries({ queryKey: ['stock_comprometido'] })
+      qc.invalidateQueries({ queryKey: ['stock_por_aprobar'], exact: false })
       qc.invalidateQueries({ queryKey: ['dashboard_metrics'] })
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
       broadcastEntidad(['despachos', 'inventario', 'clientes', 'cuentas'])
     },
     onError: (error) => {
-      showToast(error.message || 'Error al editar ítems', 'error')
+      // La decisión sobre los pagos la pregunta el propio modal (OP-2026-053)
+      if (error?.code !== 'DECISION_PAGOS_REQUERIDA') showToast(error.message || 'Error al editar ítems', 'error')
     },
   })
 }
@@ -589,6 +610,8 @@ export function useReciclarDespacho() {
 // ─── Devolución parcial de despacho entregado (administracion/logistica) ────
 export function useDevolucionParcialDespacho() {
   const qc = useQueryClient()
+  const claveGenRef = useRef(null)
+  const obtenerClaveGen = () => (claveGenRef.current ??= crearGeneradorClaveIdempotente())
 
   return useMutation({
     mutationFn: async ({
@@ -602,27 +625,43 @@ export function useDevolucionParcialDespacho() {
       pagosReembolso,
       reembolsoMetodo,
       reembolsoReferencia,
-      reembolsoMonto
+      reembolsoMonto,
+      anularAbonoId,
+      acreditarDonacion,
+      motivoAcreditarDonacion,
+      idempotencyKey: explicitKey = null,
     }) => {
+      const firma = JSON.stringify({ despachoId, items, motivo, generarReemplazo, exchangeItems, pagosDiferencia, destinoSaldo, pagosReembolso, anularAbonoId, acreditarDonacion })
+      const claveGen = obtenerClaveGen()
+      const idempotencyKey = explicitKey || claveGen.resolver(firma)
       const res = await authFetch('/api/despachos/devolucion-parcial', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
         body: JSON.stringify({
           despachoId,
           items,
           motivo,
           generarReemplazo,
+          // OP-2026-054: autorización para dar crédito por mercancía donada
+          ...(acreditarDonacion ? { acreditarDonacion: true, motivoAcreditarDonacion } : {}),
           exchangeItems,
           pagosDiferencia: Array.isArray(pagosDiferencia) ? pagosDiferencia : [],
           destinoSaldo,
           pagosReembolso: Array.isArray(pagosReembolso) ? pagosReembolso : [],
           reembolsoMetodo,
           reembolsoReferencia,
-          reembolsoMonto
+          reembolsoMonto,
+          // OP-2026-042: abono manual que el operador confirmó que era esta devolución
+          anularAbonoId: anularAbonoId || null,
+          idempotencyKey,
         }),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Error al registrar devolución parcial')
+      if (!res.ok) {
+        if ([400, 403, 404, 409].includes(res.status)) claveGen.limpiar(firma)
+        throw new Error(result.error || 'Error al registrar devolución parcial')
+      }
+      claveGen.limpiar(firma)
       return result
     },
     onSuccess: async (result) => {
@@ -638,6 +677,7 @@ export function useDevolucionParcialDespacho() {
           if (abono > 0) partes.push(`deuda reducida $${abono.toFixed(2)}`)
           if (credito > 0) partes.push(`saldo a favor $${credito.toFixed(2)}`)
           if (reembolso > 0) partes.push(`reembolso en efectivo $${reembolso.toFixed(2)}`)
+          if (result?.abono_anulado) partes.push(`abono anulado $${Number(result.abono_anulado.monto_usd || 0).toFixed(2)}`)
           if (partes.length === 0) partes.push('sin efecto financiero')
         } else if (balance > 0) {
           partes.push(`cargo por diferencia $${balance.toFixed(2)}`)
@@ -647,6 +687,7 @@ export function useDevolucionParcialDespacho() {
       showToast(msg, 'success')
       qc.invalidateQueries({ queryKey: ['despachos'], exact: false })
       qc.invalidateQueries({ queryKey: ['inventario'], exact: false })
+      qc.invalidateQueries({ queryKey: ['stock_por_aprobar'], exact: false })
       qc.invalidateQueries({ queryKey: ['clientes'], exact: false })
       qc.invalidateQueries({ queryKey: ['cuentas-cobrar'], exact: false })
       qc.invalidateQueries({ queryKey: ['cotizaciones'], exact: false })

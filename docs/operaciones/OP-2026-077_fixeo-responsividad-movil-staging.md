@@ -1,5 +1,7 @@
 # OP-2026-077 — Arreglo completo de responsividad móvil aplicado y verificado en staging
 
+> ✅ **Publicado en producción el 2026-11-25** mediante [OP-2026-080](../plans/OP-2026-080_plan-llevar-077-079-a-produccion.md) (solicitud #77, unión `fa13d0c2`). Diferencia con lo probado en staging: el botón `+` de cotización rápida quedó **solo en Inicio** por decisión del dueño.
+
 **Fecha:** 2026-11-25 · **Plan base:** [OP-2026-074](../plans/OP-2026-074_plan-fixeo-responsividad-movil.md) · **Estado:** 🧪 **Aplicado y verificado en `construacero-staging/` (copia de pruebas)** · Pendiente revisión del usuario para pasar a producción (`main`).
 
 ## En resumen

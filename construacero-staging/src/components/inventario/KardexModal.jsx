@@ -10,6 +10,7 @@ import { useKardex, useRevertirMovimiento } from '../../hooks/useMovimientosInve
 import { MOTIVOS_TIPO, formatCorrelativo, getMotivoChipClasses } from '../../utils/motivosTipo'
 import useAuthStore from '../../store/useAuthStore'
 import { showToast } from '../ui/Toast'
+import { esMovimientoManualRevertible } from '../../utils/kardexRevertible'
 
 function formatFecha(ts) {
   return new Date(ts).toLocaleString('es-VE', {
@@ -46,12 +47,13 @@ function SummaryCard({ icon: Icon, label, value, color, suffix }) {
   )
 }
 
+
 // ── Fila de Movimiento ──────────────────────────────────────────────────────
 function KardexRow({ m, idx, isExpanded, onToggle, puedeRevertir, yaRevertida, onRevertir, revirtiendo }) {
   const esIngreso = m.tipo === 'ingreso'
   const motivoCfg = MOTIVOS_TIPO[m.motivo_tipo] || MOTIVOS_TIPO.otro
   const motivoColors = getMotivoChipClasses(m.motivo_tipo)
-  const elegible = puedeRevertir && !m.origen_tipo && m.motivo_tipo !== 'venta'
+  const elegible = puedeRevertir && esMovimientoManualRevertible(m)
   
   const textRef = useRef(null)
   const [isTruncated, setIsTruncated] = useState(false)

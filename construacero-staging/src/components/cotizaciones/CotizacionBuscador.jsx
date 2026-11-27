@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useInventario, useCategorias } from '../../hooks/useInventario'
-import { useStockComprometido } from '../../hooks/useStockComprometido'
+import { useStockPorAprobar } from '../../hooks/useStockPorAprobar'
 import useAuthStore from '../../store/useAuthStore'
 import { usePrecioVendedor } from '../../hooks/usePrecioVendedor'
 import { fmtUsdSimple as fmtUsd, fmtBs, usdToBs } from '../../utils/format'
@@ -206,8 +206,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
   const { data: inventarioData, isLoading } = useInventario({ pageSize: 1000 })
   const todosProductos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
-  const { data: stockComprometido = {} } = useStockComprometido()
-
+  const { data: stockPorAprobar = {} } = useStockPorAprobar()
   const filtrados = useProductSearch(todosProductos, texto, catActiva)
 
   const idsAgregados = new Set(itemsAgregados.map(it => it.productoId))
@@ -341,7 +340,6 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
           <div className="grid grid-cols-3 gap-1 md:grid-cols-5 lg:grid-cols-6 md:gap-1.5">
             {filtrados.slice(0, 60).map(p => {
               const itemInCart = itemsMap[p.id]
-              const comprometido = stockComprometido[p.id] || 0
               return (
                 <ProductCard
                   key={p.id}
@@ -349,7 +347,7 @@ export default function BuscadorProductos({ onAgregar, onScanClick, itemsAgregad
                   agregado={idsAgregados.has(p.id)}
                   cantidad={itemInCart?.cantidad ?? null}
                   tasa={tasa}
-                  comprometido={comprometido}
+                  porAprobar={stockPorAprobar[p.id] || 0}
                   onAgregar={agregarConReciente}
                   onMas={() => onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad + 1)}
                   onMenos={() => itemInCart.cantidad <= 1 ? onEliminarItem(itemInCart._idx) : onCambiarCantidad(itemInCart._idx, 'cantidad', itemInCart.cantidad - 1)}

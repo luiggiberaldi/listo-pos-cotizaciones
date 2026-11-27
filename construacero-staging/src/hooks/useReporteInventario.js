@@ -11,7 +11,7 @@ const ROLES_VER_COSTO = ['administracion', 'jefe', 'desarrollador']
 
 // ── Transformación pura — separada del fetching ───────────────────────────────
 function transformarReporte(raw, esPrivilegiado) {
-  const { productos, stockComprometido, movimientos } = raw
+  const { productos, movimientos } = raw
 
   // Map: producto_id → última fecha de movimiento (90 días)
   const ultimoMov = {}
@@ -20,8 +20,7 @@ function transformarReporte(raw, esPrivilegiado) {
   })
 
   const items = (productos || []).map(p => {
-    const comprometido = stockComprometido[p.id] || 0
-    const disponible   = Math.max(0, Number(p.stock_actual) - comprometido)
+    const disponible   = Math.max(0, Number(p.stock_actual))
     const valorVenta   = Number(p.stock_actual) * Number(p.precio_usd)
     const valorCosto   = esPrivilegiado ? Number(p.stock_actual) * Number(p.costo_usd || 0) : null
     const ultimaActividad = ultimoMov[p.id] || null
@@ -31,7 +30,7 @@ function transformarReporte(raw, esPrivilegiado) {
     const bajStock = Number(p.stock_actual) <= 0 ||
       (Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo))
 
-    return { ...p, comprometido, disponible, valorVenta, valorCosto, ultimaActividad, diasSinMov, bajStock }
+    return { ...p, comprometido: 0, disponible, valorVenta, valorCosto, ultimaActividad, diasSinMov, bajStock }
   })
 
   // KPIs
@@ -89,7 +88,7 @@ export function useReporteInventario() {
       hace90.setDate(hace90.getDate() - 90)
 
       // Fase 2: queries paralelas
-      const [prodRes, scRes, movRes] = await Promise.all([
+      const [prodRes, movRes] = await Promise.all([
         supabase
           .from('productos')
           .select('id, codigo, nombre, categoria, unidad, precio_usd, costo_usd, stock_actual, stock_minimo, activo')
@@ -97,8 +96,6 @@ export function useReporteInventario() {
           .order('categoria')
           .order('nombre')
           .limit(5000), // tope de seguridad — sin él Supabase corta en 1000 sin avisar
-
-        supabase.rpc('obtener_stock_comprometido'),
 
         supabase
           .from('inventario_movimientos')
@@ -112,17 +109,8 @@ export function useReporteInventario() {
       // Los movimientos alimentan "días sin movimiento" — un fallo silencioso
       // marcaría productos activos como sin actividad.
       if (movRes.error) throw movRes.error
-      // Si falla esta función, no debemos convertir el error en stock disponible:
-      // eso mostraría un reporte financiero incorrecto como si no hubiera deuda.
-      if (scRes.error) throw scRes.error
 
-      // Normalizar stock comprometido a mapa
-      const stockComprometido = {}
-      ;(scRes.data || []).forEach(r => {
-        stockComprometido[r.producto_id] = Number(r.total_comprometido || r.cantidad_comprometida || 0)
-      })
-
-      return { productos: prodRes.data, stockComprometido, movimientos: movRes.data }
+      return { productos: prodRes.data, movimientos: movRes.data }
     },
 
     // Fase 4: transformación fuera del queryFn via select

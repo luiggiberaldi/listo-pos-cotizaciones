@@ -2,6 +2,7 @@
 import { json, jsonError, corsHeaders, isValidUuid, isSameOriginRequest } from '../lib/utils.js'
 import { validateOperator } from '../lib/auth.js'
 import { registrarAuditoria } from '../lib/audit.js'
+import { detectarCargasRecientesSimilares } from '../../src/utils/cargaDuplicada.js'
 
 // ── PDF temporal handler (para WhatsApp) ──────────────────────────────────
 export async function handlePdfTemp(request, env) {
@@ -212,8 +213,115 @@ export async function handleAplicarMovimientoLote(request, env) {
 }
 
 */
+function resolverIdempotencyKey(request, body) {
+  const fromBody = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : '';
+  const fromHeader = (request.headers.get('Idempotency-Key') || '').trim();
+  return fromBody || fromHeader || crypto.randomUUID();
+}
+
+// ── Conteo físico atómico (unitario y por lotes, con concurrencia optimista) ──
+export async function handleConteoInventario(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+  const ROLES_CONTEO = ['administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_CONTEO.includes(operador.rol)) {
+    return jsonError('Solo administración, jefe o desarrollador pueden registrar conteos físicos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const motivo = typeof body?.motivo === 'string' ? body.motivo.trim() : '';
+  const items = body?.items;
+  const idempotencyKey = resolverIdempotencyKey(request, body);
+  if (!motivo) return jsonError('El motivo del conteo es obligatorio', 400, request);
+  if (!Array.isArray(items) || items.length === 0) return jsonError('Debe incluir al menos un producto para conteo', 400, request);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
+
+  const seenIds = new Set();
+  const normalizedItems = [];
+  for (const item of items) {
+    if (!isValidUuid(item?.producto_id)) return jsonError('producto_id inválido en conteo', 400, request);
+    if (seenIds.has(item.producto_id)) return jsonError('No se permite repetir el mismo producto en un conteo', 400, request);
+    seenIds.add(item.producto_id);
+
+    const contado = Number(item?.stock_contado);
+    const esperado = Number(item?.stock_esperado);
+    if (!Number.isFinite(contado) || !Number.isFinite(esperado)) {
+      return jsonError('stock_contado y stock_esperado deben ser numéricos', 400, request);
+    }
+    normalizedItems.push({
+      producto_id: item.producto_id,
+      stock_contado: contado,
+      stock_esperado: esperado,
+    });
+  }
+
+  try {
+    const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/ajustar_conteo_inventario_atomico_staging`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        p_cuenta_id: operador.cuenta_id,
+        p_motivo: motivo,
+        p_items: normalizedItems,
+        p_usuario_id: operador.actor_id || operador.id,
+        p_usuario_nombre: operador.nombre,
+        p_usuario_color: operador.color || null,
+        p_idempotency_key: idempotencyKey,
+      }),
+    });
+    const text = await rpcRes.text();
+    let result = null;
+    try { result = text ? JSON.parse(text) : null; } catch { result = null; }
+    if (!rpcRes.ok) {
+      const msg = result?.message || text || `HTTP ${rpcRes.status}`;
+      if (msg.includes('CONFLICTO_CONCURRENCIA_STOCK')) {
+        return jsonError('El stock cambió en el servidor mientras contabas. Recarga el catálogo antes de guardar el conteo.', 409, request);
+      }
+      if (msg.includes('STOCK_NEGATIVO_NO_PERMITIDO')) {
+        return jsonError('El conteo no puede dejar stock negativo con la configuración actual', 400, request);
+      }
+      return jsonError(`No se pudo aplicar el conteo físico: ${msg}`, 400, request);
+    }
+    if (!result?.ok) return jsonError('La RPC no confirmó el conteo físico', 500, request);
+
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id,
+        usuarioNombre: operador.nombre,
+        usuarioRol: operador.rol,
+        categoria: 'INVENTARIO',
+        accion: 'CONTEO_FISICO_INVENTARIO',
+        descripcion: `Conteo físico (${result.movimientos ?? 0} ajustes, ${result.sin_cambios ?? 0} sin cambios): ${motivo}`,
+        entidadTipo: 'inventario',
+        entidadId: result.lote_id || normalizedItems[0]?.producto_id,
+        meta: { ...result, motivo, idempotency_key: idempotencyKey },
+        ip,
+      });
+    } catch {
+      // Best-effort operation; preserve the primary response.
+    }
+
+    return json({
+      ok: true,
+      lote_id: result.lote_id ?? null,
+      numero: result.numero ?? null,
+      movimientos: result.movimientos ?? 0,
+      sin_cambios: result.sin_cambios ?? 0,
+      detalles: result.detalles ?? [],
+      idempotent: result.idempotent === true,
+    }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error en conteo físico', 500, request);
+  }
+}
+
 // ── Revertir movimiento manual de inventario (admin) ─────────────────────────
 export async function handleRevertirMovimientoInventario(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { user, operador, headers, ip } = v;
@@ -237,7 +345,7 @@ export async function handleRevertirMovimientoInventario(request, env) {
       body: JSON.stringify({
         p_cuenta_id: operador.cuenta_id,
         p_movimiento_id: movimiento_id,
-        p_usuario_id: user.operator_id,
+        p_usuario_id: operador.actor_id || operador.id,
         p_usuario_nombre: operador.nombre,
         p_usuario_color: operador.color || null,
         p_idempotency_key: idempotencyKey,
@@ -252,7 +360,7 @@ export async function handleRevertirMovimientoInventario(request, env) {
       const msg = result?.message || text || ('HTTP ' + rpcRes.status);
       if (msg.includes('MOVIMIENTO_NO_ENCONTRADO_O_CUENTA_AJENA')) return jsonError('Movimiento no encontrado', 404, request);
       if (msg.includes('ROL_NO_AUTORIZADO_PARA_REVERTIR')) return jsonError('Rol no autorizado para revertir', 403, request);
-      if (msg.includes('MOVIMIENTO_NO_REVERTIBLE')) return jsonError('Este movimiento pertenece a un flujo (venta/despacho) y no se puede revertir aquí', 400, request);
+      if (msg.includes('MOVIMIENTO_NO_REVERTIBLE')) return jsonError('Este movimiento pertenece a un flujo del sistema y no se puede revertir aquí', 400, request);
       if (msg.includes('MOVIMIENTO_YA_REVERTIDO')) return jsonError('Este movimiento ya fue revertido', 409, request);
       if (msg.includes('STOCK_NEGATIVO_NO_PERMITIDO')) return jsonError('La reversión dejaría el stock en negativo', 400, request);
       if (msg.includes('OPERACION_IDEMPOTENTE_SIN_RESULTADO')) return jsonError('Reversión en proceso; reintenta en unos segundos', 409, request);
@@ -1010,6 +1118,308 @@ export async function handleTransformacionInventario(request, env) {
   }
 }
 
+// ── Gestión de productos con Kardex vía RPC tenant-safe (service_role) ────────
+const ROLES_PRODUCTO_EDICION = ['supervisor', 'administracion', 'jefe', 'desarrollador'];
+const ROLES_PRODUCTO_BORRADO = ['administracion', 'jefe', 'desarrollador'];
+
+function resolverIdempotencyKeyProducto(request, body) {
+  const fromBody = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey.trim() : '';
+  const fromHeader = (request.headers.get('Idempotency-Key') || '').trim();
+  return fromBody || fromHeader || crypto.randomUUID();
+}
+
+function toNullableNumber(val) {
+  return val !== '' && val != null ? Number(val) : null;
+}
+
+function normalizarCamposProducto(body) {
+  return {
+    codigo: body?.codigo?.trim() || null,
+    nombre: body?.nombre != null ? String(body.nombre).trim() : null,
+    descripcion: body?.descripcion !== undefined ? (body.descripcion?.trim() || null) : null,
+    categoria: body?.categoria !== undefined ? (body.categoria?.trim() || null) : null,
+    unidad: body?.unidad?.trim() || 'und',
+    precio_usd: toNullableNumber(body?.precio_usd),
+    costo_usd: toNullableNumber(body?.costo_usd),
+    stock_actual: toNullableNumber(body?.stock_actual),
+    stock_minimo: toNullableNumber(body?.stock_minimo),
+    imagen_url: body?.imagen_url !== undefined ? (body.imagen_url || null) : null,
+    precio_2: toNullableNumber(body?.precio_2),
+    precio_3: toNullableNumber(body?.precio_3),
+    precio1_porcentaje: toNullableNumber(body?.precio1_porcentaje),
+    precio2_porcentaje: toNullableNumber(body?.precio2_porcentaje),
+    precio3_porcentaje: toNullableNumber(body?.precio3_porcentaje),
+  };
+}
+
+function validarCamposNumericosProducto(campos) {
+  const keys = [
+    'precio_usd', 'costo_usd', 'stock_actual', 'stock_minimo',
+    'precio_2', 'precio_3', 'precio1_porcentaje', 'precio2_porcentaje', 'precio3_porcentaje',
+  ];
+  for (const key of keys) {
+    if (campos[key] !== null && !Number.isFinite(campos[key])) {
+      return `${key} debe ser numérico`;
+    }
+  }
+  return null;
+}
+
+async function ejecutarRpcProducto(request, env, v, rpcName, payload, accionAudit, descAudit, entidadIdFallback = null) {
+  const { user, operador, headers, ip } = v;
+  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${rpcName}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const text = await rpcRes.text();
+  let result = null;
+  try { result = text ? JSON.parse(text) : null; } catch { result = null; }
+
+  if (!rpcRes.ok) {
+    const msg = result?.message || text || `HTTP ${rpcRes.status}`;
+    if (msg.includes('duplicate') || result?.code === '23505') {
+      return jsonError('Ya existe un producto con ese código', 409, request);
+    }
+    if (msg.includes('PRODUCTO_CON_HISTORIAL_USAR_ARCHIVADO')) {
+      return jsonError('Este producto tiene historial de movimientos o ventas y no puede eliminarse; usa Desactivar para archivarlo.', 409, request);
+    }
+    if (msg.includes('CONFLICTO_CONCURRENCIA_STOCK')) {
+      return jsonError('El stock cambió en el servidor mientras editabas. Recarga el producto antes de ajustar el conteo.', 409, request);
+    }
+    return jsonError(`No se pudo completar ${accionAudit}: ${msg}`, 400, request);
+  }
+  if (!result?.ok) {
+    return jsonError(`La RPC ${rpcName} no confirmó la operación`, 500, request);
+  }
+
+  try {
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id,
+      usuarioNombre: operador.nombre,
+      usuarioRol: operador.rol,
+      categoria: 'INVENTARIO',
+      accion: accionAudit,
+      descripcion: descAudit(result),
+      entidadTipo: 'producto',
+      entidadId: result.id || result.producto_id || entidadIdFallback,
+      meta: { ...result },
+      ip,
+    });
+  } catch {
+    // Best-effort operation; preserve the primary response.
+  }
+
+  return json(result, 200, request);
+}
+
+export async function handleCrearProductoConKardex(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  if (!ROLES_PRODUCTO_EDICION.includes(v.operador.rol)) {
+    return jsonError('Permisos insuficientes para crear productos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const idempotencyKey = resolverIdempotencyKeyProducto(request, body);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
+
+  const campos = normalizarCamposProducto(body);
+  if (!campos.nombre) return jsonError('El nombre del producto es obligatorio', 400, request);
+  const errNum = validarCamposNumericosProducto(campos);
+  if (errNum) return jsonError(errNum, 400, request);
+  if ((campos.stock_actual ?? 0) < 0) return jsonError('El stock inicial no puede ser negativo', 400, request);
+
+  return ejecutarRpcProducto(
+    request, env, v, 'crear_producto_con_kardex_tenant_safe',
+    {
+      p_cuenta_id: v.operador.cuenta_id,
+      p_usuario_id: v.operador.actor_id || v.operador.id,
+      p_usuario_nombre: v.operador.nombre,
+      p_usuario_color: v.operador.color || null,
+      p_codigo: campos.codigo,
+      p_nombre: campos.nombre,
+      p_descripcion: campos.descripcion,
+      p_categoria: campos.categoria,
+      p_unidad: campos.unidad,
+      p_precio_usd: campos.precio_usd ?? 0,
+      p_costo_usd: campos.costo_usd,
+      p_stock_actual: campos.stock_actual ?? 0,
+      p_stock_minimo: campos.stock_minimo ?? 0,
+      p_imagen_url: campos.imagen_url,
+      p_precio_2: campos.precio_2,
+      p_precio_3: campos.precio_3,
+      p_precio1_porcentaje: campos.precio1_porcentaje,
+      p_precio2_porcentaje: campos.precio2_porcentaje,
+      p_precio3_porcentaje: campos.precio3_porcentaje,
+      p_idempotency_key: idempotencyKey,
+    },
+    'CREAR_PRODUCTO',
+    (r) => `Producto creado: ${r.nombre || campos.nombre} (stock inicial: ${campos.stock_actual ?? 0})`,
+  );
+}
+
+export async function handleActualizarProductoConKardex(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  if (!ROLES_PRODUCTO_EDICION.includes(v.operador.rol)) {
+    return jsonError('Permisos insuficientes para editar productos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const productoId = body?.id;
+  if (!isValidUuid(productoId)) return jsonError('id de producto inválido', 400, request);
+
+  const idempotencyKey = resolverIdempotencyKeyProducto(request, body);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
+
+  const campos = normalizarCamposProducto(body);
+  if (!campos.nombre) return jsonError('El nombre del producto es obligatorio', 400, request);
+  const errNum = validarCamposNumericosProducto(campos);
+  if (errNum) return jsonError(errNum, 400, request);
+
+  return ejecutarRpcProducto(
+    request, env, v, 'actualizar_producto_con_kardex_tenant_safe',
+    {
+      p_cuenta_id: v.operador.cuenta_id,
+      p_usuario_id: v.operador.actor_id || v.operador.id,
+      p_producto_id: productoId,
+      p_usuario_nombre: v.operador.nombre,
+      p_usuario_color: v.operador.color || null,
+      p_codigo: campos.codigo,
+      p_nombre: campos.nombre,
+      p_descripcion: campos.descripcion,
+      p_categoria: campos.categoria,
+      p_unidad: campos.unidad,
+      p_precio_usd: campos.precio_usd ?? 0,
+      p_costo_usd: campos.costo_usd,
+      p_stock_actual: campos.stock_actual,
+      p_stock_minimo: campos.stock_minimo ?? 0,
+      p_imagen_url: campos.imagen_url,
+      p_precio_2: campos.precio_2,
+      p_precio_3: campos.precio_3,
+      p_precio1_porcentaje: campos.precio1_porcentaje,
+      p_precio2_porcentaje: campos.precio2_porcentaje,
+      p_precio3_porcentaje: campos.precio3_porcentaje,
+      p_idempotency_key: idempotencyKey,
+    },
+    'ACTUALIZAR_PRODUCTO',
+    () => `Producto actualizado: ${campos.nombre}`,
+    productoId,
+  );
+}
+
+export async function handleBorrarProductoConKardex(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  if (!ROLES_PRODUCTO_BORRADO.includes(v.operador.rol)) {
+    return jsonError('Permisos insuficientes para eliminar productos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const productoId = body?.id;
+  if (!isValidUuid(productoId)) return jsonError('id de producto inválido', 400, request);
+
+  const idempotencyKey = resolverIdempotencyKeyProducto(request, body);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
+
+  return ejecutarRpcProducto(
+    request, env, v, 'borrar_producto_con_kardex_tenant_safe',
+    {
+      p_cuenta_id: v.operador.cuenta_id,
+      p_producto_id: productoId,
+      p_usuario_id: v.operador.actor_id || v.operador.id,
+      p_usuario_nombre: v.operador.nombre,
+      p_usuario_color: v.operador.color || null,
+      p_confirmacion: 'BORRAR_PRODUCTO',
+      p_idempotency_key: idempotencyKey,
+    },
+    'BORRAR_PRODUCTO',
+    () => `Producto eliminado del sistema (${productoId})`,
+    productoId,
+  );
+}
+
+export async function handleActualizarProductoMetadatos(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+  if (!ROLES_PRODUCTO_EDICION.includes(operador.rol)) {
+    return jsonError('Permisos insuficientes para actualizar metadatos del producto', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const productoId = body?.id;
+  if (!isValidUuid(productoId)) return jsonError('id de producto inválido', 400, request);
+
+  const patch = { actualizado_en: new Date().toISOString() };
+  let hasField = false;
+
+  if (Object.prototype.hasOwnProperty.call(body, 'activo')) {
+    if (typeof body.activo !== 'boolean') return jsonError('activo debe ser booleano', 400, request);
+    patch.activo = body.activo;
+    hasField = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'imagen_url')) {
+    if (body.imagen_url !== null && typeof body.imagen_url !== 'string') {
+      return jsonError('imagen_url inválida', 400, request);
+    }
+    patch.imagen_url = body.imagen_url;
+    hasField = true;
+  }
+
+  if (!hasField) return jsonError('No se enviaron metadatos válidos para actualizar', 400, request);
+
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/productos?id=eq.${productoId}&cuenta_id=eq.${operador.cuenta_id}&select=id,nombre,activo,imagen_url`,
+    {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify(patch),
+    },
+  );
+  const text = await res.text();
+  let rows = null;
+  try { rows = text ? JSON.parse(text) : null; } catch { rows = null; }
+  if (!res.ok) return jsonError(rows?.message || text || 'Error actualizando metadatos', 400, request);
+  const updated = Array.isArray(rows) ? rows[0] : null;
+  if (!updated) return jsonError('Producto no encontrado', 404, request);
+
+  try {
+    const accion = Object.prototype.hasOwnProperty.call(patch, 'activo')
+      ? (patch.activo ? 'PRODUCTO_ACTIVAR' : 'PRODUCTO_DESACTIVAR')
+      : 'ACTUALIZAR_METADATOS_PRODUCTO';
+    await registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id,
+      usuarioNombre: operador.nombre,
+      usuarioRol: operador.rol,
+      categoria: 'INVENTARIO',
+      accion,
+      descripcion: `Metadatos actualizados en ${updated.nombre}`,
+      entidadTipo: 'producto',
+      entidadId: productoId,
+      meta: patch,
+      ip,
+    });
+  } catch {
+    // Best-effort operation; preserve the primary response.
+  }
+
+  return json({ ok: true, id: updated.id, producto: updated }, 200, request);
+}
+
 /* Legacy no atómico desactivado; se conserva como referencia histórica.
 // ── Transformación de Inventario (Procesamiento de un producto en otro) ──────
 export async function handleTransformacionInventario(request, env) {
@@ -1165,6 +1575,12 @@ export async function handleBatchIngest(request, env) {
   const idempotencyKey = requestedIdempotencyKey || crypto.randomUUID();
   if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
 
+  // OP-2026-086 (Decisión 2 del dueño): el ingreso por lote solo SUMA. Para fijar el stock a un
+  // número se usa el conteo físico, que comprueba si hubo ventas mientras se contaba.
+  if (productos.some((p) => (p?.modoExistente || p?.modo_existente || 'sumar') !== 'sumar')) {
+    return jsonError('El ingreso por lote solo suma al stock. Para cuadrar existencias usa "Conteo físico".', 400, request);
+  }
+
   const rpcItems = productos.map((p) => {
     const isNuevo = Boolean(p.isNuevo);
     // Los precios de venta SOLO aplican a productos nuevos. Un ingreso de lote
@@ -1189,7 +1605,7 @@ export async function handleBatchIngest(request, env) {
       precio1_porcentaje: isNuevo ? (p.precio1_porcentaje ?? null) : null,
       precio2_porcentaje: isNuevo ? (p.precio2_porcentaje ?? null) : null,
       precio3_porcentaje: isNuevo ? (p.precio3_porcentaje ?? null) : null,
-      modo_existente: p.modoExistente || p.modo_existente || 'sumar',
+      modo_existente: 'sumar',
       actualizar_costo: Boolean(p.actualizarCosto ?? p.actualizar_costo),
     };
   });
@@ -1207,6 +1623,24 @@ export async function handleBatchIngest(request, env) {
   }
 
   try {
+    let advertenciasDuplicado = [];
+    try {
+      const existentes = rpcItems.filter(i => !i.is_nuevo && i.producto_id);
+      if (existentes.length > 0) {
+        const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const recRes = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/inventario_movimientos?cuenta_id=eq.${operador.cuenta_id}&tipo=eq.ingreso&creado_en=gte.${encodeURIComponent(hace24h)}&select=producto_id,producto_nombre,tipo,cantidad,motivo,origen_tipo,creado_en&order=creado_en.desc&limit=500`,
+          { headers }
+        );
+        if (recRes.ok) {
+          const recientes = await recRes.json();
+          advertenciasDuplicado = detectarCargasRecientesSimilares(recientes, existentes);
+        }
+      }
+    } catch {
+      advertenciasDuplicado = [];
+    }
+
     const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/ingresar_lote_inventario_atomico`, {
       method: 'POST',
       headers,
@@ -1238,7 +1672,7 @@ export async function handleBatchIngest(request, env) {
         descripcion: `Ingreso masivo atómico: ${result.procesados} productos (${result.nuevos} nuevos). Motivo: ${motivo}`,
         entidadTipo: 'inventario',
         entidadId: result.lote_id,
-        meta: { motivo, lote_id: result.lote_id, procesados: result.procesados, nuevos: result.nuevos, movimientos: result.movimientos, idempotency_key: idempotencyKey, idempotent: result.idempotent === true },
+        meta: { motivo, lote_id: result.lote_id, procesados: result.procesados, nuevos: result.nuevos, movimientos: result.movimientos, idempotency_key: idempotencyKey, idempotent: result.idempotent === true, advertencias_duplicado: advertenciasDuplicado.length },
         ip,
       });
     } catch (e) {
@@ -1252,6 +1686,7 @@ export async function handleBatchIngest(request, env) {
       movimientos: result.movimientos,
       lote_id: result.lote_id,
       idempotent: result.idempotent === true,
+      ...(advertenciasDuplicado.length > 0 ? { advertencias_duplicado: advertenciasDuplicado } : {}),
     }, 200, request);
   } catch (e) {
     console.error('[BATCH_INGEST] Atomic error:', e.message);

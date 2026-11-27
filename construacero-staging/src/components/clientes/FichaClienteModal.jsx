@@ -1,18 +1,21 @@
 // src/components/clientes/FichaClienteModal.jsx
 // Modal ficha del cliente: historial de crédito + formulario de abono
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, CreditCard, ArrowUpCircle, ArrowDownCircle, AlertCircle, RefreshCw, DollarSign, Hash, Phone, FileText, ChevronRight, Handshake, RotateCcw, ShoppingBag, ChevronDown, Briefcase, Repeat } from 'lucide-react'
-import { useCuentasCobrar, useRegistrarAbono, useRevertirAbono, useRegistrarSaldoFavor, useRegistrarDevolucionCredito, useCruzarSaldoFavor } from '../../hooks/useCuentasCobrar'
+import { useCuentasCobrar, useRegistrarAbono, useRevertirAbono, useRegistrarSaldoFavor, useRegistrarDevolucionCredito, useCruzarSaldoFavor, useResumenCuentaCliente } from '../../hooks/useCuentasCobrar'
 import { useVentasCliente } from '../../hooks/useClientes'
 import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsdSimple as fmtUsd } from '../../utils/format'
 import { rankEntities } from '../../utils/entitySearch'
+import { saldosCorridos, saldoDeLinea } from '../../utils/cxcSaldos'
 import EstadoBadge from '../cotizaciones/EstadoBadge'
 import { showToast } from '../ui/Toast'
 import { apiUrl } from '../../services/apiBase'
 import { authFetch } from '../../services/authFetch'
 import ConfirmModal from '../ui/ConfirmModal'
+import { useTasaCambio } from '../../hooks/useTasaCambio'
+import { crearGeneradorClaveIdempotente } from '../../utils/idempotencyKey'
 
 function fmtFecha(iso) {
   if (!iso) return '—'
@@ -23,16 +26,113 @@ function fmtFecha(iso) {
 
 const METODOS = ['Efectivo $', 'Efectivo Bs', 'Zelle', 'Transf. / Pago Móvil', 'Punto de Venta', 'USDT', 'Cruce']
 
-function FormAbono({ clienteId, saldo, onSuccess }) {
+function etiquetaDespacho(p) {
+  const num = p.numero != null ? `#${p.numero}` : (p.descripcion || 'Cargo sin número')
+  return `${num} · pendiente ${fmtUsd(p.pendiente)}${p.pendiente < p.monto_usd - 0.005 ? ` de ${fmtUsd(p.monto_usd)}` : ''}`
+}
+
+// ─── OP-2026-049: envío seguro de formularios de dinero ──────────────────────
+// N10: si el guardado falla, el formulario muestra un aviso rojo y conserva lo
+//      escrito (antes no se mostraba nada y el operador podía creer que se guardó).
+// G4:  un candado inmediato evita que un doble clic envíe dos veces (el botón
+//      deshabilitado llega tarde: el segundo clic se dispara antes de redibujar).
+function useEnvioUnico() {
+  const enviandoRef = useRef(false)
+  const [error, setError] = useState(null)
+  async function enviar(fn) {
+    if (enviandoRef.current) return { ok: false, ignorado: true }
+    enviandoRef.current = true
+    setError(null)
+    try {
+      const r = await fn()
+      return { ok: true, r }
+    } catch (e) {
+      setError(e)
+      return { ok: false, error: e }
+    } finally {
+      enviandoRef.current = false
+    }
+  }
+  return { enviar, error, setError }
+}
+
+function AvisoNoGuardado({ error, que = 'el movimiento', testid }) {
+  if (!error || error.code === 'POSIBLE_DUPLICADO') return null
+  return (
+    <div data-testid={testid} role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5 flex items-start gap-1.5">
+      <AlertCircle size={14} className="shrink-0 mt-0.5" />
+      <span>
+        <b>No se guardó {que}.</b> {error.message} Lo escrito sigue en el formulario: revisa y vuelve a intentar.
+      </span>
+    </div>
+  )
+}
+
+function nuevaClaveOperacion() {
+  try { return crypto.randomUUID() } catch { return `op-${Date.now()}-${Math.random().toString(36).slice(2)}` }
+}
+
+// OP-2026-051: huella por operación para cualquier movimiento de dinero. Se reutiliza en
+// los reintentos del MISMO movimiento y se renueva cuando cambian los datos o tras guardar.
+function useClaveOperacion(deps) {
+  const claveRef = useRef(null)
+  const [duplicado, setDuplicado] = useState(null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { claveRef.current = null; setDuplicado(null) }, deps)
+  return {
+    clave() { if (!claveRef.current) claveRef.current = nuevaClaveOperacion(); return claveRef.current },
+    renovar() { claveRef.current = null; setDuplicado(null) },
+    duplicado, setDuplicado,
+  }
+}
+
+function AvisoPosibleRepetido({ duplicado, testid, onConfirmar, onCancelar }) {
+  if (!duplicado) return null
+  return (
+    <div data-testid={testid} role="alert" className="text-xs text-amber-900 bg-amber-50 border border-amber-300 rounded-lg p-2.5 space-y-2">
+      <p className="flex items-start gap-1.5">
+        <AlertCircle size={14} className="shrink-0 mt-0.5" />
+        <span><b>¿Es otro movimiento?</b> {duplicado.message}</span>
+      </p>
+      <div className="flex gap-2">
+        <button type="button" data-testid={`${testid}-confirmar`} onClick={onConfirmar}
+          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg">
+          Sí, es otro: registrarlo
+        </button>
+        <button type="button" data-testid={`${testid}-cancelar`} onClick={onCancelar}
+          className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 font-bold rounded-lg">
+          No, cancelar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function FormAbono({ clienteId, saldo, pendientes = [], onSuccess }) {
   // Cada línea de pago: { metodo, monto, referencia }
   const [lineas, setLineas] = useState([{ metodo: 'Efectivo $', monto: '', referencia: '' }])
   const [descripcion, setDescripcion] = useState('')
+  // OP-2026-042: despacho que paga este abono ('' = sin despacho específico)
+  const [despachoId, setDespachoId] = useState('')
   const registrar = useRegistrarAbono()
+  const { enviar, error: errorAbono, setError: setErrorAbono } = useEnvioUnico()
+  // G4: una clave por operación. Se reutiliza en los reintentos del MISMO abono
+  // (si la respuesta se perdió, el servidor devuelve el ya guardado) y se renueva
+  // cuando cambian los datos o después de guardar.
+  const claveRef = useRef(null)
+  const [duplicado, setDuplicado] = useState(null) // aviso del servidor: abono igual reciente
+  useEffect(() => { claveRef.current = null; setDuplicado(null) }, [lineas, descripcion, despachoId])
 
   // Total acumulado de todas las líneas
   const totalIngresado = lineas.reduce((acc, l) => acc + (parseFloat(l.monto) || 0), 0)
   const excede = saldo > 0 && totalIngresado > saldo + 0.001
   const sinMonto = totalIngresado <= 0
+  const despachosConDeuda = pendientes.filter(p => p.despacho_id)
+  const despachoElegido = despachosConDeuda.find(p => p.despacho_id === despachoId) || null
+  const superaDespacho = !!despachoElegido && totalIngresado > despachoElegido.pendiente + 0.005
+  // OP-2026-042: un "Cruce" debe decir contra qué se cruzó (regla de trabajo)
+  const usaCruce = lineas.some(l => l.metodo === 'Cruce' && (parseFloat(l.monto) || 0) > 0)
+  const faltaMotivoCruce = usaCruce && descripcion.trim().length < 5
 
   function actualizarLinea(idx, campo, valor) {
     setLineas(prev => prev.map((l, i) => i === idx ? { ...l, [campo]: valor } : l))
@@ -52,9 +152,8 @@ function FormAbono({ clienteId, saldo, onSuccess }) {
     }
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (excede || sinMonto) return
+  async function guardarAbono({ confirmarDuplicado = false } = {}) {
+    if (excede || sinMonto || faltaMotivoCruce) return
 
     // Enviar como JSON array de formas de pago (igual que despachos)
     const formasPagoJson = JSON.stringify(lineas.map(l => ({
@@ -62,17 +161,36 @@ function FormAbono({ clienteId, saldo, onSuccess }) {
       monto: parseFloat(l.monto) || 0,
       referencia: l.referencia || '',
     })))
+    if (!claveRef.current) claveRef.current = nuevaClaveOperacion()
+    const monto = totalIngresado
 
-    await registrar.mutateAsync({
+    const res = await enviar(() => registrar.mutateAsync({
       clienteId,
-      monto: totalIngresado,
+      monto,
       formaPago: formasPagoJson,
       referencia: lineas[0]?.referencia || '',
       descripcion: descripcion || 'Abono recibido',
-    })
+      despachoId: despachoId || null,
+      idempotencyKey: claveRef.current,
+      confirmarDuplicado,
+      manejaDuplicado: true,
+    }))
+    if (res.ignorado) return
+    if (!res.ok) {
+      if (res.error?.code === 'POSIBLE_DUPLICADO') setDuplicado(res.error)
+      return
+    }
+    claveRef.current = null
+    setDuplicado(null)
     setLineas([{ metodo: 'Efectivo $', monto: '', referencia: '' }])
     setDescripcion('')
-    onSuccess?.(totalIngresado)
+    setDespachoId('')
+    onSuccess?.(monto)
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    guardarAbono()
   }
 
   return (
@@ -157,16 +275,48 @@ function FormAbono({ clienteId, saldo, onSuccess }) {
         ))}
       </div>
 
+      {/* OP-2026-042: ¿Qué despacho paga? */}
+      {despachosConDeuda.length > 0 && (
+        <div>
+          <label htmlFor="abono-despacho" className="block text-xs font-semibold text-slate-600 mb-1">¿Qué despacho paga? (recomendado)</label>
+          <select
+            id="abono-despacho"
+            data-testid="abono-despacho"
+            value={despachoId}
+            onChange={e => setDespachoId(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          >
+            <option value="">Sin despacho específico (se aplica al más antiguo)</option>
+            {despachosConDeuda.map(p => (
+              <option key={p.id} value={p.despacho_id}>{etiquetaDespacho(p)}</option>
+            ))}
+          </select>
+          {superaDespacho && (
+            <p className="text-[11px] text-amber-700 mt-1">
+              El abono supera lo pendiente de ese despacho ({fmtUsd(despachoElegido.pendiente)}). El resto se aplicará a los despachos más antiguos.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Descripción */}
       <div>
-        <label className="block text-xs font-semibold text-slate-600 mb-1">Descripción (opcional)</label>
+        <label htmlFor="abono-descripcion" className="block text-xs font-semibold text-slate-600 mb-1">
+          {usaCruce ? 'Contra qué se cruzó (obligatorio)' : 'Descripción (opcional)'}
+        </label>
         <input
+          id="abono-descripcion"
           type="text"
           value={descripcion}
           onChange={e => setDescripcion(e.target.value)}
-          placeholder="Ej: Pago parcial factura #123"
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          placeholder={usaCruce ? 'Ej: Cruce contra factura de flete #45 que les debemos' : 'Ej: Pago parcial factura #123'}
+          className={`w-full px-3 py-2 rounded-lg border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 ${faltaMotivoCruce ? 'border-amber-300' : 'border-slate-200'}`}
         />
+        {usaCruce && (
+          <p className="text-[11px] text-amber-700 mt-1">
+            Un cruce es para compensar algo real (por ejemplo, una deuda nuestra con el cliente). Si el cliente devolvió mercancía, usa la pantalla de devoluciones del despacho, no un cruce.
+          </p>
+        )}
       </div>
 
       {/* Resumen total + error */}
@@ -185,9 +335,33 @@ function FormAbono({ clienteId, saldo, onSuccess }) {
         </p>
       )}
 
+      <AvisoNoGuardado error={errorAbono} que="el abono" testid="abono-error" />
+
+      {duplicado && (
+        <div data-testid="abono-posible-duplicado" role="alert" className="text-xs text-amber-900 bg-amber-50 border border-amber-300 rounded-lg p-2.5 space-y-2">
+          <p className="flex items-start gap-1.5">
+            <AlertCircle size={14} className="shrink-0 mt-0.5" />
+            <span><b>¿Es otro pago?</b> {duplicado.message}</span>
+          </p>
+          <div className="flex gap-2">
+            <button type="button" data-testid="abono-duplicado-confirmar"
+              onClick={() => { setDuplicado(null); setErrorAbono(null); guardarAbono({ confirmarDuplicado: true }) }}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg">
+              Sí, es otro pago: registrarlo
+            </button>
+            <button type="button" data-testid="abono-duplicado-cancelar"
+              onClick={() => { setDuplicado(null); setErrorAbono(null) }}
+              className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 font-bold rounded-lg">
+              No, cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       <button
         type="submit"
-        disabled={registrar.isPending || sinMonto || excede}
+        data-testid="abono-confirmar"
+        disabled={registrar.isPending || sinMonto || excede || faltaMotivoCruce || !!duplicado}
         className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-colors"
       >
         {registrar.isPending ? 'Registrando...' : 'Confirmar abono'}
@@ -202,24 +376,38 @@ function FormSaldoFavor({ clienteId, onSuccess }) {
   const [referencia, setReferencia] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const registrarSaldoFavor = useRegistrarSaldoFavor()
+  const { enviar, error: errorSaldoFavor, setError: setErrorSaldoFavor } = useEnvioUnico()
+  const op = useClaveOperacion([monto, formaPago, referencia, descripcion])
 
   const sinMonto = !monto || parseFloat(monto) <= 0
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function guardar({ confirmarDuplicado = false } = {}) {
     if (sinMonto) return
-
-    await registrarSaldoFavor.mutateAsync({
+    const res = await enviar(() => registrarSaldoFavor.mutateAsync({
       clienteId,
       monto: parseFloat(monto),
       formaPago,
       referencia: referencia || null,
       descripcion: descripcion || 'Crédito / Saldo a favor recibido',
-    })
+      idempotencyKey: op.clave(),
+      confirmarDuplicado,
+      manejaDuplicado: true,
+    }))
+    if (res.ignorado) return
+    if (!res.ok) {
+      if (res.error?.code === 'POSIBLE_DUPLICADO') op.setDuplicado(res.error)
+      return
+    }
+    op.renovar()
     setMonto('')
     setReferencia('')
     setDescripcion('')
     onSuccess?.()
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    guardar()
   }
 
   return (
@@ -283,9 +471,15 @@ function FormSaldoFavor({ clienteId, onSuccess }) {
         />
       </div>
 
+      <AvisoNoGuardado error={errorSaldoFavor} que="el saldo a favor" testid="saldo-favor-error" />
+      <AvisoPosibleRepetido duplicado={op.duplicado} testid="saldo-favor-posible-duplicado"
+        onConfirmar={() => { op.setDuplicado(null); setErrorSaldoFavor(null); guardar({ confirmarDuplicado: true }) }}
+        onCancelar={() => { op.setDuplicado(null); setErrorSaldoFavor(null) }} />
+
       <button
         type="submit"
-        disabled={registrarSaldoFavor.isPending || sinMonto}
+        data-testid="saldo-favor-confirmar"
+        disabled={registrarSaldoFavor.isPending || sinMonto || !!op.duplicado}
         className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-colors"
       >
         {registrarSaldoFavor.isPending ? 'Cargando...' : 'Confirmar saldo a favor'}
@@ -300,6 +494,8 @@ function FormDevolucionCredito({ clienteId, saldoFavor, onSuccess }) {
   const [referencia, setReferencia] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const registrarDevolucion = useRegistrarDevolucionCredito()
+  const { enviar, error: errorDevolucion, setError: setErrorDevolucion } = useEnvioUnico()
+  const op = useClaveOperacion([monto, formaPago, referencia, descripcion])
 
   const sinMonto = !monto || parseFloat(monto) <= 0
   const excede = saldoFavor > 0 && parseFloat(monto) > saldoFavor + 0.001
@@ -308,21 +504,33 @@ function FormDevolucionCredito({ clienteId, saldoFavor, onSuccess }) {
     setMonto(saldoFavor.toFixed(2))
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function guardar({ confirmarDuplicado = false } = {}) {
     if (sinMonto || excede) return
-
-    await registrarDevolucion.mutateAsync({
+    const res = await enviar(() => registrarDevolucion.mutateAsync({
       clienteId,
       monto: parseFloat(monto),
       formaPago,
       referencia: referencia || null,
       descripcion: descripcion || 'Devolución de saldo a favor registrada',
-    })
+      idempotencyKey: op.clave(),
+      confirmarDuplicado,
+      manejaDuplicado: true,
+    }))
+    if (res.ignorado) return
+    if (!res.ok) {
+      if (res.error?.code === 'POSIBLE_DUPLICADO') op.setDuplicado(res.error)
+      return
+    }
+    op.renovar()
     setMonto('')
     setReferencia('')
     setDescripcion('')
     onSuccess?.(parseFloat(monto))
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    guardar()
   }
 
   return (
@@ -405,9 +613,15 @@ function FormDevolucionCredito({ clienteId, saldoFavor, onSuccess }) {
         </p>
       )}
 
+      <AvisoNoGuardado error={errorDevolucion} que="la devolución de saldo" testid="devolucion-saldo-error" />
+      <AvisoPosibleRepetido duplicado={op.duplicado} testid="devolucion-saldo-posible-duplicado"
+        onConfirmar={() => { op.setDuplicado(null); setErrorDevolucion(null); guardar({ confirmarDuplicado: true }) }}
+        onCancelar={() => { op.setDuplicado(null); setErrorDevolucion(null) }} />
+
       <button
         type="submit"
-        disabled={registrarDevolucion.isPending || sinMonto || excede}
+        data-testid="devolucion-saldo-confirmar"
+        disabled={registrarDevolucion.isPending || sinMonto || excede || !!op.duplicado}
         className="w-full py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-colors"
       >
         {registrarDevolucion.isPending ? 'Procesando...' : 'Confirmar devolución'}
@@ -420,6 +634,8 @@ function FormCruzarSaldoFavor({ clienteId, saldo, saldoFavor, onSuccess }) {
   const maxCruzar = Math.max(0, Math.round(Math.min(saldo, saldoFavor) * 100) / 100)
   const [monto, setMonto] = useState(maxCruzar > 0 ? maxCruzar.toFixed(2) : '')
   const cruzar = useCruzarSaldoFavor()
+  const { enviar: enviarCruce, error: errorCruce } = useEnvioUnico()
+  const op = useClaveOperacion([monto])
 
   const numMonto = parseFloat(monto) || 0
   const sinMonto = numMonto <= 0
@@ -436,7 +652,9 @@ function FormCruzarSaldoFavor({ clienteId, saldo, saldoFavor, onSuccess }) {
     e.preventDefault()
     if (sinMonto || excede || cruzar.isPending) return
 
-    await cruzar.mutateAsync({ clienteId, monto: numMonto })
+    const res = await enviarCruce(() => cruzar.mutateAsync({ clienteId, monto: numMonto, idempotencyKey: op.clave() }))
+    if (!res.ok) return
+    op.renovar()
     onSuccess?.(numMonto)
   }
 
@@ -502,6 +720,8 @@ function FormCruzarSaldoFavor({ clienteId, saldo, saldoFavor, onSuccess }) {
           El monto supera el límite máximo cruzable ({fmtUsd(maxCruzar)}).
         </p>
       )}
+
+      <AvisoNoGuardado error={errorCruce} que="el cruce" testid="cruce-error" />
 
       <button
         type="submit"
@@ -648,15 +868,49 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
   const puedeRevertirAbono = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const puedeCruzarSaldo = ['administracion', 'jefe', 'desarrollador'].includes(perfil?.rol)
   const { data: movimientos = [], isLoading, refetch } = useCuentasCobrar(isOpen ? cliente?.id : null)
+  // OP-2026-057 (M1): saldo de cada línea calculado con los movimientos de hoy (no el saldo "foto" guardado)
+  const saldosLinea = saldosCorridos(movimientos)
+  // OP-2026-042: cuenta completa (sin tope de 100) para el selector y el "pagado de más"
+  const { data: resumenCuenta } = useResumenCuentaCliente(isOpen ? cliente?.id : null)
+  const pagadoDeMasCliente = Number(resumenCuenta?.pagadoDeMas || 0)
 
   const [activeTab, setActiveTab] = useState('cuenta')
   const [abonoARevertir, setAbonoARevertir] = useState(null)
   const revertirMutation = useRevertirAbono()
+  // OP-2026-055 (I3): motivo obligatorio al anular y lista de movimientos anulados
+  const [motivoAnular, setMotivoAnular] = useState('')
+  const [errorAnular, setErrorAnular] = useState(null)
+  const [verAnulados, setVerAnulados] = useState(false)
+  const [anulados, setAnulados] = useState(null)
+  useEffect(() => { setMotivoAnular(''); setErrorAnular(null) }, [abonoARevertir])
+  useEffect(() => {
+    if (!verAnulados || !cliente?.id) return
+    let vivo = true
+    authFetch(`/api/cxc/movimientos-borrados?clienteId=${cliente.id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { if (vivo) setAnulados(Array.isArray(d) ? d : []) })
+      .catch(() => { if (vivo) setAnulados([]) })
+    return () => { vivo = false }
+  }, [verAnulados, cliente?.id, revertirMutation.isSuccess])
   const [prestamos, setPrestamos] = useState([])
   const [cargandoPrestamos, setCargandoPrestamos] = useState(false)
   const [busquedaPrestamos, setBusquedaPrestamos] = useState('')
   const [activeAction, setActiveAction] = useState(null)
   const [actionQty, setActionQty] = useState('')
+  // OP-2026-095 Fase 3 (decisión del dueño): ocultar "Facturar préstamo" y dejar solo "Devolver"
+  // hasta confirmar reglas de cobro y comisiones con el cliente.
+  const FACTURACION_PRESTAMOS_HABILITADA = false
+  // OP-2026-086: tasa del día para facturar préstamos y sello único por envío (doble clic / reintento)
+  // OP-2026-091: se factura con la TASA PRINCIPAL elegida en el sistema (BCV, USDT o manual).
+  const { tasaEfectiva, modoTasa, refrescar: refrescarTasa } = useTasaCambio()
+  const tasaDelDia = Number(tasaEfectiva) > 0 ? Number(tasaEfectiva) : 0
+  const etiquetaTasa = modoTasa === 'usdt' ? 'USDT' : modoTasa === 'manual' ? 'manual' : 'BCV'
+  // Cómo se cobra al facturar: 'credito' (se suma a la deuda) o 'ahora' (paga en el momento)
+  const [pagoModo, setPagoModo] = useState('credito')
+  const [pagoMetodo, setPagoMetodo] = useState('Efectivo $')
+  const [pagoReferencia, setPagoReferencia] = useState('')
+  const claveAccionPrestamoRef = useRef(null)
+  if (!claveAccionPrestamoRef.current) claveAccionPrestamoRef.current = crearGeneradorClaveIdempotente()
   const [actionLoading, setActionLoading] = useState(false)
 
   const [cargadoUnaVez, setCargadoUnaVez] = useState(false)
@@ -695,22 +949,47 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
     }
     setActionLoading(true)
     try {
+      if (type === 'facturar' && !FACTURACION_PRESTAMOS_HABILITADA) {
+        showToast('La facturación de préstamos está deshabilitada temporalmente.', 'error')
+        return
+      }
       const url = type === 'devolver' ? '/api/clientes/prestamos/devolver' : '/api/clientes/prestamos/facturar'
+      const tasa = tasaDelDia
+      if (type === 'facturar' && !(tasa > 0)) {
+        showToast('Todavía no hay tasa del día. Espera unos segundos o toca "Actualizar tasa" e intenta de nuevo.', 'error')
+        return
+      }
+      const firma = JSON.stringify({ type, prestamoId: prestamo.id, cantidad: qty, pago: type === 'facturar' ? (pagoModo === 'ahora' ? pagoMetodo : 'credito') : null })
+      const idempotencyKey = claveAccionPrestamoRef.current.resolver(firma)
       const res = await authFetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey
         },
         body: JSON.stringify({
           prestamoId: prestamo.id,
-          cantidad: qty
+          cantidad: qty,
+          idempotencyKey,
+          ...(type === 'facturar' ? {
+            tasa,
+            tasaModo: modoTasa || 'bcv',
+            ...(pagoModo === 'ahora' ? { pago: { metodo: pagoMetodo, referencia: pagoReferencia } } : {}),
+          } : {})
         })
       })
       const result = await res.json()
       if (!res.ok) {
+        // Error de negocio: se permite corregir y reenviar con una clave nueva.
+        if ([400, 403, 404, 409].includes(res.status)) claveAccionPrestamoRef.current.limpiar(firma)
         showToast(result.error || 'Error al procesar la acción', 'error')
       } else {
-        showToast(type === 'devolver' ? 'Devolución física registrada con éxito ✓' : 'Conversión a venta registrada con éxito ✓', 'success')
+        claveAccionPrestamoRef.current.limpiar(firma)
+        const com = result?.comision
+        const avisoCom = type === 'facturar' && com?.aplica
+          ? ` · Comisión del vendedor: $${Number(com.comision_usd).toFixed(2)}${com.liberada ? '' : ' (retenida hasta que se cobre)'}`
+          : ''
+        showToast(type === 'devolver' ? 'Devolución física registrada con éxito ✓' : `${result?.pago_metodo ? 'Facturado y cobrado' : 'Facturado a la cuenta del cliente'} ✓${avisoCom}`, 'success', 6000)
         setActiveAction(null)
         setActionQty('')
         fetchPrestamos()
@@ -842,6 +1121,16 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                 Saldo a Favor: {fmtUsd(saldoFavor)}
               </div>
             )}
+            {pagadoDeMasCliente > 0.005 && (
+              <div
+                data-testid="ficha-pagado-de-mas"
+                title="Abonos que no corresponden a ninguna deuda. Si el cliente vuelve a comprar a crédito, se descontarán solos."
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-black bg-amber-400/40 text-white border border-amber-200/60"
+              >
+                <AlertCircle size={14} className="text-amber-100" />
+                Pagado de más: {fmtUsd(pagadoDeMasCliente)}
+              </div>
+            )}
             {tienePrestamosActivos && (
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-black bg-amber-500/30 text-white border border-amber-300/40 animate-pulse">
                 <Handshake size={14} className="text-amber-200" />
@@ -894,6 +1183,17 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
           {/* PESTAÑA: CUENTA Y MOVIMIENTOS */}
           {activeTab === 'cuenta' && (
             <div className="space-y-4">
+              {/* OP-2026-042 (falla G3): pagos de más visibles */}
+              {pagadoDeMasCliente > 0.005 && (
+                <div className="flex gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 leading-snug" data-testid="ficha-aviso-pagado-de-mas">
+                  <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                  <p>
+                    <b>Este cliente tiene {fmtUsd(pagadoDeMasCliente)} en pagos que no corresponden a ninguna deuda.</b>{' '}
+                    No aparecen como deuda ni como saldo a favor, pero si vuelve a comprar a crédito se descontarán solos de la nueva deuda.
+                    Revisa el historial con administración (puede ser un abono duplicado o un registro viejo).
+                  </p>
+                </div>
+              )}
               {/* Selector de Acción CxC */}
               {puedeRegistrarAbono && (
                 <div className="flex gap-1 p-1 bg-slate-100 rounded-xl text-xs shrink-0 select-none">
@@ -954,6 +1254,7 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                 <FormAbono
                   clienteId={cliente.id}
                   saldo={saldo}
+                  pendientes={resumenCuenta?.pendientes || []}
                   onSuccess={(montoAbonado) => {
                     setSaldoLocal(prev => Math.max(0, (prev ?? saldo) - montoAbonado))
                     refetch()
@@ -992,6 +1293,36 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                     refetch()
                   }}
                 />
+              )}
+
+              {/* OP-2026-055 (I3): movimientos anulados o borrados (copia completa, quién, cuándo y por qué) */}
+              {puedeRevertirAbono && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/60">
+                  <button type="button" data-testid="ver-movimientos-anulados" onClick={() => setVerAnulados(v => !v)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-600">
+                    <span>Movimientos anulados</span>
+                    <ChevronDown size={14} className={verAnulados ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                  </button>
+                  {verAnulados && (
+                    <div className="px-3 pb-3 space-y-1.5" data-testid="lista-movimientos-anulados">
+                      {anulados === null && <p className="text-xs text-slate-400">Cargando…</p>}
+                      {anulados?.length === 0 && <p className="text-xs text-slate-400">Este cliente no tiene movimientos anulados.</p>}
+                      {(anulados || []).map(a => (
+                        <div key={a.id} className="text-xs bg-white border border-slate-200 rounded-lg p-2">
+                          <div className="flex justify-between font-bold text-slate-700">
+                            <span>{a.tipo === 'abono' ? 'Abono' : a.tipo === 'credito' ? 'Saldo a favor' : a.tipo === 'cargo' ? 'Deuda' : a.tipo} {fmtUsd(a.monto_usd)}</span>
+                            <span className="text-slate-400 font-normal">{fmtFecha(a.borrado_en)}</span>
+                          </div>
+                          <p className="text-slate-600">
+                            {a.fila?.referencia ? `Ref. ${a.fila.referencia} · ` : ''}
+                            {a.motivo ? `Motivo: ${a.motivo}` : `Borrado por: ${a.origen || 'sin identificar'}`}
+                            {a.borrado_por_nombre ? ` · ${a.borrado_por_nombre}` : ''}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Historial */}
@@ -1084,7 +1415,7 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                               {mov.tipo === 'cargo' || mov.tipo === 'devolucion_credito' ? '+' : '-'}{fmtUsd(mov.monto_usd)}
                             </p>
                             <p className="text-[10px] text-slate-400">
-                              {mov.tipo === 'consumo_credito' ? 'Favor restante' : (mov.tipo === 'credito' || mov.tipo === 'devolucion_credito') ? 'Crédito' : 'Saldo'}: {fmtUsd(mov.saldo_usd)}
+                              {mov.tipo === 'consumo_credito' ? 'Favor restante' : (mov.tipo === 'credito' || mov.tipo === 'devolucion_credito') ? 'Crédito' : 'Saldo'}: {fmtUsd(saldoDeLinea(mov, saldosLinea))}
                             </p>
                           </div>
                           {(mov.tipo === 'abono' || mov.tipo === 'credito' || mov.tipo === 'devolucion_credito' || mov.tipo === 'consumo_credito') && puedeRevertirAbono && (
@@ -1195,7 +1526,10 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                               {restante > 0 && <span className="text-rose-500">Pendiente: <strong>{restante}</strong></span>}
                             </div>
                             <p className="text-[10px] text-slate-400 mt-1">
-                              Despacho: <span className="font-mono text-slate-600">DES-{String(p.despacho?.numero || '').padStart(5, '0')}</span> · Valor ref: ${p.producto?.precio_usd ? (restante * p.producto.precio_usd).toFixed(2) : '0.00'}
+                              Despacho: <span className="font-mono text-slate-600">DES-{String(p.despacho?.numero || '').padStart(5, '0')}</span>
+                              {Number(p.precio_facturacion_usd) > 0
+                                ? <> · Precio del despacho: <strong className="text-slate-600">${Number(p.precio_facturacion_usd).toFixed(2)}</strong>/{p.producto?.unidad || 'und'} · Pendiente vale: <strong className="text-slate-600">${(restante * Number(p.precio_facturacion_usd)).toFixed(2)}</strong></>
+                                : <> · Valor ref: ${p.producto?.precio_usd ? (restante * p.producto.precio_usd).toFixed(2) : '0.00'}</>}
                             </p>
                           </div>
                           <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase shrink-0 ${
@@ -1224,60 +1558,155 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
                             >
                               Devolver
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveAction({ id: p.id, type: 'facturar' })
-                                setActionQty(String(restante))
-                              }}
-                              className="flex-1 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold transition-all active:scale-[0.98]"
-                            >
-                              Facturar
-                            </button>
+                            {FACTURACION_PRESTAMOS_HABILITADA && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveAction({ id: p.id, type: 'facturar' })
+                                  setActionQty(String(restante))
+                                  setPagoModo('credito'); setPagoReferencia('')
+                                }}
+                                className="flex-1 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold transition-all active:scale-[0.98]"
+                              >
+                                Facturar
+                              </button>
+                            )}
                           </div>
                         )}
 
-                        {/* Formulario de Acción Inline */}
-                        {isActionActive && (
-                          <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2 animate-in slide-in-from-top-1 duration-150">
-                            <div className="flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              <span>{isDevolver ? 'Registrar devolución física' : 'Facturar a cuenta del cliente'}</span>
-                              <span className="text-slate-500 font-mono">Max: {restante}</span>
+                        {/* Formulario de Acción Inline (OP-2026-088: con vista previa del cobro) */}
+                        {isActionActive && (() => {
+                          const qtyNum = Number(actionQty)
+                          const qtyValida = Number.isFinite(qtyNum) && qtyNum > 0 && qtyNum <= restante + 0.0001
+                          const precioU = Number(p.precio_facturacion_usd) > 0 ? Number(p.precio_facturacion_usd) : 0
+                          const totalUsd = qtyValida && precioU > 0 ? Math.round(qtyNum * precioU * 100) / 100 : 0
+                          const totalBs = totalUsd > 0 && tasaDelDia > 0 ? totalUsd * tasaDelDia : 0
+                          const unidad = p.producto?.unidad || 'und'
+                          const faltaTasa = isFacturar && tasaDelDia <= 0
+                          const sinPrecio = isFacturar && precioU <= 0
+                          const puedeEnviar = qtyValida && !actionLoading && !faltaTasa && !sinPrecio
+                          const fmtN = (n, d = 2) => Number(n).toLocaleString('es-VE', { minimumFractionDigits: d, maximumFractionDigits: d })
+                          return (
+                            <div className={`mt-3 p-3 rounded-xl border space-y-2.5 animate-in slide-in-from-top-1 duration-150 ${isDevolver ? 'bg-emerald-50/40 border-emerald-200' : 'bg-sky-50/40 border-sky-200'}`}>
+                              <div className="flex items-center justify-between">
+                                <span className={`text-[11px] font-black uppercase tracking-wider ${isDevolver ? 'text-emerald-700' : 'text-sky-700'}`}>
+                                  {isDevolver ? 'Devolver mercancía física' : 'Cobrar a la cuenta del cliente'}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-500">Pendiente: {restante} {unidad}</span>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                                  {isDevolver ? '¿Cuántas devuelve?' : '¿Cuántas se cobran?'}
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="any"
+                                    min="0"
+                                    max={restante}
+                                    value={actionQty}
+                                    onChange={e => setActionQty(e.target.value)}
+                                    placeholder="0"
+                                    aria-label="Cantidad"
+                                    data-testid="prestamo-cantidad"
+                                    className={`w-24 px-2.5 py-2 text-sm font-bold border rounded-lg focus:outline-none bg-white ${qtyValida || actionQty === '' ? 'border-slate-300 focus:border-slate-500' : 'border-rose-400 focus:border-rose-500'}`}
+                                    autoFocus
+                                  />
+                                  <span className="text-xs text-slate-500">{unidad}</span>
+                                  <div className="ml-auto flex gap-1">
+                                    {restante > 1 && (
+                                      <button type="button" onClick={() => setActionQty(String(Math.round(restante / 2 * 10000) / 10000))}
+                                        className="px-2 py-1 text-[10px] font-bold rounded-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">Mitad</button>
+                                    )}
+                                    <button type="button" onClick={() => setActionQty(String(restante))}
+                                      className="px-2 py-1 text-[10px] font-bold rounded-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">Todo ({restante})</button>
+                                  </div>
+                                </div>
+                                {actionQty !== '' && !qtyValida && (
+                                  <p role="alert" className="text-[10px] text-rose-600 font-semibold mt-1">
+                                    {qtyNum > restante ? `Solo quedan ${restante} ${unidad} pendientes.` : 'Escribe una cantidad mayor que cero.'}
+                                  </p>
+                                )}
+                              </div>
+
+                              {isFacturar && (
+                                <div data-testid="prestamo-vista-previa" className="rounded-lg bg-white border border-slate-200 p-2.5 text-[11px] space-y-1">
+                                  <div className="flex justify-between text-slate-500">
+                                    <span>Precio del despacho original</span>
+                                    <strong className="text-slate-700">{precioU > 0 ? `$${fmtN(precioU)} / ${unidad}` : 'sin precio'}</strong>
+                                  </div>
+                                  <div className="flex justify-between text-slate-500">
+                                    <span>Tasa principal ({etiquetaTasa})</span>
+                                    {tasaDelDia > 0
+                                      ? <strong className="text-slate-700">Bs {fmtN(tasaDelDia)}</strong>
+                                      : <button type="button" onClick={() => refrescarTasa?.()} className="font-bold text-sky-700 underline">Actualizar tasa</button>}
+                                  </div>
+                                  <div className="flex justify-between items-baseline border-t border-slate-100 pt-1.5">
+                                    <span className="font-bold text-slate-600">{pagoModo === 'ahora' ? 'Se cobra ahora' : 'Se sumará a su deuda'}</span>
+                                    <span className="text-right">
+                                      <strong className="block text-base text-sky-700">${fmtN(totalUsd)}</strong>
+                                      {totalBs > 0 && <span className="block text-[10px] text-slate-400">≈ Bs {fmtN(totalBs)}</span>}
+                                    </span>
+                                  </div>
+                                  {sinPrecio && <p className="text-[10px] text-rose-600 font-semibold">Este préstamo no tiene precio en el despacho; no se puede facturar desde aquí.</p>}
+                                </div>
+                              )}
+                              {isFacturar && (
+                                <div data-testid="prestamo-forma-cobro" className="space-y-1.5">
+                                  <p className="text-[10px] font-bold text-slate-500">¿Cómo se cobra?</p>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    <button type="button" onClick={() => setPagoModo('credito')} data-testid="prestamo-a-credito"
+                                      className={`py-1.5 rounded-lg text-[11px] font-bold border ${pagoModo === 'credito' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-600 border-slate-200'}`}>
+                                      A crédito
+                                    </button>
+                                    <button type="button" onClick={() => setPagoModo('ahora')} data-testid="prestamo-paga-ahora"
+                                      className={`py-1.5 rounded-lg text-[11px] font-bold border ${pagoModo === 'ahora' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'}`}>
+                                      Paga ahora
+                                    </button>
+                                  </div>
+                                  {pagoModo === 'ahora' ? (
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      <select value={pagoMetodo} onChange={e => setPagoMetodo(e.target.value)} aria-label="Método de pago" data-testid="prestamo-metodo"
+                                        className="px-2 py-1.5 text-[11px] border border-slate-300 rounded-lg bg-white">
+                                        {METODOS.filter(m => m !== 'Cruce').map(m => <option key={m} value={m}>{m}</option>)}
+                                      </select>
+                                      <input type="text" value={pagoReferencia} onChange={e => setPagoReferencia(e.target.value)} placeholder="Referencia (opcional)" aria-label="Referencia del pago"
+                                        className="px-2 py-1.5 text-[11px] border border-slate-300 rounded-lg bg-white" />
+                                    </div>
+                                  ) : (
+                                    <p className="text-[10px] text-slate-400">El monto se suma a lo que el cliente debe. Su comisión queda retenida hasta que se cobre.</p>
+                                  )}
+                                </div>
+                              )}
+                              {isDevolver && (
+                                <p className="text-[10px] text-slate-500">La mercancía vuelve al inventario y no se cobra nada al cliente.</p>
+                              )}
+
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => { setActiveAction(null); setActionQty('') }}
+                                  className="px-3 py-2 text-xs text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg font-bold transition-all"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleActionSubmit(p, activeAction.type)}
+                                  disabled={!puedeEnviar}
+                                  data-testid="prestamo-confirmar"
+                                  className={`flex-1 py-2 text-xs font-black text-white rounded-lg transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
+                                    isDevolver ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'
+                                  }`}
+                                >
+                                  {actionLoading ? 'Procesando…' : isDevolver ? `Devolver ${qtyValida ? qtyNum : ''} ${unidad}` : (totalUsd > 0 ? `${pagoModo === 'ahora' ? 'Facturar y cobrar' : 'Facturar'} $${fmtN(totalUsd)}` : 'Facturar')}
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex gap-2">
-                              <input
-                                type="number"
-                                step="any"
-                                min="0.0001"
-                                max={restante}
-                                value={actionQty}
-                                onChange={e => setActionQty(e.target.value)}
-                                placeholder="0.00"
-                                className="w-20 px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400"
-                                autoFocus
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setActiveAction(null)}
-                                className="px-2.5 py-1 text-[10px] text-slate-500 hover:text-slate-700 font-bold transition-all"
-                              >
-                                Cancelar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleActionSubmit(p, activeAction.type)}
-                                disabled={actionLoading}
-                                className={`flex-1 py-1 text-[10px] font-black text-white rounded-lg transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95 ${
-                                  isDevolver 
-                                    ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100' 
-                                    : 'bg-sky-600 hover:bg-sky-700 shadow-sky-100'
-                                }`}
-                              >
-                                {actionLoading ? '...' : isDevolver ? 'Devolver ✓' : 'Facturar 💳'}
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                          )
+                        })()}
                       </div>
                     )
                   })}
@@ -1289,8 +1718,56 @@ export default function FichaClienteModal({ cliente, isOpen, onClose }) {
         </div>
       </div>
 
+      {abonoARevertir && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" data-testid="anular-movimiento-modal">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-3">
+            <h3 className="text-base font-black text-slate-900">
+              {abonoARevertir.tipo === 'credito' ? '¿Anular saldo a favor?' : abonoARevertir.tipo === 'devolucion_credito' ? '¿Anular devolución de saldo?' : abonoARevertir.tipo === 'consumo_credito' ? '¿Anular consumo de saldo a favor?' : '¿Anular abono?'}
+            </h3>
+            <p className="text-sm text-slate-700">
+              Monto: <b>{fmtUsd(abonoARevertir.monto_usd)}</b>{abonoARevertir.referencia ? ` · Ref. ${abonoARevertir.referencia}` : ''}.{' '}
+              {abonoARevertir.tipo === 'abono' ? 'La deuda del cliente subirá.' : abonoARevertir.tipo === 'credito' ? 'El saldo a favor bajará.' : abonoARevertir.tipo === 'devolucion_credito' ? 'El monto vuelve al saldo a favor.' : 'El saldo a favor vuelve al cliente.'}{' '}
+              El movimiento queda guardado en “Movimientos anulados” con tu nombre y el motivo.
+            </p>
+            <textarea data-testid="anular-movimiento-motivo" value={motivoAnular} onChange={e => setMotivoAnular(e.target.value)}
+              placeholder="Motivo de la anulación (mínimo 10 caracteres)"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm min-h-[80px]" />
+            {errorAnular && (
+              <p data-testid="anular-movimiento-error" role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{errorAnular}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setAbonoARevertir(null)} disabled={revertirMutation.isPending}
+                className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg">Cancelar</button>
+              <button type="button" data-testid="anular-movimiento-confirmar"
+                disabled={motivoAnular.trim().length < 10 || revertirMutation.isPending}
+                onClick={async () => {
+                  const mov = abonoARevertir
+                  setErrorAnular(null)
+                  try {
+                    await revertirMutation.mutateAsync({ abonoId: mov.id, motivo: motivoAnular.trim() })
+                    if (mov.tipo === 'credito') {
+                      setSaldoFavorLocal(prev => Math.max(0, (prev ?? Number(cliente.saldo_a_favor || 0)) - Number(mov.monto_usd)))
+                    } else if (mov.tipo === 'devolucion_credito') {
+                      setSaldoFavorLocal(prev => (prev ?? Number(cliente.saldo_a_favor || 0)) + Number(mov.monto_usd))
+                    } else if (mov.tipo === 'abono') {
+                      setSaldoLocal(prev => (prev ?? Number(cliente.saldo_pendiente || 0)) + Number(mov.monto_usd))
+                    }
+                    setAbonoARevertir(null)
+                  } catch (e) {
+                    setErrorAnular(e?.message || 'No se pudo anular el movimiento')
+                  }
+                }}
+                className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50">
+                {revertirMutation.isPending ? 'Anulando…' : 'Anular'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmación anterior (sin motivo) desactivada en OP-2026-055 */}
       <ConfirmModal
-        isOpen={!!abonoARevertir}
+        isOpen={false}
         onClose={() => setAbonoARevertir(null)}
         onConfirm={async () => {
           if (!abonoARevertir) return

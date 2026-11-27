@@ -1,6 +1,6 @@
 # OP-2026-080 — Plan para llevar a producción OP-2026-077 (móvil) y OP-2026-079 (solo cuadrícula)
 
-**Fecha:** 2026-11-25 · **Versión:** 2 (corregida tras la auditoría [OP-2026-081](../operaciones/OP-2026-081_auditoria-plan-080.md)) · **Estado:** 📝 Plan propuesto, pendiente de tu aprobación. No se ha tocado producción ni se ha creado ninguna rama.
+**Fecha:** 2026-11-25 · **Versión:** 2 (corregida tras la auditoría [OP-2026-081](../operaciones/OP-2026-081_auditoria-plan-080.md)) · **Estado:** ✅ **Publicado en producción el 2026-11-25** (solicitud #77, unión `fa13d0c2`).
 
 ## En resumen
 
@@ -86,9 +86,21 @@
 | 6c. Compilación | `npm run build` correcto; PWA con 84 entradas. Solo la advertencia de tamaño de bloques que ya existía. |
 | 7. Navegador | Pantalla de la rama en `http://localhost:4173` conectada a **staging** (datos de prueba) con el servidor local (`op080-api-staging` / `op080-web-staging` en `.claude/launch.json`); el dueño entró con su usuario de staging. Revisión automática y visual: **360 px** en 15 rutas y **1280 px** en 12 rutas → **0 desbordes laterales**, **0 botones de lista**, botón `+` solo en Inicio (y nunca en computadora), Buzón abajo a la izquierda en teléfono sin chocar con el `+` y abajo a la derecha en computadora. Clientes en 1 columna con botones envueltos; Comisiones con tasas lado a lado e Imprimir/Descargar completos; Reportes → Crédito conserva el selector `formato-reporte-cxc` (Resumen / Detallado PDF); Configuración en 2 columnas en teléfono y una fila en computadora. Única falla en consola: `/api/rates` (tasas de cambio) responde 500 porque en esta prueba local esa llamada va al puerto 8787, donde no hay servidor; es del montaje de prueba, no del cambio, y la pantalla usa la tasa guardada. |
 
+## Publicación (2026-11-25)
+
+| Paso | Resultado |
+|---|---|
+| 8. Vista previa | Vercel construyó la vista previa de la solicitud #77 sin errores. |
+| 9. Control de archivos | Solo pantallas (`src/`), las dos pruebas nuevas y documentación; nada de `api/`, migraciones, Worker ni `construacero-staging/`. |
+| Revisión automática "Kilo Code Review" | No pudo ejecutarse: la cuenta del servicio **no tiene créditos** (igual en las solicitudes #74 y #75). No es un fallo del código. |
+| 10. Unión | Visto bueno del dueño → solicitud #77 unida a `main` con el commit `fa13d0c2`. |
+| Instalación | GitHub Actions "Deploy Worker a Cloudflare" (ejecución `45669535680`): **éxito** en todos los pasos. Vercel producción: **éxito**. |
+| 11. Verificación en producción | `https://listo-pos-cotizaciones.vercel.app` responde 200; de los 77 archivos de la aplicación publicada, **ninguno** contiene el botón "Vista lista", **sí** está el Buzón nuevo a la izquierda y la migración `clientes_vista`; `/api/rates` responde 200 (confirma que la falla vista en la prueba local era del montaje de prueba). |
+| Avisos anteriores ajenos | "Auditor de saldos — principal" y "Staging E2E nocturno" ya fallaban en la versión anterior (`ed76e680`), antes de este cambio. |
+
 ## Pendiente / sin verificar
 
-- Visto bueno del dueño tras su propia prueba en el navegador.
-- Guardado (commit `95474733`), subido y abierta la **solicitud de cambio #77** (https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/77) tras el visto bueno del dueño a su prueba en navegador (2026-11-25).
-- **Pendiente:** mirar la vista previa de Vercel en el teléfono (usa datos reales: solo mirar) y el visto bueno final para unir a `main`. Al unir se anotará el commit de la unión y la verificación en producción (paso 11).
+- No se entró a producción con un usuario real tras publicar (la verificación fue de los archivos publicados, sin iniciar sesión). Quien tenga sesión abierta verá el cambio al cerrar sesión o recargar (aviso de versión nueva).
+- Sería bueno que el dueño abra la app en su teléfono y confirme Inicio, Clientes y Despachos.
+
 - Relacionado: [OP-2026-077](../operaciones/OP-2026-077_fixeo-responsividad-movil-staging.md), [OP-2026-079](../operaciones/OP-2026-079_solo-vista-cuadricula-staging.md), [plan OP-2026-074](OP-2026-074_plan-fixeo-responsividad-movil.md), [auditoría OP-2026-081](../operaciones/OP-2026-081_auditoria-plan-080.md).

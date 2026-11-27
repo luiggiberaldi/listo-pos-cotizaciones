@@ -1,8 +1,9 @@
 // src/components/inventario/ProductoForm.jsx
 // Formulario para crear/editar productos — solo supervisor
 import { useState, useEffect, useRef } from 'react'
-import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X, Clipboard } from 'lucide-react'
-import { useCrearProducto, useActualizarProducto, useCategorias } from '../../hooks/useInventario'
+import { Hash, Package, Tag, Layers, DollarSign, BarChart2, Loader2, Camera, X, Clipboard, ClipboardCheck, Lock } from 'lucide-react'
+import { useCrearProducto, useActualizarProducto, useActualizarProductoMetadatos, useCategorias } from '../../hooks/useInventario'
+import { useConteoFisico } from '../../hooks/useMovimientosInventario'
 import { comprimirImagen, subirImagenProducto } from '../../utils/imageCompress'
 import supabase from '../../services/supabase/client'
 import CustomSelect from '../ui/CustomSelect'
@@ -119,9 +120,26 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
 
   const crear     = useCrearProducto()
   const actualizar = useActualizarProducto()
+  const actualizarMetadatos = useActualizarProductoMetadatos()
+  const conteo = useConteoFisico()
   const { data: categoriasExistentes = [] } = useCategorias()
   const mutation  = esEdicion ? actualizar : crear
-  const cargando  = mutation.isPending
+  const cargando  = mutation.isPending || actualizarMetadatos.isPending || conteo.isPending
+
+  // N25: ajuste de stock exclusivo por conteo físico con concurrencia optimista
+  const [conteoAbierto, setConteoAbierto] = useState(false)
+  const [stockContado, setStockContado] = useState('')
+  const [motivoConteo, setMotivoConteo] = useState('')
+  const [errorConteo, setErrorConteo] = useState('')
+  const conteoKeyRef = useRef({ signature: null, key: null })
+
+  useEffect(() => {
+    setConteoAbierto(false)
+    setStockContado(producto?.stock_actual != null ? String(producto.stock_actual) : '0')
+    setMotivoConteo('')
+    setErrorConteo('')
+    conteoKeyRef.current = { signature: null, key: null }
+  }, [producto?.id, producto?.stock_actual, isClone])
 
   // Estados del generador de códigos
   const [genLinea, setGenLinea] = useState('')
@@ -452,7 +470,7 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
       errs.precio_3 = 'Precio inválido'
     if (campos.costo_usd !== '' && isNaN(Number(campos.costo_usd)))
       errs.costo_usd = 'Costo inválido'
-    if (isNaN(Number(campos.stock_actual)))
+    if (!esEdicion && isNaN(Number(campos.stock_actual)))
       errs.stock_actual = 'Stock inválido'
     
     // Validar estructura de código estructurado
@@ -481,7 +499,7 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
           finalImageUrl = await subirImagenProducto(supabase, producto.id, imagenBlob)
         }
 
-        // 2. Ejecutar la actualización en base de datos con el nuevo URL
+        // 2. Ejecutar actualización de ficha (N25: sin modificar stock_actual)
         productoResult = await actualizar.mutateAsync({
           id: producto.id,
           campos,
@@ -494,13 +512,53 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
         // Luego subimos la imagen si hay una
         if (imagenBlob && productoResult?.id) {
           const url = await subirImagenProducto(supabase, productoResult.id, imagenBlob)
-          await supabase.from('productos').update({ imagen_url: url }).eq('id', productoResult.id)
+          await actualizarMetadatos.mutateAsync({ id: productoResult.id, imagen_url: url })
         }
       }
 
       onSuccess?.()
     } catch (err) {
       setErrorGeneral(err.message ?? 'Ocurrió un error. Intenta de nuevo.')
+    }
+  }
+
+  async function handleAplicarConteo() {
+    if (!esEdicion || !producto?.id) return
+    setErrorConteo('')
+    const normalizado = String(stockContado).replace(',', '.').trim()
+    const contadoNum = Number(normalizado)
+    if (normalizado === '' || !Number.isFinite(contadoNum)) {
+      setErrorConteo('Ingresa una cantidad contada válida')
+      return
+    }
+    if (!motivoConteo.trim()) {
+      setErrorConteo('El motivo del conteo físico es obligatorio')
+      return
+    }
+    const esperadoNum = Number(campos.stock_actual ?? producto.stock_actual ?? 0)
+    const sig = JSON.stringify({ id: producto.id, c: contadoNum, e: esperadoNum, m: motivoConteo.trim() })
+    if (conteoKeyRef.current.signature !== sig || !conteoKeyRef.current.key) {
+      conteoKeyRef.current = { signature: sig, key: crypto.randomUUID() }
+    }
+    try {
+      await conteo.mutateAsync({
+        motivo: motivoConteo.trim(),
+        items: [{
+          producto_id: producto.id,
+          stock_contado: contadoNum,
+          stock_esperado: esperadoNum,
+        }],
+        idempotencyKey: conteoKeyRef.current.key,
+      })
+      conteoKeyRef.current = { signature: null, key: null }
+      setCampos(p => ({ ...p, stock_actual: String(contadoNum) }))
+      setConteoAbierto(false)
+      setMotivoConteo('')
+    } catch (err) {
+      if (err.status === 409) {
+        conteoKeyRef.current = { signature: null, key: null }
+      }
+      setErrorConteo(err.message || 'No se pudo aplicar el conteo físico')
     }
   }
 
@@ -763,11 +821,37 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
       </div>
 
       {/* Stock actual + mínimo (fila) */}
-      <div className="grid grid-cols-2 gap-3">
-        <Campo label="Stock actual" icono={BarChart2} error={errores.stock_actual}>
-          <input type="text" inputMode="decimal" name="stock_actual" value={campos.stock_actual}
-            onChange={cambiar} placeholder="0"
-            className={inputClass} disabled={cargando} />
+      <div className="grid grid-cols-2 gap-3 items-start">
+        <Campo label={esEdicion ? 'Stock actual (solo lectura)' : 'Stock actual'} icono={BarChart2} error={errores.stock_actual}>
+          {esEdicion ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-sm font-bold text-slate-700 flex items-center justify-between">
+                  <span>{Number(campos.stock_actual || 0).toLocaleString('es-VE')} {campos.unidad || 'und'}</span>
+                  <Lock size={13} className="text-slate-400 shrink-0" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConteoAbierto(v => !v)
+                    setStockContado(String(campos.stock_actual ?? '0'))
+                    setErrorConteo('')
+                  }}
+                  disabled={cargando}
+                  className="px-3 py-2.5 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <ClipboardCheck size={14} /> Ajustar por conteo físico
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Solo mediante conteo físico: evita sobrescribir ventas o devoluciones simultáneas.
+              </p>
+            </div>
+          ) : (
+            <input type="text" inputMode="decimal" name="stock_actual" value={campos.stock_actual}
+              onChange={cambiar} placeholder="0"
+              className={inputClass} disabled={cargando} />
+          )}
         </Campo>
         <Campo label="Stock mínimo" icono={BarChart2} error={errores.stock_minimo}>
           <input type="text" inputMode="decimal" name="stock_minimo" value={campos.stock_minimo}
@@ -775,6 +859,64 @@ export default function ProductoForm({ producto = null, isClone = false, onSucce
             className={inputClass} disabled={cargando} />
         </Campo>
       </div>
+
+      {esEdicion && conteoAbierto && (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-3.5 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-bold text-violet-900 uppercase tracking-wide flex items-center gap-1.5">
+                <ClipboardCheck size={14} /> Conteo físico rápido
+              </p>
+              <p className="text-[11px] text-violet-700">
+                Sistema actual: <strong>{Number(campos.stock_actual || 0)} {campos.unidad || 'und'}</strong>. Se ajustará al monto contado si no hubo cambios simultáneos.
+              </p>
+            </div>
+            <button type="button" onClick={() => setConteoAbierto(false)} className="text-violet-400 hover:text-violet-700">
+              <X size={15} />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label className="text-[11px] font-semibold text-violet-900 block mb-1">Stock físico contado *</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={stockContado}
+                onChange={e => { setStockContado(e.target.value.replace(',', '.')); setErrorConteo('') }}
+                placeholder="0"
+                disabled={cargando}
+                className="w-full px-3 py-2 rounded-xl border border-violet-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-300"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-violet-900 block mb-1">Motivo del conteo *</label>
+              <input
+                type="text"
+                value={motivoConteo}
+                onChange={e => { setMotivoConteo(e.target.value); setErrorConteo('') }}
+                placeholder="Ej: Conteo físico en almacén"
+                disabled={cargando}
+                className="w-full px-3 py-2 rounded-xl border border-violet-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-300"
+              />
+            </div>
+          </div>
+          {errorConteo && (
+            <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+              {errorConteo}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setConteoAbierto(false)} disabled={cargando}
+              className="px-3 py-1.5 rounded-xl border border-violet-200 text-xs font-semibold text-violet-700 bg-white hover:bg-violet-50">
+              Cerrar
+            </button>
+            <button type="button" onClick={handleAplicarConteo} disabled={cargando}
+              className="px-4 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
+              {conteo.isPending ? <><Loader2 size={13} className="animate-spin" /> Aplicando...</> : 'Aplicar conteo'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {errorGeneral && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">

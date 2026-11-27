@@ -16,6 +16,8 @@ import { Modal as _Modal } from '../ui/Modal'
 import _CustomSelect from '../ui/CustomSelect'
 import { showToast } from '../ui/Toast'
 import { authFetch } from '../../services/authFetch'
+import supabase from '../../services/supabase/client'
+import { detectarCargasRecientesSimilares } from '../../utils/cargaDuplicada'
 import {  smartSearchProductos,
   findBestFuzzyCodeMatch,
  
@@ -71,7 +73,39 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
   const [filas, setFilas] = useState([])
   const [motivoIngreso, setMotivoIngreso] = useState('Ingreso de mercancía por lote')
   const [isSaving, setIsSaving] = useState(false)
+  const [recientes24h, setRecientes24h] = useState([])
   const idempotencyKeyRef = useRef(null)
+
+  // N32: Consultar ingresos de las últimas 24h al pasar a verificación
+  useEffect(() => {
+    if (!isOpen || paso !== 2) return
+    let cancelled = false
+    const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    supabase
+      .from('inventario_movimientos')
+      .select('producto_id, producto_nombre, tipo, cantidad, motivo, origen_tipo, creado_en')
+      .eq('tipo', 'ingreso')
+      .gte('creado_en', hace24h)
+      .order('creado_en', { ascending: false })
+      .limit(300)
+      .then(({ data }) => {
+        if (!cancelled && Array.isArray(data)) setRecientes24h(data)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [isOpen, paso])
+
+  const alertasDuplicado = useMemo(() => {
+    if (paso !== 2 || filas.length === 0 || recientes24h.length === 0) return []
+    const candidatos = filas
+      .filter(f => f.estado === 'existente' && f.matchedProduct?.id && (f.modoExistente || 'sumar') === 'sumar')
+      .map(f => ({
+        producto_id: f.matchedProduct.id,
+        nombre: f.nombre || f.matchedProduct.nombre,
+        cantidad: Number(f.cantidadInput),
+      }))
+    return detectarCargasRecientesSimilares(recientes24h, candidatos)
+  }, [paso, filas, recientes24h])
 
   // Opciones de categorías consolidadas
   const catOptions = useMemo(() => {
@@ -180,7 +214,7 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
       
       // Metadatos de coincidencia
       matchedProduct: match, // Referencia al producto existente
-      modoExistente: 'sumar', // 'sumar' | 'sobrescribir' (para stock en coincidentes)
+      modoExistente: 'sumar', // OP-2026-086: siempre suma (se quitó 'sobrescribir')
       actualizarCosto: true,  // Si se debe actualizar el costo en existentes
       
       // Estado de validación
@@ -461,7 +495,7 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
           categoria: f.categoria,
           unidad: f.unidad,
           isNuevo: f.estado === 'nuevo',
-          modoExistente: f.modoExistente, // 'sumar' | 'sobrescribir'
+          modoExistente: 'sumar', // OP-2026-086: siempre suma
           actualizarCosto: f.actualizarCosto
         }))
       }
@@ -477,7 +511,10 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
       }
 
       const data = await res.json()
-      showToast(`¡Ingreso masivo exitoso! Se procesaron ${data.procesados} productos.`, 'success')
+      const avisoDuplicado = data.advertencias_duplicado?.length
+        ? ` (aviso: ${data.advertencias_duplicado.length} producto(s) con ingreso similar en 24h)`
+        : ''
+      showToast(`¡Ingreso masivo exitoso! Se procesaron ${data.procesados} productos.${avisoDuplicado}`, 'success')
       
       if (onSuccess) onSuccess()
       onClose()
@@ -830,31 +867,11 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
                                   className="w-full px-2 py-1 text-xs font-black text-center bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                                 />
                                 
-                                {/* Si es existente, selector de sumar o sobrescribir */}
+                                {/* OP-2026-086 (Decisión 2 del dueño): las filas existentes siempre SUMAN.
+                                    Para cuadrar existencias se usa "Conteo físico". */}
                                 {esExistente && (
-                                  <div className="flex bg-slate-100 rounded p-0.5 text-[9px] font-bold">
-                                    <button
-                                      onClick={() => handleFilaChange(fila.id, 'modoExistente', 'sumar')}
-                                      className={`flex-1 py-0.5 rounded text-center transition-colors ${
-                                        fila.modoExistente === 'sumar' 
-                                          ? 'bg-white text-slate-800 shadow-sm' 
-                                          : 'text-slate-400 hover:text-slate-600'
-                                      }`}
-                                      title="Suma la cantidad ingresada al stock actual"
-                                    >
-                                      Suma
-                                    </button>
-                                    <button
-                                      onClick={() => handleFilaChange(fila.id, 'modoExistente', 'sobrescribir')}
-                                      className={`flex-1 py-0.5 rounded text-center transition-colors ${
-                                        fila.modoExistente === 'sobrescribir' 
-                                          ? 'bg-white text-slate-800 shadow-sm' 
-                                          : 'text-slate-400 hover:text-slate-600'
-                                      }`}
-                                      title="Sobrescribe el stock actual con este valor"
-                                    >
-                                      Sobre
-                                    </button>
+                                  <div className="text-[9px] font-bold text-emerald-700 text-center" title="Se suma al stock actual. Para cuadrar existencias usa Conteo físico.">
+                                    Suma al stock
                                   </div>
                                 )}
                               </div>
@@ -943,6 +960,20 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
                     </tbody>
                   </table>
                 </div>
+
+                {/* Alerta amarilla no bloqueante por posible carga duplicada (N32) */}
+                {alertasDuplicado.length > 0 && (
+                  <div className="mx-4 mt-3 flex items-start gap-2.5 px-3.5 py-2.5 bg-amber-50 border border-amber-300 rounded-xl shrink-0">
+                    <_AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                    <div className="text-xs text-amber-900">
+                      <p className="font-bold">Posible carga repetida en las últimas 24h</p>
+                      <p>
+                        Ya existe un ingreso por la misma cantidad en{' '}
+                        {alertasDuplicado.map(a => `${a.nombre} (+${a.cantidad})`).join(', ')}. Verifica antes de confirmar.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Footer del Panel de la Tabla: Configuración del Lote */}
                 <div className="p-4 border-t bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">

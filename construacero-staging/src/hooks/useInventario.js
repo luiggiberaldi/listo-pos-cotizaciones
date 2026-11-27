@@ -3,6 +3,7 @@
 // — Vendedor usa RPCs SECURITY DEFINER (sin costo_usd)
 // — Supervisor usa la tabla productos directa (con costo_usd)
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRef } from 'react'
 import supabase from '../services/supabase/client'
 import useAuthStore from '../store/useAuthStore'
 import { buildSmartFilter, smartSearchProductos } from '../utils/smartSearch'
@@ -10,6 +11,7 @@ import { showToast } from '../components/ui/Toast'
 import { MOVIMIENTOS_KEY } from './useMovimientosInventario'
 import { broadcastInventarioUpdate } from '../services/supabase/realtimeBus'
 import { authFetch } from '../services/authFetch'
+import { crearGeneradorClaveIdempotente } from '../utils/idempotencyKey'
 
 export const INVENTARIO_KEY = ['inventario']
 
@@ -252,45 +254,68 @@ export function useCategorias({ mostrarInactivos = false } = {}) {
 // Exportar para uso en useInventario
 export { getCategoryGroup }
 
-// ─── Mutation: crear producto (solo supervisor) ───────────────────────────────
-// Usa RPC que registra stock inicial en kardex automáticamente
+// Construye payload uniforme para /api/productos/crear y /api/productos/actualizar
+function buildProductoPayload(campos, extra = {}) {
+  return {
+    codigo: campos.codigo?.trim() || null,
+    nombre: campos.nombre.trim(),
+    descripcion: campos.descripcion?.trim() || null,
+    categoria: campos.categoria?.trim() || null,
+    unidad: campos.unidad?.trim() || 'und',
+    precio_usd: Number(campos.precio_usd) || 0,
+    costo_usd: campos.costo_usd ? Number(campos.costo_usd) : null,
+    stock_minimo: Number(campos.stock_minimo) || 0,
+    precio_2: campos.precio_2 !== '' && campos.precio_2 != null ? Number(campos.precio_2) : null,
+    precio_3: campos.precio_3 !== '' && campos.precio_3 != null ? Number(campos.precio_3) : null,
+    precio1_porcentaje: campos.precio1_porcentaje !== '' && campos.precio1_porcentaje != null ? Number(campos.precio1_porcentaje) : null,
+    precio2_porcentaje: campos.precio2_porcentaje !== '' && campos.precio2_porcentaje != null ? Number(campos.precio2_porcentaje) : null,
+    precio3_porcentaje: campos.precio3_porcentaje !== '' && campos.precio3_porcentaje != null ? Number(campos.precio3_porcentaje) : null,
+    ...extra,
+  }
+}
+
+async function callProductoApi(path, method, payload) {
+  const res = await authFetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const result = await res.json().catch(() => null)
+  if (!res.ok) {
+    const err = new Error(result?.error || `Error en ${path}`)
+    if (result?.code) err.code = result.code
+    err.status = res.status
+    throw err
+  }
+  return result
+}
+
+// ─── Mutation: crear producto (via Worker / service_role) ─────────────────────
+// Registra stock inicial en kardex automáticamente
 export function useCrearProducto() {
   const qc = useQueryClient()
+  const claveGenRef = useRef(null)
+  const obtenerClaveGen = () => (claveGenRef.current ??= crearGeneradorClaveIdempotente())
 
   return useMutation({
     mutationFn: async (campos) => {
-      const { data, error } = await supabase.rpc('crear_producto_con_kardex_staging', {
-        p_codigo:       campos.codigo?.trim()      || null,
-        p_nombre:       campos.nombre.trim(),
-        p_descripcion:  campos.descripcion?.trim() || null,
-        p_categoria:    campos.categoria?.trim()   || null,
-        p_unidad:       campos.unidad?.trim()      || 'und',
-        p_precio_usd:   Number(campos.precio_usd)  || 0,
-        p_costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
-        p_stock_actual: Number(campos.stock_actual) || 0,
-        p_stock_minimo: Number(campos.stock_minimo) || 0,
-        p_precio_2     : campos.precio_2 !== '' && campos.precio_2 != null ? Number(campos.precio_2) : null,
-        p_precio_3     : campos.precio_3 !== '' && campos.precio_3 != null ? Number(campos.precio_3) : null,
-        p_precio1_porcentaje: campos.precio1_porcentaje !== '' && campos.precio1_porcentaje != null ? Number(campos.precio1_porcentaje) : null,
-        p_precio2_porcentaje: campos.precio2_porcentaje !== '' && campos.precio2_porcentaje != null ? Number(campos.precio2_porcentaje) : null,
-        p_precio3_porcentaje: campos.precio3_porcentaje !== '' && campos.precio3_porcentaje != null ? Number(campos.precio3_porcentaje) : null,
+      const payloadBase = buildProductoPayload(campos, {
+        stock_actual: Number(campos.stock_actual) || 0,
       })
-
-      if (error) {
-        if (error.message?.includes('duplicate') || error.code === '23505')
-          throw new Error('Ya existe un producto con ese código')
-        throw error
-      }
-      return data
+      const claveGen = obtenerClaveGen()
+      const idempotencyKey = campos.idempotencyKey || claveGen.resolver(payloadBase)
+      const res = await callProductoApi('/api/productos/crear', 'POST', {
+        ...payloadBase,
+        idempotencyKey,
+      })
+      claveGen.limpiar(payloadBase)
+      return res
     },
     onSuccess: async () => {
-      // Cancelar queries en vuelo para evitar race condition Vercel→Supabase:
-      // el RPC puede tardar en ser visible en DB antes que el refetch inmediato complete.
       await qc.cancelQueries({ queryKey: INVENTARIO_KEY })
       await qc.cancelQueries({ queryKey: MOVIMIENTOS_KEY })
       broadcastInventarioUpdate()
       showToast('Producto creado', 'success')
-      // Invalidar con delay para dar tiempo al commit de ser visible en Supabase
       setTimeout(() => {
         qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
         qc.invalidateQueries({ queryKey: MOVIMIENTOS_KEY })
@@ -301,38 +326,28 @@ export function useCrearProducto() {
   })
 }
 
-// ─── Mutation: actualizar producto (solo supervisor) ──────────────────────────
-// Usa RPC que registra cambios de stock en kardex automáticamente
+// ─── Mutation: actualizar producto (via Worker / service_role) ────────────────
+// N25: edición general de ficha NO modifica stock_actual (solo via conteo físico)
 export function useActualizarProducto() {
   const qc = useQueryClient()
+  const claveGenRef = useRef(null)
+  const obtenerClaveGen = () => (claveGenRef.current ??= crearGeneradorClaveIdempotente())
 
   return useMutation({
-    mutationFn: async ({ id, campos, imagen_url }) => {
-      const { data, error } = await supabase.rpc('actualizar_producto_con_kardex_staging', {
-        p_id:           id,
-        p_codigo:       campos.codigo?.trim()      || null,
-        p_nombre:       campos.nombre.trim(),
-        p_descripcion:  campos.descripcion?.trim() || null,
-        p_categoria:    campos.categoria?.trim()   || null,
-        p_unidad:       campos.unidad?.trim()      || 'und',
-        p_precio_usd:   Number(campos.precio_usd)  || 0,
-        p_costo_usd:    campos.costo_usd ? Number(campos.costo_usd) : null,
-        p_stock_actual: Number(campos.stock_actual) || 0,
-        p_stock_minimo: Number(campos.stock_minimo) || 0,
-        p_precio_2     : campos.precio_2 !== '' && campos.precio_2 != null ? Number(campos.precio_2) : null,
-        p_precio_3     : campos.precio_3 !== '' && campos.precio_3 != null ? Number(campos.precio_3) : null,
-        p_precio1_porcentaje: campos.precio1_porcentaje !== '' && campos.precio1_porcentaje != null ? Number(campos.precio1_porcentaje) : null,
-        p_precio2_porcentaje: campos.precio2_porcentaje !== '' && campos.precio2_porcentaje != null ? Number(campos.precio2_porcentaje) : null,
-        p_precio3_porcentaje: campos.precio3_porcentaje !== '' && campos.precio3_porcentaje != null ? Number(campos.precio3_porcentaje) : null,
-        p_imagen_url   : imagen_url ?? null,
+    mutationFn: async ({ id, campos, imagen_url, idempotencyKey: explicitKey = null }) => {
+      const payloadBase = buildProductoPayload(campos, {
+        id,
+        imagen_url: imagen_url ?? null,
+        stock_actual: undefined,
       })
-
-      if (error) {
-        if (error.message?.includes('duplicate') || error.code === '23505')
-          throw new Error('Ya existe un producto con ese código')
-        throw error
-      }
-      return data
+      const claveGen = obtenerClaveGen()
+      const idempotencyKey = explicitKey || claveGen.resolver(payloadBase)
+      const res = await callProductoApi('/api/productos/actualizar', 'PATCH', {
+        ...payloadBase,
+        idempotencyKey,
+      })
+      claveGen.limpiar(payloadBase)
+      return res
     },
     onSuccess: async () => {
       await qc.cancelQueries({ queryKey: INVENTARIO_KEY })
@@ -349,20 +364,43 @@ export function useActualizarProducto() {
   })
 }
 
-// ─── Mutation: borrar producto (hard delete con kardex) ────────────────────────
-// Usa RPC que registra egreso del stock restante antes de borrar
-export function useBorrarProducto() {
+// ─── Mutation: actualizar metadatos de producto (imagen / activar-desactivar) ──
+export function useActualizarProductoMetadatos() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id) => {
-      const { error } = await supabase.rpc('borrar_producto_con_kardex_staging', {
-        p_producto_id: id,
+    mutationFn: async ({ id, activo, imagen_url }) => {
+      const payload = { id }
+      if (activo !== undefined) payload.activo = activo
+      if (imagen_url !== undefined) payload.imagen_url = imagen_url
+      return callProductoApi('/api/productos/metadatos', 'PATCH', payload)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: INVENTARIO_KEY })
+    },
+  })
+}
+
+// ─── Mutation: borrar producto (via Worker / service_role) ────────────────────
+export function useBorrarProducto() {
+  const qc = useQueryClient()
+  const claveGenRef = useRef(null)
+  const obtenerClaveGen = () => (claveGenRef.current ??= crearGeneradorClaveIdempotente())
+
+  return useMutation({
+    mutationFn: async (arg) => {
+      const id = typeof arg === 'object' ? arg.id : arg
+      const explicitKey = typeof arg === 'object' ? arg.idempotencyKey : null
+      const claveGen = obtenerClaveGen()
+      const idempotencyKey = explicitKey || claveGen.resolver(id)
+      const res = await callProductoApi('/api/productos/borrar', 'DELETE', {
+        id,
+        idempotencyKey,
       })
-      if (error) throw error
+      claveGen.limpiar(id)
+      return res
     },
     onSuccess: (_, id) => {
-      // Remover optimísticamente del cache para respuesta inmediata en UI
       qc.cancelQueries({ queryKey: INVENTARIO_KEY })
       qc.setQueriesData({ queryKey: INVENTARIO_KEY }, (old) => {
         if (!old?.productos) return old
@@ -381,17 +419,13 @@ export function useBorrarProducto() {
   })
 }
 
-// ─── Mutation: desactivar producto (soft delete) ──────────────────────────────
+// ─── Mutation: desactivar producto (soft delete via Worker) ──────────────────
 export function useDesactivarProducto() {
   const qc = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ id, activo }) => {
-      const { error } = await supabase
-        .from('productos')
-        .update({ activo })
-        .eq('id', id)
-      if (error) throw error
+      return callProductoApi('/api/productos/metadatos', 'PATCH', { id, activo })
     },
     onSuccess: (_, { id, activo }) => {
       qc.cancelQueries({ queryKey: INVENTARIO_KEY })
@@ -402,6 +436,7 @@ export function useDesactivarProducto() {
           productos: old.productos.map(p => p.id === id ? { ...p, activo } : p)
         }
       })
+      broadcastInventarioUpdate()
       showToast(activo ? 'Producto activado' : 'Producto desactivado', 'success')
       setTimeout(() => qc.invalidateQueries({ queryKey: INVENTARIO_KEY }), 300)
     },

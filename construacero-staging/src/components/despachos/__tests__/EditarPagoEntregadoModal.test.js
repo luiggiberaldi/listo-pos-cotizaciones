@@ -49,7 +49,9 @@ describe('EditarPagoEntregadoModal — cuadre automático de CxC (paso 2)', () =
     expect(source).toContain('idempotencyKey: abonoKey')
     expect(source).toContain('clienteId: cuadre.clienteId')
     expect(source).toContain('despachoId: despacho.id')
-    expect(hooks).toContain("authFetch('/api/cxc/abono'")
+    // OP-2026-049: la llamada pasa por llamarApiCxc (que usa authFetch y da errores claros)
+    expect(hooks).toContain("llamarApiCxc('/api/cxc/abono'")
+    expect(hooks).toMatch(/export async function llamarApiCxc[\s\S]*?authFetch\(ruta, opciones\)/)
     expect(hooks).toContain("...(idempotencyKey ? { idempotencyKey } : {})")
   })
 

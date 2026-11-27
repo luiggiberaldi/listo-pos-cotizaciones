@@ -1,5 +1,21 @@
 // api/lib/cxcUtils.js
 // Función unificada y estandarizada para recálculo y sincronización de saldos de clientes
+// OP-2026-057 (M5): si el recálculo falla, queda anotado en la auditoría (categoría SISTEMA,
+// RECALCULO_SALDO_FALLIDO) en vez de perderse en la consola. La base además recalcula sola con su
+// disparador (trg_recalcular_saldo_pendiente), así que un fallo aquí no deja el saldo mal.
+import { registrarAuditoria } from './audit.js'
+
+async function anotarFallo(env, headers, clienteId, paso, detalle) {
+  try {
+    await registrarAuditoria(env, headers, {
+      usuarioId: null, usuarioNombre: 'Sistema', usuarioRol: 'sistema',
+      categoria: 'SISTEMA', accion: 'RECALCULO_SALDO_FALLIDO',
+      descripcion: `No se pudo recalcular el saldo del cliente ${clienteId} (${paso})`,
+      entidadTipo: 'cliente', entidadId: clienteId,
+      meta: { paso, detalle: String(detalle || '').slice(0, 500) },
+    });
+  } catch { /* la auditoría ya avisa en consola si falla */ }
+}
 
 export async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
   if (!clienteId) return { saldoReal: 0, saldoFavor: 0 };
@@ -13,6 +29,7 @@ export async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
     if (!cxcRes.ok) {
       const txt = await cxcRes.text();
       console.error(`[RECALCULO-SALDO] Error leyendo cuentas_por_cobrar del cliente ${clienteId}:`, txt);
+      await anotarFallo(env, headers, clienteId, 'leer movimientos', txt);
       return { saldoReal: 0, saldoFavor: 0 };
     }
 
@@ -51,6 +68,7 @@ export async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
     if (!patchRes.ok) {
       const patchTxt = await patchRes.text();
       console.error(`[RECALCULO-SALDO] Error al actualizar cliente ${clienteId}:`, patchTxt);
+      await anotarFallo(env, headers, clienteId, 'guardar saldo', patchTxt);
     } else {
       console.log(`[RECALCULO-SALDO] Cliente ${clienteId} sincronizado -> Deuda: $${saldoReal}, Favor: $${saldoFavor}`);
     }
@@ -58,6 +76,7 @@ export async function recalcularSaldoPendienteCliente(clienteId, env, headers) {
     return { saldoReal, saldoFavor };
   } catch (err) {
     console.error(`[RECALCULO-SALDO] Excepción recalculando cliente ${clienteId}:`, err?.message);
+    await anotarFallo(env, headers, clienteId, 'excepción', err?.message);
     return { saldoReal: 0, saldoFavor: 0 };
   }
 }
