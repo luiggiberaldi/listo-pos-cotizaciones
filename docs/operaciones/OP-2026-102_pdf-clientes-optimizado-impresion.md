@@ -53,11 +53,34 @@
    - `despues_Base_de_Datos_Clientes_2026-11-27.pdf` (2 páginas, 45 clientes de ejemplo): verificadas visualmente página 1 y página 2 convertidas a imagen.
    - `despues_Reporte_de_Personal_2026-11-27.pdf` (1 página): verificada visualmente página 1 convertida a imagen.
    - Comparado lado a lado contra `antes_Base_de_Datos_Clientes_2026-11-27.pdf` y `despues_Base_de_Datos_Choferes_2026-11-27.pdf`.
+5. **Prueba en navegador real (Chromium sobre `dist/` compilado, con datos sintéticos aislados):**
+   - Sesión iniciada con PIN como `jefe`, apertura de `/clientes` (modos *"Mis datos"* y *"Todos"*) y `/personal`:
+   - Descarga real verificada de `Base_de_Datos_Clientes_2026-11-27.pdf` (en *Mis datos* = 1 cliente y filtro visible; en *Todos* = 2 clientes con texto multilínea sin recortes) y `Reporte_de_Personal_2026-11-27.pdf` (1 trabajador).
+   - Verificado que al pulsar **Descargar PDF** refresca los datos del servidor (`clientesCalls: 5`), que **Imprimir** ejecuta sin errores, **0 errores de página/consola** y **0 desbordamiento horizontal** en pantalla de computadora (`1280×800`) y teléfono (`360×800`).
+
+---
+
+## Preparación para paso seguro a producción
+
+### 1. Control de alcance y riesgo (bajo)
+- **Punto de partida:** `origin/main` = `e85518b0` (Merge PR #89, [OP-2026-097](../plans/OP-2026-097_plan-paso-a-produccion-inventario-y-seguridad.md)).
+- **Qué entra:** únicamente código de pantalla y generación de PDFs (`src/`), pruebas automáticas y documentación.
+- **Qué NO se toca:** **0 cambios** en base de datos (`supabase/migrations/`), **0 cambios** en el servidor (`api/`, `worker.js`), **0 cambios** en `vercel.json` ni `wrangler.toml`, ni en `construacero-staging/`.
+
+### 2. Verificación posterior al unir a `main` (humo en producción)
+1. Confirmar despliegue en verde de **Vercel** (frontend) y del flujo **Deploy Worker a Cloudflare** en GitHub Actions.
+2. Comprobar que la app carga (`200`), `/api/ping` responde (`200`) y una ruta privada sin sesión sigue respondiendo `401`.
+3. Entrar en **Clientes** (probar *Mis datos* y *Todos*) y en **Personal**, descargar el PDF e imprimir una hoja de prueba en papel para confirmar encabezado, logo y ahorro de tinta reales. *(Recordar recargar si ya había una sesión abierta con versión anterior.)*
+
+### 3. Plan de vuelta atrás (rollback)
+- **Opción A (más rápida para pantalla):** en **Vercel**, usar *Instant Rollback* al despliegue anterior (`e85518b0`).
+- **Opción B (completa en Git):** revertir la solicitud de cambio en GitHub (`git revert` del merge sobre `main`), lo que vuelve a publicar pantalla y Worker al punto `e85518b0` en ~1 minuto.
+- **Base de datos:** no hay migraciones que revertir.
 
 ---
 
 ## Pendiente
 
-- Que revises el ejemplo visual y confirmes si lo publicamos en staging/producción (solicitud de cambio desde `fix/op-102-pdf-clientes-optimizado`).
-- *(Opcional cuando se ordene el escritorio)* Retirar la carpeta antigua `construacero-work`, pues su trabajo pendiente ya quedó integrado en este caso.
+- **Tu aprobación para unir la solicitud de cambio a `main`** (y opcionalmente revisar la vista previa de Vercel con solo lectura antes de unir).
+- *(Opcional al cerrar el caso)* Retirar las carpetas `construacero-op-102` y la antigua `construacero-work`, pues su ajuste de textos largos sin recorte quedó integrado aquí.
 - *(Nota de numeración)* Los números `OP-2026-098` a `OP-2026-101` corresponden a trabajos previos que aún viven en sus propias carpetas locales antes de unirse a `main`.
