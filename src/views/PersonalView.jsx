@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { Briefcase, Plus, Search, RefreshCw, X, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useVendedores, useBorrarCliente, useActivarCliente } from '../hooks/useClientes'
-import { buscarClientes } from '../utils/clienteSearch'
+import { filtrarClientes, resumenFiltrosClientes } from '../utils/clientesListado'
 import { limpiarVistaListaGuardada } from '../utils/vistaCuadricula'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import ClienteCard       from '../components/clientes/ClienteCard'
@@ -131,7 +131,7 @@ export default function PersonalView() {
 
   // La búsqueda se hace en pantalla (buscarClientes) sobre la lista ya cargada:
   // no se vuelve a pedir la lista completa al servidor en cada búsqueda.
-  const { data: clientes = [], isLoading, isError, refetch } = useClientes()
+  const { data: clientes = [], isLoading, isFetching, isError, refetch } = useClientes()
   const { data: vendedores = [] } = useVendedores()
   const empresaUser = vendedores.find(v => v.nombre?.toUpperCase() === 'EMPRESA')
   const forzarVendedorId = empresaUser?.id || null
@@ -147,12 +147,30 @@ export default function PersonalView() {
   const [exportandoPDF, setExportandoPDF] = useState(false)
   const [imprimiendoPDF, setImprimiendoPDF] = useState(false)
 
+  const opcionesFiltro = useMemo(() => ({
+    esPersonal: true,
+    busqueda,
+    filtroConDeuda,
+    filtroConPrestamo,
+    filtroSaldoFavor,
+    filtroEstado,
+  }), [busqueda, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado])
+
   async function exportarClientesPDF(accion = 'download') {
     if (accion === 'print') setImprimiendoPDF(true)
     else setExportandoPDF(true)
     try {
+      let listaBase = clientes
+      try {
+        const fresh = await refetch()
+        if (Array.isArray(fresh?.data)) listaBase = fresh.data
+      } catch {
+        // En modo offline se exporta con la lista ya cargada en pantalla
+      }
+      const itemsExport = filtrarClientes(listaBase, opcionesFiltro)
+      const filtroResumen = resumenFiltrosClientes(opcionesFiltro)
       const { generarClientesPDF } = await import('../services/pdf/clientesPDF')
-      await generarClientesPDF({ items: clientesFiltrados, config, action: accion, title: 'Reporte de Personal' })
+      await generarClientesPDF({ items: itemsExport, config, action: accion, title: 'Reporte de Personal', filtroResumen })
     } catch (err) {
       import('../components/ui/Toast').then(({ showToast }) =>
         showToast('Error al generar el PDF: ' + err.message, 'error')
@@ -164,49 +182,10 @@ export default function PersonalView() {
   }
 
   // Filtrado local y ordenamiento (clientes con deuda o préstamos activos primero)
-  const clientesFiltrados = useMemo(() => {
-    const list = clientes.filter(c => {
-      // SOLO incluir personal
-      if (c.tipo_cliente !== 'personal') return false
-      if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0)) return false
-      if (filtroConPrestamo && !c.tiene_prestamos_activos) return false
-      if (filtroSaldoFavor && !(Number(c.saldo_a_favor || 0) > 0)) return false
-      
-      if (filtroEstado === 'activos' && !c.activo) return false
-      if (filtroEstado === 'desactivados' && c.activo) return false
-      
-      return true
-    })
-
-    // Reutilizar el ranking de clientes para nombre, cédula, código y teléfono.
-    const listaConBusqueda = busqueda ? buscarClientes(list, busqueda) : list
-
-    // Ordenar: Trabajadores con deuda o préstamos activos primero, luego relevancia/nombre
-    return [...listaConBusqueda].sort((a, b) => {
-      const deudaA = Number(a.saldo_pendiente || 0)
-      const deudaB = Number(b.saldo_pendiente || 0)
-      const prestamoA = !!a.tiene_prestamos_activos
-      const prestamoB = !!b.tiene_prestamos_activos
-
-      const esDeudorA = deudaA > 0 || prestamoA
-      const esDeudorB = deudaB > 0 || prestamoB
-
-      if (esDeudorA && !esDeudorB) return -1
-      if (!esDeudorA && esDeudorB) return 1
-
-      if (esDeudorA && esDeudorB) {
-        // Priorizar por mayor deuda de dinero
-        if (deudaA !== deudaB) {
-          return deudaB - deudaA
-        }
-        // Desempatar poniendo primero al que tiene préstamos
-        if (prestamoA && !prestamoB) return -1
-        if (!prestamoA && prestamoB) return 1
-      }
-
-      return (a.nombre || '').localeCompare(b.nombre || '')
-    })
-  }, [clientes, busqueda, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado])
+  const clientesFiltrados = useMemo(
+    () => filtrarClientes(clientes, opcionesFiltro),
+    [clientes, opcionesFiltro]
+  )
 
   const hayFiltros = filtroConDeuda || filtroConPrestamo || filtroSaldoFavor || filtroEstado !== 'activos'
 
@@ -321,7 +300,7 @@ export default function PersonalView() {
               <>
                 <button 
                   onClick={() => exportarClientesPDF('print')} 
-                  disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                  disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || clientesFiltrados.length === 0}
                   className="flex items-center gap-1.5 sm:gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
                   <Printer size={15} />
@@ -329,7 +308,7 @@ export default function PersonalView() {
                 </button>
                 <button 
                   onClick={() => exportarClientesPDF('download')} 
-                  disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                  disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || clientesFiltrados.length === 0}
                   className="flex items-center gap-1.5 sm:gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
                   <FileText size={15} />
