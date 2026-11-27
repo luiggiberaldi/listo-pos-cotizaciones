@@ -117,6 +117,7 @@
 | OP-2026-094 | 2026-11-26 | Auditoría independiente (solo lectura) del informe de traspaso OP-2026-093 y de las solicitudes #83, #84 y #85 | **Hallazgos corregidos y verificados en staging en OP-2026-096** (plan OP-2026-095) | [#86](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/86) | [informe](OP-2026-094_auditoria-informe-traspaso-staging.md) |
 | OP-2026-095 | 2026-11-26 | Plan paso a paso (Fases 0 a 7) para corregir los hallazgos de la auditoría OP-2026-094 en staging y preparar el camino seguro a producción | **Fases 0 a 6 ejecutadas y verificadas al 100 % en staging (ver OP-2026-096)**; Fase 7 (producción) en caso aparte con autorización | [#87](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/87) | [plan](../plans/OP-2026-095_plan-correccion-auditoria-traspaso-staging.md) |
 | OP-2026-096 | 2026-11-26 | Ejecución en staging del plan OP-2026-095 (Fases 0 a 6): rescate OP-084, conflicto #78, integración #85 en #84, seguridad restauración/catálogo (327), ocultar "Facturar préstamo" + devoluciones (328) y despachos $0 en 4 pantallas | **Verificado al 100 % en staging** (`590/590` pruebas, build OK, `123/123` E2E, `6/6` por aprobar, `17/17` seguridad, restauración real 26 tablas OK, 6 pantallas + préstamo/devolución `DES-04983` en navegador con 0 errores). Pendiente: Fase 7 (producción, caso aparte) | [#84](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/84) | [informe](OP-2026-096_ejecucion-plan-correccion-traspaso-staging.md) |
+| OP-2026-097 | 2026-11-26 | Auditoría solo lectura de producción y paquete completo de paso a producción (migraciones 313–318 + 6 rollbacks exactos, Conteo físico, "N por aprobar", respaldo 26 tablas, cierres INC-004/N30 y "Facturar préstamo" oculto/apagado) | **Auditado y paquete listo para publicar antes del inventario del sábado** (`1.288/1.288` pruebas y build OK en `construacero-op097`); **producción aún NO tocada**, pendiente autorización final | Solicitud abierta (`feat/op-097-inventario-seguridad-prod`) | [plan](../plans/OP-2026-097_plan-paso-a-produccion-inventario-y-seguridad.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -132,7 +133,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-097**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-098**).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.

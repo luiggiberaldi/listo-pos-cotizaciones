@@ -264,3 +264,9 @@ construacero-backups/
 
 # OP-2026-095: plan de corrección tras auditoría OP-2026-094
 !docs/plans/OP-2026-095_plan-correccion-auditoria-traspaso-staging.md
+
+# OP-2026-097: paso a producción de inventario, "por aprobar", respaldo 26 tablas y seguridad
+!docs/plans/OP-2026-097_plan-paso-a-produccion-inventario-y-seguridad.md
+!src/utils/__tests__/despachoSinCobro.test.js
+!src/utils/__tests__/op087StockPorAprobar.test.js
+!api/handlers/__tests__/produccion097SeguridadYRespaldo.test.js

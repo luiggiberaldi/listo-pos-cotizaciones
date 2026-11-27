@@ -7,6 +7,7 @@ import { useConfigNegocio } from '../../hooks/useConfigNegocio'
 import { useEditarDespacho } from '../../hooks/useDespachos'
 import { useClientes } from '../../hooks/useClientes'
 import useClienteFresco from '../../hooks/useClienteFresco'
+import { evaluarSinCobro } from '../../utils/despachoSinCobro'
 import { useFormasPago } from '../../hooks/useFormasPago'
 import { useSaldoFavorOrigen } from '../../hooks/useCuentasCobrar'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
@@ -278,8 +279,12 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
     : `DES-${String(despacho.numero).padStart(5, '0')}`
 
 
+  // OP-2026-092 / OP-2026-095: sin nada que cobrar (total $0) no se exige método de pago.
+  const infoSinCobro = evaluarSinCobro({ esCod, total: totalConFlete, items: despacho?.items || [] })
+  const sinCobro = infoSinCobro.sinCobro
+
   async function handleGuardar() {
-    const fpJson = JSON.stringify(formasPagoFinales)
+    const fpJson = JSON.stringify(sinCobro ? [] : formasPagoFinales)
     await editarDespacho.mutateAsync({
       despachoId: despacho.id,
       formaPago: fpJson,
@@ -652,6 +657,13 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
                 </div>
               )}
 
+              {sinCobro && (
+                <div data-testid="editar-despacho-sin-cobro" className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs leading-snug">
+                  <p className="font-bold">{infoSinCobro.titulo}</p>
+                  <p className="mt-0.5 opacity-80">{infoSinCobro.descripcion}</p>
+                </div>
+              )}
+
               {!esCod && pagosInmediatos.length > 0 && (
                 <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold ${
                   pagoInmediatoCuadrado
@@ -890,7 +902,7 @@ export default function EditDespachoModal({ isOpen, onClose, despacho }) {
           </button>
           <button onClick={handleGuardar} disabled={
             cargando ||
-            !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : pagoInmediatoCuadrado) ||
+            !(esCod ? (montoCodRequerido > 0.015 && propuestaCodCuadrado) : (pagoInmediatoCuadrado || sinCobro)) ||
             !cxcVencimientoValido ||
             (direccionEnvioActiva && (!direccionEnvioEstado || !direccionEnvioCiudad)) ||
             !destinoFleteValido

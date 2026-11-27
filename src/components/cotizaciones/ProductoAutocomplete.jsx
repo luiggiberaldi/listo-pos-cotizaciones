@@ -6,7 +6,7 @@ import { smartSearchProductos } from '../../utils/smartSearch'
 import { precio2Visible, precio3Visible } from '../../utils/preciosHabilitados'
 import ImgProducto from "../inventario/ImgProducto"
 
-export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgregados = new Set(), placeholder = 'Búsqueda rápida por nombre o código...' }) {
+export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgregados = new Set(), placeholder = 'Búsqueda rápida por nombre o código...', stockPorAprobar = {} }) {
   const [texto, setTexto] = useState('')
   const [focused, setFocused] = useState(false)
   const ref = useRef(null)
@@ -59,6 +59,7 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
           {sugerencias.map(p => {
             const yaAgregado = idsAgregados.has(p.id)
             const sinStock = p.stock_actual != null && p.stock_actual <= 0
+            const porAprobar = stockPorAprobar[p.id] || 0
             // El precio 0 es un precio válido ($0.00): no bloquea la selección.
             return (
               <button
@@ -84,6 +85,7 @@ export default function ProductoAutocomplete({ productos = [], onAgregar, idsAgr
                       (p.stock_actual <= (p.stock_minimo || 5)) ? 'text-amber-500' : 'text-emerald-500'
                     }`}>
                       {sinStock ? 'Agotado' : `Stock: ${p.stock_actual}`}
+                      {porAprobar > 0 && !sinStock && <span className="ml-1.5 text-sky-600">· {porAprobar} por aprobar</span>}
                     </span>
                   </div>
                 </div>

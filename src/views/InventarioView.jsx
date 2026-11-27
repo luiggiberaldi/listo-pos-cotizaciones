@@ -11,6 +11,7 @@ import { useTasaCambio } from '../hooks/useTasaCambio'
 import CustomSelect from '../components/ui/CustomSelect'
 import { useInventario, useCategorias, useDesactivarProducto, useBorrarProducto, CATEGORY_GROUPS as CATEGORY_GROUPS_VIEW } from '../hooks/useInventario'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
+import { useStockPorAprobar } from '../hooks/useStockPorAprobar'
 import ProductoCard  from '../components/inventario/ProductoCard'
 import ProductoForm  from '../components/inventario/ProductoForm'
 import MovimientoLoteModal from '../components/inventario/MovimientoLoteModal'
@@ -121,6 +122,7 @@ export default function InventarioView() {
   const { data: categorias = [] } = useCategorias({ mostrarInactivos: esPrivilegiado })
   const desactivar = useDesactivarProducto()
   const borrar = useBorrarProducto()
+  const { data: stockPorAprobar = {} } = useStockPorAprobar()
   const categoriasBatch = useMemo(() => [...new Set(todosProductos.map(p => p.categoria).filter(Boolean))].sort(), [todosProductos])
 
   // Smart search client-side
@@ -497,6 +499,7 @@ export default function InventarioView() {
               onKardex={setKardexProducto}
               onDetalle={setDetalleProducto}
               tasa={tasaEfectiva}
+              porAprobar={stockPorAprobar[p.id] || 0}
             />
           ))}
         </div>

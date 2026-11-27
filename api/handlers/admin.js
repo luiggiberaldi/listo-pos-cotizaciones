@@ -275,13 +275,62 @@ export async function handleBackup(request, env) {
 
   const errors = [];
 
-  async function fetchTable(tabla, query = '') {
-    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}?limit=100000&cuenta_id=eq.${user.id}${query}`, { headers: h });
-    if (!res.ok) {
-      errors.push(`Error al leer ${tabla}: ${res.status}`);
-      return [];
+  // OP-2026-086/095/097 (C2): el servidor de datos entrega como máximo 1000 filas por consulta. Se lee
+  // página por página y se compara contra el conteo real de la base; si no cuadra, el respaldo se
+  // marca como incompleto en vez de salir "bien" con datos faltantes.
+  const PAGINA = 1000;
+  function conOrdenEstable(query) {
+    if (/(^|&)order=/.test(query)) return query.replace(/(^|&)order=([^&]*)/, (m, pre, ord) => (/(^|,)id\./.test(ord) ? m : `${pre}order=${ord},id.asc`));
+    return `${query}&order=id.asc`;
+  }
+  async function leerPaginado(tabla, filtro, query = '', { maximo = Infinity, ordenarPorId = true } = {}) {
+    const q = ordenarPorId ? conOrdenEstable(query) : query;
+    const filas = [];
+    let total = null;
+    for (let offset = 0; offset < maximo; offset += PAGINA) {
+      const limite = Math.min(PAGINA, maximo - offset);
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}?${filtro}${q}&limit=${limite}&offset=${offset}`, {
+        headers: offset === 0 ? { ...h, Prefer: 'count=exact' } : h,
+      });
+      if (!res.ok) {
+        errors.push(`Error al leer ${tabla}: ${res.status}`);
+        return filas;
+      }
+      if (offset === 0) {
+        const rango = res.headers.get('content-range') || '';
+        const t = Number(rango.split('/')[1]);
+        total = Number.isFinite(t) ? t : null;
+      }
+      const pagina = await res.json();
+      filas.push(...pagina);
+      if (pagina.length < limite) break;
     }
-    return res.json();
+    const esperado = total === null ? null : Math.min(total, maximo);
+    if (esperado !== null && filas.length !== esperado) {
+      errors.push(`${tabla}: se leyeron ${filas.length} de ${esperado} filas`);
+    }
+    return filas;
+  }
+
+  async function fetchTable(tabla, query = '') {
+    if (tabla === 'auditoria') {
+      return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query.replace(/&limit=\d+/, ''), { maximo: 5000 });
+    }
+    if (tabla === 'configuracion_negocio') return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query, { ordenarPorId: false });
+    if (tabla === 'comisiones') return leerPaginado(tabla, `cuentaid=eq.${user.id}`, '&order=creadoen.asc');
+    if (tabla === 'inventario_operaciones') return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query.includes('order=') ? `${query},idempotency_key.asc` : '&order=idempotency_key.asc', { ordenarPorId: false });
+    return leerPaginado(tabla, `cuenta_id=eq.${user.id}`, query);
+  }
+
+  async function fetchChildTableByIds(tabla, col, ids, order = '') {
+    const cleanIds = [...new Set((ids || []).filter(Boolean))];
+    if (cleanIds.length === 0) return [];
+    const rows = [];
+    for (let i = 0; i < cleanIds.length; i += 150) {
+      const chunk = cleanIds.slice(i, i + 150);
+      rows.push(...(await leerPaginado(tabla, `${col}=in.(${chunk.join(',')})`, order)));
+    }
+    return rows;
   }
 
   const [
@@ -290,7 +339,23 @@ export async function handleBackup(request, env) {
     cotizaciones,
     cotizacion_items,
     notas_despacho,
+    notas_despacho_items,
+    despacho_descuentos,
+    inventario_movimientos,
+    inventario_operaciones,
+    cuentas_por_cobrar,
+    cxc_movimientos_borrados,
+    comisiones,
+    comision_liberaciones,
+    comision_designacion_diaria,
     transportistas,
+    vehiculos,
+    proveedores,
+    ordenes_compra,
+    orden_compra_items,
+    cuentas_por_pagar,
+    pagos_transportistas,
+    pagos_transportistas_despachos,
     usuarios,
     configuracion_negocio,
     auditoria,
@@ -300,27 +365,82 @@ export async function handleBackup(request, env) {
     fetchTable('cotizaciones', '&order=numero.asc'),
     fetchTable('cotizacion_items', '&order=cotizacion_id.asc,orden.asc'),
     fetchTable('notas_despacho', '&order=numero.asc'),
+    fetchTable('notas_despacho_items', '&order=despacho_id.asc,orden.asc'),
+    fetchTable('despacho_descuentos', '&order=creado_en.asc'),
+    fetchTable('inventario_movimientos', '&order=numero.asc'),
+    fetchTable('inventario_operaciones', '&order=creado_en.asc'),
+    fetchTable('cuentas_por_cobrar', '&order=creado_en.asc'),
+    fetchTable('cxc_movimientos_borrados', '&order=id.asc'),
+    fetchTable('comisiones', '&order=creadoen.asc'),
+    fetchTable('comision_liberaciones', '&order=creado_en.asc'),
+    fetchTable('comision_designacion_diaria', '&order=creado_en.asc'),
     fetchTable('transportistas', '&order=nombre.asc'),
+    fetchTable('vehiculos', '&order=creado_en.asc'),
+    fetchTable('proveedores', '&order=creado_en.asc'),
+    fetchTable('ordenes_compra', '&order=creado_en.asc'),
+    fetchTable('orden_compra_items', '&order=id.asc'),
+    fetchTable('cuentas_por_pagar', '&order=creado_en.asc'),
+    fetchTable('pagos_transportistas', '&order=creado_en.asc'),
+    fetchTable('pagos_transportistas_despachos', '&order=creado_en.asc'),
     fetchTable('usuarios', '&order=nombre.asc'),
     fetchTable('configuracion_negocio'),
     fetchTable('auditoria', '&order=ts.desc&limit=5000'),
   ]);
 
+  const clienteIds = clientes.map(c => c.id);
+  const despachoIds = notas_despacho.map(d => d.id);
+  const [
+    prestamosPorCliente,
+    prestamosPorDespacho,
+    despacho_devoluciones,
+    despacho_devolucion_intercambios,
+  ] = await Promise.all([
+    fetchChildTableByIds('cliente_prestamos', 'cliente_id', clienteIds, '&order=creado_en.asc'),
+    fetchChildTableByIds('cliente_prestamos', 'despacho_id', despachoIds, '&order=creado_en.asc'),
+    fetchChildTableByIds('despacho_devoluciones', 'despacho_id', despachoIds, '&order=creado_en.asc'),
+    fetchChildTableByIds('despacho_devolucion_intercambios', 'despacho_id', despachoIds, '&order=creado_en.asc'),
+  ]);
+  const prestamosMap = new Map();
+  for (const row of [...prestamosPorCliente, ...prestamosPorDespacho]) {
+    if (row?.id && !prestamosMap.has(row.id)) prestamosMap.set(row.id, row);
+  }
+  const cliente_prestamos = [...prestamosMap.values()];
+
   // If any table failed to load, warn in the backup
   const negocio = configuracion_negocio?.[0]?.nombre_negocio || 'sistema';
 
   const backup = {
-    version: '1.0',
+    version: '1.3',
     generado_en: new Date().toISOString(),
     negocio,
     errores: errors.length > 0 ? errors : undefined,
+    completo: errors.length === 0,
     tablas: {
       productos,
       clientes,
       cotizaciones,
       cotizacion_items,
       notas_despacho,
+      notas_despacho_items,
+      despacho_descuentos,
+      cliente_prestamos,
+      despacho_devoluciones,
+      despacho_devolucion_intercambios,
+      cuentas_por_cobrar,
+      cxc_movimientos_borrados,
+      comisiones,
+      comision_liberaciones,
+      comision_designacion_diaria,
+      inventario_movimientos,
+      inventario_operaciones,
       transportistas,
+      vehiculos,
+      proveedores,
+      ordenes_compra,
+      orden_compra_items,
+      cuentas_por_pagar,
+      pagos_transportistas,
+      pagos_transportistas_despachos,
       usuarios: usuarios.map(({ pin_hash: _hash, pin_salt: _salt, ...safe }) => safe),
       configuracion_negocio,
       auditoria,
@@ -330,7 +450,26 @@ export async function handleBackup(request, env) {
       clientes: clientes.length,
       cotizaciones: cotizaciones.length,
       notas_despacho: notas_despacho.length,
+      notas_despacho_items: notas_despacho_items.length,
+      despacho_descuentos: despacho_descuentos.length,
+      cliente_prestamos: cliente_prestamos.length,
+      despacho_devoluciones: despacho_devoluciones.length,
+      despacho_devolucion_intercambios: despacho_devolucion_intercambios.length,
+      cuentas_por_cobrar: cuentas_por_cobrar.length,
+      cxc_movimientos_borrados: cxc_movimientos_borrados.length,
+      comisiones: comisiones.length,
+      comision_liberaciones: comision_liberaciones.length,
+      comision_designacion_diaria: comision_designacion_diaria.length,
+      inventario_movimientos: inventario_movimientos.length,
+      inventario_operaciones: inventario_operaciones.length,
       transportistas: transportistas.length,
+      vehiculos: vehiculos.length,
+      proveedores: proveedores.length,
+      ordenes_compra: ordenes_compra.length,
+      orden_compra_items: orden_compra_items.length,
+      cuentas_por_pagar: cuentas_por_pagar.length,
+      pagos_transportistas: pagos_transportistas.length,
+      pagos_transportistas_despachos: pagos_transportistas_despachos.length,
       usuarios: usuarios.length,
     },
   };
@@ -381,59 +520,48 @@ export async function handleRestore(request, env) {
     return jsonError(`Backup incompleto: faltan tablas ${missingTables.join(', ')}`, 400, request);
   }
 
-  const h = {
-    apikey: env.SUPABASE_SERVICE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-    Prefer: 'resolution=merge-duplicates',
-  };
-
-  // Tablas a restaurar en orden (respetando FK)
-  const TABLAS_RESTORE = [
-    'configuracion_negocio',
-    'transportistas',
-    'productos',
-    'clientes',
-    'cotizaciones',
-    'cotizacion_items',
-    'notas_despacho',
-  ];
-
-  const resumen = {};
-  const errores = [];
-
-  for (const tabla of TABLAS_RESTORE) {
-    const filas = backup.tablas[tabla];
-    if (!Array.isArray(filas) || filas.length === 0) {
-      resumen[tabla] = 0;
-      continue;
-    }
-
-    // Upsert en lotes de 500
-    let restaurados = 0;
-    for (let i = 0; i < filas.length; i += 500) {
-      const lote = filas.slice(i, i + 500).map(fila => ({ ...fila, cuenta_id: user.id }));
-      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabla}`, {
-        method: 'POST',
-        headers: h,
-        body: JSON.stringify(lote),
-      });
-      if (res.ok) {
-        restaurados += lote.length;
-      } else {
-        const errText = await res.text().catch(() => 'unknown');
-        errores.push(`${tabla} lote ${i}-${i + lote.length}: ${errText}`);
-      }
-    }
-    resumen[tabla] = restaurados;
+  // OP-2026-086/095/097 (C3): exigir respaldo explícitamente completo (rechaza v1.0/v1.1
+  // antiguos que salían recortados a 1000 filas sin la marca completo: true).
+  if (backup.completo !== true || (Array.isArray(backup.errores) && backup.errores.length > 0)) {
+    const detalle = (backup.errores || []).length > 0
+      ? (backup.errores || []).join('; ')
+      : 'respaldo antiguo o sin verificación de integridad (puede estar recortado a 1000 filas)';
+    return jsonError(`Este respaldo no está verificado como completo (${detalle}). No se restaura para no mezclar datos parciales.`, 400, request);
   }
 
-  return json({
-    ok: errores.length === 0,
-    resumen,
-    errores: errores.length > 0 ? errores : undefined,
-    advertencia: errores.length > 0 ? `Restore parcial: ${errores.length} lote(s) fallaron` : undefined,
-  }, 200, request);
+  const TABLAS_RESTORE = [
+    'configuracion_negocio', 'transportistas', 'vehiculos', 'proveedores', 'productos', 'clientes',
+    'cotizaciones', 'cotizacion_items', 'notas_despacho', 'notas_despacho_items',
+    'despacho_descuentos', 'cliente_prestamos', 'despacho_devoluciones',
+    'despacho_devolucion_intercambios', 'cuentas_por_cobrar', 'cxc_movimientos_borrados',
+    'comisiones', 'comision_liberaciones', 'comision_designacion_diaria',
+    'inventario_movimientos', 'inventario_operaciones',
+    'ordenes_compra', 'orden_compra_items', 'cuentas_por_pagar',
+    'pagos_transportistas', 'pagos_transportistas_despachos',
+  ];
+  const tablas = {};
+  for (const t of TABLAS_RESTORE) if (Array.isArray(backup.tablas[t])) tablas[t] = backup.tablas[t];
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/restaurar_respaldo_atomico`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_cuenta_id: user.id, p_tablas: tablas }),
+  });
+  const text = await res.text();
+  let r = null;
+  try { r = text ? JSON.parse(text) : null; } catch { r = null; }
+  if (!res.ok || !r?.ok) {
+    const msg = r?.message || text || `HTTP ${res.status}`;
+    if (msg.includes('RESPALDO_CON_FILAS_DE_OTRA_EMPRESA')) {
+      return jsonError('El respaldo contiene datos de otra empresa. No se restauró nada.', 409, request);
+    }
+    return jsonError(`No se restauró nada (la operación se deshizo completa): ${msg}`, 400, request);
+  }
+  return json({ ok: true, resumen: r.resumen, secuencias: r.secuencias }, 200, request);
 }
 
 async function getExistingColumns(env, cuentaId) {

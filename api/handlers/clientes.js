@@ -794,9 +794,17 @@ export async function handleDevolverPrestamo(request, env) {
   }
 }
 
+// OP-2026-095/097: la facturación de préstamos queda apagada por defecto en producción hasta
+// confirmar con el cliente cómo desean registrarla. Dejar visible/activo solo "Devolver".
+export const FACTURACION_PRESTAMOS_HABILITADA = false;
+
 // Endpoint para facturar préstamo (convertir a venta con saldo en cuentas por cobrar)
 export async function handleFacturarPrestamo(request, env) {
   if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const habilitada = FACTURACION_PRESTAMOS_HABILITADA || env?.FACTURACION_PRESTAMOS_HABILITADA === 'true';
+  if (!habilitada) {
+    return jsonError('La facturación de préstamos está temporalmente deshabilitada. Por ahora solo está disponible la devolución física.', 403, request);
+  }
   const v = await validateOperator(request, env);
   if (v.error) return v.error;
   const { operador, headers, ip } = v;

@@ -12,6 +12,7 @@ import { compartirPorWhatsApp, generarMensaje } from '../utils/whatsapp'
 import { useClientes } from '../hooks/useClientes'
 import ClienteForm from '../components/clientes/ClienteForm'
 import { useInventario, useCategorias } from '../hooks/useInventario'
+import { useStockPorAprobar } from '../hooks/useStockPorAprobar'
 import { precio2Visible, precio3Visible } from '../utils/preciosHabilitados'
 import { precioVentaBase } from '../utils/precioVenta'
 import { mostrarAvisoSinPrecio } from '../utils/avisoSinPrecio'
@@ -421,6 +422,7 @@ export default function VentaRapidaView() {
   const navigate = useNavigate()
   const { data: clientes = [] } = useClientes()
   const { data: inventarioData } = useInventario({ pageSize: 1000 })
+  const { data: stockPorAprobar = {} } = useStockPorAprobar()
   const productos = inventarioData?.productos ?? inventarioData ?? []
   const { data: categorias = [] } = useCategorias()
   const { data: config = {} } = useConfigNegocio()
@@ -780,7 +782,8 @@ export default function VentaRapidaView() {
     Number(cxcItem.diasVencimiento) > 0
   );
 
-  const step2Valid = (esPrestamoPuro || ((esCod
+  const sinCobroVentaRapida = !esCod && totalConFlete <= 0.015
+  const step2Valid = (esPrestamoPuro || sinCobroVentaRapida || ((esCod
     ? (pagoInmediatoCuadrado || (montoCodRequerido > 0.015 && propuestaCodCuadrado))
     : pagoInmediatoCuadrado) && cxcVencimientoValido))
     && (!direccionEnvioActiva || (direccionEnvioEstado && direccionEnvioCiudad))
@@ -1120,6 +1123,7 @@ export default function VentaRapidaView() {
             setEditItemIdx={setEditItemIdx}
             esVendedorSinComision={esVendedorSinComision}
             togglePrestamo={togglePrestamo}
+            stockPorAprobar={stockPorAprobar}
           />
         )}
 
@@ -1351,6 +1355,7 @@ function Step1Productos({
   setEditItemIdx,
   esVendedorSinComision,
   togglePrestamo,
+  stockPorAprobar = {},
 }) {
   const { aplicarMarkup, esExterno } = usePrecioVendedor()
   const [sheetState, setSheetState] = useState('closed')
@@ -1657,6 +1662,7 @@ function Step1Productos({
                 agregado={added}
                 cantidad={itemInCart?.cantidad ?? null}
                 tasa={tasa}
+                porAprobar={stockPorAprobar[p.id] || 0}
                 onAgregar={agregarProducto}
                 onMas={() => cambiarCantidad(p.id, 1)}
                 onMenos={() => itemInCart.cantidad <= 1 ? quitarItem(p.id) : cambiarCantidad(p.id, -1)}

@@ -174,6 +174,107 @@ export async function handleAplicarMovimientoLote(request, env) {
   }
 }
 
+// ── Conteo físico atómico (unitario y por lotes, con concurrencia optimista) ──
+export async function handleConteoInventario(request, env) {
+  if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
+  const v = await validateOperator(request, env);
+  if (v.error) return v.error;
+  const { user, operador, headers, ip } = v;
+  const ROLES_CONTEO = ['administracion', 'jefe', 'desarrollador'];
+  if (!ROLES_CONTEO.includes(operador.rol)) {
+    return jsonError('Solo administración, jefe o desarrollador pueden registrar conteos físicos', 403, request);
+  }
+
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Body inválido', 400, request); }
+
+  const motivo = typeof body?.motivo === 'string' ? body.motivo.trim() : '';
+  const items = body?.items;
+  const idempotencyKey = resolverIdempotencyKey(request, body);
+  if (!motivo) return jsonError('El motivo del conteo es obligatorio', 400, request);
+  if (!Array.isArray(items) || items.length === 0) return jsonError('Debe incluir al menos un producto para conteo', 400, request);
+  if (!isValidUuid(idempotencyKey)) return jsonError('Idempotency-Key inválida', 400, request);
+
+  const seenIds = new Set();
+  const normalizedItems = [];
+  for (const item of items) {
+    if (!isValidUuid(item?.producto_id)) return jsonError('producto_id inválido en conteo', 400, request);
+    if (seenIds.has(item.producto_id)) return jsonError('No se permite repetir el mismo producto en un conteo', 400, request);
+    seenIds.add(item.producto_id);
+
+    const contado = Number(item?.stock_contado);
+    const esperado = Number(item?.stock_esperado);
+    if (!Number.isFinite(contado) || !Number.isFinite(esperado)) {
+      return jsonError('stock_contado y stock_esperado deben ser numéricos', 400, request);
+    }
+    normalizedItems.push({
+      producto_id: item.producto_id,
+      stock_contado: contado,
+      stock_esperado: esperado,
+    });
+  }
+
+  try {
+    const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/ajustar_conteo_inventario_atomico`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        p_cuenta_id: operador.cuenta_id,
+        p_motivo: motivo,
+        p_items: normalizedItems,
+        p_usuario_id: operador.actor_id || user.operator_id,
+        p_usuario_nombre: operador.nombre,
+        p_usuario_color: operador.color || null,
+        p_idempotency_key: idempotencyKey,
+      }),
+    });
+    const text = await rpcRes.text();
+    let result = null;
+    try { result = text ? JSON.parse(text) : null; } catch { result = null; }
+    if (!rpcRes.ok) {
+      const msg = result?.message || text || `HTTP ${rpcRes.status}`;
+      if (msg.includes('CONFLICTO_CONCURRENCIA_STOCK')) {
+        return jsonError('El stock cambió en el servidor mientras contabas. Recarga el catálogo antes de guardar el conteo.', 409, request);
+      }
+      if (msg.includes('STOCK_NEGATIVO_NO_PERMITIDO')) {
+        return jsonError('El conteo no puede dejar stock negativo con la configuración actual', 400, request);
+      }
+      return jsonError(`No se pudo aplicar el conteo físico: ${msg}`, 400, request);
+    }
+    if (!result?.ok) return jsonError('La RPC no confirmó el conteo físico', 500, request);
+
+    try {
+      await registrarAuditoria(env, headers, {
+        usuarioId: user.operator_id,
+        usuarioNombre: operador.nombre,
+        usuarioRol: operador.rol,
+        categoria: 'INVENTARIO',
+        accion: 'CONTEO_FISICO_INVENTARIO',
+        descripcion: `Conteo físico (${result.movimientos ?? 0} ajustes, ${result.sin_cambios ?? 0} sin cambios): ${motivo}`,
+        entidadTipo: 'inventario',
+        entidadId: result.lote_id || normalizedItems[0]?.producto_id,
+        meta: { ...result, motivo, idempotency_key: idempotencyKey },
+        ip,
+      });
+    } catch {
+      // Best-effort operation; preserve the primary response.
+    }
+
+    return json({
+      ok: true,
+      lote_id: result.lote_id ?? null,
+      numero: result.numero ?? null,
+      movimientos: result.movimientos ?? 0,
+      sin_cambios: result.sin_cambios ?? 0,
+      detalles: result.detalles ?? [],
+      idempotency_key: idempotencyKey,
+      idempotent: result.idempotent === true,
+    }, 200, request);
+  } catch (e) {
+    return jsonError(e.message || 'Error al registrar conteo físico', 500, request);
+  }
+}
+
 // ── Revertir movimiento manual de inventario (admin) ─────────────────────────
 export async function handleRevertirMovimientoInventario(request, env) {
   if (!isSameOriginRequest(request)) return jsonError('Origen de la petición no permitido', 403, request);
@@ -946,7 +1047,14 @@ async function callProductKardexRpc(request, env, rpcName, payload, context) {
   }
 
   if (!rpcRes.ok) {
-    return jsonError(result?.message || result?.details || text || `HTTP ${rpcRes.status}`, 400, request)
+    const msg = result?.message || result?.details || text || `HTTP ${rpcRes.status}`
+    if (msg.includes('USAR_CONTEO_FISICO_PARA_MODIFICAR_STOCK')) {
+      return jsonError('No se puede cambiar el stock desde la ficha del producto. Usa Conteo físico o Ingreso/Egreso.', 400, request)
+    }
+    if (msg.includes('PRODUCTO_CON_HISTORIAL_USAR_ARCHIVADO')) {
+      return jsonError('Este producto tiene historial de ventas, cotizaciones o movimientos. Archívalo en lugar de eliminarlo.', 409, request)
+    }
+    return jsonError(msg, 400, request)
   }
   if (!result?.ok) return jsonError('La RPC de producto no confirmó la operación', 500, request)
 
@@ -1334,8 +1442,11 @@ export async function handleBatchIngest(request, env) {
     if (!Number.isFinite(cantidad) || cantidad <= 0) {
       return jsonError('La cantidad debe ser mayor a 0', 400, request);
     }
-    if (!isNuevo && p?.modoExistente && !['sumar', 'sobrescribir'].includes(p.modoExistente)) {
-      return jsonError('modoExistente debe ser "sumar" o "sobrescribir"', 400, request);
+    if (!isNuevo && p?.modoExistente === 'sobrescribir') {
+      return jsonError('La opción "sobrescribir" fue eliminada para proteger el inventario. Use "sumar" o Conteo físico.', 400, request);
+    }
+    if (!isNuevo && p?.modoExistente && p.modoExistente !== 'sumar') {
+      return jsonError('modoExistente debe ser "sumar"', 400, request);
     }
 
     productosRpc.push({

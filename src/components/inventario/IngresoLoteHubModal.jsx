@@ -828,31 +828,10 @@ export default function IngresoLoteHubModal({ isOpen, onClose, productos = [], c
                                   className="w-full px-2 py-1 text-xs font-black text-center bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                                 />
                                 
-                                {/* Si es existente, selector de sumar o sobrescribir */}
+                                {/* OP-2026-086/097: el ingreso por lote siempre suma; para cuadrar existencias se usa Conteo físico */}
                                 {esExistente && (
-                                  <div className="flex bg-slate-100 rounded p-0.5 text-[9px] font-bold">
-                                    <button
-                                      onClick={() => handleFilaChange(fila.id, 'modoExistente', 'sumar')}
-                                      className={`flex-1 py-0.5 rounded text-center transition-colors ${
-                                        fila.modoExistente === 'sumar' 
-                                          ? 'bg-white text-slate-800 shadow-sm' 
-                                          : 'text-slate-400 hover:text-slate-600'
-                                      }`}
-                                      title="Suma la cantidad ingresada al stock actual"
-                                    >
-                                      Suma
-                                    </button>
-                                    <button
-                                      onClick={() => handleFilaChange(fila.id, 'modoExistente', 'sobrescribir')}
-                                      className={`flex-1 py-0.5 rounded text-center transition-colors ${
-                                        fila.modoExistente === 'sobrescribir' 
-                                          ? 'bg-white text-slate-800 shadow-sm' 
-                                          : 'text-slate-400 hover:text-slate-600'
-                                      }`}
-                                      title="Sobrescribe el stock actual con este valor"
-                                    >
-                                      Sobre
-                                    </button>
+                                  <div className="text-[9px] font-bold text-emerald-700 text-center" title="Se suma al stock actual. Para cuadrar existencias usa Conteo físico.">
+                                    Suma al stock
                                   </div>
                                 )}
                               </div>
