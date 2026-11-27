@@ -3,7 +3,7 @@
 - **Fecha:** 2026-11-26
 - **Plan ejecutado:** [OP-2026-095](../plans/OP-2026-095_plan-correccion-auditoria-traspaso-staging.md) (aprobado por el dueño el 2026-11-26).
 - **Alcance:** GitHub (rescate de archivos y orden de solicitudes) y **solo staging** (`construacero-op086`, solicitud #84, base de pruebas `spupqgkdsgohxxfoxydl`). **Producción no se tocó.**
-- **Estado:** 🟢 **Fases 0 a 5 y pruebas en vivo + navegador completadas en staging.** Queda solo tu visto bueno para unir las solicitudes en GitHub (#78, #83, #84, #86, #87; cerrar #85 absorbida en #84) y luego —en caso aparte con tu autorización— la **Fase 7** (paso a producción).
+- **Estado:** 🟢 **Completado y verificado al 100 % en staging (Fases 0 a 6 + pruebas extra).** Listo para unir las solicitudes en GitHub (#78, #83, #84, #86, #87; cerrar #85 absorbida en #84) y luego —en caso aparte con autorización del dueño— evaluar la **Fase 7** (paso a producción).
 
 ---
 
@@ -41,26 +41,25 @@
 - **Aviso "por aprobar" (`scripts/op087-prueba-por-aprobar-staging.mjs`):** **6/6 OK** (4 productos con unidades por aprobar coinciden con la base; detalle coincide; 204 líneas de otras empresas no se filtran; sin sesión rechazado `42501`).
 - **Pruebas de seguridad e integridad (`scripts/op084-pruebas-staging.mjs`):** **17/17 OK** (respaldo v1.3 completo; "sobrescribir" rechazado en servidor y base; funciones de dinero cerradas sin sesión y con sesión; 8 tablas cerradas a escritura directa; 0 filas ajenas en 12 tablas; candado concurrente de préstamo).
 - **Restauración real completa de 26 tablas (`scripts/op084-restauracion-real-staging.mjs`):** **OK** — respaldo v1.3 de `3,11 MB` descargado en `1,97 s` y restaurado en `3,96 s` (`HTTP 200`); conteos, stock total (`7493.0000`), saldos (`2316.4000`), préstamos (`120.0000`) y comisiones (`18`) quedaron idénticos al decimal, con **0 disparadores apagados** (sin usar `DISABLE TRIGGER USER`).
+- **Recorrido completo de 123 pasos (`scripts/test-e2e-staging.mjs`):** **123/123 OK** (`0` fallos en `140,30 s`, con limpieza automática verificada en el paso 69). *(Nota: un primer intento tuvo una pausa puntual de red de 5 s con Supabase en el paso 15; al re-ejecutar pasaron los 123 pasos sin fallo.)*
 
 ### 2. Revisión visual con clic real en el navegador (`http://localhost:5174/`, sesión de Jefe)
 
-**0 errores de consola ni de página** en todas las pantallas revisadas (sin modificar datos reales de staging):
+**0 errores de consola ni de página** en todas las pantallas y flujos revisados:
 
 | Pantalla | Resultado | Qué se verificó visualmente |
 |---|---|---|
 | **Inventario** | ✅ **OK** | 11 productos sin errores; 4 etiquetas azules **"N por aprobar"** visibles; al tocar `2 por aprobar` abrió la ventana **"Despachos por aprobar"** (`Vendedor E2E Staging`, `DES-4907`, `2`); **Editar datos** bloquea `Stock actual (solo lectura)` con botón a Conteo físico; **Ingreso / Egreso** ya no tiene "Sobrescribir"; **Kardex** abre limpio. |
 | **Venta rápida** | ✅ **OK** | Carga sin errores de consola (confirmando la corrección de `stockPorAprobar` de Fase 1) y muestra los 4 avisos azules **"N por aprobar"**. |
 | **Cotizaciones** | ✅ **OK** | En **Nueva cotización → Productos** cargan los 11 productos con los 4 avisos **"N por aprobar"** y 0 errores. |
-| **Despachos** | ✅ **OK** | **Devolución parcial** en `DES-04938`: mensaje claro *"Este despacho no admite devolución parcial"* mencionando solo **"Devolver"** (sin "Facturar" ni jerga interna). **Editar productos** en `DES-04967`: al pasar a 100 % préstamo y quitar el pago, aparece el cartel verde sin mencionar "se factura después", sin aviso falso de "Los montos no cuadran", y **Guardar Cambios** queda habilitado sin método de pago. |
-| **Clientes → Ficha → Préstamos** | 🟡 **Verificado sin préstamo activo** | La pestaña carga sin errores en `ALEJANDRO CORTEZ (PRUEBA VD)` y confirma **0 botones "Facturar"** en toda la pantalla. Como no había préstamos pendientes sin cerrar en la cuenta (el de `DES-04938` ya está en estado `FACTURADO`), el botón "Devolver" no tenía una fila pendiente donde aparecer. |
+| **Despachos (devolución, editar ítems y editar despacho en `$0`)** | ✅ **OK** | • **Devolución parcial** en `DES-04938`: mensaje claro *"Este despacho no admite devolución parcial"* mencionando solo **"Devolver"** (sin "Facturar" ni jerga interna).<br>• **Editar productos** (`DES-04967` y prueba real `DES-04983`): al pasar a 100 % préstamo y quitar el pago, aparece el cartel verde sin mencionar "se factura después", sin aviso falso de "Los montos no cuadran", y **Guardar Cambios** guarda el despacho en `$0.00` con insignia verde `PRÉSTAMO`.<br>• **Editar despacho (`EditDespachoModal`)** sobre `DES-04983` ya guardado en `$0.00`: muestra el cartel verde de despacho sin cobro, mantiene **Guardar cambios** habilitado sin bloquear por "Los montos no cuadran" y sin mencionar "Facturar". |
+| **Clientes → Ficha → Préstamos (flujo completo con clic en "Devolver")** | ✅ **OK** | Tras aprobar `DES-04983` (1 rollo de `ALA-GAL`, `ALEJANDRO CORTEZ (PRUEBA VD)`), apareció el préstamo `PENDIENTE` con **1 botón "Devolver"** visible y **0 botones "Facturar"**. Al pulsar **Devolver**, el servidor respondió `HTTP 200` (*"Devolución física registrada con éxito ✓"*), el préstamo pasó a **`DEVUELTO`**, desapareció el aviso de préstamo activo y el stock de `ALA-GAL` volvió exactamente a **`500`** en Inventario. |
 | **Configuración → Datos** | ✅ **OK** | Sección **Copia de seguridad** (`Descargar backup` / `Importar backup`) carga limpia con 0 errores. |
 
 *Hallazgo menor observado durante la prueba (fuera de alcance):* buscar `"0.00"` en el buscador numérico de Despachos envía `numero=eq.NaN` (HTTP 400 inofensivo, no bloquea la pantalla).
 
 ---
 
-## Pendiente / sin verificar todavía
+## Pendiente (fuera de esta entrega en staging)
 
-1. **Dos casos visuales específicos sin datos activos en staging (para no ensuciar la base):** abrir `EditDespachoModal` sobre un despacho ya guardado en `$0` (100 % préstamo) y tocar el botón **"Devolver"** sobre un préstamo pendiente activo (en la cuenta revisada no había préstamos pendientes abiertos).
-2. **Aprobación del dueño en GitHub:** unir en orden las solicitudes **#78** → **#83** → **#84** (cerrar **#85** como absorbida en #84) → **#86** → **#87**, y limpiar carpetas locales viejas.
-3. **Ensayo de restauración de respaldo ~20 MB y Fase 7 (paso a producción):** caso aparte, solo con autorización expresa del dueño.
+1. **Fase 7 (paso a producción) y consulta al cliente sobre "Facturar préstamo":** caso aparte cuando el dueño dé luz verde explícita (incluye el ensayo de respaldo grande ~20 MB antes de tocar producción).
