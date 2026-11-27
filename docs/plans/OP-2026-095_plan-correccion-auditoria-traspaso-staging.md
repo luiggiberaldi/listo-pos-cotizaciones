@@ -12,7 +12,7 @@
 
 - **Objetivo:** rescatar los 3 archivos que se iban a perder, resolver los 9 choques entre las solicitudes #84 y #85, cerrar los huecos de seguridad y comisiones encontrados en la auditoría OP-2026-094, y dejarte una sola copia de pruebas funcionando para que la revises en pantalla antes de pensar en producción.
 - **Cómo se organiza:** en **8 pasos claros (Fases 0 a 7)**. Primero aseguramos los archivos (Fase 0), después unimos y corregimos staging (Fases 1 a 5), luego tú lo ves en pantalla y apruebas (Fase 6), y solo al final —en un caso separado con tu permiso— se lleva limpio a producción (Fase 7).
-- **Qué tienes que decidir tú antes de arrancar:** **4 decisiones cortas** al final de este documento (con nuestra recomendación en cada una). Si dices "aprueba con las recomendaciones", podemos empezar desde la Fase 0 de inmediato.
+- **Qué tienes que decidir tú antes de arrancar:** **5 decisiones cortas** al final de este documento (con nuestra recomendación en cada una). Si dices "aprueba con las recomendaciones", podemos empezar desde la Fase 0 de inmediato.
 
 > **Glosario rápido.** *Solicitud de cambio (PR):* propuesta en GitHub para sumar cambios al proyecto principal. *Migración:* archivo con instrucciones que actualiza reglas o tablas de la base de datos. *Vuelta atrás (rollback):* archivo hermano que deshace una migración si algo sale mal. *`.gitignore`:* lista de archivos que la herramienta de versiones ignora para no subir basura ni claves. *Candado total (`ACCESS EXCLUSIVE`):* bloqueo que congela una tabla entera mientras se modifica, impidiendo incluso leerla.
 
@@ -120,12 +120,13 @@
 
 ## Fase 3 — Corregir comisiones de préstamos, tasa, fecha de vencimiento y devoluciones
 
-**Por qué es crítica:** hoy las comisiones de préstamos violan la regla de clientes de EMPRESA, pueden borrar datos de comisiones ya pagadas, se pierden ante una devolución parcial o error 502, y el tope de tasa `4×` contra el despacho viejo puede bloquear cobros reales en Venezuela.
+**Por qué es crítica:** hoy las comisiones de préstamos en staging se construyeron sobre un flujo viejo que **ya no existe** en la app (usando `cta_cobrar` y un botón "Liberar comisión CxC" eliminado en agosto 2026; hoy el sistema solo registra comisiones con estado `'generada'` para que administración sepa cuánto pagar, excluyendo ventas a crédito/CxC). Además violan la regla de clientes de EMPRESA, se pierden ante una devolución parcial o error 502, y el tope de tasa `4×` contra el despacho viejo puede bloquear cobros reales en Venezuela.
 
 **Archivos exactos:**
 - Crear: `construacero-staging/supabase/migrations/328_staging_comisiones_prestamo_y_devolucion.sql` (+ `..._rollback.sql`)
 - Modificar: `construacero-staging/api/handlers/despachos.js`
 - Modificar: `construacero-staging/api/handlers/clientes.js`
+- Modificar (alinear con producción): `construacero-staging/api/handlers/comisiones.js` (quitar código muerto del flujo viejo `pagada`/`cta_cobrar`/`liberar-cxc` que confundió a OP-091)
 - Actualizar: `construacero-staging/scripts/op091-prueba-prestamo-cobro-staging.mjs`
 - Crear prueba real: `construacero-staging/api/handlers/__tests__/prestamoComisionYTasa095.test.js` (y añadir excepción en `.gitignore`)
 
@@ -133,9 +134,10 @@
 1. **En la migración `328` (base de staging):**
    - En `comision_prestamo_facturado_staging`:
      - Usar **solo `cl.vendedor_id`** (sin `COALESCE(..., nd.vendedor_id)`): si el cliente es de EMPRESA (`cl.vendedor_id IS NULL`), devuelve `aplica: false, motivo: 'cliente_empresa'` (cumple OP-2026-032).
-     - Si la comisión existente del despacho ya estaba pagada (`estado = 'pagada'`), **no borrar `pagadaen` ni `pagadapor`** (conservar historial de pago anterior; pasar a `pendiente` o `cta_cobrar` sin borrar quién pagó la parte previa).
-     - Si el despacho ya tiene comisión liberada pendiente de pagar al vendedor y se factura otro préstamo "A crédito" (o viceversa: tenía "A crédito" y ahora se factura otro "Paga ahora"), calcular `estado` según si queda `comision_liberada > montopagado` (disponible para pagar) o solo `comision_retenida > 0` (`cta_cobrar`), para que el vendedor nunca quede bloqueado para cobrar lo ya liberado.
-     - *(Opcional según **Decisión 1**)*: crear tabla dedicada `comision_prestamos_facturados` para que cualquier recálculo del motor `238b` vuelva a sumar automáticamente las comisiones de préstamos sin necesitar frenos provisionales.
+     - **Alinear al modelo actual de comisiones (`estado = 'generada'`, `comision_retenida = 0`, sin tocar `pagadaen`/`pagadapor`):**
+       - Con **"Paga ahora"**: suma la comisión a `totalcomision` y `comision_liberada`, siempre con `estado = 'generada'`.
+       - Con **"A crédito"**: aplicar tu respuesta a la **Decisión 1B** (recomendado: igual que cualquier venta a crédito hoy en producción, **no** genera comisión automática en `totalcomision`; administración la considera aparte cuando el cliente pague).
+     - *(Opcional según **Decisión 1A**)*: crear tabla dedicada `comision_prestamos_facturados` para que cualquier recálculo del motor `238b` vuelva a sumar automáticamente las comisiones de préstamos cobrados sin necesitar frenos provisionales.
    - En `facturar_prestamo_atomico`:
      - Al facturar **"A crédito"**, calcular y guardar `fecha_vencimiento` en el cargo de `cuentas_por_cobrar` (usando los días de crédito del cliente o la configuración del negocio, igual que en OP-011/N18).
      - Formatear el precio unitario en el texto del cargo conservando hasta 4 decimales solo si tiene más de 2 (cierra M2).
@@ -145,16 +147,16 @@
      - Guardar `origen_tipo = 'devolucion'`, `origen_id = p_despacho_id` y `origen_referencia = 'DES-' || v_despacho.numero` en los movimientos de Kardex nuevos, para dejar de crear filas "sin origen" (cierra A6).
 2. **En `api/handlers/despachos.js` y `clientes.js`:**
    - Cambiar el freno provisional de OP-092 a **modo seguro (fail-closed)**: si al consultar `cliente_prestamos` Supabase responde error o 502, **NO borrar ni recalcular la comisión** (registrar advertencia y avisar).
-   - Aplicar ese mismo freno en `handleDevolucionParcialDespacho` (línea 3399, antes de `recalcularComision238b`) y en las reasignaciones de cliente en `clientes.js` (o dejarlo resuelto de raíz si eliges la tabla dedicada en **Decisión 1**).
+   - Aplicar ese mismo freno en `handleDevolucionParcialDespacho` (línea 3399, antes de `recalcularComision238b`) y en las reasignaciones de cliente en `clientes.js` (o dejarlo resuelto de raíz si eliges la tabla dedicada en **Decisión 1A**).
    - En `handleFacturarPrestamo` (`clientes.js`): reemplazar la comparación `1/4–4×` contra el viejo `tasa_snapshot` del despacho por una comparación contra la tasa actual del sistema (`/api/rates` / rango razonable frente a la tasa vigente del día, salvo que sea tasa manual explícita dentro de un rango sano), para que la inflación de meses nunca bloquee un cobro real (cierra A3).
 3. **Ampliar `scripts/op091-prueba-prestamo-cobro-staging.mjs`** con 4 casos nuevos:
    - Cliente de EMPRESA (`vendedor_id IS NULL`) → comisión `$0` (`cliente_empresa`).
-   - Despacho cuya comisión ya está `pagada` → conserva `pagadaen`/`pagadapor`.
-   - Dos préstamos en un despacho (uno "A crédito", otro "Paga ahora") → la parte liberada queda cobrable.
-   - Cargo "A crédito" → queda con `fecha_vencimiento` no nula.
+   - Préstamo **"Paga ahora"** → suma a `totalcomision` y `comision_liberada`, `estado = 'generada'`, `comision_retenida = 0`.
+   - Préstamo **"A crédito"** → comportamiento según **Decisión 1B** (sin crear estado viejo `cta_cobrar`).
+   - Cargo **"A crédito"** → queda con `fecha_vencimiento` no nula.
 
 **Listo cuando:**
-- Todas las pruebas de `op091-prueba-prestamo-cobro-staging.mjs` (13/13) y las pruebas nuevas de servidor pasan en verde contra staging.
+- Todas las pruebas de `op091-prueba-prestamo-cobro-staging.mjs` y las pruebas nuevas de servidor pasan en verde contra staging, sin usar estados viejos (`cta_cobrar`/`pagada`).
 
 ---
 
@@ -241,13 +243,14 @@
 
 ---
 
-## 4 decisiones tuyas que necesito antes de empezar
+## 5 decisiones tuyas que necesito antes de empezar
 
 | Nº | Pregunta | Mi recomendación |
 |---|---|---|
-| **1** | En comisiones de préstamos facturados: ¿hacemos de una vez el **arreglo definitivo** (tabla propia para que ningún recálculo borre jamás esas comisiones) o dejamos solo el **freno reforzado** en los 3 lugares (`editar-pago`, `devolución parcial`, `reasignar cliente`)? | **Hacer la tabla propia ahora en Fase 3.** Es complejidad media-baja y elimina para siempre el riesgo de que un recálculo borre una comisión de préstamo al pasar a producción. |
+| **1A** | En comisiones de préstamos facturados: ¿hacemos de una vez la **tabla propia definitiva** para que ningún recálculo borre jamás esas comisiones, o dejamos solo el **freno reforzado** en los 3 lugares (`editar-pago`, `devolución parcial`, `reasignar cliente`)? | **Hacer la tabla propia ahora en Fase 3.** Es complejidad media-baja y elimina para siempre el riesgo de que un recálculo borre una comisión de préstamo al pasar a producción. |
+| **1B** | Al facturar un préstamo **"A crédito"** (como ya no existe el botón "Liberar comisión CxC" ni comisiones retenidas en pantalla): ¿**no** genera comisión automática (igual que cualquier venta a crédito en producción, y solo **"Paga ahora"** genera comisión `'generada'`), o quieres que genere comisión de inmediato aunque sea a crédito? | **No generar comisión automática en "A crédito" (solo en "Paga ahora").** Mantiene exactamente la misma regla que hoy usas en producción para todas las ventas a crédito (migración 238) y evita que aparezcan comisiones de deudas sin cobrar. |
 | **2** | En el respaldo y restauración desde Configuración: además de sumar `despacho_descuentos`, `comision_liberaciones`, `comision_designacion_diaria` y `cxc_movimientos_borrados`, ¿incluimos también **proveedores, órdenes de compra, cuentas por pagar, vehículos y pagos a transportistas**? | **Sí, incluirlas**, para que el botón "Respaldo" guarde el negocio completo y no solo ventas/inventario. |
 | **3** | En **DES-04938** (staging): ¿quieres que dejemos ese despacho de prueba tal cual está o que limpiemos su pago falso de `$2.640`? | **Dejarlo como está en staging** (es solo un dato de prueba) y enfocarnos en que el sistema ya no permita crear casos nuevos así. |
 | **4** | ¿Me autorizas a subir a GitHub la **Fase 0** (rescatar los 3 archivos de OP-084 en #83/#84, arreglar #78 y subir OP-094 y este plan OP-095)? | **Sí, hacer Fase 0 primero** para que nada de lo que ya trabajaste corra riesgo de perderse. |
 
-*(Pendientes de negocio que siguen abiertos para antes de Fase 7: confirmar si la segunda cuenta de producción es real o de prueba; y si en el futuro la comisión retenida de préstamos a crédito se libera sola al pagar el cliente o sigue manual como hoy).*
+*(Pendiente de negocio para antes de Fase 7: confirmar si la segunda cuenta de producción es real o de prueba).*
