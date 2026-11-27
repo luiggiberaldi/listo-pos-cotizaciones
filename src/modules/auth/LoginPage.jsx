@@ -10,6 +10,7 @@ import queryClient from '../../lib/queryClient'
 import LoginAvatar from '../../components/auth/LoginAvatar'
 import LoginPinModal from '../../components/auth/LoginPinModal'
 import HeaderTasas from '../../components/layout/HeaderTasas'
+import { StagingBadge } from '../../components/ui/StagingBanner'
 
 
 // ─── Fondo animado con orbes ─────────────────────────────────────────────────
@@ -358,6 +359,9 @@ function GateStep({ onPass }) {
             <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
             <span className="text-[10px] font-bold tracking-[0.3em] uppercase" style={{ color: '#B8860B' }}>Acceso al Sistema</span>
             <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
+          </div>
+          <div className="mt-2">
+            <StagingBadge />
           </div>
         </div>
 

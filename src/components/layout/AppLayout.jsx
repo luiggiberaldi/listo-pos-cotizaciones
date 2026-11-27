@@ -29,6 +29,7 @@ import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
 import { NOTIF_TYPES, setNotificationUserId, startRealtimeNotifications, stopRealtimeNotifications } from '../../services/notificationService'
 import PendingQueueBadge from '../ui/PendingQueueBadge'
+import { StagingBadge } from '../ui/StagingBanner'
 
 // ─── Formato de tiempo relativo para notificaciones ─────────────────────────
 function formatNotifTime(ts) {
@@ -337,6 +338,9 @@ export default function AppLayout() {
 
         {/* Logo — solo móvil */}
         <img src="/logo.png" alt="Construacero Carabobo" className="md:hidden h-7 w-auto object-contain" style={{ filter: 'brightness(1.1)' }} />
+        <div className="md:hidden">
+          <StagingBadge compact />
+        </div>
 
         {/* Título de página — solo desktop */}
         {currentPage && (
@@ -346,6 +350,7 @@ export default function AppLayout() {
               <currentPage.icono size={16} className="text-white/80" />
             </div>
             <span className="text-sm font-black tracking-wide text-white/90">{currentPage.label}</span>
+            <StagingBadge />
           </div>
         )}
 
@@ -575,13 +580,18 @@ export default function AppLayout() {
             draggable={false}
           />
           {!collapsed && (
-            <div className="mt-1.5 md:mt-2 flex items-center gap-2 w-full justify-center">
-              <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
-              <span className="text-[9px] font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: 'rgba(184,134,11,0.7)' }}>
-                Sistema de Gestión
-              </span>
-              <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
-            </div>
+            <>
+              <div className="mt-1.5 md:mt-2 flex items-center gap-2 w-full justify-center">
+                <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
+                <span className="text-[9px] font-bold tracking-[0.25em] uppercase whitespace-nowrap" style={{ color: 'rgba(184,134,11,0.7)' }}>
+                  Sistema de Gestión
+                </span>
+                <div className="h-px flex-1 opacity-20" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
+              </div>
+              <div className="mt-1.5">
+                <StagingBadge />
+              </div>
+            </>
           )}
         </div>
 
