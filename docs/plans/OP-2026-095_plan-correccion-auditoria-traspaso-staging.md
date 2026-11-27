@@ -1,7 +1,7 @@
 # OP-2026-095 — Plan paso a paso para corregir los hallazgos de la auditoría OP-2026-094 y dejar staging listo para producción
 
 - **Fecha:** 2026-11-26 (actualizado con decisión del dueño: ocultar "Facturar préstamo" por ahora)
-- **Estado:** Propuesta actualizada, pendiente de aprobación para arrancar (no se modificó código ni bases de datos todavía).
+- **Estado:** **Aprobado por el dueño el 2026-11-26** (confirmadas las 3 recomendaciones: respaldo completo con compras/flota, interruptor apagado también en servidor para facturar préstamos, permiso para Fase 0 en GitHub). En ejecución.
 - **Entorno de trabajo:** **solo staging** (`construacero-staging/` y base de pruebas `spupqgkdsgohxxfoxydl`). **Producción no se toca** en ninguna fase salvo en la Fase 7, que es un caso aparte y requiere tu autorización escrita.
 - **Origen:** auditoría [OP-2026-094](../operaciones/OP-2026-094_auditoria-informe-traspaso-staging.md) sobre el informe de traspaso [OP-2026-093](../operaciones/OP-2026-093_informe-traspaso-inventario-prestamos-staging.md).
 - **Carpeta de este documento:** `construacero-op095` (rama `docs/op-095-plan-correccion-traspaso`, local y sin subir a GitHub).
