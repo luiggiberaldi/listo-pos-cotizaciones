@@ -1,3 +1,5 @@
+> **Nota de actualización (2026-11-26, OP-2026-094 / OP-2026-095 / OP-2026-096):** este informe fue auditado en **OP-2026-094** (solicitud #86) y sus observaciones se corrigieron en staging en **OP-2026-096** (dentro de la solicitud #84): se rescataron el plan OP-084 y sus 2 scripts de prueba; se integró el aviso "por aprobar" (#85) sobre #84; se cerró el cruce en tablas hijas de restauración (migración 327) y se amplió el respaldo a 26 tablas; por decisión del dueño **se ocultó "Facturar préstamo" (en pantalla y servidor)** dejando solo "Devolver" hasta consultar al cliente; se corrigió que `liquidar_transportista` sí estaba cerrada en producción (INC-004), que `ACTION_REQUIRED` es la app externa **Kilo Code Review** y que la solicitud **#78** seguía abierta (conflicto ya resuelto).
+
 # OP-2026-093 — Informe de traspaso: inventario, préstamos y seguridad en staging (qué se hizo y qué falta)
 
 **Fecha:** 2026-11-25 · **Para:** otro asistente (LLM) o persona que continúe el trabajo · **Escrito por:** Claude (sesión con el dueño)

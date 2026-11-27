@@ -173,9 +173,7 @@ Todo contra la **base real de staging**, con el servidor y la página corriendo 
 
 ## Pendiente
 
+- Revisión visual en navegador por el dueño (Bloque 10) y aprobación final (ver seguimiento completo en OP-2026-094, OP-2026-095 y OP-2026-096).
 - Registros técnicos sin columna de empresa (`system_logs`, `system_log_analysis`).
-- Fase 3 de OP-078 (respaldo completo y restauración segura) (seguridad, respaldo y restauración, facturar préstamo, separación entre empresas, detalles menores).
-- Ejecución del plan de pruebas OP-084 y su informe.
-- Publicar el servidor de staging con esta versión.
-- Anotar las migraciones `301`–`315` en el registro de migraciones de la base de staging.
-- Solicitud de cambio en GitHub al terminar.
+- Publicar el servidor de staging en Cloudflare cuando el dueño cargue `SUPABASE_SERVICE_KEY` de staging.
+- Anotar las migraciones `301`–`328` en el registro de migraciones de la base de staging si se decide usar seguimiento automático.
