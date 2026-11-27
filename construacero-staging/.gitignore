@@ -142,3 +142,7 @@ scripts/*
 
 # OP-2026-092: despacho solo prestamo sin pago
 !src/utils/__tests__/op092DespachoPrestamoSinPago.test.js
+
+# OP-2026-084: programas de prueba en staging (rescatados en OP-2026-095 Fase 0)
+!scripts/op084-pruebas-staging.mjs
+!scripts/op084-restauracion-real-staging.mjs
