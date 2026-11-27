@@ -121,20 +121,28 @@ export function useReporteVendedores({ from, to, prevFrom, prevTo }) {
         const batches = []
         for (let i = 0; i < allDispatchIds.length; i += 50) batches.push(allDispatchIds.slice(i, i + 50))
         const results = await Promise.all(batches.map(batch => Promise.all([
-          supabase
-            .from('notas_despacho_items')
-            .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen, es_prestamo, producto:productos(categoria)')
-            .in('despacho_id', batch),
-          supabase
-            .from('despacho_descuentos')
-            .select('despacho_id, cotizacion_item_id, monto_usd')
-            .in('despacho_id', batch),
+          leerTodasLasPaginas((desde, hasta) =>
+            supabase
+              .from('notas_despacho_items')
+              .select('despacho_id, producto_id, nombre_snap, codigo_snap, cantidad, precio_unit_usd, total_linea_usd, origen, es_prestamo, producto:productos(categoria)')
+              .in('despacho_id', batch)
+              .order('despacho_id', { ascending: true })
+              .order('id', { ascending: true })
+              .range(desde, hasta)
+          ),
+          leerTodasLasPaginas((desde, hasta) =>
+            supabase
+              .from('despacho_descuentos')
+              .select('despacho_id, cotizacion_item_id, monto_usd')
+              .in('despacho_id', batch)
+              .order('despacho_id', { ascending: true })
+              .order('id', { ascending: true })
+              .range(desde, hasta)
+          ),
         ])))
-        for (const [itemsRes, descRes] of results) {
-          if (itemsRes.error) throw itemsRes.error
-          if (descRes.error) throw descRes.error
-          ndItems = ndItems.concat(itemsRes.data ?? [])
-          despachoDescuentos = despachoDescuentos.concat(descRes.data ?? [])
+        for (const [itemsBatch, descBatch] of results) {
+          ndItems = ndItems.concat(itemsBatch ?? [])
+          despachoDescuentos = despachoDescuentos.concat(descBatch ?? [])
         }
       }
 

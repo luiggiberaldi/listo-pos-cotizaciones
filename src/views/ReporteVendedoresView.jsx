@@ -357,12 +357,22 @@ export default function ReporteVendedoresView() {
   }, [])
 
   const handleExportPDF = async (tipo = 'general', vendedorId = null) => {
-    if (!data) return
+    if (!data || isPlaceholderData || isFetching) return
     setPdfLoading(vendedorId || tipo)
     try {
+      const freshRes = await refetch()
+      if (freshRes?.isError || !freshRes?.data) {
+        throw freshRes?.error || new Error('No se pudieron actualizar los datos del reporte.')
+      }
+      const freshData = freshRes.data
+      const visiblesPdf = (freshData.porVendedor || []).filter(v => shouldIncludeReporteVendedor(perfil?.rol, v))
+      const dataParaPdf = {
+        ...freshData,
+        porVendedor: visiblesPdf,
+      }
       const { generarReporteVendedoresPDF } = await import('../services/pdf/reporteVendedoresPDF')
       await generarReporteVendedoresPDF({
-        data,
+        data: dataParaPdf,
         config,
         periodo: { from: rango.from, to: rango.to },
         tipo,
@@ -389,7 +399,7 @@ export default function ReporteVendedoresView() {
             <div ref={exportDropdownRef} className="relative">
               <button
                 onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                disabled={pdfLoading !== null || isLoading || !data}
+                disabled={pdfLoading !== null || isLoading || isFetching || isPlaceholderData || !data}
                 className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg,rgba(27,54,93,.07),rgba(184,134,11,.07))', border:'1px solid rgba(27,54,93,.2)', color:'#1B365D' }}
               >

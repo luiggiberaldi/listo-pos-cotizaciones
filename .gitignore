@@ -276,3 +276,4 @@ construacero-backups/
 !src/services/__tests__/
 !src/services/__tests__/listaPreciosPDF.test.js
 !src/services/__tests__/op101Fase1Operativos.test.js
+!src/utils/__tests__/comisionesYExternosPaginacionPdf.test.js
