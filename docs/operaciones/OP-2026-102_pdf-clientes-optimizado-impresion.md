@@ -1,6 +1,6 @@
 # OP-2026-102 — Optimización de tinta, encabezado y colores del PDF Base de Datos de Clientes (y Personal)
 
-**Fecha:** 2026-11-27 · **Estado:** **Listo y probado en carpeta de trabajo aparte (`construacero-op-102`, rama `fix/op-102-pdf-clientes-optimizado`)**; sin publicar en producción ni staging todavía · **Pendiente:** revisión visual del ejemplo por el dueño para aprobar su publicación.
+**Fecha:** 2026-11-27 · **Estado:** **Listo para pasar a producción (solicitud [#90](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/90) abierta en `construacero-op-102`, rama `fix/op-102-pdf-clientes-optimizado`)**; producción intacta hasta tu aprobación final · **Pendiente:** aprobar y unir la solicitud #90.
 
 ## En resumen
 
