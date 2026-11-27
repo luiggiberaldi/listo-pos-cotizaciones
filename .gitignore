@@ -258,3 +258,6 @@ construacero-backups/
 !api/handlers/__tests__/authOperatorSession12h.test.js
 !src/utils/__tests__/operatorSessionPersistence12h.test.js
 !docs/plans/OP-2026-072_tasa-login-y-sesion-12h.md
+
+# OP-2026-095: plan de corrección tras auditoría OP-2026-094
+!docs/plans/OP-2026-095_plan-correccion-auditoria-traspaso-staging.md
