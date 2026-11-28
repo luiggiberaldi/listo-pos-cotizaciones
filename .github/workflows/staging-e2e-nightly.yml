@@ -106,27 +106,38 @@ jobs:
         working-directory: construacero-staging
         run: npm run test:e2e:staging
 
-      - name: Auditar continuidad y provenance del Kardex
+      - name: Auditar continuidad y provenance del Kardex (cuenta E2E)
         working-directory: construacero-staging
         run: npm run monitor:kardex:staging
 
-      - name: Escribir resumen de la corrida
+      - name: Refuerzo automático — pruebas unitarias y de PDFs (repositorio principal)
+        run: |
+          npm ci
+          VITE_SUPABASE_URL="${STAGING_SUPABASE_URL}" VITE_SUPABASE_ANON_KEY="${STAGING_SUPABASE_ANON_KEY}" npm test
+
+      - name: Escribir resumen de la corrida en español
         if: ${{ always() }}
         working-directory: construacero-staging
         shell: bash
         run: |
           {
-            echo '## Staging E2E nocturno'
-            echo "- Proyecto: \`$STAGING_PROJECT_REF\`"
-            echo "- Run: [${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            echo '## 🤖 Probador nocturno en staging (1:00 a. m. VE)'
+            echo ''
+            echo "- **Proyecto de pruebas:** \`$STAGING_PROJECT_REF\` (producción nunca se toca)"
+            echo "- **Corrida:** [#${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            echo "- **Estado general:** \`${{ job.status }}\`"
+            echo ''
+            echo '### Qué se revisó esta madrugada'
+            echo '- Recorrido completo E2E de operaciones (ventas, cobros, despachos, devoluciones, préstamos y permisos).'
+            echo '- Continuidad y trazabilidad del historial de almacén (Kardex) en la cuenta E2E.'
+            echo '- Batería completa de pruebas automáticas y de generación de PDFs.'
             log_file="$(find ../tmp/e2e-staging -maxdepth 1 -type f -name 'tester-*.log' -print 2>/dev/null | sort | tail -1)"
             if test -n "$log_file"; then
-              echo '- Últimas líneas del log:'
+              echo ''
+              echo '### Últimas líneas del recorrido E2E'
               echo '```text'
               tail -n 8 "$log_file"
               echo '```'
-            else
-              echo '- No se generó log del Tester.'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 

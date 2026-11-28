@@ -57,3 +57,16 @@ Este repositorio es **construacero** (ERP de ventas/despachos/inventario) con:
 - La **carpeta principal** (`construacero`) se queda siempre en la rama `main`, al día con producción y **limpia**: no se trabaja ni se guardan archivos sueltos ahí.
 - **Cada caso se hace en su propia carpeta de trabajo** creada desde `origin/main` (`git worktree add ../construacero-<caso> -b <rama> origin/main`), con su propia rama y solicitud de cambio.
 - Al publicar un caso, se borra su carpeta de trabajo. Los PDF de prueba van a `tmp/pdfs-generados/` y los respaldos de base de datos a `construacero-backups/` (ninguno se sube a GitHub).
+
+## Regla de impacto en probadores automáticos (OP-2026-105)
+
+**Cualquier cambio en el sistema que pueda afectar a los probadores o inspectores automáticos debe ser informado explícitamente al usuario y documentado.** Esto incluye:
+- El **Verificador diario de ventas reales en staging** (12:00 a. m. L–S, `verificador-diario-staging.yml`).
+- El **Probador nocturno completo en staging** (1:00 a. m., `staging-e2e-nightly.yml` y monitor de Kardex).
+- El **Auditor de saldos y comisiones en producción** (2:00 a. m., `auditor-saldos-main.yml`).
+- Las **pruebas automáticas de código y PDFs** (`vitest`) y los **avisos programados del servidor** (`wrangler.toml`, ej. cobranza 8:00 a. m. y limpieza nocturna).
+
+Antes de cerrar cualquier cambio que toque reglas de ventas, pagos, inventario, comisiones, CxC, PDFs, roles, tablas o permisos:
+1. Revisar si alguno de los probadores/inspectores se ve afectado o necesita actualizarse.
+2. **Informar al usuario en lenguaje claro** qué probador se ve afectado, por qué y qué ajuste se hizo (o falta hacer).
+3. Dejar constancia en el documento del caso en `docs/operaciones/`.
