@@ -13,7 +13,10 @@ const ROLES_LECTURA = ['desarrollador', 'supervisor', 'jefe', 'administracion']
 const ROLES_FINANZAS = ['desarrollador', 'jefe', 'administracion']
 
 // Categorías y acciones con precios/dinero ocultas para el supervisor (decisión del dueño, 24-nov-2026)
-const CATEGORIAS_OCULTAS_SUPERVISOR = new Set(['FINANZAS', 'COMISIONES', 'PROVEEDOR', 'CONFIG'])
+// CATEGORIAS_ENUM_OCULTAS_SUPERVISOR solo incluye etiquetas válidas del ENUM categoria_auditoria
+// para que PostgREST nunca rechace el filtro not.in.(...).
+const CATEGORIAS_ENUM_OCULTAS_SUPERVISOR = ['FINANZAS', 'COMISIONES', 'CONFIG', 'CONFIGURACION']
+const CATEGORIAS_OCULTAS_SUPERVISOR = new Set([...CATEGORIAS_ENUM_OCULTAS_SUPERVISOR, 'PROVEEDOR'])
 const ACCIONES_OCULTAS_SUPERVISOR = new Set([
   'EDITAR_PAGO_DESPACHO', 'APLICAR_DESCUENTO', 'DEVOLUCION_PARCIAL',
   'EDICION_PROFUNDA_CXC', 'ANULAR_ABONO_POR_DEVOLUCION', 'REGISTRAR_ABONO',
@@ -82,7 +85,7 @@ export async function handleGetAudit(request, env, url) {
     filter += `&categoria=eq.${encodeURIComponent(catUp)}`
   }
   if (auth.esSupervisor) {
-    filter += `&categoria=not.in.(${[...CATEGORIAS_OCULTAS_SUPERVISOR].join(',')})`
+    filter += `&categoria=not.in.(${CATEGORIAS_ENUM_OCULTAS_SUPERVISOR.join(',')})`
     filter += `&accion=not.in.(${[...ACCIONES_OCULTAS_SUPERVISOR].join(',')})`
   }
   const usuario = url.searchParams.get('usuario_id')
@@ -218,7 +221,7 @@ export async function handleGetAuditHistoria(request, env, url) {
     + (tabla ? `&tabla=eq.${encodeURIComponent(tabla)}` : '')
     + (auth.esSupervisor ? '&es_sensible_dinero=eq.false' : '')
   const filtroBitacora = `entidad_id=eq.${encodeURIComponent(id)}`
-    + (auth.esSupervisor ? `&categoria=not.in.(${[...CATEGORIAS_OCULTAS_SUPERVISOR].join(',')})` : '')
+    + (auth.esSupervisor ? `&categoria=not.in.(${CATEGORIAS_ENUM_OCULTAS_SUPERVISOR.join(',')})` : '')
 
   const [cambiosRes, bitacoraRes] = await Promise.all([
     fetch(`${env.SUPABASE_URL}/rest/v1/auditoria_cambios?select=id,ts,tabla,registro_id,tipo,cambios,operador_nombre,operador_rol,origen,operacion_id,es_sensible_dinero&${filtroCambios}&order=ts.desc&limit=100`, { headers: h }),
