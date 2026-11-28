@@ -14,6 +14,7 @@ import queryClient from './lib/queryClient'
 import { indexedDbPersister, CACHE_BUSTER } from './lib/queryPersister'
 import { mayPersistQuery } from './utils/dashboardAccess'
 import OfflineBanner from './components/ui/OfflineBanner'
+import StagingBanner from './components/ui/StagingBanner'
 import AvisoVersionNueva from './components/ui/AvisoVersionNueva'
 import useAuthStore from './store/useAuthStore'
 import { ToastProvider } from './components/ui/Toast'
@@ -448,6 +449,7 @@ export default function App() {
         }}>
         <BrowserRouter unstable_useTransitions={false}>
           <ToastProvider>
+            <StagingBanner />
             <OfflineBanner>
               <AppRoutes />
             </OfflineBanner>

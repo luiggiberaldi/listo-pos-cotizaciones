@@ -273,7 +273,15 @@ construacero-backups/
 !src/utils/__tests__/op087StockPorAprobar.test.js
 !api/handlers/__tests__/produccion097SeguridadYRespaldo.test.js
 
-# OP-2026-102: optimización de impresión PDF de Clientes y Personal
+# OP-2026-101: plan integral de arreglo de los 19 PDFs en staging y publicación a producción
+!docs/plans/OP-2026-101_plan-fixeo-integral-pdfs-staging.md
 !src/services/__tests__/
+!src/services/__tests__/listaPreciosPDF.test.js
+!src/services/__tests__/op101Fase1Operativos.test.js
+!src/services/__tests__/op101Fase3Financieros.test.js
+!src/services/__tests__/op101Fase4CatalogosFlota.test.js
+!src/utils/__tests__/comisionesYExternosPaginacionPdf.test.js
+
+# OP-2026-102: optimización de impresión PDF de Clientes y Personal
 !src/services/__tests__/clientesPersonalPdf.test.js
 !src/utils/__tests__/clientesListado.test.js

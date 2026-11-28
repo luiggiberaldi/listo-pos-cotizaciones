@@ -32,6 +32,7 @@ import DateRangeSelector from '../components/reportes/DateRangeSelector'
 import CustomSelect from '../components/ui/CustomSelect'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import ModalDetalleVendedor, { prepararComisionParaPDF } from '../components/reportes/ModalDetalleVendedor'
+import { cargarEventosComisionesParaPdf } from '../services/comisionesPdfHelper'
 import supabase from '../services/supabase/client'
 
 const round2 = value => Math.round((Number(value) || 0) * 100) / 100
@@ -630,12 +631,16 @@ export default function ComisionesView() {
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [vendedorSeleccionado, setVendedorSeleccionado] = useState(null)
 
-  const { data: comisionesRes, isLoading, isError, refetch } = useComisiones({
+  const { data: comisionesRes, isLoading, isFetching: cargandoComisiones, isPlaceholderData: cambiandoComisiones, isError, refetch } = useComisiones({
     vendedorId: esPrivilegiado ? filtroVendedor : '',
     desde: rango.from,
     hasta: rango.to,
     todas: true,
   })
+
+  useEffect(() => {
+    setAjustesManuales({})
+  }, [rango.from, rango.to])
 
   // Consulta paralela para alimentar el dropdown con todos los asesores del rango
   const { data: comisionesDropdownRes } = useComisiones({
@@ -732,52 +737,16 @@ export default function ComisionesView() {
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesGeneradasPDF')
-
-      const params = new URLSearchParams()
-      params.set('vista', 'eventos')
-      params.set('page', '1')
-      params.set('pageSize', '1000')
-      if (rango?.from) params.set('desde', rango.from)
-      if (rango?.to) params.set('hasta', rango.to)
-      if (filtroVendedor) params.set('vendedorId', filtroVendedor)
-
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`HTTP ${res.status}: ${text}`)
-      }
-      const resJson = await res.json()
-      const rawEvents = resJson.data || []
-
-      let filteredEvents = rawEvents
-      if (tipoFiltro === 'internos') {
-        filteredEvents = rawEvents.filter(r => {
-          const v = r.vendedor || {}
-          return !(v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0))
-        })
-      } else if (tipoFiltro === 'externos') {
-        filteredEvents = rawEvents.filter(r => {
-          const v = r.vendedor || {}
-          return !!v.es_externo || (v.markup_pct != null && Number(v.markup_pct) > 0)
-        })
-      }
+      const { filteredEvents, cotizacionesMap } = await cargarEventosComisionesParaPdf({
+        desde: rango?.from || '',
+        hasta: rango?.to || '',
+        vendedorId: filtroVendedor || '',
+        tipoFiltro,
+      })
 
       if (filteredEvents.length === 0) {
         alert('🔍 SIN DATOS: No hay comisiones registradas para el grupo de vendedores seleccionado en este rango.')
         return
-      }
-
-      const cotizacionIds = [...new Set(filteredEvents.map(r => r.comisiones?.cotizacionid).filter(Boolean))]
-      let cotizacionesMap = {}
-      if (cotizacionIds.length > 0) {
-        const { data: cotList, error: cotErr } = await supabase
-          .from('cotizaciones')
-          .select('id, numero, tasa_bcv_snapshot, cliente:clientes(id, nombre)')
-          .in('id', cotizacionIds)
-        if (!cotErr && cotList) {
-          cotizacionesMap = Object.fromEntries(cotList.map(c => [c.id, c]))
-        }
       }
 
       const vendedorInfo = filtroVendedor
@@ -792,7 +761,7 @@ export default function ComisionesView() {
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
-        vendedor: vendedorInfo ? { nombre: vendedorInfo.nombre, color: vendedorInfo.color, markup_pct: vendedorInfo.markup_pct, es_externo: vendedorInfo.es_externo } : null,
+        vendedor: vendedorInfo ? { id: vendedorInfo.id, codigo: vendedorInfo.codigo, nombre: vendedorInfo.nombre, color: vendedorInfo.color, markup_pct: vendedorInfo.markup_pct, es_externo: vendedorInfo.es_externo } : null,
         tipoVendedor: tipoFiltro === 'todos' ? null : tipoFiltro,
         rango,
         config: configNeg ?? {},
@@ -823,39 +792,16 @@ export default function ComisionesView() {
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesGeneradasPDF')
-
-      const params = new URLSearchParams()
-      params.set('vista', 'eventos')
-      params.set('page', '1')
-      params.set('pageSize', '1000')
-      if (rango?.from) params.set('desde', rango.from)
-      if (rango?.to) params.set('hasta', rango.to)
-      if (vendedor?.id) params.set('vendedorId', vendedor.id)
-
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`HTTP ${res.status}: ${text}`)
-      }
-      const resJson = await res.json()
-      const rawEvents = resJson.data || []
+      const { filteredEvents: rawEvents, cotizacionesMap } = await cargarEventosComisionesParaPdf({
+        desde: rango?.from || '',
+        hasta: rango?.to || '',
+        vendedorId: vendedor?.id || '',
+        tipoFiltro: 'todos',
+      })
 
       if (rawEvents.length === 0) {
         alert(`🔍 SIN DATOS: No hay liberaciones de comisiones para ${vendedor?.nombre || 'este vendedor'} en el periodo seleccionado.`)
         return
-      }
-
-      const cotizacionIds = [...new Set(rawEvents.map(r => r.comisiones?.cotizacionid).filter(Boolean))]
-      let cotizacionesMap = {}
-      if (cotizacionIds.length > 0) {
-        const { data: cotList, error: cotErr } = await supabase
-          .from('cotizaciones')
-          .select('id, numero, tasa_bcv_snapshot, cliente:clientes(id, nombre)')
-          .in('id', cotizacionIds)
-        if (!cotErr && cotList) {
-          cotizacionesMap = Object.fromEntries(cotList.map(c => [c.id, c]))
-        }
       }
 
       const comisionesParaPDF = rawEvents.map(r => prepararComisionParaPDF(
@@ -866,7 +812,7 @@ export default function ComisionesView() {
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
-        vendedor: { nombre: vendedor.nombre, color: vendedor.color, markup_pct: vendedor.markup_pct, es_externo: vendedor.es_externo },
+        vendedor: { id: vendedor.id, codigo: vendedor.codigo, nombre: vendedor.nombre, color: vendedor.color, markup_pct: vendedor.markup_pct, es_externo: vendedor.es_externo },
         rango,
         config: configNeg ?? {},
         formato: formatoReporte,
@@ -1003,7 +949,7 @@ export default function ComisionesView() {
                 {filtroVendedor ? (
                   <button
                     onClick={() => exportarPDF('todos', 'imprimir')}
-                    disabled={exportando || comisiones.length === 0 || !tasaDisponible}
+                    disabled={exportando || isLoading || cargandoComisiones || cambiandoComisiones || comisiones.length === 0 || !tasaDisponible}
                     className="w-full sm:w-auto justify-center flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm min-h-9"
                   >
                     <Printer size={13} className="text-slate-500 shrink-0" />
@@ -1014,7 +960,7 @@ export default function ComisionesView() {
                   <>
                     <button
                       onClick={() => setShowPrintMenu(!showPrintMenu)}
-                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
+                      disabled={exportando || isLoading || cargandoComisiones || cambiandoComisiones || comisiones.length === 0 || !tasaDisponible}
                       className="w-full sm:w-auto justify-center flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm min-h-9"
                     >
                       <Printer size={13} className="text-slate-500 shrink-0" />
@@ -1060,7 +1006,7 @@ export default function ComisionesView() {
                 {filtroVendedor ? (
                   <button
                     onClick={() => exportarPDF('todos', 'descargar')}
-                    disabled={exportando || comisiones.length === 0 || !tasaDisponible}
+                    disabled={exportando || isLoading || cargandoComisiones || cambiandoComisiones || comisiones.length === 0 || !tasaDisponible}
                     className="w-full sm:w-auto justify-center flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md min-h-9"
                     style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                   >
@@ -1072,7 +1018,7 @@ export default function ComisionesView() {
                   <>
                     <button
                       onClick={() => setShowExportMenu(!showExportMenu)}
-                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
+                      disabled={exportando || isLoading || cargandoComisiones || cambiandoComisiones || comisiones.length === 0 || !tasaDisponible}
                       className="w-full sm:w-auto justify-center flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md min-h-9"
                       style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                     >
@@ -1284,8 +1230,9 @@ export default function ComisionesView() {
                           <button
                             type="button"
                             onClick={e => { e.stopPropagation(); exportarIndividualPDF(v) }}
+                            disabled={exportando || isLoading || cargandoComisiones || cambiandoComisiones || !tasaDisponible}
                             title="Descargar reporte individual"
-                            className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all active:scale-95 duration-200"
+                            className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all active:scale-95 duration-200 disabled:opacity-50"
                           >
                             <Download size={14} />
                           </button>
@@ -1349,8 +1296,9 @@ export default function ComisionesView() {
                           <button
                             type="button"
                             onClick={e => { e.stopPropagation(); exportarIndividualPDF(v) }}
+                            disabled={exportando || isLoading || cargandoComisiones || cambiandoComisiones || !tasaDisponible}
                             title="Descargar reporte individual"
-                            className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all active:scale-95 duration-200"
+                            className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all active:scale-95 duration-200 disabled:opacity-50"
                           >
                             <Download size={14} />
                           </button>

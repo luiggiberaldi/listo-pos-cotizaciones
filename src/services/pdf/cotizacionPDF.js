@@ -6,8 +6,8 @@ import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_WHITE,
   CUENTAS_BANCARIAS,
-  fmtFecha, fmtPrecio, fmtTotal, fmtTelefono,
-  hexToRgb, drawWatermark, drawSimplifiedHeader,
+  fmtFecha, fmtPrecio, fmtTotal, fmtTelefono, fechaArchivoCaracas,
+  hexToRgb, drawWatermark, drawAnuladaWatermark, drawSimplifiedHeader,
   checkPage
 } from './pdfShared'
 
@@ -626,7 +626,11 @@ export async function generarPDF({ cotizacion, items = [], config = {}, returnBl
   } // fin for páginas footer
 
   const clienteNombreCot = (cotizacion.cliente?.nombre || 'cliente').replace(/[^a-zA-Z0-9à-ÿ\s]/g, '').trim().replace(/\s+/g, '_').toUpperCase()
-  const fechaCot = (cotizacion.creado_en || new Date().toISOString()).slice(0, 10)
+  if (cotizacion?.estado === 'anulada') {
+    const totP = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totP; p++) { doc.setPage(p); drawAnuladaWatermark(doc) }
+  }
+  const fechaCot = fechaArchivoCaracas(cotizacion.creado_en || new Date())
   const filename = `${numDisplay.replace(/\s+/g, '_')}_${clienteNombreCot}_${fechaCot}.pdf`
   if (returnBlob) return doc.output('blob')
   doc.save(filename)

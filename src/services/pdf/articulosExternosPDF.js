@@ -9,7 +9,7 @@ import {
   drawWatermark, drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter, checkPage,
 } from './pdfShared'
 
-export async function generarArticulosExternosPDF({ items, rango, kpis, config = {}, action = 'download' }) {
+export async function generarArticulosExternosPDF({ items, rango, kpis, filtroAsesor = '', busqueda = '', config = {}, action = 'download' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
   const logoData = LOGO_LISTA_PRECIOS
 
@@ -23,12 +23,18 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
   let y = 0
 
   // ═══ CABECERA ═══
+  const filtrosSub = [
+    `${rango.from} — ${rango.to}`,
+    filtroAsesor ? `Asesor: ${filtroAsesor}` : null,
+    busqueda ? `Búsqueda: "${busqueda}"` : null,
+  ].filter(Boolean).join('  ·  ')
+
   y = drawPremiumHeader({
     doc,
     logoData,
     config,
     title: 'Artículos Externos Vendidos',
-    subtitle: `${rango.from} — ${rango.to}`,
+    subtitle: filtrosSub,
     customBgColor:       [255, 255, 255],
     customAccentColor:   [0, 0, 0],
     customTextColor:     [0, 0, 0],
@@ -87,20 +93,22 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
   doc.setFontSize(6.5)
   doc.setTextColor(80, 90, 110)
 
-  // Columnas optimizadas para evitar choques
+  // Columnas optimizadas para evitar choques (incluye Código)
   const colX = {
     fecha: MARGIN,
-    despacho: MARGIN + 12 + 2,
-    articulo: MARGIN + 24 + 2,
-    cantidad: MARGIN + 68 + 10,
-    precio: MARGIN + 78 + 16,
-    total: MARGIN + 94 + 18,
-    cliente: MARGIN + 112 + 2,
-    asesor: MARGIN + 164 + 2
+    despacho: MARGIN + 13,
+    codigo: MARGIN + 24,
+    articulo: MARGIN + 39,
+    cantidad: MARGIN + 82,
+    precio: MARGIN + 98,
+    total: MARGIN + 115,
+    cliente: MARGIN + 118,
+    asesor: MARGIN + 165
   }
 
   doc.text('Fecha', colX.fecha, y + 5)
   doc.text('Nº Desp.', colX.despacho, y + 5)
+  doc.text('Código', colX.codigo, y + 5)
   doc.text('Artículo', colX.articulo, y + 5)
   doc.text('Cant.', colX.cantidad, y + 5, { align: 'right' })
   doc.text('Precio U.', colX.precio, y + 5, { align: 'right' })
@@ -113,8 +121,8 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
     // Los textos largos se parten en varias líneas (nunca se recortan)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.5)
-    const artLines = doc.splitTextToSize(String(item.articulo_nombre || ''), 40)
-    const cliLines = doc.splitTextToSize(`${item.cliente_nombre || ''} (${item.cliente_rif || ''})`, 48)
+    const artLines = doc.splitTextToSize(String(item.articulo_nombre || ''), 33)
+    const cliLines = doc.splitTextToSize(`${item.cliente_nombre || ''} (${item.cliente_rif || ''})`, 45)
     const aseLines = doc.splitTextToSize(String(item.asesor_nombre || ''), 20)
     const nLines = Math.max(1, artLines.length, cliLines.length, aseLines.length)
     const rowH = Math.max(7.5, nLines * 3 + 3.5)
@@ -127,6 +135,7 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
       d.setTextColor(80, 90, 110)
       d.text('Fecha', colX.fecha, MARGIN + 20)
       d.text('Nº Desp.', colX.despacho, MARGIN + 20)
+      d.text('Código', colX.codigo, MARGIN + 20)
       d.text('Artículo', colX.articulo, MARGIN + 20)
       d.text('Cant.', colX.cantidad, MARGIN + 20, { align: 'right' })
       d.text('Precio U.', colX.precio, MARGIN + 20, { align: 'right' })
@@ -150,6 +159,7 @@ export async function generarArticulosExternosPDF({ items, rango, kpis, config =
     doc.setFont('helvetica', 'bold')
     doc.text(String(item.despacho_numero || ''), colX.despacho, y + 4)
     doc.setFont('helvetica', 'normal')
+    doc.text(String(item.articulo_codigo || '—').substring(0, 10), colX.codigo, y + 4)
     doc.text(artLines, colX.articulo, y + 4, { lineHeightFactor: 1.2 })
 
     // Formatear cantidad quitando decimales si es entero

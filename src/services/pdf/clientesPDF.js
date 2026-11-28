@@ -26,6 +26,7 @@ export async function generarClientesPDF({
   action = 'download',
   title = 'Base de Datos de Clientes',
   filtroResumen = '',
+  filtroTexto = '',
   comprimir = true,
 } = {}) {
   const safeConfig = config || {}
@@ -39,8 +40,9 @@ export async function generarClientesPDF({
     month: 'short',
     year: 'numeric',
   })
-  const subtitle = filtroResumen
-    ? `Generado: ${fechaTxt}\n${filtroResumen}`
+  const resumen = filtroResumen || filtroTexto
+  const subtitle = resumen
+    ? `Generado: ${fechaTxt}\n${resumen}`
     : `Generado: ${fechaTxt}`
 
   // Encabezado blanco/negro de bajo consumo de tinta (igual a Transportistas, Artículos Externos y Ventas)
@@ -97,15 +99,15 @@ export async function generarClientesPDF({
 
   y += kpiBoxH + 8
 
-  // Tabla
+  // Tabla con anchos calibrados
   const cols = isPersonalReport ? [
-    { label: 'CÓDIGO', x: MARGIN, w: 12 },
-    { label: 'CÉDULA / RIF', x: MARGIN + 12, w: 20 },
-    { label: 'NOMBRE Y APELLIDO', x: MARGIN + 32, w: 50 },
-    { label: 'ROL / CARGO', x: MARGIN + 82, w: 26 },
-    { label: 'TELÉFONO', x: MARGIN + 108, w: 22 },
-    { label: 'VENDEDOR ASIG.', x: MARGIN + 130, w: 28 },
-    { label: 'REGISTRO', x: MARGIN + 158, w: 30 },
+    { label: 'CÓDIGO', x: MARGIN, w: 13 },
+    { label: 'CÉDULA / RIF', x: MARGIN + 13, w: 21 },
+    { label: 'NOMBRE Y APELLIDO', x: MARGIN + 34, w: 48 },
+    { label: 'ROL / CARGO', x: MARGIN + 82, w: 28 },
+    { label: 'TELÉFONO', x: MARGIN + 110, w: 22 },
+    { label: 'VENDEDOR ASIG.', x: MARGIN + 132, w: 28 },
+    { label: 'REGISTRO', x: MARGIN + 160, w: 28 },
   ] : [
     { label: 'CÓDIGO', x: MARGIN, w: 14 },
     { label: 'RIF / CÉDULA', x: MARGIN + 14, w: 22 },

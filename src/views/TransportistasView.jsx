@@ -447,7 +447,7 @@ export default function TransportistasView() {
   const PAGE_SIZE = 12
   const [desactivandoTransp,    setDesactivandoTransp]    = useState(null)
 
-  const { data: transportistasPage = { items: [], total: 0 }, isLoading, isError, refetch } =
+  const { data: transportistasPage = { items: [], total: 0 }, isLoading, isFetching, isError, refetch } =
     useTransportistas({ soloActivos: true, paginado: true, page, pageSize: PAGE_SIZE, search, tipo: filtroTipo })
   const transportistas = useMemo(() => transportistasPage.items ?? [], [transportistasPage.items])
   const totalCount = transportistasPage.total ?? 0
@@ -469,8 +469,58 @@ export default function TransportistasView() {
     if (accion === 'print') setImprimiendoPDF(true)
     else setExportandoPDF(true)
     try {
-      const { generarTransportistasPDF } = await import('../services/pdf/transportistasPDF')
-      await generarTransportistasPDF({ items: transportistasFiltrados, config, action: accion })
+      const [{ generarTransportistasPDF }, { default: supabaseClient }, { leerTodasLasPaginas }] = await Promise.all([
+        import('../services/pdf/transportistasPDF'),
+        import('../services/supabase/client'),
+        import('../utils/leerPaginas'),
+      ])
+      // Pedir TODOS los transportistas activos que coincidan con el filtro (no solo los 12 de la página visible)
+      const todosActivos = await leerTodasLasPaginas((desde, hasta) => {
+        let q = supabaseClient
+          .from('transportistas')
+          .select('*')
+          .eq('activo', true)
+          .order('nombre', { ascending: true })
+          .order('id', { ascending: true })
+        if (filtroTipo === 'locales') q = q.eq('es_local', true)
+        else if (filtroTipo === 'generales') q = q.eq('es_local', false)
+        return q.range(desde, hasta)
+      })
+
+      let arr = todosActivos
+      if (search.trim()) {
+        arr = rankEntities(arr, search, [
+          { key: 'nombre', weight: 10 },
+          { key: 'rif', weight: 9 },
+          { key: 'placa_chuto', weight: 9 },
+          { key: 'placa_batea', weight: 9 },
+          { key: 'vehiculo', weight: 5 },
+          { key: 'color_batea', weight: 3 },
+          { key: 'zona_cobertura', weight: 3 },
+          { key: 'capacidad', weight: 3 },
+        ])
+      }
+
+      // Cruzar choferes locales con su vehículo habitual de flota propia
+      const itemsEnriquecidos = arr.map(t => {
+        const veh = t.vehiculo_habitual_id ? vehiculosPorId[t.vehiculo_habitual_id] : null
+        if (!veh) return t
+        return {
+          ...t,
+          vehiculo: t.vehiculo || [veh.nombre, veh.modelo].filter(Boolean).join(' ') || '',
+          color: t.color || veh.color || '',
+          placa_chuto: t.placa_chuto || veh.placa || '',
+          placa_batea: t.placa_batea || veh.placa_batea || '',
+          capacidad: t.capacidad || (veh.capacidad_ton ? `${veh.capacidad_ton} Ton` : ''),
+        }
+      })
+
+      const filtroDesc = [
+        filtroTipo === 'locales' ? 'Solo Locales' : filtroTipo === 'generales' ? 'Solo Generales' : 'Todos los choferes activos',
+        search.trim() ? `Búsqueda: "${search.trim()}"` : null,
+      ].filter(Boolean).join(' · ')
+
+      await generarTransportistasPDF({ items: itemsEnriquecidos, config, filtroTexto: filtroDesc, action: accion })
     } catch (err) {
       import('../components/ui/Toast').then(({ showToast }) =>
         showToast('Error al generar el PDF: ' + err.message, 'error')
@@ -566,7 +616,7 @@ export default function TransportistasView() {
                 <>
                   <button 
                     onClick={() => exportarTransportistasPDF('print')}
-                    disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                    disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || totalCount === 0}
                     className="flex items-center gap-1.5 sm:gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                   >
                     <Printer size={15} />
@@ -574,7 +624,7 @@ export default function TransportistasView() {
                   </button>
                   <button 
                     onClick={() => exportarTransportistasPDF('download')}
-                    disabled={imprimiendoPDF || exportandoPDF || isLoading}
+                    disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || totalCount === 0}
                     className="flex items-center gap-1.5 sm:gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                   >
                     <FileText size={15} />

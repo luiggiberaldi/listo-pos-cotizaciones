@@ -1,6 +1,6 @@
 // src/views/ReportesView.jsx
 // Vista profesional de reportes administrativos con tabs
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   BarChart3, CreditCard, RefreshCw, Download,
@@ -36,6 +36,7 @@ import TabTransportistas from '../components/reportes/TabTransportistas'
 import TabVentasDia from '../components/reportes/TabVentasDia'
 import SeccionTransportistasVentas from '../components/reportes/SeccionTransportistasVentas'
 import ModalDetalleVendedor from '../components/reportes/ModalDetalleVendedor'
+import { cargarEventosComisionesParaPdf } from '../services/comisionesPdfHelper'
 import supabase from '../services/supabase/client'
 import { apiUrl, getAuthHeaders } from '../services/apiBase'
 import { countUniqueDispatches } from '../utils/comisionUtils'
@@ -191,9 +192,7 @@ function FormaPagoSection({ data = [], kpis, cxcData }) {
     ? cxcData.kpis.totalDeuda
     : ((fpCxc ? fpCxc.totalUsd : 0) + (fpCod ? fpCod.totalUsd : 0))
 
-  const fpDonacion = data.find(fp => fp.formaPago === 'Donación')
-  const totalDonacion = fpDonacion ? fpDonacion.totalUsd : 0
-  const totalSaldoFavor = data.filter(fp => fp.formaPago === 'Saldo a favor').reduce((s, fp) => s + fp.totalUsd, 0)
+  const totalSaldoFavor = data.filter(fp => String(fp.formaPago || '').toLowerCase() === 'saldo a favor').reduce((s, fp) => s + fp.totalUsd, 0)
   const totalDeducciones = totalCxc + totalSaldoFavor
   const recaudacionDineroFresco = Math.max(0, total - totalDeducciones)
   const COLORS = {
@@ -533,8 +532,16 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
   const comisionCabilla2 = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionCabilla2 || 0), 0)
   const comisionCabilla3 = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionCabilla3 || 0), 0)
   const comisionOtros = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionOtros || 0), 0)
+  const totalComisionesSplit = filteredPorVendedor.reduce((s, v) => s + Number(v.comisionSplit || 0), 0)
 
-  // 4. Recalcular Formas de Pago
+  // 3.5 Filtrar devoluciones por los vendedores del filtro
+  const filteredDevoluciones = (reporte.devoluciones || []).filter(dev => {
+    const vid = dev.vendedor_id || dev.asesor_id || 'unassigned'
+    return sellerIds.has(vid)
+  })
+  const totalDevoluciones = filteredDevoluciones.reduce((s, dev) => s + Number(dev.monto_usd || 0), 0)
+
+  // 4. Recalcular Formas de Pago (restando devoluciones igual que useReporteVentas)
   const formaPagoMap = {}
   filteredDespachos.forEach(d => {
     const formas = Array.isArray(d.forma_pago) ? d.forma_pago : []
@@ -576,6 +583,35 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
       })
     }
   })
+
+  filteredDevoluciones.forEach(dev => {
+    const montoDev = Number(dev.monto_usd || 0)
+    if (montoDev <= 0) return
+    let metodo = 'Reembolso'
+    if (Array.isArray(dev.forma_pago_abono) && dev.forma_pago_abono[0]?.metodo) {
+      metodo = dev.forma_pago_abono[0].metodo
+    } else if (typeof dev.forma_pago_abono === 'string' && dev.forma_pago_abono.trim()) {
+      try {
+        const parsed = JSON.parse(dev.forma_pago_abono)
+        if (Array.isArray(parsed) && parsed[0]?.metodo) metodo = parsed[0].metodo
+        else metodo = dev.forma_pago_abono.trim()
+      } catch {
+        metodo = dev.forma_pago_abono.trim()
+      }
+    }
+    if (!formaPagoMap[metodo]) formaPagoMap[metodo] = { formaPago: metodo, count: 0, totalUsd: 0, pagos: [] }
+    formaPagoMap[metodo].totalUsd -= montoDev
+    formaPagoMap[metodo].pagos.push({
+      cliente: `${dev.cliente_nombre || 'Sin cliente'} (Devolución)`,
+      numero: 'DEV',
+      monto: -montoDev,
+      tasa: null,
+      montoBs: null,
+      referencia: dev.referencia || null,
+      es_devolucion: true,
+    })
+  })
+
   const porFormaPago = Object.values(formaPagoMap).sort((a, b) => b.totalUsd - a.totalUsd)
 
   return {
@@ -584,9 +620,11 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
       totalVentas,
       totalFlete,
       totalDescuentos,
+      totalDevoluciones,
       numDespachos,
       ticketPromedio,
       totalComisiones,
+      totalComisionesSplit,
       comisionesPagadas,
       comisionesPendientes,
       comisionCabilla2,
@@ -600,6 +638,32 @@ function filtrarReporteVentas(reporte, tipoFiltro) {
     porVendedor: filteredPorVendedor,
     porFormaPago,
     despachos: filteredDespachos,
+    devoluciones: filteredDevoluciones,
+  }
+}
+
+function filtrarCxcPorVendedores(cxcData, sellerIds, tipoFiltro) {
+  if (!cxcData || tipoFiltro === 'todos') return cxcData
+  const clientesFiltrados = (cxcData.clientesConDeuda || []).filter(c => {
+    const vid = c.vendedor?.id || 'unassigned'
+    return sellerIds.has(vid)
+  })
+  const clienteIds = new Set(clientesFiltrados.map(c => c.id))
+  const abonosFiltrados = (cxcData.abonos || []).filter(a => {
+    const vid = a.cliente?.vendedor_id || a.vendedor_id || null
+    if (vid) return sellerIds.has(vid)
+    return clienteIds.has(a.cliente_id || a.cliente?.id)
+  })
+  const totalDeuda = clientesFiltrados.reduce((s, c) => s + Number(c.saldo_pendiente || 0), 0)
+  return {
+    ...cxcData,
+    clientesConDeuda: clientesFiltrados,
+    abonos: abonosFiltrados,
+    kpis: {
+      ...(cxcData.kpis || {}),
+      totalDeuda,
+      numClientesConDeuda: clientesFiltrados.length,
+    },
   }
 }
 
@@ -616,22 +680,30 @@ function TabVentas({ configNeg }) {
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
 
-  const { data: reporte, isLoading, isError, refetch, isPlaceholderData: cambiandoVentas } = useReporteVentas({
+  const { data: reporte, isLoading, isError, refetch, isFetching: cargandoVentas, isPlaceholderData: cambiandoVentas } = useReporteVentas({
     from: rango.from,
     to: rango.to,
     prevFrom: rango.prevFrom,
     prevTo: rango.prevTo,
   })
 
-  const { data: cxcData } = useResumenCxC(rango)
+  const { data: cxcData, isFetching: cxcFetching, refetch: refetchCxcVentas } = useResumenCxC(rango)
 
   async function exportarPDF(tipoFiltro = 'todos', accion = 'descargar') {
-    if (!reporte) return
+    if (!reporte || cambiandoVentas || cargandoVentas || cxcFetching) return
     setExportando(true)
     try {
+      const [ventasRes, cxcRes] = await Promise.all([refetch(), refetchCxcVentas()])
+      if (ventasRes?.isError || !ventasRes?.data) {
+        throw ventasRes?.error || new Error('No se pudieron actualizar los datos de ventas.')
+      }
+      const reporteFresco = ventasRes.data
+      const cxcFresco = cxcRes?.data ?? cxcData
       const { generarReporteVentasPDF } = await import('../services/pdf/comisionesPDF')
       
-      const reporteFiltrado = filtrarReporteVentas(reporte, tipoFiltro)
+      const reporteFiltrado = filtrarReporteVentas(reporteFresco, tipoFiltro)
+      const sellerIdsFiltrados = new Set((reporteFiltrado.porVendedor || []).map(v => v.id))
+      const cxcParaPdf = filtrarCxcPorVendedores(cxcFresco, sellerIdsFiltrados, tipoFiltro)
 
       const reportePDF = {
         ...reporteFiltrado,
@@ -654,10 +726,11 @@ function TabVentas({ configNeg }) {
         rango, 
         config: configNeg, 
         action: accion === 'imprimir' ? 'print' : 'download',
-        cxcData
+        cxcData: cxcParaPdf
       })
     } catch (e) {
       console.error('Error generando reporte de ventas:', e)
+      showToast('No se pudo generar el reporte de ventas con datos actualizados.', 'error')
     } finally {
       setExportando(false)
     }
@@ -713,7 +786,7 @@ function TabVentas({ configNeg }) {
             <div className="relative">
               <button
                 onClick={() => setShowPrintMenu(!showPrintMenu)}
-                disabled={exportando || !despachos.length}
+                disabled={exportando || !despachos.length || cambiandoVentas || cargandoVentas || cxcFetching}
                 className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
               >
                 <Printer size={13} className="text-slate-500" />
@@ -764,7 +837,7 @@ function TabVentas({ configNeg }) {
             <div className="relative">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                disabled={exportando || !despachos.length}
+                disabled={exportando || !despachos.length || cambiandoVentas || cargandoVentas || cxcFetching}
                 className="flex items-center gap-2 text-xs font-black px-5 py-2.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-indigo-100/40"
                 style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
               >
@@ -1061,13 +1134,17 @@ function TabComisiones({ configNeg }) {
     }))
   }
 
-  const { data: comisionesRes, isLoading: comisionesLoading, isError, refetch, isPlaceholderData: cambiandoComisiones } = useComisiones({
+  const { data: comisionesRes, isLoading: comisionesLoading, isFetching: cargandoComisiones, isError, refetch, isPlaceholderData: cambiandoComisiones } = useComisiones({
     mantenerAnterior: true,
     vendedorId: filtroVendedor,
     desde: rango.from,
     hasta: rango.to,
     todas: true,
   })
+
+  useEffect(() => {
+    setAjustesManuales({})
+  }, [rango.from, rango.to])
   const comisiones = comisionesRes?.data ?? []
 
   // Segunda llamada SIN filtro de vendedor, solo para construir el dropdown
@@ -1152,62 +1229,21 @@ function TabComisiones({ configNeg }) {
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesGeneradasPDF')
-
-      const params = new URLSearchParams()
-      params.set('vista', 'eventos')
-      params.set('page', '1')
-      // El Worker admite hasta 1000 filas; debe cubrir el lote completo de staging.
-      params.set('pageSize', '1000')
-      if (rango.from) params.set('desde', rango.from)
-      if (rango.to) params.set('hasta', rango.to)
-      if (filtroVendedor) params.set('vendedorId', filtroVendedor)
-
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`HTTP ${res.status}: ${text}`)
-      }
-      const resJson = await res.json()
-      const rawEvents = resJson.data || []
+      const { rawEvents, filteredEvents, cotizacionesMap } = await cargarEventosComisionesParaPdf({
+        desde: rango.from || '',
+        hasta: rango.to || '',
+        vendedorId: filtroVendedor || '',
+        tipoFiltro,
+      })
 
       if (!rawEvents || rawEvents.length === 0) {
         alert(`🔍 SIN DATOS: No hay liberaciones de comisiones entre ${rango.from} y ${rango.to}.`)
         return
       }
 
-      let filteredEvents = rawEvents
-
-      if (tipoFiltro === 'internos') {
-        filteredEvents = rawEvents.filter(r => {
-          const v = r.vendedor || r.comisiones?.vendedor
-          const esExterno = !!v?.es_externo || (v?.markup_pct != null && Number(v.markup_pct) > 0)
-          return !esExterno
-        })
-      } else if (tipoFiltro === 'externos') {
-        filteredEvents = rawEvents.filter(r => {
-          const v = r.vendedor || r.comisiones?.vendedor
-          const esExterno = !!v?.es_externo || (v?.markup_pct != null && Number(v.markup_pct) > 0)
-          return esExterno
-        })
-      }
-
       if (filteredEvents.length === 0) {
-        alert(`🔍 SIN DATOS: No hay comisiones registradas para el grupo de vendedores seleccionado en este rango.`);
-        return;
-      }
-
-      // Fetch cotizaciones
-      const cotizacionIds = [...new Set(filteredEvents.map(r => r.comisiones?.cotizacionid).filter(Boolean))]
-      let cotizacionesMap = {}
-      if (cotizacionIds.length > 0) {
-        const { data: cotList, error: cotErr } = await supabase
-          .from('cotizaciones')
-          .select('id, numero, tasa_bcv_snapshot, cliente:clientes(id, nombre)')
-          .in('id', cotizacionIds)
-        if (!cotErr && cotList) {
-          cotizacionesMap = Object.fromEntries(cotList.map(c => [c.id, c]))
-        }
+        alert(`🔍 SIN DATOS: No hay comisiones registradas para el grupo de vendedores seleccionado en este rango.`)
+        return
       }
 
       const vendedorInfo = filtroVendedor
@@ -1218,11 +1254,11 @@ function TabComisiones({ configNeg }) {
         r,
         r.comisiones?.cotizacion || cotizacionesMap[r.comisiones?.cotizacionid],
         vendedorInfo,
-      ));
+      ))
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
-        vendedor: vendedorInfo ? { nombre: vendedorInfo.nombre, color: vendedorInfo.color, markup_pct: vendedorInfo.markup_pct, es_externo: vendedorInfo.es_externo } : null,
+        vendedor: vendedorInfo ? { id: vendedorInfo.id, codigo: vendedorInfo.codigo, nombre: vendedorInfo.nombre, color: vendedorInfo.color, markup_pct: vendedorInfo.markup_pct, es_externo: vendedorInfo.es_externo } : null,
         tipoVendedor: tipoFiltro === 'todos' ? null : tipoFiltro,
         rango,
         config: configNeg ?? {},
@@ -1252,55 +1288,27 @@ function TabComisiones({ configNeg }) {
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../services/pdf/comisionesGeneradasPDF')
-
-      // Usar el Worker, igual que el reporte general, para respetar el tenant
-      // y el rol de la sesión. La consulta directa desde el navegador queda
-      // sometida a RLS y puede ocultar eventos válidos en staging.
-      const params = new URLSearchParams()
-      params.set('vista', 'eventos')
-      params.set('page', '1')
-      // El Worker admite hasta 1000 filas; debe cubrir el lote completo de staging.
-      params.set('pageSize', '1000')
-      if (rango?.from) params.set('desde', rango.from)
-      if (rango?.to) params.set('hasta', rango.to)
-      if (vendedor?.id) params.set('vendedorId', vendedor.id)
-
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`HTTP ${res.status}: ${text}`)
-      }
-      const resJson = await res.json()
-      const rawEvents = resJson.data || []
+      const { filteredEvents: rawEvents, cotizacionesMap } = await cargarEventosComisionesParaPdf({
+        desde: rango?.from || '',
+        hasta: rango?.to || '',
+        vendedorId: vendedor?.id || '',
+        tipoFiltro: 'todos',
+      })
 
       if (rawEvents.length === 0) {
         alert(`🔍 SIN DATOS: No hay liberaciones de comisiones para ${vendedor?.nombre || 'este vendedor'} en el periodo seleccionado.`)
         return
       }
 
-      // Fetch cotizaciones
-      const cotizacionIds = [...new Set(rawEvents.map(r => r.comisiones?.cotizacionid).filter(Boolean))]
-      let cotizacionesMap = {}
-      if (cotizacionIds.length > 0) {
-        const { data: cotList, error: cotErr } = await supabase
-          .from('cotizaciones')
-          .select('id, numero, tasa_bcv_snapshot, cliente:clientes(id, nombre)')
-          .in('id', cotizacionIds)
-        if (!cotErr && cotList) {
-          cotizacionesMap = Object.fromEntries(cotList.map(c => [c.id, c]))
-        }
-      }
-
       const comisionesParaPDF = rawEvents.map(r => prepararComisionParaPDF(
         r,
         r.comisiones?.cotizacion || cotizacionesMap[r.comisiones?.cotizacionid],
         vendedor,
-      ));
+      ))
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
-        vendedor: { nombre: vendedor.nombre, color: vendedor.color, markup_pct: vendedor.markup_pct, es_externo: vendedor.es_externo },
+        vendedor: { id: vendedor.id, codigo: vendedor.codigo, nombre: vendedor.nombre, color: vendedor.color, markup_pct: vendedor.markup_pct, es_externo: vendedor.es_externo },
         rango,
         config: configNeg ?? {},
         formato: formatoReporte,
@@ -1402,7 +1410,7 @@ function TabComisiones({ configNeg }) {
                   {filtroVendedor ? (
                     <button
                       onClick={() => exportarPDF('todos', 'imprimir')}
-                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
+                      disabled={exportando || comisionesLoading || cargandoComisiones || cambiandoComisiones || comisiones.length === 0 || !tasaDisponible}
                       className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
                     >
                       <Printer size={12} className="text-slate-500" />
@@ -1412,7 +1420,7 @@ function TabComisiones({ configNeg }) {
                     <>
                       <button
                         onClick={() => setShowPrintMenu(!showPrintMenu)}
-                        disabled={exportando || comisiones.length === 0 || !tasaDisponible}
+                        disabled={exportando || comisionesLoading || cargandoComisiones || cambiandoComisiones || comisiones.length === 0 || !tasaDisponible}
                         className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
                       >
                         <Printer size={12} className="text-slate-500" />
@@ -1466,7 +1474,7 @@ function TabComisiones({ configNeg }) {
                   {filtroVendedor ? (
                     <button
                       onClick={() => exportarPDF('todos', 'descargar')}
-                      disabled={exportando || comisiones.length === 0 || !tasaDisponible}
+                      disabled={exportando || comisionesLoading || cargandoComisiones || cambiandoComisiones || comisiones.length === 0 || !tasaDisponible}
                       className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
                       style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                     >
@@ -1477,7 +1485,7 @@ function TabComisiones({ configNeg }) {
                     <>
                       <button
                         onClick={() => setShowExportMenu(!showExportMenu)}
-                        disabled={exportando || comisiones.length === 0 || !tasaDisponible}
+                        disabled={exportando || comisionesLoading || cargandoComisiones || cambiandoComisiones || comisiones.length === 0 || !tasaDisponible}
                         className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
                         style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
                       >
@@ -1657,8 +1665,9 @@ function TabComisiones({ configNeg }) {
 </div>
 <button
   onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
+  disabled={exportando || comisionesLoading || cargandoComisiones || cambiandoComisiones || !tasaDisponible}
   title="Descargar reporte individual"
-  className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all active:scale-95 duration-200"
+  className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all active:scale-95 duration-200 disabled:opacity-50"
 >
   <Download size={14} />
 </button>
@@ -1720,8 +1729,9 @@ function TabComisiones({ configNeg }) {
 </div>
 <button
   onClick={(e) => { e.stopPropagation(); exportarIndividualPDF(v); }}
+  disabled={exportando || comisionesLoading || cargandoComisiones || cambiandoComisiones || !tasaDisponible}
   title="Descargar reporte individual"
-  className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all active:scale-95 duration-200"
+  className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-xl border border-amber-100 hover:border-amber-200 transition-all active:scale-95 duration-200 disabled:opacity-50"
 >
   <Download size={14} />
 </button>
@@ -1897,7 +1907,7 @@ function TabCredito() {
   // El reporte del período (KPIs de saldo inicial/cargos/abonos, cuadre de
   // movimientos y movimientos del rango) lo construye el módulo probado
   // cxcPeriodReport.js a través de useReportePeriodoCxC.
-  const { data: cxcData, isLoading: cxcLoading, isError: cxcError, refetch: refetchCxc, isPlaceholderData: cambiandoCxc } = useReportePeriodoCxC(rango)
+  const { data: cxcData, isLoading: cxcLoading, isFetching: cargandoCxc, isError: cxcError, refetch: refetchCxc, isPlaceholderData: cambiandoCxc } = useReportePeriodoCxC(rango)
   const { data: proveedores = [], isLoading: provLoading, isError: provError, refetch: refetchProv } = useProveedores()
 
   const [vistaCredito, setVistaCredito] = useState('resumen')
@@ -1928,6 +1938,7 @@ function TabCredito() {
   }
 
   async function exportarCxCPDF(accion = 'descargar') {
+    if (!cxcData || cambiandoCxc || cargandoCxc) return
     const ventanaImpresion = accion === 'imprimir' ? window.open('', '_blank') : null
     if (accion === 'imprimir' && !ventanaImpresion) {
       showToast('Permite las ventanas emergentes para imprimir el PDF.', 'warning')
@@ -1936,9 +1947,13 @@ function TabCredito() {
 
     setExportandoCxC(true)
     try {
+      const freshRes = await refetchCxc()
+      if (freshRes?.isError || !freshRes?.data) {
+        throw freshRes?.error || new Error('No se pudieron actualizar los datos de CxC.')
+      }
       const { generarReporteCxCPDF } = await import('../services/pdf/cxcPDF')
       await generarReporteCxCPDF({
-        data: cxcData,
+        data: freshRes.data,
         config: configNeg,
         action: accion === 'imprimir' ? 'print' : 'download',
         tipo: tipoReporteCxC,
@@ -2066,11 +2081,11 @@ function TabCredito() {
             <option value="resumen">Resumen PDF</option>
             <option value="detallado">Detallado PDF</option>
           </select>
-          <button type="button" aria-label="Imprimir reporte CxC" onClick={() => exportarCxCPDF('imprimir')} disabled={exportandoCxC || (!clientesConDeuda.length && !actividadCxC)}
+          <button type="button" aria-label="Imprimir reporte CxC" onClick={() => exportarCxCPDF('imprimir')} disabled={exportandoCxC || cxcLoading || cargandoCxc || cambiandoCxc || !cxcData || (!clientesConDeuda.length && !actividadCxC)}
             className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 sm:flex-none">
             {exportandoCxC ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Imprimir
           </button>
-          <button type="button" aria-label="Descargar reporte CxC" onClick={() => exportarCxCPDF('descargar')} disabled={exportandoCxC || (!clientesConDeuda.length && !actividadCxC)}
+          <button type="button" aria-label="Descargar reporte CxC" onClick={() => exportarCxCPDF('descargar')} disabled={exportandoCxC || cxcLoading || cargandoCxc || cambiandoCxc || !cxcData || (!clientesConDeuda.length && !actividadCxC)}
             className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-600 px-3 text-xs font-bold text-white shadow-sm hover:bg-red-700 disabled:opacity-50 sm:flex-none">
             {exportandoCxC ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
             {exportandoCxC ? 'Generando…' : 'Descargar'}
@@ -2129,12 +2144,22 @@ function TabCredito() {
         </section>
       )}
 
-      {vistaCredito === 'resumen' && esAdmin && alertasVencimiento.length > 0 && (
-        <button type="button" onClick={() => { setPaginaAlertas(1); setVistaCredito('alertas') }} className="flex w-full items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-left hover:bg-orange-100">
-          <span className="flex min-w-0 items-center gap-2"><AlertTriangle size={17} className="shrink-0 text-orange-600" /><span className="truncate text-xs font-bold text-orange-900">{alertasVencimiento.length} alertas de vencimiento · {alertasVencimiento.filter(alerta => alerta.diasRestantes < 0).length} vencidas</span></span>
-          <span className="shrink-0 text-xs font-bold text-orange-800">Ver alertas →</span>
-        </button>
-      )}
+      {vistaCredito === 'resumen' && esAdmin && alertasVencimiento.length > 0 && (() => {
+        const clientesEnAlerta = new Set(alertasVencimiento.map(a => a.cliente_id || a.cliente_nombre)).size
+        const notasVencidas = alertasVencimiento.filter(alerta => alerta.diasRestantes < 0).length
+        const montoAlertas = alertasVencimiento.reduce((s, a) => s + Number(a.saldo_usd || 0), 0)
+        return (
+          <button type="button" onClick={() => { setPaginaAlertas(1); setVistaCredito('alertas') }} className="flex w-full items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-left hover:bg-orange-100">
+            <span className="flex min-w-0 items-center gap-2">
+              <AlertTriangle size={17} className="shrink-0 text-orange-600" />
+              <span className="truncate text-xs font-bold text-orange-900">
+                {alertasVencimiento.length} notas en alerta (de {clientesEnAlerta} {clientesEnAlerta === 1 ? 'cliente' : 'clientes'}) · {notasVencidas} vencidas · {fmtUsd(montoAlertas)}
+              </span>
+            </span>
+            <span className="shrink-0 text-xs font-bold text-orange-800">Ver alertas →</span>
+          </button>
+        )
+      })()}
 
       {/* Resumen CxC para las fechas seleccionadas */}
       {vistaCredito === 'resumen' && <>
@@ -2558,7 +2583,7 @@ function TabArticulosExternos({ configNeg }) {
   const [filtroAsesor, setFiltroAsesor] = useState('')
   const [busqueda, setBusqueda] = useState('')
 
-  const { data: items = [], isLoading, isError, refetch, isPlaceholderData: cambiandoExternos } = useReporteExternos({
+  const { data: items = [], isLoading, isFetching: cargandoExternos, isError, refetch, isPlaceholderData: cambiandoExternos } = useReporteExternos({
     from: rango.from,
     to: rango.to
   })
@@ -2572,6 +2597,12 @@ function TabArticulosExternos({ configNeg }) {
     })
     return Object.values(map).sort((a, b) => a.nombre.localeCompare(b.nombre))
   }, [items])
+
+  useEffect(() => {
+    if (filtroAsesor && !asesores.some(a => a.nombre === filtroAsesor)) {
+      setFiltroAsesor('')
+    }
+  }, [asesores, filtroAsesor])
 
   const itemsFiltrados = useMemo(() => {
     const porAsesor = items.filter(item => !filtroAsesor || item.asesor_nombre === filtroAsesor)
@@ -2590,7 +2621,7 @@ function TabArticulosExternos({ configNeg }) {
     const totalVentas = itemsFiltrados.reduce((sum, item) => sum + Number(item.total_usd || 0), 0)
     const cantidadTotal = itemsFiltrados.reduce((sum, item) => sum + Number(item.cantidad || 0), 0)
     const pedidosUnicos = new Set(itemsFiltrados.map(item => item.despacho_id)).size
-    const clientesUnicos = new Set(itemsFiltrados.map(item => item.cliente_rif)).size
+    const clientesUnicos = new Set(itemsFiltrados.map(item => item.cliente_id || item.cliente_rif || item.cliente_nombre)).size
 
     return {
       totalVentas,
@@ -2601,19 +2632,50 @@ function TabArticulosExternos({ configNeg }) {
   }, [itemsFiltrados])
 
   const exportarPDF = async (accion = 'descargar') => {
-    if (!itemsFiltrados.length) return
+    if (!itemsFiltrados.length || cambiandoExternos || cargandoExternos) return
     setExportando(true)
     try {
+      const freshRes = await refetch()
+      if (freshRes?.isError) {
+        throw freshRes.error || new Error('No se pudieron actualizar los artículos externos.')
+      }
+      const freshItems = freshRes?.data ?? items
+      const porAsesor = freshItems.filter(item => !filtroAsesor || item.asesor_nombre === filtroAsesor)
+      const filtradosFrescos = busqueda.trim()
+        ? rankEntities(porAsesor, busqueda, [
+            { key: 'articulo_nombre', weight: 10 },
+            { key: 'articulo_codigo', weight: 9 },
+            { key: 'cliente_nombre', weight: 8 },
+            { key: 'cliente_rif', weight: 8 },
+            { key: 'despacho_numero', weight: 7 },
+          ])
+        : porAsesor
+
+      if (!filtradosFrescos.length) {
+        showToast('No hay artículos externos con los filtros actuales.', 'info')
+        return
+      }
+
+      const kpisFrescos = {
+        totalVentas: filtradosFrescos.reduce((sum, item) => sum + Number(item.total_usd || 0), 0),
+        cantidadTotal: filtradosFrescos.reduce((sum, item) => sum + Number(item.cantidad || 0), 0),
+        pedidosUnicos: new Set(filtradosFrescos.map(item => item.despacho_id)).size,
+        clientesUnicos: new Set(filtradosFrescos.map(item => item.cliente_id || item.cliente_rif || item.cliente_nombre)).size,
+      }
+
       const { generarArticulosExternosPDF } = await import('../services/pdf/articulosExternosPDF')
       await generarArticulosExternosPDF({
-        items: itemsFiltrados,
+        items: filtradosFrescos,
         rango,
-        kpis,
+        kpis: kpisFrescos,
+        filtroAsesor,
+        busqueda: busqueda.trim(),
         config: configNeg,
         action: accion === 'imprimir' ? 'print' : 'download'
       })
     } catch (e) {
       console.error('Error generando PDF de artículos externos:', e)
+      showToast('No se pudo generar el PDF de artículos externos.', 'error')
     } finally {
       setExportando(false)
     }
@@ -2677,7 +2739,7 @@ function TabArticulosExternos({ configNeg }) {
             <div className="flex items-center gap-1.5 ml-auto shrink-0 self-end">
               <button
                 onClick={() => exportarPDF('imprimir')}
-                disabled={exportando || !itemsFiltrados.length}
+                disabled={exportando || isLoading || cargandoExternos || cambiandoExternos || !itemsFiltrados.length}
                 className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm h-9"
               >
                 <Printer size={12} className="text-slate-500" />
@@ -2686,7 +2748,7 @@ function TabArticulosExternos({ configNeg }) {
 
               <button
                 onClick={() => exportarPDF('descargar')}
-                disabled={exportando || !itemsFiltrados.length}
+                disabled={exportando || isLoading || cargandoExternos || cambiandoExternos || !itemsFiltrados.length}
                 className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 sm:px-3.5 rounded-xl text-white transition-all active:scale-[0.98] disabled:opacity-50 shadow-md h-9"
                 style={{ background: 'linear-gradient(135deg, #1B365D, #0d1f3c)' }}
               >

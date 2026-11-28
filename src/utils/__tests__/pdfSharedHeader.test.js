@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { jsPDF } from 'jspdf'
 import {
   MARGIN,
+  drawPremiumFooter,
   drawPremiumHeader,
   drawSimplifiedHeader,
+  fechaArchivoCaracas,
+  fmtBs,
+  fmtFecha,
+  fmtUsd,
   getPremiumHeaderLayout,
 } from '../../services/pdf/pdfShared'
 
@@ -81,5 +86,22 @@ describe('PDF shared headers', () => {
     doc.setFont('times', 'bold')
     doc.setFontSize(7)
     expect(doc.getTextWidth(config.nombre_negocio) <= brandWidth).toBe(true)
+  })
+
+  it('tolera config nulo en header, continuacion y footer sin fallar', () => {
+    const doc = makeDoc()
+    expect(() => drawPremiumHeader({ doc, logoData: null, config: null, title: 'Test', subtitle: '' })).not.toThrow()
+    expect(() => drawSimplifiedHeader(doc, null, null, 'Cont.')).not.toThrow()
+    expect(() => drawPremiumFooter(doc, null)).not.toThrow()
+  })
+
+  it('formatea fechas y nombres de archivo en hora de Venezuela (evita salto nocturno UTC)', () => {
+    // 2026-11-27T02:30:00Z = 2026-11-26 22:30 hora Caracas (UTC-4)
+    expect(fechaArchivoCaracas(new Date('2026-11-27T02:30:00Z'))).toBe('2026-11-26')
+    expect(fechaArchivoCaracas('2026-11-27T02:30:00Z')).toBe('2026-11-26')
+    expect(fmtFecha('2026-11-27T02:30:00Z')).toBe('26/11/2026')
+    expect(fmtFecha('fecha-invalida')).toBe('—')
+    expect(fmtUsd('no-numero')).toBe('$0,00')
+    expect(fmtBs('no-numero')).toBe('Bs 0,00')
   })
 })

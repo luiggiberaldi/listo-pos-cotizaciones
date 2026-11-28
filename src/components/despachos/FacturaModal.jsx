@@ -3,15 +3,23 @@
 import { useEffect, useState } from 'react'
 import { X, FileText, Loader2, Check } from 'lucide-react'
 
+const MONEDA_FACTURA_OPTIONS = [
+  { key: 'bs', label: 'Bs', sublabel: 'Bolívares', activeCls: 'bg-blue-600 text-white border-blue-600 shadow-sm' },
+  { key: '$', label: '$', sublabel: 'USDT', activeCls: 'bg-emerald-600 text-white border-emerald-600 shadow-sm' },
+  { key: 'bcv', label: 'BCV', sublabel: 'Dólar BCV', activeCls: 'bg-teal-600 text-white border-teal-600 shadow-sm' },
+]
+
 export default function FacturaModal({ isOpen, onClose, onConfirm, actionType = 'download', loading = false }) {
   const [numFactura, setNumFactura] = useState('')
   const [numControl, setNumControl] = useState('')
+  const [monedaFactura, setMonedaFactura] = useState('bs')
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (isOpen) {
       setNumFactura('')
       setNumControl('')
+      setMonedaFactura('bs')
       setError('')
     }
   }, [isOpen])
@@ -29,7 +37,7 @@ export default function FacturaModal({ isOpen, onClose, onConfirm, actionType = 
       return
     }
     setError('')
-    onConfirm(numFactura.trim(), numControl.trim())
+    onConfirm(numFactura.trim(), numControl.trim(), monedaFactura)
   }
 
   return (
@@ -92,6 +100,44 @@ export default function FacturaModal({ isOpen, onClose, onConfirm, actionType = 
                   className="w-full pl-3 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
                 />
               </div>
+            </div>
+
+            {/* Campo: Moneda de la Factura (siempre inicia en Bs) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
+                  Moneda de la Factura
+                </span>
+                <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                  Predeterminado: Bs
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {MONEDA_FACTURA_OPTIONS.map(opt => {
+                  const selected = monedaFactura === opt.key
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => setMonedaFactura(opt.key)}
+                      className={`py-2 px-2 rounded-xl border text-center transition-all ${
+                        selected
+                          ? opt.activeCls
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="text-sm font-bold leading-tight">{opt.label}</div>
+                      <div className={`text-[10px] font-medium leading-tight mt-0.5 ${selected ? 'text-white/85' : 'text-slate-400'}`}>
+                        {opt.sublabel}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Siempre inicia en Bolívares (Bs). Cambie manualmente solo si requiere otra moneda.
+              </p>
             </div>
 
             {error && (

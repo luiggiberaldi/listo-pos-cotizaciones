@@ -1,5 +1,5 @@
 // src/components/reportes/ModalDetalleVendedor.jsx
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { DollarSign, Percent, Download, FileText, Printer, Loader2 } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import Skeleton from '../ui/Skeleton'
@@ -7,8 +7,7 @@ import { useComisiones } from '../../hooks/useComisiones'
 import { useTasaCambio } from '../../hooks/useTasaCambio'
 import useAuthStore from '../../store/useAuthStore'
 import { fmtUsd, fmtBs } from '../../utils/format'
-import { apiUrl, getAuthHeaders } from '../../services/apiBase'
-import supabase from '../../services/supabase/client'
+import { cargarEventosComisionesParaPdf } from '../../services/comisionesPdfHelper'
 
 export function prepararComisionParaPDF(evento, cotizacion = null, vendedorFallback = null) {
   const event = evento || {}
@@ -78,8 +77,17 @@ function SkeletonDetalle() {
   )
 }
 
-export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose, configNeg, ajustesManuales = {} }) {
-  const { data: comisionesRes, isLoading } = useComisiones({
+export default function ModalDetalleVendedor({
+  vendedor,
+  rango,
+  isOpen,
+  onClose,
+  configNeg,
+  ajustesManuales = {},
+  initialTipoTasa = 'euro',
+  initialFormato = 'detallado',
+}) {
+  const { data: comisionesRes, isLoading, isFetching } = useComisiones({
     desde: rango?.from,
     hasta: rango?.to,
     vendedorId: vendedor?.id,
@@ -89,7 +97,7 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
 
   const { perfil } = useAuthStore()
   const { tasaEuro, tasaUsdt } = useTasaCambio()
-  const [tipoTasaComision, setTipoTasaComision] = useState('euro')
+  const [tipoTasaComision, setTipoTasaComision] = useState(initialTipoTasa)
   const tasaSeleccionadaInfo = tipoTasaComision === 'usdt' ? tasaUsdt : tasaEuro
   const tasaSeleccionada = tasaSeleccionadaInfo?.precio || 0
   const tipoTasaLabel = tipoTasaComision === 'usdt' ? 'USDT' : 'Euro BCV'
@@ -110,7 +118,14 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
   }, { totalUsd: 0, comBs: 0 })
 
   const [exportando, setExportando] = useState(false)
-  const [formatoReporte, setFormatoReporte] = useState('detallado')
+  const [formatoReporte, setFormatoReporte] = useState(initialFormato)
+
+  useEffect(() => {
+    if (isOpen) {
+      setTipoTasaComision(initialTipoTasa)
+      setFormatoReporte(initialFormato)
+    }
+  }, [isOpen, initialTipoTasa, initialFormato])
 
   const totalConAjustes = useMemo(() => {
     if (!vendedor) return totales
@@ -135,39 +150,16 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
     setExportando(true)
     try {
       const { generarComisionesPDF } = await import('../../services/pdf/comisionesGeneradasPDF')
-
-      const params = new URLSearchParams()
-      params.set('vista', 'eventos')
-      params.set('page', '1')
-      params.set('pageSize', '1000')
-      if (rango?.from) params.set('desde', rango.from)
-      if (rango?.to) params.set('hasta', rango.to)
-      if (vendedor?.id) params.set('vendedorId', vendedor.id)
-
-      const headers = await getAuthHeaders()
-      const res = await fetch(apiUrl(`/api/comisiones/lista?${params}`), { headers })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`HTTP ${res.status}: ${text}`)
-      }
-      const resJson = await res.json()
-      const rawEvents = resJson.data || []
+      const { filteredEvents: rawEvents, cotizacionesMap } = await cargarEventosComisionesParaPdf({
+        desde: rango?.from || '',
+        hasta: rango?.to || '',
+        vendedorId: vendedor?.id || '',
+        tipoFiltro: 'todos',
+      })
 
       if (rawEvents.length === 0) {
         alert(`🔍 SIN DATOS: No hay liberaciones de comisiones para ${vendedor?.nombre || 'este vendedor'} en el periodo seleccionado.`)
         return
-      }
-
-      const cotizacionIds = [...new Set(rawEvents.map(r => r.comisiones?.cotizacionid).filter(Boolean))]
-      let cotizacionesMap = {}
-      if (cotizacionIds.length > 0) {
-        const { data: cotList, error: cotErr } = await supabase
-          .from('cotizaciones')
-          .select('id, numero, tasa_bcv_snapshot, cliente:clientes(id, nombre)')
-          .in('id', cotizacionIds)
-        if (!cotErr && cotList) {
-          cotizacionesMap = Object.fromEntries(cotList.map(c => [c.id, c]))
-        }
       }
 
       const comisionesParaPDF = rawEvents.map(r => prepararComisionParaPDF(
@@ -175,6 +167,7 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
         r.comisiones?.cotizacion || cotizacionesMap[r.comisiones?.cotizacionid],
         vendedor ? {
           id: vendedor.id,
+          codigo: vendedor.codigo,
           nombre: vendedor.nombre,
           color: vendedor.color,
           markup_pct: vendedor.markup_pct,
@@ -184,7 +177,7 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
 
       await generarComisionesPDF({
         comisiones: comisionesParaPDF,
-        vendedor: { nombre: vendedor?.nombre, color: vendedor?.color, markup_pct: vendedor?.markup_pct, es_externo: vendedor?.es_externo },
+        vendedor: { id: vendedor?.id, codigo: vendedor?.codigo, nombre: vendedor?.nombre, color: vendedor?.color, markup_pct: vendedor?.markup_pct, es_externo: vendedor?.es_externo },
         rango,
         config: configNeg ?? {},
         action,
@@ -231,7 +224,7 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={(e) => { e.stopPropagation(); exportarPDF('download') }}
-              disabled={exportando || !tasaDisponible}
+              disabled={exportando || !tasaDisponible || isLoading || isFetching || detalle.length === 0}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-all duration-200 border border-slate-700 shadow-md active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
               title="Descargar Reporte PDF"
             >
@@ -241,7 +234,7 @@ export default function ModalDetalleVendedor({ vendedor, rango, isOpen, onClose,
 
             <button
               onClick={(e) => { e.stopPropagation(); exportarPDF('print') }}
-              disabled={exportando || !tasaDisponible}
+              disabled={exportando || !tasaDisponible || isLoading || isFetching || detalle.length === 0}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-900/10 hover:bg-blue-900/20 text-blue-900 transition-all duration-200 border border-blue-900/20 shadow-md active:scale-95 disabled:opacity-50 group font-bold text-xs tracking-wide"
               title="Imprimir Reporte PDF"
             >

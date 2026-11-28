@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generarComisionesPDF } from '../../services/pdf/comisionesPDF'
+import { generarComisionesPDF } from '../../services/pdf/comisionesGeneradasPDF'
 
 describe('Cálculo de Tasa en Reporte de Comisiones vs Ventas', () => {
   const despachoHistorico = {

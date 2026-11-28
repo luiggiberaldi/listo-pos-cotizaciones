@@ -6,7 +6,7 @@ import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import { 
   PAGE_W, PAGE_H, MARGIN, CONTENT_W, 
   C_PRIMARY, C_DARK, C_WHITE, C_GRAY,
-  drawSimplifiedHeader, checkPage, drawWatermark, drawPremiumHeader
+  drawSimplifiedHeader, checkPage, drawWatermark, drawPremiumHeader, fechaArchivoCaracas
 } from './pdfShared'
 
 // ─── Colores personalizados para Lista de Precios (blanco/negro) ─────────────
@@ -279,11 +279,23 @@ function fmtUsd(n) {
 function fmtBs(n) {
   return `Bs ${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
-function fmtPrecio(n, moneda, tasa) {
-  const usd = Number(n || 0)
-  if (moneda === 'bs' && tasa > 0) return fmtBs(usd * tasa)
-  if ((moneda === 'mixto' || moneda === 'mixto_bcv') && tasa > 0) return `${fmtUsd(usd)}  /  ${fmtBs(usd * tasa)}`
-  return fmtUsd(usd)
+function fmtPrecioLista(basePrecio, moneda, tasa, factorBcv) {
+  if (basePrecio == null) return '—'
+  const usd = Number(basePrecio)
+  if (!Number.isFinite(usd)) return '—'
+  if (moneda === 'bs') {
+    if (!(tasa > 0)) return '—'
+    return 'Bs ' + (usd * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+  if (moneda === 'bcv') {
+    if (!(factorBcv > 0)) return '—'
+    return '$' + (usd * factorBcv).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+  if ((moneda === 'mixto' || moneda === 'mixto_bcv') && tasa > 0) {
+    const base = moneda === 'mixto_bcv' && factorBcv > 0 ? usd * factorBcv : usd
+    return `${fmtUsd(base)}  /  ${fmtBs(usd * tasa)}`
+  }
+  return '$' + usd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 const MONEDA_LABELS = {
   '$': 'Precio Detal USDT',
@@ -329,6 +341,10 @@ function fmtTelefono(tel) {
   if (!tel) return ''
   const s = String(tel).replace(/\D/g, '')
   if (s.length === 11) return `${s.slice(0, 4)}-${s.slice(4, 7)}.${s.slice(7, 9)}.${s.slice(9, 11)}`
+  if (s.length === 12 && s.startsWith('58')) {
+    const loc = '0' + s.slice(2)
+    return `${loc.slice(0, 4)}-${loc.slice(4, 7)}.${loc.slice(7, 9)}.${loc.slice(9, 11)}`
+  }
   return tel
 }
 
@@ -448,18 +464,24 @@ function drawFooter(doc, config) {
  * @param {Object} params.config     - Config del negocio (nombre_negocio, logo_url)
  * @param {Object} params.opciones   - { moneda: 'usd'|'bs'|'mixto', tasa: number, columnas: { codigo, categoria, unidad, stock, precio2, precio3 } }
  */
-export async function generarListaPreciosPDF({ productos, config = {}, opciones = {} }) {
-  const { moneda = 'usd', tasa = 0, columnas = {}, formato = 'lista' } = opciones
+export async function generarListaPreciosPDF({ productos = [], config = {}, opciones = {} }) {
+  const { moneda = 'usd', tasa = 0, factorBcv = 0, columnas = {}, formato = 'lista', fechaEmision = new Date() } = opciones
+  if (moneda === 'bs' && !(Number(tasa) > 0)) {
+    throw new Error('No hay tasa vigente disponible para generar la lista de precios en Bolívares.')
+  }
+  if (moneda === 'bcv' && !(Number(factorBcv) > 0)) {
+    throw new Error('No hay tasa BCV disponible para generar la lista de precios en Dólar BCV.')
+  }
+  // Excluir siempre productos desactivados del catálogo exportado
+  const productosActivos = (productos || []).filter(p => p && p.activo !== false)
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   let y = drawHeader(doc, null, config, moneda, tasa)
   drawWatermark(doc)
 
-
-
   // Agrupar por categoría usando el normalizador para corregir errores de tipeo
   const grupos = {}
-  productos.forEach(p => {
+  productosActivos.forEach(p => {
     // 1. Corregir categoría basada en discrepancias con el nombre
     const catCorregida = corregirCategoriaCruzada(p.categoria, p.nombre)
     
@@ -693,6 +715,8 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
       const otrosItems = subgrupos['OTROS'] || []
       if (otrosItems.length > 0) {
         otrosItems.forEach((p, idx) => {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(7)
           const nombreColDef = cols.find(c => c.key === 'nombre')
           const nombreMaxW = nombreColDef ? nombreColDef.w - 2 : 50
           const nombreLines = doc.splitTextToSize(p.nombre || '—', nombreMaxW)
@@ -748,19 +772,11 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
                 if (p.stock_actual <= 0) doc.setTextColor(185, 28, 28)
                 break
               case 'precio':
-              case 'precio2':
-                const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2;
-                if (basePrecio != null) {
-                  const usd = Number(basePrecio)
-                  if (moneda === 'bs' && tasa > 0) {
-                     val = 'Bs ' + (usd * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                  } else {
-                     val = '$' + usd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                  }
-                } else {
-                  val = '—'
-                }
+              case 'precio2': {
+                const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2
+                val = fmtPrecioLista(basePrecio, moneda, tasa, factorBcv)
                 break
+              }
             }
 
             const textY = y + 3.8
@@ -790,7 +806,8 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
 
         // Sub-encabezado de subcategoría
         let prevYSub = y
-        y = checkPage(doc, y, 12, (d) => drawSimplifiedHeader(d, LOGO_LISTA_PRECIOS, config, 'Lista de Precios (Cont.)', LP_BG, LP_TEXT), bottomMargin)
+        const bottomMarginSub = doc.internal.getNumberOfPages() === 1 ? 35 : 12
+        y = checkPage(doc, y, 12, (d) => drawSimplifiedHeader(d, LOGO_LISTA_PRECIOS, config, 'Lista de Precios (Cont.)', LP_BG, LP_TEXT), bottomMarginSub)
         if (y < prevYSub) {
           y = drawTableHeader(y, isGrid)
         }
@@ -816,6 +833,8 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
 
         // Filas de productos de la subcategoría
         subItems.forEach((p, idx) => {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(7)
           const nombreColDef = cols.find(c => c.key === 'nombre')
           const nombreMaxW = nombreColDef ? nombreColDef.w - 2 : 50
           const nombreLines = doc.splitTextToSize(p.nombre || '—', nombreMaxW)
@@ -871,19 +890,11 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
                 if (p.stock_actual <= 0) doc.setTextColor(185, 28, 28)
                 break
               case 'precio':
-              case 'precio2':
-                const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2;
-                if (basePrecio != null) {
-                  const usd = Number(basePrecio)
-                  if (moneda === 'bs' && tasa > 0) {
-                     val = 'Bs ' + (usd * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                  } else {
-                     val = '$' + usd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                  }
-                } else {
-                  val = '—'
-                }
+              case 'precio2': {
+                const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2
+                val = fmtPrecioLista(basePrecio, moneda, tasa, factorBcv)
                 break
+              }
             }
 
             const textY = y + 3.8
@@ -907,6 +918,8 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
     } else {
       // Filas de productos normales si no hay subcategorías
       items.forEach((p, idx) => {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7)
         const nombreColDef = cols.find(c => c.key === 'nombre')
         const nombreMaxW = nombreColDef ? nombreColDef.w - 2 : 50
         const nombreLines = doc.splitTextToSize(p.nombre || '—', nombreMaxW)
@@ -962,19 +975,11 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
               if (p.stock_actual <= 0) doc.setTextColor(185, 28, 28)
               break
             case 'precio':
-            case 'precio2':
-              const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2;
-              if (basePrecio != null) {
-                const usd = Number(basePrecio)
-                if (moneda === 'bs' && tasa > 0) {
-                   val = 'Bs ' + (usd * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                } else {
-                   val = '$' + usd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                }
-              } else {
-                val = '—'
-              }
+            case 'precio2': {
+              const basePrecio = col.key === 'precio' ? p.precio_usd : p.precio_2
+              val = fmtPrecioLista(basePrecio, moneda, tasa, factorBcv)
               break
+            }
           }
 
           const textY = y + 3.8
@@ -1000,5 +1005,5 @@ export async function generarListaPreciosPDF({ productos, config = {}, opciones 
   })
 
   drawFooter(doc, config)
-  doc.save(`Lista_Precios_${new Date().toISOString().slice(0, 10)}.pdf`)
+  doc.save(`Lista_Precios_${fechaArchivoCaracas(fechaEmision)}.pdf`)
 }

@@ -25,35 +25,58 @@ export const CUENTAS_BANCARIAS = [
 ]
 
 // ─── Formateadores ───────────────────────────────────────────────────────────
+const numSeguro = n => {
+  const v = Number(n)
+  return Number.isFinite(v) ? v : 0
+}
+
 export function fmtUsd(n) {
-  return `$${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `$${numSeguro(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 export function fmtBs(n) {
-  return `Bs ${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `Bs ${numSeguro(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 export function fmtBsShort(n) {
-  return Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return numSeguro(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export function fmtBcvUsd(n) {
-  return `$${Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `$${numSeguro(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-/** Formatea fecha corta dd/mm/yyyy en hora Venezuela. Variante 'short-month' usa mes abreviado. */
+/** Devuelve fecha YYYY-MM-DD en hora de Venezuela (America/Caracas) para nombres de archivo y cortes. */
+export function fechaArchivoCaracas(f = new Date()) {
+  let d = f instanceof Date ? f : null
+  if (!d && typeof f === 'string' && f.trim()) {
+    const s = f.trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+    d = new Date(s)
+  }
+  if (!d || isNaN(d.getTime())) d = new Date()
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Caracas',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d)
+  const v = Object.fromEntries(partes.map(p => [p.type, p.value]))
+  return `${v.year}-${v.month}-${v.day}`
+}
+
+/** Formatea fecha corta dd/mm/yyyy en hora de Venezuela. Variante 'short-month' usa mes abreviado. */
 export function fmtFecha(f, variant) {
   if (!f) return '—'
-  const raw = String(f)
-  const hasTime = f instanceof Date || raw.includes('T')
   let dateObj
   if (f instanceof Date) {
     dateObj = f
   } else {
-    const dateStr = hasTime ? raw : `${raw}T12:00:00-04:00`
+    const raw = String(f).trim()
+    const dateStr = raw.includes('T') || raw.includes(' ') ? raw : `${raw}T12:00:00-04:00`
     dateObj = new Date(dateStr)
     if (isNaN(dateObj.getTime())) {
-      dateObj = new Date(f)
+      dateObj = new Date(raw)
     }
   }
   if (isNaN(dateObj.getTime())) return '—'
@@ -124,10 +147,12 @@ export function drawCheck(doc, label, x, y, checked = false) {
 /** Dibuja marca de agua centrada con opacidad */
 export function drawWatermark(doc) {
   try {
+    const pw = doc.internal?.pageSize?.getWidth?.() || PAGE_W
+    const ph = doc.internal?.pageSize?.getHeight?.() || PAGE_H
     const gState = new doc.GState({ opacity: 0.06 })
     doc.setGState(gState)
     const wmSize = 140
-    doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - wmSize) / 2, (PAGE_H - wmSize) / 2, wmSize, wmSize, 'WATERMARK_LOGO', 'FAST')
+    doc.addImage(WATERMARK_LOGO, 'PNG', (pw - wmSize) / 2, (ph - wmSize) / 2, wmSize, wmSize, 'WATERMARK_LOGO', 'FAST')
     doc.setGState(new doc.GState({ opacity: 1 }))
   } catch {
     return
@@ -167,14 +192,16 @@ export function drawAnuladaWatermark(doc) {
 /** Dibuja marca de agua "APROBADO POR: [NOMBRE]" en verde, diagonal, semitransparente */
 export function drawAprobadoWatermark(doc, nombre) {
   try {
+    const pw = doc.internal?.pageSize?.getWidth?.() || PAGE_W
+    const ph = doc.internal?.pageSize?.getHeight?.() || PAGE_H
     doc.saveGraphicsState()
     const gState = new doc.GState({ opacity: 0.35 }) // Menos traslúcido
     doc.setGState(gState)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(32) // Más grande
     doc.setTextColor(30, 80, 160)
-    const cx = (PAGE_W / 2) + 10 // Movido 1cm a la derecha
-    const cy = (PAGE_H / 2) + 40 // Movido 1cm abajo adicional
+    const cx = (pw / 2) + 10 // Movido 1cm a la derecha
+    const cy = (ph / 2) + 40 // Movido 1cm abajo adicional
     
     // Ajustado para que quede más centrado y grande
     doc.text(`APROBADO POR:`, cx - 8, cy - 10, { align: 'center', angle: 35 })
@@ -188,10 +215,11 @@ export function drawAprobadoWatermark(doc, nombre) {
 
 /** Verifica si necesita salto de página, agrega nueva con watermark y ejecuta callback si existe */
 export function checkPage(doc, y, needed = 30, onPageAdd = null, customBottomMargin = null) {
+  const ph = doc.internal?.pageSize?.getHeight?.() || PAGE_H
   const bottomMargin = customBottomMargin !== null ? customBottomMargin : 35
-  if (y + needed > PAGE_H - bottomMargin) {
+  if (y + needed > ph - bottomMargin) {
     doc.addPage()
-    drawWatermark(doc)
+    if (!doc.__watermarkEnAddPage) drawWatermark(doc)
     if (onPageAdd && typeof onPageAdd === 'function') {
       return onPageAdd(doc)
     }
@@ -411,9 +439,9 @@ export function drawPremiumHeader({
   // Títulos de negocio centrado
   let n = config?.nombre_negocio || 'CONSTRUACERO CARABOBO C.A.'
   if (!n || n.trim().toUpperCase() === 'PRUEBA' || n.trim() === '') n = 'CONSTRUACERO CARABOBO C.A.'
-  const words = n.split(' ')
+  const words = n.trim().split(/\s+/)
   const main = (words[0] || 'CONSTRUACERO').toUpperCase()
-  const secondary = words.slice(1).join(' ').toUpperCase() || 'CARABOBO C.A.'
+  const secondary = words.slice(1).join(' ').toUpperCase()
   
   const layout = getPremiumHeaderLayout(doc)
   doc.setFont('times', 'bold'); doc.setTextColor(...(customTextColor || C_WHITE))
@@ -467,8 +495,8 @@ export function drawPremiumHeader({
  */
 export function drawPremiumFooter(doc, config, customBgColor = [255, 255, 255], customAccentColor = [0, 0, 0], customTextColor = [0, 0, 0], extraText = '') {
   const totalPages = doc.internal.getNumberOfPages()
-  const ph = PAGE_H
-  const pw = PAGE_W
+  const ph = doc.internal?.pageSize?.getHeight?.() || PAGE_H
+  const pw = doc.internal?.pageSize?.getWidth?.() || PAGE_W
 
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p)
@@ -589,19 +617,7 @@ export function drawPremiumFooter(doc, config, customBgColor = [255, 255, 255], 
   }
 }
 
-// ─── Fechas de archivo y ajuste de texto en tablas ───────────────────────────
-/** Fecha YYYY-MM-DD en hora de Venezuela (America/Caracas) para nombres de archivo. */
-export function fechaArchivoCaracas(fecha = new Date()) {
-  const d = fecha instanceof Date ? fecha : new Date(fecha)
-  const valida = Number.isNaN(d.getTime()) ? new Date() : d
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Caracas',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(valida)
-}
-
+// ─── Ajuste de texto en tablas ───────────────────────────────────────────────
 /** Parte un texto en líneas que caben en `width` mm con la fuente actual del doc. */
 export function wrapLines(doc, text, width) {
   const t = String(text ?? '')

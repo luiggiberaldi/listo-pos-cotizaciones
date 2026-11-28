@@ -6,7 +6,7 @@ import { LOGO_DESPACHO } from './logoDespachoBase64'
 import {
   PAGE_W, PAGE_H, MARGIN, CONTENT_W,
   C_DARK, C_WHITE,
-  fmtPrecio, fmtTotal, fmtFecha, fmtTelefono,
+  fmtPrecio, fmtTotal, fmtFecha, fmtTelefono, fechaArchivoCaracas,
   drawWatermark, drawAnuladaWatermark,
 } from './pdfShared'
 
@@ -795,7 +795,7 @@ export async function generarDespachoPDF({ despacho, items = [], config = {}, fo
 
   // ── Guardar o devolver blob ──────────────────────────────────────────────
   const clienteNombreDes = ((despacho.cliente_factura || despacho.cliente)?.nombre || 'cliente').replace(/[^a-zA-Z0-9à-ÿ\s]/g, '').trim().replace(/\s+/g, '_').toUpperCase()
-  const fechaDes = (despacho.creado_en || new Date().toISOString()).slice(0, 10)
+  const fechaDes = fechaArchivoCaracas(despacho.creado_en || new Date())
   const filename = `${numDes.replace(/ /g, '_')}_${clienteNombreDes}_${fechaDes}.pdf`
   if (returnBlob) return { blob: doc.output('blob'), filename }
   doc.save(filename)

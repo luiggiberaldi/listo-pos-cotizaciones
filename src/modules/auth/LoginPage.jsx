@@ -10,6 +10,7 @@ import queryClient from '../../lib/queryClient'
 import LoginAvatar from '../../components/auth/LoginAvatar'
 import LoginPinModal from '../../components/auth/LoginPinModal'
 import HeaderTasas from '../../components/layout/HeaderTasas'
+import { StagingBadge, esEntornoStaging } from '../../components/ui/StagingBanner'
 
 
 // ─── Fondo animado con orbes ─────────────────────────────────────────────────
@@ -358,6 +359,9 @@ function GateStep({ onPass }) {
             <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to right, transparent, #B8860B)' }} />
             <span className="text-[10px] font-bold tracking-[0.3em] uppercase" style={{ color: '#B8860B' }}>Acceso al Sistema</span>
             <div className="h-px w-12 opacity-40" style={{ background: 'linear-gradient(to left, transparent, #B8860B)' }} />
+          </div>
+          <div className="mt-2">
+            <StagingBadge />
           </div>
         </div>
 
@@ -1061,7 +1065,7 @@ export default function LoginPage() {
     <>
       {/* ── Barra superior (móvil + desktop, tal cual como el header post-PIN) ── */}
       <header
-        className="fixed top-0 left-0 right-0 z-40 px-3 md:px-4 h-12 md:h-14 flex items-center justify-between gap-2 md:gap-4"
+        className={`fixed ${esEntornoStaging() ? 'top-8' : 'top-0'} left-0 right-0 z-40 px-3 md:px-4 h-12 md:h-14 flex items-center justify-between gap-2 md:gap-4`}
         style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
         <div className="pointer-events-none select-none flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.06] border border-white/[0.1] backdrop-blur-md shadow-lg shadow-black/20">

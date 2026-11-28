@@ -131,11 +131,11 @@ export function useCrearTransportista() {
       // Cancelar cualquier refetch para que no nos pise el update optimístico
       await qc.cancelQueries({ queryKey: KEY })
 
-      // Inyectar en TODAS las variantes de la query ['transportistas'] (activos y todos)
+      // Inyectar SOLO en cachés tipo Array (nunca pisar { items, total } paginado ni { todos, locales, generales })
       qc.setQueriesData({ queryKey: KEY, exact: false }, (viejos) => {
-        const arr = Array.isArray(viejos) ? viejos : []
-        if (arr.some(t => t.id === tReal.id)) return arr
-        return [tReal, ...arr].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
+        if (!Array.isArray(viejos)) return viejos
+        if (viejos.some(t => t.id === tReal.id)) return viejos
+        return [tReal, ...viejos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
       })
 
       showToast.success('Transportista creado')
@@ -171,8 +171,8 @@ export function useActualizarTransportista() {
       await qc.cancelQueries({ queryKey: KEY })
 
       qc.setQueriesData({ queryKey: KEY, exact: false }, (viejos) => {
-        const arr = Array.isArray(viejos) ? viejos : []
-        return arr.map(t => t.id === tReal.id ? tReal : t)
+        if (!Array.isArray(viejos)) return viejos
+        return viejos.map(t => t.id === tReal.id ? tReal : t)
       })
 
       showToast.success('Transportista actualizado')
@@ -295,8 +295,8 @@ export function useDesactivarTransportista() {
       await qc.cancelQueries({ queryKey: KEY })
 
       qc.setQueriesData({ queryKey: KEY, exact: false }, (viejos) => {
-        const arr = Array.isArray(viejos) ? viejos : []
-        return arr.filter(t => t.id !== id)
+        if (!Array.isArray(viejos)) return viejos
+        return viejos.filter(t => t.id !== id)
       })
 
       showToast.success('Transportista eliminado')

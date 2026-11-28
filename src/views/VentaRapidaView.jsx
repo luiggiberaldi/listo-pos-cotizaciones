@@ -106,13 +106,18 @@ function ModalVentaExitosa({ data, onClose, config }) {
   }
 
   async function fetchDespachoData(pdfType) {
+    if (!despachoId) throw new Error('El despacho aún no se ha sincronizado con el servidor.')
     const session = (await supabase.auth.getSession()).data.session
     const importFn = pdfType === 'orden'
       ? import('../services/pdf/ordenDespachoPDF')
       : import('../services/pdf/despachoPDF')
-    const [pdfModule, itemsRes, clienteData, vendedorRes, transportistaRes, vehiculoViajeRes] = await Promise.all([
+    const [pdfModule, despachoRes, clienteData, vendedorRes, transportistaRes] = await Promise.all([
       importFn,
-      supabase.from('notas_despacho_items').select('codigo_snap, nombre_snap, unidad_snap, cantidad, precio_unit_usd, total_linea_usd, orden').eq('despacho_id', despachoId).order('orden'),
+      supabase
+        .from('notas_despacho')
+        .select('*, vehiculo_viaje:vehiculos!notas_despacho_vehiculo_id_fkey(id, codigo, nombre, modelo, placa, placa_batea, color_batea, capacidad_kg)')
+        .eq('id', despachoId)
+        .single(),
       fetch(apiUrl('/api/clientes/lookup'), {
         method: 'POST',
         headers: {
@@ -121,44 +126,22 @@ function ModalVentaExitosa({ data, onClose, config }) {
           ...getOperatorSessionHeaders(),
         },
         body: JSON.stringify({ ids: [data.clienteId].filter(Boolean) }),
-      }).then(r => r.ok ? r.json() : []),
+      }).then(r => { if (!r.ok) throw new Error('No se pudo cargar los datos del cliente'); return r.json() }),
       supabase.from('usuarios').select('id, nombre, color, telefono').eq('id', data.vendedorId).single(),
       data.transportistaId ? supabase.from('transportistas').select('id, nombre, rif, telefono, vehiculo, placa_chuto, placa_batea, color, color_batea, zona_cobertura, capacidad, vehiculo_habitual_id').eq('id', data.transportistaId).single() : Promise.resolve({ data: null }),
-      // Camión real del viaje (plan de flota) para imprimirlo en la nota
-      supabase.from('notas_despacho').select('vehiculo_id, vehiculo_viaje:vehiculos!notas_despacho_vehiculo_id_fkey(id, codigo, nombre, modelo, placa, placa_batea, color_batea, capacidad_kg)').eq('id', despachoId).maybeSingle(),
     ])
-    if (itemsRes.error) throw itemsRes.error
+    if (despachoRes.error || !despachoRes.data) throw new Error(despachoRes.error?.message || 'No se pudo leer el despacho actualizado')
+    const despReal = despachoRes.data
     const despachoObj = {
-      id: despachoId, numero, cotizacion_id: cotizacionId,
-      cliente_id: data.clienteId, vendedor_id: data.vendedorId, transportista_id: data.transportistaId,
-      forma_pago: JSON.stringify(formasPago), total_usd: totalConFlete, tasa_bcv_snapshot: tasa,
-      estado: 'pendiente', costo_envio_usd: 0, flete_usd: flete,
-      creado_en: new Date().toISOString(),
-      notas: notas || null,
+      ...despReal,
       cliente: clienteData?.[0] || null,
       vendedor: vendedorRes.data || null,
       transportista: transportistaRes.data || null,
-      vehiculo_id: vehiculoViajeRes?.data?.vehiculo_id || null,
-      vehiculo_viaje: vehiculoViajeRes?.data?.vehiculo_viaje || null,
+      vehiculo_viaje: despReal.vehiculo_viaje || null,
     }
+    const { itemsConsolidados } = await fetchDespachoConsolidado(despachoId, despachoObj)
     const generarFn = pdfType === 'orden' ? pdfModule.generarOrdenDespachoPDF : pdfModule.generarDespachoPDF
-
-    // Si el despacho tiene devoluciones, usar ítems consolidados
-    let finalItems = itemsRes.data ?? []
-    try {
-      const despCheck = await supabase.from('notas_despacho').select('tiene_devoluciones, total_usd').eq('id', despachoId).maybeSingle()
-      if (despCheck.data?.tiene_devoluciones) {
-        const { itemsConsolidados } = await fetchDespachoConsolidado(despachoId, { tiene_devoluciones: true })
-        finalItems = itemsConsolidados
-        if (despCheck.data.total_usd != null) {
-          despachoObj.total_usd = Number(despCheck.data.total_usd)
-        }
-      }
-    } catch (e) {
-      console.error('[VentaRapida] Error al consolidar ítems con devoluciones:', e)
-    }
-
-    return { generarFn, despachoObj, items: finalItems }
+    return { generarFn, despachoObj, items: itemsConsolidados }
   }
 
   async function handleDescargar(tipo) {
@@ -903,28 +886,30 @@ export default function VentaRapidaView() {
     }, {
       onSuccess: (result) => {
         clearDraft(perfil?.id)
-        // Guardar datos para el modal de éxito
-        setVentaExitosa({
-          numero: result.numero,
-          despachoId: result.id,
-          cotizacionId: result.cotizacionId,
-          clienteId: clienteId,
-          clienteNombre: clienteSeleccionado?.nombre,
-          vendedorId: perfil?.id,
-          transportistaId: transportistaId || null,
-          transportista: transportistaSeleccionado?.nombre || null,
-          flete,
-          corte,
-          items: items.map(it => ({ ...it })),
-          subtotal,
-          totalUsd,
-          totalBs,
-          tasa,
-          tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
-          tasaBcv: tasaHook.tasaBcv?.precio || 0,
-          formasPago: formasPagoFinales,
-          notas,
-        })
+        // En modo offline (_queued), no abrir modal de éxito con despachoId undefined
+        if (!result?._queued && result?.id) {
+          setVentaExitosa({
+            numero: result.numero,
+            despachoId: result.id,
+            cotizacionId: result.cotizacionId,
+            clienteId: clienteId,
+            clienteNombre: clienteSeleccionado?.nombre,
+            vendedorId: perfil?.id,
+            transportistaId: transportistaId || null,
+            transportista: transportistaSeleccionado?.nombre || null,
+            flete,
+            corte,
+            items: items.map(it => ({ ...it })),
+            subtotal,
+            totalUsd,
+            totalBs,
+            tasa,
+            tasaUsdt: tasaHook.tasaUsdt?.precio || 0,
+            tasaBcv: tasaHook.tasaBcv?.precio || 0,
+            formasPago: formasPagoFinales,
+            notas,
+          })
+        }
         // Reset form
         setStep(0)
         setClienteId('')

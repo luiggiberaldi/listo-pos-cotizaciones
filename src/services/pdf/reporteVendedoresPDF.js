@@ -190,10 +190,12 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
         doc.setTextColor(100, 116, 139)
         doc.setFontSize(5.5)
         const catPrincipal = config.comision_categoria_cabilla || 'Cabilla'
+        const localTotalComisionOtros = listToUse.reduce((s, v) => s + Number(v.comisionOtros || 0), 0)
         const kpiParts = [
           `${catPrincipal} 2%: ${fmtUsd(localTotalComisionCabilla2)}`,
           `3%: ${fmtUsd(localTotalComisionCabilla3)}`,
         ]
+        if (localTotalComisionOtros > 0) kpiParts.push(`Otros: ${fmtUsd(localTotalComisionOtros)}`)
         if (localTotalComisionSplit > 0) kpiParts.push(`Cliente ajeno: ${fmtUsd(localTotalComisionSplit)}`)
         doc.text(
           kpiParts.join(' | '),
@@ -458,7 +460,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
 
     // Variación vs período anterior
     if (v.variacionUsd !== null && v.variacionUsd !== undefined) {
-      const arrow = v.variacionUsd >= 0 ? '+' : ''
+      const arrow = v.variacionUsd > 0 ? '+' : v.variacionUsd < 0 ? '-' : ''
       const varText = `${arrow}${Math.abs(v.variacionUsd).toFixed(1)}% vs periodo anterior`
       doc.setFontSize(7)
       doc.setFont('helvetica', 'normal')
@@ -571,7 +573,7 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       doc.setTextColor(c.color[0], c.color[1], c.color[2])
       doc.text(c.value, bx2 + col2W - 3, cy, { align: 'right' })
     })
-    y += 34
+    y += 42
 
     // ── Top Clientes + Top Productos ──────────────────────────────────────────
     const col3W = (CONTENT_W - 4) / 2
@@ -629,7 +631,13 @@ export async function generarReporteVendedoresPDF({ data, config = {}, periodo =
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
       doc.setTextColor(...C_DARK)
-      doc.text('Historial de Despachos del Período', MARGIN, y + 4)
+      doc.text(
+        v.historial.length > 10
+          ? `Últimos 10 despachos del período (de ${v.historial.length})`
+          : `Historial de Despachos del Período (${v.historial.length})`,
+        MARGIN,
+        y + 4
+      )
       y += 8
 
       const hCols = [

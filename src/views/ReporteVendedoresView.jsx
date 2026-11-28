@@ -10,10 +10,16 @@ import { fmtUsdSimple as fmtUsd, fmtFecha } from '../utils/format'
 import { shouldIncludeReporteVendedor } from '../utils/reporteVendedoresAccess'
 import IndicadorActualizando from '../components/reportes/IndicadorActualizando'
 
-// ─── Helpers de rango ─────────────────────────────────────────────────────────
+// ─── Helpers de rango (hora Venezuela, evita salto nocturno UTC) ──────────────
+function fechaCaracasISO(d) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(d)
+}
+
 function getRango(tipo) {
-  const hoy = new Date()
-  const iso = (d) => d.toISOString().split('T')[0]
+  const hoyIso = fechaCaracasISO(new Date())
+  const [y, m, day] = hoyIso.split('-').map(Number)
+  const hoy = new Date(y, m - 1, day, 12, 0, 0)
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
   if (tipo === 'hoy') {
     const ayer = new Date(hoy)
@@ -357,12 +363,22 @@ export default function ReporteVendedoresView() {
   }, [])
 
   const handleExportPDF = async (tipo = 'general', vendedorId = null) => {
-    if (!data) return
+    if (!data || isPlaceholderData || isFetching) return
     setPdfLoading(vendedorId || tipo)
     try {
+      const freshRes = await refetch()
+      if (freshRes?.isError || !freshRes?.data) {
+        throw freshRes?.error || new Error('No se pudieron actualizar los datos del reporte.')
+      }
+      const freshData = freshRes.data
+      const visiblesPdf = (freshData.porVendedor || []).filter(v => shouldIncludeReporteVendedor(perfil?.rol, v))
+      const dataParaPdf = {
+        ...freshData,
+        porVendedor: visiblesPdf,
+      }
       const { generarReporteVendedoresPDF } = await import('../services/pdf/reporteVendedoresPDF')
       await generarReporteVendedoresPDF({
-        data,
+        data: dataParaPdf,
         config,
         periodo: { from: rango.from, to: rango.to },
         tipo,
@@ -389,7 +405,7 @@ export default function ReporteVendedoresView() {
             <div ref={exportDropdownRef} className="relative">
               <button
                 onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                disabled={pdfLoading !== null || isLoading || !data}
+                disabled={pdfLoading !== null || isLoading || isFetching || isPlaceholderData || !data}
                 className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-all hover:shadow-sm disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg,rgba(27,54,93,.07),rgba(184,134,11,.07))', border:'1px solid rgba(27,54,93,.2)', color:'#1B365D' }}
               >
