@@ -22,6 +22,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { showToast } from '../components/ui/Toast'
 import useAuthStore from '../store/useAuthStore'
 import { authFetch } from '../services/authFetch'
+import Auditoria2Panel from '../components/auditoria/Auditoria2Panel'
 
 // ─── Configuración de categorías ────────────────────────────────────────────
 const CATEGORIA_CONFIG = {
@@ -521,6 +522,7 @@ export default function AuditoriaView() {
   const [busqueda,     setBusqueda]     = useState('')
   const [filtroFecha,  setFiltroFecha]  = useState('')
   const [copiado,      setCopiado]      = useState(false)
+  const [tabAuditoria2, setTabAuditoria2] = useState('bitacora')
 
   const perfil = useAuthStore(s => s.perfil)
   const esRolAutorizado = ['jefe', 'administracion', 'supervisor', 'desarrollador'].includes(perfil?.rol)
@@ -1498,6 +1500,11 @@ export default function AuditoriaView() {
           ) : null
         }
       />
+
+      {/* Auditoría 2.0 (OP-2026-110): pestañas Cambios Antes/Después, Portero, Alertas y Sellos */}
+      {esRolAutorizado && (
+        <Auditoria2Panel tabActiva={tabAuditoria2} onCambiarTab={setTabAuditoria2} />
+      )}
 
       {/* KPIs: solo desarrollador */}
       {esDesarrollador && (

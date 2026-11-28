@@ -164,6 +164,16 @@ WHERE m.origen_tipo = 'reversion_inventario'
       AND a.accion = 'REVERSION_INVENTARIO'
       AND a.entidad_id = m.lote_id
   )
+UNION ALL
+-- W5: salud de Auditoría 2.0 (OP-2026-110) — despachos recientes sin rastro en auditoría
+SELECT 'W5_despachos_sin_auditoria', COUNT(*)::int,
+  COALESCE(jsonb_agg(jsonb_build_object('despacho', d.numero, 'id', d.id, 'creado_en', d.creado_en) ORDER BY d.creado_en DESC), '[]'::jsonb)
+FROM public.notas_despacho d
+WHERE d.creado_en > now() - interval '7 days'
+  AND NOT EXISTS (
+    SELECT 1 FROM public.auditoria a
+    WHERE a.entidad_id = d.id
+  )
 `
 
 // Replay canónico (idéntico al validado en release 12) + deltas por cliente.
@@ -241,6 +251,7 @@ if (comRows.length === 0) {
       W2_anuladas_con_comision: 'despachos ANULADOS con comisión viva (pendiente/cta_cobrar)',
       W3_sabados_sin_designacion: 'sábados con ventas entregadas comisionables pero SIN designación (split no aplicó)',
       W4_reversiones_sin_auditoria: 'reversiones de kardex sin fila REVERSION_INVENTARIO en auditoría (últimos 7d)',
+      W5_despachos_sin_auditoria: 'despachos creados en los últimos 7d sin rastro en auditoría',
     }
     const etiqueta = etiquetas[r.check_id] || r.check_id
     console.log(`⚠️ COMISIONES ${r.check_id}: ${r.n} caso(s) — ${etiqueta}.`)

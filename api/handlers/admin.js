@@ -548,6 +548,9 @@ export async function handleRestore(request, env) {
       apikey: env.SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
       'Content-Type': 'application/json',
+      // OP-2026-110: pausa las cámaras fila-por-fila durante la restauración masiva
+      // y deja una sola anotación resumida RESPALDO_RESTAURADO en la bitácora.
+      'X-Audit-Skip': '1',
     },
     body: JSON.stringify({ p_cuenta_id: user.id, p_tablas: tablas }),
   });
@@ -561,6 +564,24 @@ export async function handleRestore(request, env) {
     }
     return jsonError(`No se restauró nada (la operación se deshizo completa): ${msg}`, 400, request);
   }
+  const audRestore = registrarAuditoria(env, {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  }, {
+    usuarioId: user.operator_id || user.id,
+    usuarioNombre: user.operator_nombre || 'Administrador',
+    usuarioRol: user.operator_rol || 'jefe',
+    categoria: 'SISTEMA',
+    accion: 'RESPALDO_RESTAURADO',
+    descripcion: `Respaldo restaurado (${Object.keys(tablas).length} tablas)`,
+    entidadTipo: 'sistema',
+    entidadId: user.id,
+    meta: { resumen: r.resumen || {} },
+    ip: request.headers.get('cf-connecting-ip') || null,
+  }).catch(() => null);
+  if (typeof env?.waitUntil === 'function') env.waitUntil(audRestore);
+  else await audRestore;
   return json({ ok: true, resumen: r.resumen, secuencias: r.secuencias }, 200, request);
 }
 

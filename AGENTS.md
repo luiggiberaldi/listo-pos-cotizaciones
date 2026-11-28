@@ -70,3 +70,8 @@ Antes de cerrar cualquier cambio que toque reglas de ventas, pagos, inventario, 
 1. Revisar si alguno de los probadores/inspectores se ve afectado o necesita actualizarse.
 2. **Informar al usuario en lenguaje claro** qué probador se ve afectado, por qué y qué ajuste se hizo (o falta hacer).
 3. Dejar constancia en el documento del caso en `docs/operaciones/`.
+
+## Regla de cobertura de Auditoría 2.0 (OP-2026-110)
+
+- Toda **tabla nueva** que guarde datos del negocio debe llevar cámara automática (`trg_auditoria_camara`) o declararse explícitamente excluida.
+- Toda **acción nueva** registrada con `registrarAuditoria(...)` debe agregarse al catálogo (`auditoria_catalogo`) y usar `await` o `env.waitUntil(...)` (nunca suelta). Las pruebas `auditFase0Op109.test.js` y `auditoriaCoberturaOp110.test.js` lo verifican antes de publicar.

@@ -1,6 +1,6 @@
 # OP-2026-066 — Plan: Auditoría 2.0 (más completa, más rápida y que crece sola)
 
-**Fecha original:** 2026-11-24 · **Actualizado:** 2026-11-27 (con hallazgos de [OP-2026-108](../operaciones/OP-2026-108_auditoria-plan-auditoria-2.md)) · **Estado:** 🟡 Fase 0 aprobada y en ejecución (OP-2026-109); Fases 1–5 pendientes · **Origen:** [OP-2026-065](../operaciones/OP-2026-065_auditoria-que-no-registra.md)
+**Fecha original:** 2026-11-24 · **Actualizado:** 2026-11-27 (con hallazgos de [OP-2026-108](../operaciones/OP-2026-108_auditoria-plan-auditoria-2.md)) · **Estado:** ✅ Fases 0 a 5 completadas y verificadas en staging ([OP-2026-109](../operaciones/OP-2026-109_auditoria-fase-0.md) y [OP-2026-110](../operaciones/OP-2026-110_auditoria-2-completa-staging.md)); pendiente aprobación final para producción · **Origen:** [OP-2026-065](../operaciones/OP-2026-065_auditoria-que-no-registra.md)
 
 ## En resumen
 

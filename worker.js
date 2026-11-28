@@ -13,11 +13,12 @@ import { hashPinPBKDF2, verifyPinPBKDF2, generateSalt } from './api/lib/crypto.j
 import { verifyAuth, getOperatorRole, verifySupervisor, verifyPrivileged, validateOperator, supaServiceHeaders, SUPER_ADMIN_UUID } from './api/lib/auth.js'
 import { groqFetch, groqCounters } from './api/lib/groq.js'
 import { logToSystem, registrarAuditoria } from './api/lib/audit.js'
+import { registrarPeticionPortero } from './api/lib/portero.js'
 import { sendWebPush } from './api/lib/webpush.js'
 import { handleListarClientes, handleCheckRif, handleClientesLookup, handleReasignarCliente, handleReasignarClientesBulk, handleCrearCliente, handleActualizarCliente, handleBorrarCliente, handleActivarCliente, handleGetPrestamosCliente, handleDevolverPrestamo, handleFacturarPrestamo } from './api/handlers/clientes.js'
 import { handlePush } from './api/handlers/push.js'
 import { handleLogFromClient, handleGetLogs, handleGetLogStats, handleDownloadLogs, handleAnalyzeLogs, handlePurgeLogs } from './api/handlers/logs.js'
-import { handleGetAudit, handleGetAuditStats, handleAnalyzeAudit } from './api/handlers/audit.js'
+import { handleGetAudit, handleGetAuditStats, handleGetAuditCambios, handleGetAuditHistoria, handleGetAuditPeticiones, handleVerificarCadenaAuditoria, handleAnalyzeAudit } from './api/handlers/audit.js'
 import { handleGetComisionesConfig, handleGetComisiones, handleGetComisionesResumen } from './api/handlers/comisiones.js'
 import { handleRegistrarAbono, handleRevertirAbono, handleMovimientosBorradosCliente, handleRevertirCargoCxc, handleRegistrarSaldoFavor, handleCruzarSaldoFavor, handleRegistrarDevolucionCredito } from './api/handlers/cxc.js'
 import { handleSwitchOperator, handleClearOperator, handleGetOperators, handleSuperAdmin, handleCurrentOperator, handleGetTasaConfig } from './api/handlers/auth-operators.js'
@@ -513,12 +514,24 @@ const worker = {
       return handlePurgeLogs(request, env);
     }
 
-    // ── API: Auditoría completa ──────────────────────────────────────────
+    // ── API: Auditoría completa (Auditoría 2.0) ──────────────────────────
     if (url.pathname === '/api/admin/audit' && request.method === 'GET') {
       return handleGetAudit(request, env, url);
     }
     if (url.pathname === '/api/admin/audit/stats' && request.method === 'GET') {
       return handleGetAuditStats(request, env);
+    }
+    if (url.pathname === '/api/admin/audit/cambios' && request.method === 'GET') {
+      return handleGetAuditCambios(request, env, url);
+    }
+    if (url.pathname === '/api/admin/audit/historia' && request.method === 'GET') {
+      return handleGetAuditHistoria(request, env, url);
+    }
+    if (url.pathname === '/api/admin/audit/peticiones' && request.method === 'GET') {
+      return handleGetAuditPeticiones(request, env, url);
+    }
+    if (url.pathname === '/api/admin/audit/verificar-cadena' && request.method === 'GET') {
+      return handleVerificarCadenaAuditoria(request, env);
     }
     if (url.pathname === '/api/admin/audit/analyze' && request.method === 'POST') {
       return handleAnalyzeAudit(request, env);
@@ -689,10 +702,11 @@ const worker = {
   },
 
   async scheduled(event, env, ctx) {
+    const envCron = { ...env, auditContext: { operacionId: `cron-${Date.now()}`, source: 'cron' } };
     // 8:00 a. m. de Venezuela: resumen de cobranza a jefe y administración
     if (event.cron === CRON_AVISO_COBRANZA) {
       ctx.waitUntil(
-        runAvisoCobranza(env)
+        runAvisoCobranza(envCron)
           .then(res => console.log('[CRON AVISO_COBRANZA] Completado:', JSON.stringify(res)))
           .catch(err => console.error('[CRON AVISO_COBRANZA] Falló:', err?.message))
       );
@@ -700,8 +714,8 @@ const worker = {
     }
     ctx.waitUntil(
       Promise.allSettled([
-        runPurgeTrackingImages(env),
-        runCleanupCotizaciones(env)
+        runPurgeTrackingImages(envCron),
+        runCleanupCotizaciones(envCron)
       ]).then(results => {
         results.forEach((res, idx) => {
           const cronName = idx === 0 ? 'PURGE_IMAGES' : 'CLEANUP_COTIZACIONES';
@@ -716,6 +730,43 @@ const worker = {
   },
 };
 
-// Cronómetro (Server-Timing) en todas las rutas /api/: solo mide, no cambia respuestas.
-export default { ...worker, fetch: conCronometro(worker.fetch) };
+// Portero (Capa 2, OP-2026-110): inyecta operacionId + auditContext a todo /api/
+// y registra mutaciones, accesos denegados y errores en segundo plano (waitUntil).
+function conPortero(fetchFn) {
+  return async (request, env, ctx) => {
+    const url = new URL(request.url);
+    if (!url.pathname.startsWith('/api/') || request.method === 'OPTIONS') {
+      return fetchFn(request, env, ctx);
+    }
+    const inicio = Date.now();
+    const operacionId = request.headers.get('X-Request-Id') || crypto.randomUUID();
+    const auditContext = {
+      operacionId,
+      source: 'app',
+      cuentaId: null,
+      usuarioId: null,
+      usuarioNombre: null,
+      usuarioRol: null,
+    };
+    const envConCtx = { ...conWaitUntil(env, ctx), auditContext };
+    const res = await fetchFn(request, envConCtx, ctx);
+    const p = registrarPeticionPortero(envConCtx, {
+      operacionId,
+      cuentaId: auditContext.cuentaId,
+      metodo: request.method,
+      ruta: url.pathname,
+      status: res?.status || 500,
+      duracionMs: Date.now() - inicio,
+      usuarioId: auditContext.usuarioId,
+      usuarioNombre: auditContext.usuarioNombre,
+      usuarioRol: auditContext.usuarioRol,
+      ip: request.headers.get('CF-Connecting-IP') || null,
+    });
+    if (typeof envConCtx.waitUntil === 'function') envConCtx.waitUntil(p);
+    return res;
+  };
+}
+
+// Cronómetro (Server-Timing) + Portero en todas las rutas /api/.
+export default { ...worker, fetch: conCronometro(conPortero(worker.fetch)) };
 // Hot-reload trigger: fixed syntax in despachos.js

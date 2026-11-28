@@ -12,11 +12,20 @@ const userCache = new Map()
 export function invalidateOperatorCache() {}
 
 export function supaServiceHeaders(env) {
+  const ctx = env?.auditContext
+  const nombreSeguro = ctx?.usuarioNombre
+    ? String(ctx.usuarioNombre).replace(/[^\x20-\xFF]/g, '').slice(0, 120)
+    : null
   return {
     apikey: env.SUPABASE_SERVICE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     'Content-Type': 'application/json',
     Prefer: 'return=representation',
+    ...(ctx?.operacionId ? { 'X-Request-Id': String(ctx.operacionId) } : {}),
+    ...(ctx?.usuarioId ? { 'X-Operator-Id': String(ctx.usuarioId) } : {}),
+    ...(nombreSeguro ? { 'X-Operator-Nombre': nombreSeguro } : {}),
+    ...(ctx?.usuarioRol ? { 'X-Operator-Rol': String(ctx.usuarioRol) } : {}),
+    ...(ctx?.source ? { 'X-Audit-Source': String(ctx.source) } : {}),
   }
 }
 
@@ -98,6 +107,12 @@ export async function verifyAuth(request, env) {
     user.operator_session_expires_at = session.expiresAt
     user.operator_virtual_developer = session.virtualDeveloper
     user.operador = session.operator
+    if (env?.auditContext) {
+      env.auditContext.cuentaId = user.id
+      env.auditContext.usuarioId = session.operator.id
+      env.auditContext.usuarioNombre = session.operator.nombre
+      env.auditContext.usuarioRol = session.operator.rol
+    }
     return user
   } catch {
     return null
