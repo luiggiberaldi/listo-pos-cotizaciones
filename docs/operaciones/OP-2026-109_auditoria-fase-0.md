@@ -1,6 +1,6 @@
 # OP-2026-109 — Auditoría 2.0 (Fase 0): no perder anotaciones, alarma reparada, acceso para Administración y candado anti-borrado
 
-**Fecha:** 2026-11-27 · **Origen:** [OP-2026-065](OP-2026-065_auditoria-que-no-registra.md), [OP-2026-066](../plans/OP-2026-066_plan-auditoria-2.md) y [OP-2026-108](OP-2026-108_auditoria-plan-auditoria-2.md) · **Estado:** 🟡 Código, migración y pruebas listos en rama local (`docs/op-108-auditoria-plan-auditoria-2`); pendiente aplicar migración `319` y probar en vivo en staging antes de pasar a producción
+**Fecha:** 2026-11-27 · **Origen:** [OP-2026-065](OP-2026-065_auditoria-que-no-registra.md), [OP-2026-066](../plans/OP-2026-066_plan-auditoria-2.md) y [OP-2026-108](OP-2026-108_auditoria-plan-auditoria-2.md) · **Estado:** ✅ Aplicado y verificado **11/11 en vivo en staging** (`spupqgkdsgohxxfoxydl` / Worker `ac27f904`); producción sin tocar todavía (pendiente de tu aprobación para publicar)
 
 ## En resumen
 
@@ -46,10 +46,20 @@
 
 ## Verificación realizada
 
-- Pruebas unitarias y de guardia estática: **`139/139` archivos** en verde (incluyendo `audit.test.js` y `auditFase0Op109.test.js`).
-- Compilación del frontend (`npm run build`): verificada.
+- **Pruebas automáticas locales (`vitest`):** `139/139` archivos (`1.320/1.320` pruebas) en verde, incluyendo `audit.test.js` y `auditFase0Op109.test.js` (guardia estática contra llamadas sueltas).
+- **Compilación (`vite build` + PWA):** OK en raíz y en `construacero-staging/`.
+- **Despliegue en staging:**
+  - Base de datos `spupqgkdsgohxxfoxydl`: migración `329_staging_auditoria_inmutable_fase0.sql` aplicada (política `auditoria_jefe_all` reemplazada por `auditoria_jefe_select` y disparador `trg_auditoria_inmutable` activo).
+  - Worker `construacero-staging` desplegado en `https://construacero-staging.luigistorelogistics.workers.dev` (versión `ac27f904-4c13-4ce2-8345-fdb3a494a0f5`, con secreto `SUPABASE_SERVICE_KEY` cargado).
+- **Pruebas en vivo contra staging (`11/11` PASS, 0 filas residuales):**
+  1. `/api/ping` → `200 OK` apuntando a `spupqgkdsgohxxfoxydl`.
+  2. Inicio de sesión con PIN incorrecto → `401` y **`LOGIN_FALLIDO` guardado en `auditoria`** vía `waitUntil`.
+  3. Inicio de sesión con PIN válido (`administracion`) → `200` y **`LOGIN_EXITOSO` guardado en `auditoria`** vía `waitUntil`.
+  4. `GET /api/admin/audit` y `GET /api/admin/audit/stats` como `administracion` → `200 OK` (antes daba `403`).
+  5. Candado en base de datos bloqueó `UPDATE` y `DELETE` sobre `auditoria` con error `AUDITORIA_INMUTABLE` (`42501`).
+  6. Limpieza controlada con `SET LOCAL app.permitir_limpieza_auditoria = '1'` eliminó las 2 filas sintéticas de prueba (0 basura en staging).
 
 ## Pendiente / sin verificar
 
-- **No se ha aplicado todavía la migración `319` ni el código en staging ni en producción.**
-- Falta aplicar `319_auditoria_inmutable_fase0.sql` en staging, desplegar el Worker en staging, probar un inicio de sesión, creación de vehículo y lectura como `administracion`, y confirmar que el probador nocturno de staging corre 100 % verde antes de pedir aprobación para producción.
+- **Producción (`oyfyuszgjwcepjpngclv`) sigue intacta:** falta tu aprobación para abrir la solicitud de cambio a `main`, aplicar `319_auditoria_inmutable_fase0.sql` en producción (con respaldo previo) y publicar.
+- Confirmar la próxima corrida automática del **Probador nocturno en staging (1:00 a. m.)** tras la migración `329`.

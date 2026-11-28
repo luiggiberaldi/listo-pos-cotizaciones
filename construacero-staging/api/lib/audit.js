@@ -58,24 +58,24 @@ export async function registrarAuditoria(env, headers, { usuarioId, usuarioNombr
       }
       await logToSystem(env, {
         nivel: 'error',
-        origen: 'auditoria',
+        origen: 'worker',
         categoria: categoria || 'SISTEMA',
         mensaje: `Auditoría RECHAZADA (${response.status}) acción=${accion} categoría=${categoria}${rescatada ? ' — guardada como SISTEMA' : ' — NO se pudo rescatar'}: ${String(detalle).slice(0, 300)}`,
         endpoint: '/rest/v1/auditoria',
         usuario_id: usuarioId || null,
         usuario_nombre: usuarioNombre || null,
-        meta: { accion: accion || null, status: response.status, rescatada },
+        meta: { suborigen: 'auditoria', accion: accion || null, status: response.status, rescatada },
       });
     }
     return response;
   } catch (err) {
     await logToSystem(env, {
       nivel: 'error',
-      origen: 'auditoria',
+      origen: 'worker',
       categoria: categoria || 'SISTEMA',
       mensaje: `Auditoría SIN REGISTRAR (error de red) acción=${accion} categoría=${categoria}: ${err?.message || err}`,
       endpoint: '/rest/v1/auditoria',
-      meta: { accion: accion || null },
+      meta: { suborigen: 'auditoria', accion: accion || null },
     });
     return null;
   }

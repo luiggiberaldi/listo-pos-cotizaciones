@@ -62,6 +62,8 @@ export default {
 
     // ── API routes (wrapped in error logging) ────
     if (url.pathname.startsWith('/api/')) {
+      // OP-2026-109 (Auditoría 2.0 Fase 0): todas las rutas /api/ reciben waitUntil
+      env = conWaitUntil(env, ctx);
       try {
 
     // Guarda de escritura en el borde del router — cubre handlers que no pasan
