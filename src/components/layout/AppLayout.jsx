@@ -29,7 +29,7 @@ import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { showToast } from '../ui/Toast'
 import { NOTIF_TYPES, setNotificationUserId, startRealtimeNotifications, stopRealtimeNotifications } from '../../services/notificationService'
 import PendingQueueBadge from '../ui/PendingQueueBadge'
-import { StagingBadge } from '../ui/StagingBanner'
+import { StagingBadge, esEntornoStaging } from '../ui/StagingBanner'
 
 // ─── Formato de tiempo relativo para notificaciones ─────────────────────────
 function formatNotifTime(ts) {
@@ -320,11 +320,13 @@ export default function AppLayout() {
   // En móvil el drawer siempre muestra labels completos
   const collapsed = sidebarCollapsed && !menuOpen
 
+  const enStaging = esEntornoStaging()
+
   return (
-    <div className="flex h-screen h-[100dvh] pt-12 md:pt-14 overflow-hidden" style={{ background: '#f1f5f9' }}>
+    <div className={`flex h-screen h-[100dvh] ${enStaging ? 'pt-20 md:pt-[5.5rem]' : 'pt-12 md:pt-14'} overflow-hidden`} style={{ background: '#f1f5f9' }}>
 
       {/* ── Barra superior (móvil + desktop) ────────────────────────────── */}
-      <div className="fixed top-0 left-0 right-0 z-40 px-3 md:px-4 h-12 md:h-14 flex items-center justify-between gap-2 md:gap-4"
+      <div className={`fixed ${enStaging ? 'top-8' : 'top-0'} left-0 right-0 z-40 px-3 md:px-4 h-12 md:h-14 flex items-center justify-between gap-2 md:gap-4`}
         style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
 
         {/* Hamburger — solo móvil */}
@@ -537,7 +539,7 @@ export default function AppLayout() {
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}
           ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-64'}
           w-[85%] max-w-xs top-0 rounded-br-2xl rounded-tr-2xl
-          md:w-64 md:inset-y-0 md:rounded-none md:translate-x-0 md:static md:z-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-14
+          md:w-64 md:inset-y-0 md:rounded-none md:translate-x-0 md:static md:z-auto ${enStaging ? 'md:h-[calc(100vh-5.5rem)] md:top-[5.5rem]' : 'md:h-[calc(100vh-3.5rem)] md:top-14'} md:sticky
           overflow-hidden
         `}
         style={{

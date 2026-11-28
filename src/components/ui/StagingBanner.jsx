@@ -40,27 +40,19 @@ export default function StagingBanner() {
   if (!isStaging) return null
 
   return (
-    <>
-      <div
-        role="status"
-        aria-live="polite"
-        data-testid="staging-banner"
-        className="sticky top-0 z-[100] w-full min-h-8 bg-amber-400 text-slate-950 border-b-2 border-amber-600 shadow-md px-3 py-1 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 text-center"
-      >
-        <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-black uppercase tracking-wider">
-          <AlertTriangle size={14} className="shrink-0 text-amber-950" />
-          PROYECTO DE PRUEBAS (STAGING)
-        </span>
-        <span className="text-[11px] sm:text-xs font-semibold text-amber-950/90">
-          — Entorno de prueba: los cambios, ventas y PDFs aquí NO afectan producción.
-        </span>
-      </div>
-      <div
-        className="fixed bottom-3 left-3 z-[90] pointer-events-none select-none hidden sm:flex items-center gap-1.5 rounded-full bg-amber-400/95 text-slate-950 border border-amber-600 shadow-lg px-3 py-1 text-[10px] font-black uppercase tracking-wider"
-      >
-        <FlaskConical size={12} />
-        <span>STAGING · PROYECTO DE PRUEBAS</span>
-      </div>
-    </>
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="staging-banner"
+      className="fixed top-0 left-0 right-0 z-[100] h-8 bg-amber-400 text-slate-950 border-b-2 border-amber-600 shadow-md px-3 flex items-center justify-center gap-x-2 text-center overflow-hidden"
+    >
+      <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-black uppercase tracking-wider shrink-0">
+        <AlertTriangle size={14} className="shrink-0 text-amber-950" />
+        PROYECTO DE PRUEBAS (STAGING)
+      </span>
+      <span className="hidden sm:inline text-[11px] sm:text-xs font-semibold text-amber-950/90 truncate">
+        — Entorno de prueba: los cambios, ventas y PDFs aquí NO afectan producción.
+      </span>
+    </div>
   )
 }
