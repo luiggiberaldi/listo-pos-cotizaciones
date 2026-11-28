@@ -896,7 +896,7 @@ export default function ConfiguracionView() {
   const esTabForm = tab === 'comisiones' || tab === 'negocio'
 
   return (
-    <div className="p-3 sm:p-4 md:p-5 lg:p-6 max-w-4xl space-y-4">
+    <div className="p-3 sm:p-4 md:p-5 lg:p-6 max-w-6xl mx-auto space-y-4">
 
       {/* Encabezado */}
       <PageHeader
