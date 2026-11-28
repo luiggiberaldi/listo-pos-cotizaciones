@@ -5,9 +5,9 @@
 ## En resumen
 
 - De los **8 problemas principales** (3 serios + 5 medianos) detectados el 10 de noviembre en [OP-2026-023](OP-2026-023_auditoria-errores-e2e.md):
-  - **2 ya están resueltos y verificados hoy:** las funciones de dinero abiertas (`2.3`, cerradas en OP-085 / INC-004) y la prueba nocturna de staging (`3.2`, arreglada en OP-104 y verificada hoy 100 % verde en `#46112939562`).
-  - **2 problemas serios siguen abiertos hoy:** el **vigilante nocturno de saldos en producción sigue caído** (falló hoy mismo en `#46156349404` por llave vencida en GitHub) y los **avisos push al celular siguen sin llaves VAPID** en producción.
-  - **4 problemas medianos siguen abiertos:** la deuda al aprobar un despacho todavía va en un paso separado *"no crítico"*, la comisión del despacho anulado **#1898 (\$170,64) sigue `pendiente`**, quedan **23 productos activos con stock negativo** y **95 despachos pendientes + 4 despachados** con más de 30 días sin cerrar.
+  - **3 ya están resueltos en infraestructura/seguridad:** la llave del **vigilante nocturno de saldos (`2.1`) ya funciona** (corrida `#46156349404`, replay en `0.4 s`, `0` clientes divergentes y `0` huecos en Auditoría 2.0 `W5`), las funciones de dinero abiertas (`2.3`, cerradas en OP-085 / INC-004) y la prueba nocturna de staging (`3.2`, arreglada en OP-104 y verificada hoy 100 % verde en `#46112939562`).
+  - **1 problema serio sigue abierto hoy:** los **avisos push al celular siguen sin llaves VAPID** en producción (`2.2`).
+  - **4 problemas medianos siguen abiertos** (y **uno de ellos — `3.3` — es lo que pone en rojo al vigilante nocturno**): las **3 filas históricas de comisiones** (`#4020`, `#4179` con \$0,01 de redondeo y `#2121` con \$0,94 de más en liberado) + la comisión del despacho anulado **#1898 (\$170,64) aún `pendiente`**; la deuda al aprobar un despacho todavía va en un paso separado *"no crítico"*; quedan **23 productos activos con stock negativo** y **95 despachos pendientes + 4 despachados** con más de 30 días sin cerrar.
 - De los asuntos menores, siguen abiertos: búsquedas sin sanear en 3 archivos, `4.042` sesiones de PIN vencidas acumuladas sin limpieza, ventas rápidas sin conexión (`N40`) y registros de error del Worker sin `[observability]`.
 
 ---
@@ -16,7 +16,7 @@
 
 | Punto OP-023 | Gravedad | Estado real hoy (28-nov-2026) | Evidencia verificada |
 |---|---|---|---|
-| **2.1 Vigilante nocturno de saldos (`auditor-saldos-main.yml`)** | 🔴 Serio | **Sigue caído** | Corrida `#46156349404` (28-nov) falló en 15 s. Falta actualizar el secreto `MAIN_SUPABASE_ACCESS_TOKEN` en GitHub. |
+| **2.1 Vigilante nocturno de saldos (`auditor-saldos-main.yml`)** | 🟢 Llave renovada (falla por datos `3.3`) | **Conectado y funcionando** | Corrida `#46156349404` (28-nov) se conectó OK en `0.4 s` (`✅ SALDOS: 0 divergentes`, `✅ W5: 0`). Sale en rojo **únicamente** por las 3 filas históricas de comisiones (`C1`/`C2`) del punto `3.3`. |
 | **2.2 Avisos al celular (Push / VAPID)** | 🔴 Serio | **Sigue abierto** | `wrangler secret list` solo tiene 5 secretos; faltan `VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY` en Cloudflare y en `deploy-worker.yml`. |
 | **2.3 Funciones abiertas (`registrar_cargo_cxc`, `registrar_pago_comision`)** | 🟢 Resuelto | **Cerradas en producción** | `has_function_privilege('anon', ...)` = `false` en ambas (cerrado en OP-2026-085 / INC-004). |
 | **3.1 Cargo CxC al aprobar despacho en paso aparte** | 🟠 Mediano | **Sigue abierto** | `api/handlers/despachos.js:1279-1455` mantiene `/* no crítico — no bloquear aprobación por error CxC */`. |
