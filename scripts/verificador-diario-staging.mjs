@@ -182,7 +182,7 @@ async function leerDiaProduccion() {
       ? await prodSelectSql(`SELECT * FROM transportistas WHERE id IN (${transpIds})`)
       : []
     const tasaRows = await prodSelectSql(`
-      SELECT tasa_bcv, tasa_usdt, tasa_cambio, tasa_manual FROM configuracion_negocio
+      SELECT * FROM configuracion_negocio
       WHERE cuenta_id = '${PROD_CUENTA_ID}' LIMIT 1
     `)
     return { despachos, cotizaciones, transportistas, items, devoluciones, movsCxc, clientes, histCxc, productos, config: tasaRows[0] || {} }
