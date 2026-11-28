@@ -73,7 +73,7 @@ export function fmtFecha(f, variant) {
     dateObj = f
   } else {
     const raw = String(f).trim()
-    const dateStr = raw.includes('T') || raw.includes(' ') ? raw : `${raw}T12:00:00Z`
+    const dateStr = raw.includes('T') || raw.includes(' ') ? raw : `${raw}T12:00:00-04:00`
     dateObj = new Date(dateStr)
     if (isNaN(dateObj.getTime())) {
       dateObj = new Date(raw)
@@ -81,13 +81,14 @@ export function fmtFecha(f, variant) {
   }
   if (isNaN(dateObj.getTime())) return '—'
 
+  const tzOpt = { timeZone: 'America/Caracas' }
   if (variant === 'short-month') {
-    return dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Caracas' })
+    return dateObj.toLocaleDateString('es-VE', { ...tzOpt, day: '2-digit', month: 'short', year: 'numeric' })
   }
   if (variant === 'short') {
-    return dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'America/Caracas' })
+    return dateObj.toLocaleDateString('es-VE', { ...tzOpt, day: '2-digit', month: '2-digit', year: '2-digit' })
   }
-  return dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Caracas' })
+  return dateObj.toLocaleDateString('es-VE', { ...tzOpt, day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 export function fmtFechaCorta(f) {
@@ -614,4 +615,17 @@ export function drawPremiumFooter(doc, config, customBgColor = [255, 255, 255], 
       doc.text(`Página ${p} de ${totalPages}`, pw - 10, ph - 2.5, { align: 'right' })
     }
   }
+}
+
+// ─── Ajuste de texto en tablas ───────────────────────────────────────────────
+/** Parte un texto en líneas que caben en `width` mm con la fuente actual del doc. */
+export function wrapLines(doc, text, width) {
+  const t = String(text ?? '')
+  return doc.splitTextToSize(t === '' ? '—' : t, Math.max(width, 4))
+}
+
+/** Alto de una fila de tabla según la celda con más líneas. */
+export function rowHeight(cellsLines, minH = 6, lineH = 2.9, pad = 3) {
+  const n = Math.max(1, ...cellsLines.map(l => l.length))
+  return Math.max(minH, n * lineH + pad)
 }

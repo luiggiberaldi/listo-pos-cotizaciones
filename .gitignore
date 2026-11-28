@@ -86,6 +86,7 @@ __tests__/
 !docs/decisiones/*.md
 !docs/incidentes/*.md
 !docs/operaciones/*.md
+!docs/operaciones/reportes-diarios/*.md
 !docs/history/2026-04-25-roadmap-fases-producto.md
 
 # Release evidence and selected commission regressions
@@ -228,6 +229,7 @@ outputs/
 # Release 17 — smokes de verificación post-ventana (producción)
 !scripts/smoke-release17-produccion.mjs
 !scripts/smoke-cxc-reporte-produccion.mjs
+!scripts/verificador-diario-staging.mjs
 
 # Copias de seguridad y respaldos locales (nunca se suben)
 construacero-backups/
@@ -271,7 +273,7 @@ construacero-backups/
 !src/utils/__tests__/op087StockPorAprobar.test.js
 !api/handlers/__tests__/produccion097SeguridadYRespaldo.test.js
 
-# OP-2026-101: plan integral de arreglo de los 19 PDFs en staging
+# OP-2026-101: plan integral de arreglo de los 19 PDFs en staging y publicación a producción
 !docs/plans/OP-2026-101_plan-fixeo-integral-pdfs-staging.md
 !src/services/__tests__/
 !src/services/__tests__/listaPreciosPDF.test.js
@@ -279,3 +281,7 @@ construacero-backups/
 !src/services/__tests__/op101Fase3Financieros.test.js
 !src/services/__tests__/op101Fase4CatalogosFlota.test.js
 !src/utils/__tests__/comisionesYExternosPaginacionPdf.test.js
+
+# OP-2026-102: optimización de impresión PDF de Clientes y Personal
+!src/services/__tests__/clientesPersonalPdf.test.js
+!src/utils/__tests__/clientesListado.test.js

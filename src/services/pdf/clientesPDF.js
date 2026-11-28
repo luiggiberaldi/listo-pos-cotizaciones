@@ -1,42 +1,23 @@
 // src/services/pdf/clientesPDF.js
-// Genera PDF profesional del Listado Detallado de Clientes o Personal — Construacero Carabobo
+// Genera PDF optimizado para impresión (bajo consumo de tinta) del Listado de Clientes y Personal — Construacero Carabobo
 import { jsPDF } from 'jspdf'
-import { cargarLogo } from './pdfLogo'
-import { WATERMARK_LOGO } from './watermarkBase64'
+import { LOGO_LISTA_PRECIOS } from './logoListaPreciosBase64'
 import {
-  PAGE_W, PAGE_H, MARGIN, CONTENT_W,
-  C_PRIMARY, C_DARK, C_WHITE, C_EMERALD, C_AMBER, C_GRAY,
-  drawPremiumHeader, drawSimplifiedHeader, fmtFecha, fmtTelefono, fechaArchivoCaracas
+  MARGIN, CONTENT_W,
+  C_DARK, C_GRAY,
+  drawPremiumHeader, drawSimplifiedHeader, drawPremiumFooter, drawWatermark, checkPage,
+  fmtFecha, fmtTelefono, fechaArchivoCaracas, wrapLines, rowHeight,
 } from './pdfShared'
 
-function drawHeader(doc, logoData, config, title = 'Base de Datos de Clientes', filtroTexto = '') {
-  const fechaSub = `Generado: ${new Date().toLocaleDateString('es-VE', { timeZone: 'America/Caracas', day: '2-digit', month: 'short', year: 'numeric' })}`
-  const subtitle = filtroTexto ? `${fechaSub} · ${filtroTexto}` : fechaSub
-  return drawPremiumHeader({
-    doc,
-    logoData,
-    config,
-    title,
-    subtitle,
-  })
-}
-
-function drawFooter(doc, config) {
-  const totalPages = doc.internal.getNumberOfPages()
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p)
-    doc.setDrawColor(...C_PRIMARY)
-    doc.setLineWidth(0.5)
-    doc.line(MARGIN, PAGE_H - 15, MARGIN + CONTENT_W, PAGE_H - 15)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C_GRAY)
-    let footName = config?.nombre_negocio || 'Construacero Carabobo C.A.'
-    if (footName.trim().toUpperCase() === 'PRUEBA' || footName.trim() === '') footName = 'Construacero Carabobo C.A.'
-    doc.text(footName, MARGIN, PAGE_H - 10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' })}`, MARGIN, PAGE_H - 6)
-    doc.text(`Página ${p} de ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' })
-  }
+/** Devuelve YYYY-MM en hora de Venezuela (America/Caracas) para comparar registros del mes actual. */
+function mesAnioCaracas(fecha) {
+  const d = fecha instanceof Date ? fecha : new Date(fecha)
+  if (Number.isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Caracas',
+    year: 'numeric',
+    month: '2-digit',
+  }).format(d)
 }
 
 export async function generarClientesPDF({
@@ -44,54 +25,76 @@ export async function generarClientesPDF({
   config = {},
   action = 'download',
   title = 'Base de Datos de Clientes',
+  filtroResumen = '',
   filtroTexto = '',
-}) {
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
-  const logoData = await cargarLogo(config?.logo_url)
+  comprimir = true,
+} = {}) {
+  const safeConfig = config || {}
   const isPersonalReport = title === 'Reporte de Personal'
+  const logoData = LOGO_LISTA_PRECIOS
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: comprimir })
 
-  let y = drawHeader(doc, logoData, config, title, filtroTexto)
+  const fechaTxt = new Date().toLocaleDateString('es-VE', {
+    timeZone: 'America/Caracas',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+  const resumen = filtroResumen || filtroTexto
+  const subtitle = resumen
+    ? `Generado: ${fechaTxt}\n${resumen}`
+    : `Generado: ${fechaTxt}`
 
-  const dibujarWatermark = () => {
-    try {
-      const gState = new doc.GState({ opacity: 0.06 })
-      doc.setGState(gState)
-      doc.addImage(WATERMARK_LOGO, 'PNG', (PAGE_W - 140) / 2, (PAGE_H - 140) / 2, 140, 140)
-      doc.setGState(new doc.GState({ opacity: 1 }))
-    } catch (_) {}
-  }
+  // Encabezado blanco/negro de bajo consumo de tinta (igual a Transportistas, Artículos Externos y Ventas)
+  let y = drawPremiumHeader({
+    doc,
+    logoData,
+    config: safeConfig,
+    title,
+    subtitle,
+    customBgColor:       [255, 255, 255],
+    customAccentColor:   [0, 0, 0],
+    customTextColor:     [0, 0, 0],
+    customSubtitleColor: [0, 0, 0],
+    customBorderColor:   [0, 0, 0],
+    centerBusinessName:  true,
+  })
+  drawWatermark(doc)
 
-  dibujarWatermark()
-
-  // KPIs (calculados en hora America/Caracas)
+  // KPIs en cajas claras con borde fino (sin bloques sólidos oscuros)
   const totalClientes = items.length
   const activos = items.filter(c => c.activo).length
-  const mesActualVe = fechaArchivoCaracas().slice(0, 7)
+  const mesActual = mesAnioCaracas(new Date())
   const nuevosEsteMes = items.filter(c => {
     if (!c.creado_en) return false
-    return fechaArchivoCaracas(c.creado_en).slice(0, 7) === mesActualVe
+    return mesAnioCaracas(c.creado_en) === mesActual
   }).length
+
+  const kpis = [
+    { label: isPersonalReport ? 'Total Personal' : 'Total Clientes', value: String(totalClientes) },
+    { label: isPersonalReport ? 'Personal Activo' : 'Clientes Activos', value: String(activos) },
+    { label: 'Nuevos Este Mes', value: String(nuevosEsteMes) },
+  ]
 
   const kpiBoxW = CONTENT_W / 3
   const kpiBoxH = 15
 
-  const kpis = [
-    { label: isPersonalReport ? 'Total Personal' : 'Total Clientes', value: String(totalClientes), color: C_PRIMARY },
-    { label: isPersonalReport ? 'Personal Activo' : 'Clientes Activos', value: String(activos), color: C_EMERALD },
-    { label: 'Nuevos Este Mes', value: String(nuevosEsteMes), color: C_AMBER },
-  ]
-
   kpis.forEach((kpi, i) => {
     const bx = MARGIN + i * kpiBoxW
-    doc.setFillColor(kpi.color[0], kpi.color[1], kpi.color[2])
-    doc.roundedRect(bx + 1, y, kpiBoxW - 2, kpiBoxH, 2, 2, 'F')
+    doc.setFillColor(248, 250, 252)
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(bx + 1, y, kpiBoxW - 2, kpiBoxH, 2, 2, 'FD')
+
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.5)
-    doc.setTextColor(...C_WHITE)
-    doc.text(kpi.label, bx + 4, y + 4.5)
+    doc.setTextColor(71, 85, 105)
+    doc.text(kpi.label, bx + 4, y + 5.2)
+
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.text(kpi.value, bx + 4, y + 10.5)
+    doc.setFontSize(11)
+    doc.setTextColor(...C_DARK)
+    doc.text(kpi.value, bx + 4, y + 11.8)
   })
 
   y += kpiBoxH + 8
@@ -116,78 +119,92 @@ export async function generarClientesPDF({
   ]
 
   function drawTableHeaders(yPos) {
-    doc.setFillColor(240, 242, 245)
+    doc.setFillColor(241, 245, 249)
     doc.rect(MARGIN, yPos, CONTENT_W, 7, 'F')
     doc.setDrawColor(210, 215, 225)
     doc.setLineWidth(0.3)
     doc.line(MARGIN, yPos + 7, MARGIN + CONTENT_W, yPos + 7)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
-    doc.setTextColor(80, 90, 110)
-    cols.forEach(col => doc.text(col.label, col.x + 1, yPos + 5))
+    doc.setTextColor(...C_DARK)
+    cols.forEach(col => doc.text(col.label, col.x + 1, yPos + 4.8))
     return yPos + 8
   }
 
+  const contTitle = isPersonalReport ? 'Reporte de Personal (Cont.)' : 'Base de Datos de Clientes (Cont.)'
+  const onNewPage = (d) => {
+    const nextY = drawSimplifiedHeader(d, logoData, safeConfig, contTitle, [255, 255, 255], [0, 0, 0])
+    return drawTableHeaders(nextY + 2)
+  }
+  const bottomMargin = () => (doc.internal.getCurrentPageInfo().pageNumber === 1 ? 35 : 14)
+
   y = drawTableHeaders(y)
 
-  items.forEach((item, idx) => {
-    const codStr = String(item.codigo_cliente || '—')
-    const rifStr = String(item.rif_cedula || '—')
-    const nombreStr = String(item.nombre || '—').toUpperCase()
-    const tipoStr = isPersonalReport
-      ? String(item.categoria || '—').toUpperCase()
-      : (item.tipo_cliente === 'juridico' ? 'JURÍDICO' : 'NATURAL')
-    const telStr = fmtTelefono(item.telefono)
-    const vendStr = String(item.vendedor?.nombre || item.vendedor_nombre || '—')
-    const fechaReg = item.creado_en ? fmtFecha(item.creado_en) : '—'
+  if (items.length === 0) {
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(8)
+    doc.setTextColor(...C_GRAY)
+    doc.text('No hay registros que coincidan con los filtros seleccionados.', MARGIN + 2, y + 5)
+  } else {
+    items.forEach((item, idx) => {
+      const tipo = isPersonalReport
+        ? (item.categoria || '—').toUpperCase()
+        : (item.tipo_cliente === 'juridico' ? 'JURÍDICO' : 'NATURAL')
+      const vend = item.vendedor?.nombre || item.vendedor_nombre || '—'
+      const fechaReg = item.creado_en ? fmtFecha(item.creado_en) : '—'
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
-    const nombreLines = doc.splitTextToSize(nombreStr, cols[2].w - 2)
-    doc.setFont('helvetica', 'normal')
-    const celdas = [
-      doc.splitTextToSize(codStr, cols[0].w - 2),
-      doc.splitTextToSize(rifStr, cols[1].w - 2),
-      nombreLines,
-      doc.splitTextToSize(tipoStr, cols[3].w - 2),
-      doc.splitTextToSize(telStr, cols[4].w - 2),
-      doc.splitTextToSize(vendStr, cols[5].w - 2),
-      doc.splitTextToSize(fechaReg, cols[6].w - 2),
-    ]
-    const nLineas = Math.max(1, ...celdas.map(l => l.length))
-    const rowH = Math.max(6, nLineas * 2.9 + 2.8)
+      // Los textos largos se parten en varias líneas (nunca se recortan)
+      doc.setFontSize(6.5)
+      doc.setFont('helvetica', 'normal')
+      const celdas = [
+        wrapLines(doc, item.codigo_cliente || '—', cols[0].w - 2),
+        wrapLines(doc, item.rif_cedula || '—', cols[1].w - 2),
+        null,
+        wrapLines(doc, tipo, cols[3].w - 2),
+        wrapLines(doc, fmtTelefono(item.telefono), cols[4].w - 2),
+        wrapLines(doc, vend, cols[5].w - 2),
+        wrapLines(doc, fechaReg, cols[6].w - 2),
+      ]
+      doc.setFont('helvetica', 'bold')
+      celdas[2] = wrapLines(doc, (item.nombre || '—').toUpperCase(), cols[2].w - 2)
+      const alto = rowHeight(celdas)
 
-    if (y + rowH > PAGE_H - 22) {
-      doc.addPage()
-      dibujarWatermark()
-      y = drawSimplifiedHeader(doc, logoData, config, `${title} (Cont.)`)
-      y = drawTableHeaders(y + 2)
-    }
+      y = checkPage(doc, y, alto + 1, onNewPage, bottomMargin())
 
-    if (idx % 2 === 0) {
-      doc.setFillColor(252, 252, 253)
-      doc.rect(MARGIN, y - 1, CONTENT_W, rowH, 'F')
-    }
+      if (idx % 2 === 0) {
+        doc.setFillColor(248, 250, 252)
+        doc.rect(MARGIN, y - 1, CONTENT_W, alto, 'F')
+      }
 
-    doc.setFontSize(6.5)
-    doc.setTextColor(...C_DARK)
-    celdas.forEach((lineas, i) => {
-      doc.setFont('helvetica', i === 2 ? 'bold' : 'normal')
-      doc.text(lineas, cols[i].x + 1, y + 3, { lineHeightFactor: 1.15 })
+      doc.setFontSize(6.5)
+      doc.setTextColor(...C_DARK)
+      celdas.forEach((lineas, i) => {
+        doc.setFont('helvetica', i === 2 ? 'bold' : 'normal')
+        doc.text(lineas, cols[i].x + 1, y + 3, { lineHeightFactor: 1.15 })
+      })
+
+      doc.setDrawColor(226, 232, 240)
+      doc.setLineWidth(0.2)
+      doc.line(MARGIN, y + alto - 1, MARGIN + CONTENT_W, y + alto - 1)
+
+      y += alto
     })
+  }
 
-    y += rowH
-  })
+  // Pie de página corporativo blanco/negro (igual a todos los reportes optimizados)
+  drawPremiumFooter(doc, safeConfig, [255, 255, 255], [0, 0, 0], [0, 0, 0])
 
-  drawFooter(doc, config)
+  const filePrefix = isPersonalReport ? 'Reporte_de_Personal' : 'Base_de_Datos_Clientes'
+  const filename = `${filePrefix}_${fechaArchivoCaracas()}`
 
-  const prefix = isPersonalReport ? 'Reporte_de_Personal' : 'Base_de_Datos_Clientes'
-  const filename = `${prefix}_${fechaArchivoCaracas()}`
+  if (action === 'return') {
+    return { doc, filename: `${filename}.pdf`, blob: doc.output('blob') }
+  }
 
   if (action === 'print') {
     doc.autoPrint()
     const blobUrl = doc.output('bloburl')
-    if (blobUrl) {
+    if (typeof document !== 'undefined' && blobUrl) {
       const iframe = document.createElement('iframe')
       iframe.style.position = 'fixed'
       iframe.style.right = '0'
@@ -201,7 +218,7 @@ export async function generarClientesPDF({
         iframe.contentWindow.focus()
         iframe.contentWindow.print()
         setTimeout(() => {
-          document.body.removeChild(iframe)
+          try { document.body.removeChild(iframe) } catch { /* ya removido */ }
           URL.revokeObjectURL(blobUrl)
         }, 10000)
       }
@@ -209,4 +226,6 @@ export async function generarClientesPDF({
   } else {
     doc.save(`${filename}.pdf`)
   }
+
+  return { doc, filename: `${filename}.pdf` }
 }

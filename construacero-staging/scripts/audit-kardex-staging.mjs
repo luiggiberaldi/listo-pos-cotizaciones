@@ -319,12 +319,18 @@ export async function main() {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   })
 
-  let tenantId = null
+  let tenantId = config.STAGING_AUDIT_TENANT_ID || config.STAGING_E2E_TENANT_ID || null
   if (!config.serviceKey) {
     if (!config.email || !config.password) throw new Error('Sin service key: faltan STAGING_AUDIT_EMAIL/STAGING_E2E_PASSWORD')
     const login = await client.auth.signInWithPassword({ email: config.email.trim().toLowerCase(), password: config.password })
     if (login.error) throw new Error(`Login staging rechazado: ${login.error.message}`)
     tenantId = login.data.user?.id || null
+  } else if (!tenantId && config.STAGING_AUDIT_ALL_TENANTS !== 'true' && config.email) {
+    // OP-2026-104: en modo service_role, acotar por defecto al tenant E2E (staging-e2e@listo.sys)
+    // para que las copias históricas de otras cuentas en staging no generen falsos positivos nocturnos.
+    const { data: usersPage } = await client.auth.admin.listUsers({ page: 1, perPage: 100 })
+    const match = (usersPage?.users || []).find(u => (u.email || '').toLowerCase() === config.email.trim().toLowerCase())
+    if (match?.id) tenantId = match.id
   }
 
   const [products, movements, loans] = await Promise.all([

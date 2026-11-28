@@ -1,0 +1,74 @@
+name: Verificador diario de ventas en staging (12 a.m. L-S)
+
+on:
+  schedule:
+    # 12:00 a. m. hora Venezuela (04:00 UTC) de martes a domingo → revisa las ventas de lunes a sábado (omite domingos).
+    - cron: "0 4 * * 2,3,4,5,6,0"
+  workflow_dispatch:
+    inputs:
+      fecha:
+        description: "Fecha específica a verificar (AAAA-MM-DD, opcional; por defecto ayer hora Venezuela)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verificador-diario-staging
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    name: Replicar y verificar ventas del día en staging (sin tocar producción)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MAIN_PROJECT_REF: oyfyuszgjwcepjpngclv
+      STAGING_PROJECT_REF: spupqgkdsgohxxfoxydl
+      MAIN_SUPABASE_ACCESS_TOKEN: ${{ secrets.MAIN_SUPABASE_ACCESS_TOKEN }}
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_SERVICE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_KEY }}
+      TARGET_DATE: ${{ inputs.fecha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias (para validar PDFs reales)
+        run: npm ci
+
+      - name: Validar guardas de entorno
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$MAIN_SUPABASE_ACCESS_TOKEN" || { echo 'Falta MAIN_SUPABASE_ACCESS_TOKEN'; exit 1; }
+          test -n "$STAGING_SUPABASE_URL" || { echo 'Falta STAGING_SUPABASE_URL'; exit 1; }
+          test -n "$STAGING_SUPABASE_SERVICE_KEY" || { echo 'Falta STAGING_SUPABASE_SERVICE_KEY'; exit 1; }
+          test "$STAGING_SUPABASE_URL" = "https://${STAGING_PROJECT_REF}.supabase.co" || {
+            echo "Guardia CI: STAGING_SUPABASE_URL no apunta a staging ($STAGING_PROJECT_REF)"
+            exit 1
+          }
+
+      - name: Ejecutar verificador diario (solo lectura en producción → réplica y cuadre en staging)
+        run: node scripts/verificador-diario-staging.mjs
+
+      - name: Guardar reporte diario en el repositorio
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "construacero-bot"
+          git config user.email "bot@construacero.local"
+          git add docs/operaciones/reportes-diarios/
+          if ! git diff --cached --quiet; then
+            git commit -m "docs(op-103): reporte diario de verificacion en staging [skip ci]"
+            git push
+          else
+            echo "Sin cambios nuevos en reportes diarios."
+          fi

@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { Users, Plus, Search, RefreshCw, X, Filter, ChevronDown, Check, AlertCircle, Trash2, UserCheck, FileText, Printer, Handshake, DollarSign } from 'lucide-react'
 import useAuthStore from '../store/useAuthStore'
 import { useClientes, useVendedores, useBorrarCliente, useActivarCliente } from '../hooks/useClientes'
-import { buscarClientes } from '../utils/clienteSearch'
+import { filtrarClientes, resumenFiltrosClientes } from '../utils/clientesListado'
 import { limpiarVistaListaGuardada } from '../utils/vistaCuadricula'
 import { useConfigNegocio } from '../hooks/useConfigNegocio'
 import ClienteCard       from '../components/clientes/ClienteCard'
@@ -150,37 +150,35 @@ export default function ClientesView() {
   const [exportandoPDF, setExportandoPDF] = useState(false)
   const [imprimiendoPDF, setImprimiendoPDF] = useState(false)
 
+  const opcionesFiltro = useMemo(() => ({
+    esPersonal: false,
+    mostrarToggle,
+    verTodos,
+    perfilId: perfil?.id,
+    busqueda,
+    filtroTipo,
+    filtroVendedor,
+    filtroConDeuda,
+    filtroConPrestamo,
+    filtroSaldoFavor,
+    filtroEstado,
+  }), [mostrarToggle, verTodos, perfil?.id, busqueda, filtroTipo, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado])
+
   async function exportarClientesPDF(accion = 'download') {
     if (accion === 'print') setImprimiendoPDF(true)
     else setExportandoPDF(true)
     try {
-      const freshRes = await refetch()
-      if (freshRes?.isError) throw freshRes.error || new Error('No se pudo actualizar el listado de clientes.')
-      const base = Array.isArray(freshRes?.data) ? freshRes.data : clientes
-      const filtradosFrescos = base.filter(c => {
-        if (c.tipo_cliente === 'personal') return false
-        if (mostrarToggle && !verTodos && !busqueda.trim() && c.vendedor_id !== perfil?.id) return false
-        if (filtroTipo && c.tipo_cliente !== filtroTipo) return false
-        if (filtroVendedor && c.vendedor_id !== filtroVendedor) return false
-        if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0)) return false
-        if (filtroConPrestamo && !c.tiene_prestamos_activos) return false
-        if (filtroSaldoFavor && !(Number(c.saldo_a_favor || 0) > 0)) return false
-        if (filtroEstado === 'activos' && !c.activo) return false
-        if (filtroEstado === 'desactivados' && c.activo) return false
-        return true
-      })
-      const itemsExport = busqueda.trim() ? buscarClientes(filtradosFrescos, busqueda) : filtradosFrescos
-      const partesFiltro = [
-        mostrarToggle && !verTodos && !busqueda.trim() ? 'Solo mis clientes' : 'Todos los clientes',
-        filtroEstado === 'activos' ? 'Activos' : filtroEstado === 'desactivados' ? 'Desactivados' : null,
-        filtroConDeuda ? 'Con deuda' : null,
-        filtroConPrestamo ? 'Con préstamo' : null,
-        filtroSaldoFavor ? 'Con saldo a favor' : null,
-        busqueda.trim() ? `Búsqueda: "${busqueda.trim()}"` : null,
-      ].filter(Boolean)
-
+      let listaBase = clientes
+      try {
+        const fresh = await refetch()
+        if (Array.isArray(fresh?.data)) listaBase = fresh.data
+      } catch {
+        // En modo offline se exporta con la lista ya cargada en pantalla
+      }
+      const itemsExport = filtrarClientes(listaBase, opcionesFiltro)
+      const filtroResumen = resumenFiltrosClientes({ ...opcionesFiltro, vendedores, esExterno })
       const { generarClientesPDF } = await import('../services/pdf/clientesPDF')
-      await generarClientesPDF({ items: itemsExport, config, filtroTexto: partesFiltro.join(' · '), action: accion })
+      await generarClientesPDF({ items: itemsExport, config, action: accion, filtroResumen })
     } catch (err) {
       import('../components/ui/Toast').then(({ showToast }) =>
         showToast('Error al generar el PDF: ' + err.message, 'error')
@@ -192,52 +190,10 @@ export default function ClientesView() {
   }
 
   // Filtrado local y ordenamiento (clientes con deuda o préstamos activos primero)
-  const clientesFiltrados = useMemo(() => {
-    const list = clientes.filter(c => {
-      // Excluir personal de la lista general de clientes
-      if (c.tipo_cliente === 'personal') return false
-      // Supervisor/dev con toggle en "Mis datos": solo ver propios (a menos que haya una búsqueda activa)
-      if (mostrarToggle && !verTodos && !busqueda.trim() && c.vendedor_id !== perfil?.id) return false
-      if (filtroTipo     && c.tipo_cliente !== filtroTipo)               return false
-      if (filtroVendedor && c.vendedor_id  !== filtroVendedor)           return false
-      if (filtroConDeuda && !(Number(c.saldo_pendiente || 0) > 0)) return false
-      if (filtroConPrestamo && !c.tiene_prestamos_activos) return false
-      if (filtroSaldoFavor && !(Number(c.saldo_a_favor || 0) > 0)) return false
-      
-      if (filtroEstado === 'activos' && !c.activo) return false
-      if (filtroEstado === 'desactivados' && c.activo) return false
-      
-      return true
-    })
-
-    const listaConBusqueda = busqueda ? buscarClientes(list, busqueda) : list
-
-    // Ordenar: Clientes con deuda o préstamos activos primero, luego relevancia/nombre
-    return [...listaConBusqueda].sort((a, b) => {
-      const deudaA = Number(a.saldo_pendiente || 0)
-      const deudaB = Number(b.saldo_pendiente || 0)
-      const prestamoA = !!a.tiene_prestamos_activos
-      const prestamoB = !!b.tiene_prestamos_activos
-
-      const esDeudorA = deudaA > 0 || prestamoA
-      const esDeudorB = deudaB > 0 || prestamoB
-
-      if (esDeudorA && !esDeudorB) return -1
-      if (!esDeudorA && esDeudorB) return 1
-
-      if (esDeudorA && esDeudorB) {
-        // Priorizar por mayor deuda de dinero
-        if (deudaA !== deudaB) {
-          return deudaB - deudaA
-        }
-        // Desempatar poniendo primero al que tiene préstamos
-        if (prestamoA && !prestamoB) return -1
-        if (!prestamoA && prestamoB) return 1
-      }
-
-      return (a.nombre || '').localeCompare(b.nombre || '')
-    })
-  }, [clientes, busqueda, filtroTipo, filtroVendedor, filtroConDeuda, filtroConPrestamo, filtroSaldoFavor, filtroEstado, mostrarToggle, verTodos, perfil?.id])
+  const clientesFiltrados = useMemo(
+    () => filtrarClientes(clientes, opcionesFiltro),
+    [clientes, opcionesFiltro]
+  )
 
   const hayFiltros = filtroTipo || filtroVendedor || filtroConDeuda || filtroConPrestamo || filtroSaldoFavor || filtroEstado !== 'activos'
 
