@@ -120,9 +120,9 @@ DECLARE
 BEGIN
   SELECT
     COUNT(*),
-    COUNT(*) FILTER (WHERE ts >= date_trunc('day', now() AT TIME ZONE 'America/Caracas') AT TIME ZONE 'America/Caracas'),
-    COUNT(*) FILTER (WHERE ts >= now() - interval '7 days'),
-    COUNT(*) FILTER (WHERE accion = 'LOGIN_FALLIDO' AND ts >= now() - interval '7 days')
+    COUNT(*) FILTER (WHERE a.ts >= date_trunc('day', now() AT TIME ZONE 'America/Caracas') AT TIME ZONE 'America/Caracas'),
+    COUNT(*) FILTER (WHERE a.ts >= now() - interval '7 days'),
+    COUNT(*) FILTER (WHERE a.accion = 'LOGIN_FALLIDO' AND a.ts >= now() - interval '7 days')
   INTO v_total, v_hoy, v_semana, v_logins_fallidos
   FROM public.auditoria a
   LEFT JOIN public.auditoria_catalogo c ON c.accion = a.accion
