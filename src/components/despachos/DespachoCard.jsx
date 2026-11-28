@@ -598,7 +598,20 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
     setShowFacturaModal(true)
   }
 
-  async function generarFacturaConDatos(nroFactura, nroControl) {
+  async function generarFacturaConDatos(nroFactura, nroControl, monedaFactura = 'bs') {
+    const monedaElegida = monedaFactura || 'bs'
+    const tasaBase = Number(tasa) > 0
+      ? Number(tasa)
+      : (Number(tasaUsdt?.precio) > 0 ? Number(tasaUsdt.precio) : Number(tasaBcv?.precio || 0))
+    const tasaParaFactura = (esLogistica && (monedaElegida === 'bs' || monedaElegida === 'bcv') && Number(tasaPersonalizada) > 0)
+      ? Number(tasaPersonalizada)
+      : tasaBase
+
+    if (monedaElegida === 'bs' && !(tasaParaFactura > 0)) {
+      showToast('No hay tasa de cambio cargada para generar la factura en Bolívares', 'error')
+      return
+    }
+
     setShowFacturaModal(false)
     if (facturaActionType === 'print') {
       setPrintLoading(true)
@@ -613,7 +626,7 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
       const { blob, filename } = await generarFacturaPDF({
         despacho: despachoPdf, items: itemsFinal, config,
         formaPago: despachoPdf.forma_pago || '',
-        monedaPDF: monedaPdf, tasa: tasaImpresion,
+        monedaPDF: monedaElegida, tasa: tasaParaFactura,
         tasaUsdt: tasaUsdt.precio, tasaBcv: tasaBcv.precio,
         returnBlob: true,
         nroFactura, nroControl,
@@ -1322,8 +1335,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                   <button onClick={() => { setShowPrintMenu(false); abrirFacturaModal('print') }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 active:bg-slate-100 text-left border-t border-slate-100">
                     <Printer size={14} className="text-slate-400" /> Factura
-                    <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
-                      {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                    <span className="ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none text-blue-600 bg-blue-50 border border-blue-200">
+                      Bs
                     </span>
                   </button>
                   <button onClick={imprimirGuiaDespacho}
@@ -1363,8 +1376,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                   <button onClick={() => { setShowDownloadMenu(false); abrirFacturaModal('download') }}
                     className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 active:bg-slate-100 text-left border-t border-slate-100">
                     <Download size={14} /> Factura
-                    <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
-                      {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                    <span className="ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none text-blue-600 bg-blue-50 border border-blue-200">
+                      Bs
                     </span>
                   </button>
                   <button onClick={() => { descargarGuiaDespacho(); setShowDownloadMenu(false) }}
@@ -1430,8 +1443,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                     <button onClick={() => { setShowPrintMenu(false); abrirFacturaModal('print') }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left border-t border-slate-100">
                       <Printer size={14} className="text-slate-400" /> Factura
-                      <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
-                        {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                      <span className="ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none text-blue-600 bg-blue-50 border border-blue-200">
+                        Bs
                       </span>
                     </button>
                     <button onClick={imprimirGuiaDespacho}
@@ -1477,8 +1490,8 @@ export default memo(function DespachoCard({ despacho, onCambiarEstado, onAnular,
                     <button onClick={() => { setShowDownloadMenu(false); abrirFacturaModal('download') }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left border-t border-slate-100">
                       <Download size={14} /> Factura
-                      <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none ${monedaPdf === 'bs' ? 'text-blue-600 bg-blue-50 border border-blue-200' : monedaPdf === 'bcv' ? 'text-teal-600 bg-teal-50 border border-teal-200' : 'text-emerald-600 bg-emerald-50 border border-emerald-200'}`}>
-                        {monedaPdf === 'bs' ? 'Bs' : monedaPdf === 'bcv' ? 'BCV' : '$'}
+                      <span className="ml-auto text-[9px] font-bold px-1 py-0.5 rounded leading-none text-blue-600 bg-blue-50 border border-blue-200">
+                        Bs
                       </span>
                     </button>
                     <button onClick={() => { descargarGuiaDespacho(); setShowDownloadMenu(false) }}

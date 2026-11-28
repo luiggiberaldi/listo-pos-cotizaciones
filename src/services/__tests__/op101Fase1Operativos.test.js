@@ -68,6 +68,41 @@ describe('OP-2026-101 Fase 1: integridad de PDFs operativos', () => {
     expect(globalThis.__op1Nombre).toContain('2026-11-26.pdf')
   })
 
+  it('facturaPDF usa Bolívares (bs) por defecto cuando hay tasa y permite cambiar manualmente a $', async () => {
+    await generarFacturaPDF({
+      despacho: {
+        numero: 1003,
+        creado_en: '2026-11-27T14:00:00Z',
+        total_usd: 100,
+        cliente: { nombre: 'CLIENTE BS', rif_cedula: 'J-12345678-9' },
+      },
+      items: [{ cantidad: 1, nombre_snap: 'CABILLA', unidad_snap: 'Und', precio_unit_usd: 100, total_linea_usd: 100 }],
+      config: { nombre_negocio: 'CONSTRUACERO CARABOBO C.A.' },
+      tasa: 100,
+    })
+
+    const textosBs = [...globalThis.__op1Textos]
+    expect(textosBs.some(t => t.includes('10.000,00'))).toBe(true)
+    expect(textosBs.some(t => t.includes('$100,00'))).toBe(false)
+
+    globalThis.__op1Textos = []
+    await generarFacturaPDF({
+      despacho: {
+        numero: 1003,
+        creado_en: '2026-11-27T14:00:00Z',
+        total_usd: 100,
+        cliente: { nombre: 'CLIENTE USD', rif_cedula: 'J-12345678-9' },
+      },
+      items: [{ cantidad: 1, nombre_snap: 'CABILLA', unidad_snap: 'Und', precio_unit_usd: 100, total_linea_usd: 100 }],
+      config: { nombre_negocio: 'CONSTRUACERO CARABOBO C.A.' },
+      monedaPDF: '$',
+      tasa: 100,
+    })
+
+    const textosUsd = [...globalThis.__op1Textos]
+    expect(textosUsd.some(t => t.includes('$100,00'))).toBe(true)
+  })
+
   it('ordenDespachoPDF con devoluciones y porcentaje != 100 no inventa CTA POR COBRAR falsa', async () => {
     await generarOrdenDespachoPDF({
       despacho: {

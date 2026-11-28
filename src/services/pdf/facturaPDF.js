@@ -44,7 +44,7 @@ function formatTlfDash(raw) {
   return fmtTelefono(raw)
 }
 
-export async function generarFacturaPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = '$', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false, nroFactura = '', nroControl = '', porcentaje = 100 }) {
+export async function generarFacturaPDF({ despacho, items = [], config = {}, formaPago = '', monedaPDF = 'bs', tasa = 0, tasaUsdt = 0, tasaBcv = 0, returnBlob = false, nroFactura = '', nroControl = '', porcentaje = 100 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait', compress: true })
 
   const factor = Number(porcentaje || 100) / 100
