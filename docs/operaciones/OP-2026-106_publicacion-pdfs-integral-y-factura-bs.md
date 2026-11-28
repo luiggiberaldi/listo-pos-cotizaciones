@@ -10,7 +10,7 @@ Este caso documenta la **Fase 6 (paso a producción)** del plan [OP-2026-101](..
   3. **Se conservó al 100 % el ahorro de tinta** en *Base de Datos de Clientes* y *Reporte de Personal* publicado en [OP-2026-102](OP-2026-102_pdf-clientes-optimizado-impresion.md).
   4. **Indicador visual permanente de entorno de pruebas (`STAGING`):** solo aparece cuando la app corre contra la base de pruebas; **nunca aparece en producción**.
 - **Cambios en la base de datos de producción:** **Ninguno** (0 migraciones SQL; todo es interfaz y generación de PDFs).
-- **Estado:** En publicación a producción (2026-11-27).
+- **Estado:** **Publicado y verificado en producción (2026-11-27).**
 
 ---
 
@@ -53,7 +53,9 @@ Este caso documenta la **Fase 6 (paso a producción)** del plan [OP-2026-101](..
 
 ## Cierre de publicación
 
-- **Solicitud de cambio (PR):** *(se anotará al crear y fusionar)*
-- **Commit en `main`:** *(se anotará al fusionar)*
-- **Despliegue Vercel (frontend):** *(se verificará en vivo)*
-- **Despliegue Cloudflare Worker:** no requiere cambios de código (verificado que `/api/ping` sigue respondiendo en producción).
+- **Solicitud de cambio (PR):** [#96](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/96)
+- **Commit en `main`:** `bf13ff02`
+- **Pruebas y compilación:** `138/138` archivos de prueba (`1.316/1.316` pruebas en verde) + `vite build` + PWA (`85` archivos precacheados) sin errores.
+- **Despliegue Vercel (frontend):** `success` (`CHSUqqPY56NuM42ooZZ6fnykjLFi`), `https://listo-pos-cotizaciones.vercel.app` respondiendo correctamente.
+- **Despliegue Cloudflare Worker:** `completed / success` (ejecución `#46094888786`, 46 s; `/api/ping` responde `"ok"`).
+- **Carpeta temporal de pruebas:** `construacero-op-101` eliminada al cerrar; carpeta principal en `main` limpia.
