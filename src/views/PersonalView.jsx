@@ -300,11 +300,7 @@ export default function PersonalView() {
               <>
                 <button 
                   onClick={() => exportarClientesPDF('print')} 
-<<<<<<< HEAD
-                  disabled={imprimiendoPDF || exportandoPDF || isLoading || clientesFiltrados.length === 0}
-=======
                   disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || clientesFiltrados.length === 0}
->>>>>>> origin/main
                   className="flex items-center gap-1.5 sm:gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
                   <Printer size={15} />
@@ -312,11 +308,7 @@ export default function PersonalView() {
                 </button>
                 <button 
                   onClick={() => exportarClientesPDF('download')} 
-<<<<<<< HEAD
-                  disabled={imprimiendoPDF || exportandoPDF || isLoading || clientesFiltrados.length === 0}
-=======
                   disabled={imprimiendoPDF || exportandoPDF || isLoading || isFetching || clientesFiltrados.length === 0}
->>>>>>> origin/main
                   className="flex items-center gap-1.5 sm:gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 min-h-9 rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 whitespace-nowrap"
                 >
                   <FileText size={15} />
