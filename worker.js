@@ -69,6 +69,9 @@ const worker = {
 
     // ── API routes (wrapped in error logging) ────
     if (url.pathname.startsWith('/api/')) {
+      // OP-2026-109 (Auditoría 2.0 Fase 0): todas las rutas /api/ reciben waitUntil
+      // para que auditoría y avisos en segundo plano nunca se corten al responder.
+      env = conWaitUntil(env, ctx);
       // Guard every API write at the router boundary, including mutation handlers
       // that do not use validateOperator or are mounted through special routes.
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !isSameOriginRequest(request)) {

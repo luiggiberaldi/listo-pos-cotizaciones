@@ -45,13 +45,15 @@ export async function registrarAuditoria(env, headers, { usuarioId, usuarioNombr
   // estuvo meses sin que nadie lo notara.
   const avisar = (mensaje, extra = {}) => logToSystem(env, {
     nivel: 'error',
-    origen: 'auditoria',
+    // OP-2026-109: system_logs solo acepta 'frontend' | 'worker' | 'supabase' (migración 056).
+    // Antes usaba 'auditoria' y la base descartaba la alarma en silencio (OP-2026-065).
+    origen: 'worker',
     categoria: categoria || 'SISTEMA',
     mensaje,
     endpoint: '/rest/v1/auditoria',
     usuario_id: usuarioId || null,
     usuario_nombre: usuarioNombre || null,
-    meta: { accion: accion || null, categoria: categoria || null, entidadTipo: entidadTipo || null, entidadId: entidadId || null, ...extra },
+    meta: { suborigen: 'auditoria', accion: accion || null, categoria: categoria || null, entidadTipo: entidadTipo || null, entidadId: entidadId || null, ...extra },
   })
   const fila = (cat, extraMeta = null, prefijo = '') => JSON.stringify({
     usuario_id: usuarioId,

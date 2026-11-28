@@ -330,13 +330,15 @@ export async function handleCrearDespacho(request, env) {
       if (vinculo.error) avisoVehiculo = `No se pudo fijar el camión del chofer: ${vinculo.error}`
     }
 
-    // Auditoría (fire-and-forget)
-    registrarAuditoria(env, headers, {
-      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: 'supervisor',
+    // Auditoría con waitUntil (no bloquea al usuario ni se corta al responder)
+    const audDespacho = registrarAuditoria(env, headers, {
+      usuarioId: user.operator_id, usuarioNombre: operador.nombre, usuarioRol: operador.rol || 'supervisor',
       categoria: 'COTIZACION', accion: 'CREAR_DESPACHO',
       entidadTipo: 'nota_despacho', entidadId: despacho.id,
       meta: { cotizacion_id: cotizacionId, total_usd: cot.total_usd }, ip,
-    }).catch(() => {});
+    }).catch(() => null);
+    if (typeof env?.waitUntil === 'function') env.waitUntil(audDespacho);
+    else await audDespacho;
 
     // Aviso push desde el servidor (no depende del navegador de quien creó el despacho)
     await avisarDespacho(env, { tipo: 'creado', despachoId: despacho.id, actor: operador });

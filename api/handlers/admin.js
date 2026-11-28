@@ -1768,7 +1768,7 @@ export async function handleCrearTransportista(request, env) {
   const data = await res.json();
   const creado = data[0] || {};
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
-  registrarAuditoria(env, {
+  const audCrearTransp = registrarAuditoria(env, {
     apikey: env.SUPABASE_SERVICE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     'Content-Type': 'application/json',
@@ -1783,7 +1783,9 @@ export async function handleCrearTransportista(request, env) {
     entidadId: creado.id,
     meta: { nombre, rif, es_local: !!es_local },
     ip,
-  }).catch(() => {});
+  }).catch(() => null);
+  if (typeof env?.waitUntil === 'function') env.waitUntil(audCrearTransp);
+  else await audCrearTransp;
 
   return json({ ok: true, transportista: creado }, 201, request);
 }
@@ -1848,7 +1850,7 @@ export async function handleActualizarTransportista(request, env) {
   const data = await res.json();
   const actualizado = data[0] || {};
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
-  registrarAuditoria(env, {
+  const audActTransp = registrarAuditoria(env, {
     apikey: env.SUPABASE_SERVICE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     'Content-Type': 'application/json',
@@ -1863,7 +1865,9 @@ export async function handleActualizarTransportista(request, env) {
     entidadId: id,
     meta: { campos_modificados: Object.keys(updateData) },
     ip,
-  }).catch(() => {});
+  }).catch(() => null);
+  if (typeof env?.waitUntil === 'function') env.waitUntil(audActTransp);
+  else await audActTransp;
 
   return json({ ok: true, transportista: actualizado }, 200, request);
 }
@@ -1910,7 +1914,7 @@ export async function handleDesactivarTransportista(request, env) {
   try { resultado = texto ? JSON.parse(texto) : {} } catch { /* respuesta vacía */ }
 
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null;
-  registrarAuditoria(env, {
+  const audDesactTransp = registrarAuditoria(env, {
     apikey: env.SUPABASE_SERVICE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     'Content-Type': 'application/json',
@@ -1927,7 +1931,9 @@ export async function handleDesactivarTransportista(request, env) {
     entidadId: id,
     meta: { activo: false, ...resultado },
     ip,
-  }).catch(() => {});
+  }).catch(() => null);
+  if (typeof env?.waitUntil === 'function') env.waitUntil(audDesactTransp);
+  else await audDesactTransp;
 
   return json({ ok: true, ...resultado }, 200, request);
 }

@@ -8,7 +8,7 @@ export async function handleGetAudit(request, env, url) {
   const user = await verifyAuth(request, env)
   if (!user?.operator_id) return jsonError('No autenticado', 401, request)
   const rol = await getOperatorRole(user.operator_id, env)
-  if (!rol || !['desarrollador', 'supervisor', 'jefe'].includes(rol)) return jsonError('Solo desarrolladores o jefe', 403, request)
+  if (!rol || !['desarrollador', 'supervisor', 'jefe', 'administracion'].includes(rol)) return jsonError('Solo desarrolladores, jefe, administración o supervisor', 403, request)
 
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'))
   const limit = Math.min(100, Math.max(10, parseInt(url.searchParams.get('limit') || '50')))
@@ -49,7 +49,7 @@ export async function handleGetAuditStats(request, env) {
   const user = await verifyAuth(request, env)
   if (!user?.operator_id) return jsonError('No autenticado', 401, request)
   const rol = await getOperatorRole(user.operator_id, env)
-  if (!rol || !['desarrollador', 'supervisor', 'jefe'].includes(rol)) return jsonError('Solo desarrolladores o jefe', 403, request)
+  if (!rol || !['desarrollador', 'supervisor', 'jefe', 'administracion'].includes(rol)) return jsonError('Solo desarrolladores, jefe, administración o supervisor', 403, request)
 
   const h = {
     apikey: env.SUPABASE_SERVICE_KEY,

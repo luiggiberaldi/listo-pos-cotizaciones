@@ -126,6 +126,7 @@
 | OP-2026-106 | 2026-11-27 | Paso a producción (Fase 6 de OP-2026-101): arreglo integral de los 19 PDFs activos, Factura en Bolívares (`Bs`) predeterminado con selector manual, indicador visual permanente de STAGING y limpieza de código muerto | **Publicado y verificado en producción 2026-11-27** (`138/138` archivos / `1.316/1.316` pruebas en verde, `vite build` + PWA OK, Worker `#46094888786` OK, Vercel `CHSUqqPY56NuM42ooZZ6fnykjLFi` OK, `/api/ping` OK, 0 cambios en BD) | [#96](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/96) · `bf13ff02` | [OP-2026-106_publicacion-pdfs-integral-y-factura-bs.md](OP-2026-106_publicacion-pdfs-integral-y-factura-bs.md) |
 | OP-2026-107 | 2026-11-27 | Ajuste de ancho (`max-w-6xl`, ~1.152 px) y centrado (`mx-auto`) en la pantalla de Configuración para aprovechar mejor laptops y monitores grandes | **Publicado en producción 2026-11-27** (`vite build` + PWA OK, cambio solo visual sin tocar BD ni servidor) | rama `fix/op-107-ancho-configuracion` | [OP-2026-107_ancho-centrado-configuracion.md](OP-2026-107_ancho-centrado-configuracion.md) |
 | OP-2026-108 | 2026-11-27 | Auditoría (solo lectura) del plan "Auditoría 2.0" (`OP-2026-066`) contra el código actual | **Auditoría terminada (sin cambios de código)**: 3 fallos críticos (Event Triggers no permitidos en Supabase, falta estándar seguro de operador en PostgREST, choque con restauración 26 tablas y limpiezas staging), 4 huecos de seguridad/permisos (`administracion` bloqueada, `supervisor` lee directo de BD, candado de no borrado insuficiente, `waitUntil` solo en 4 rutas), cotizaciones ya resuelta en OP-069 y falta impacto en probadores automáticos (OP-105). Recomendación: ajustar el plan y arrancar solo Fase 0 en staging | — (rama `docs/op-108-auditoria-plan-auditoria-2`) | [OP-2026-108_auditoria-plan-auditoria-2.md](OP-2026-108_auditoria-plan-auditoria-2.md) |
+| OP-2026-109 | 2026-11-27 | Auditoría 2.0 (Fase 0): corrección del plan `OP-2026-066`, `waitUntil` global en `/api/` y 12 llamadas sueltas arregladas, alarma a `system_logs` con `origen: 'worker'`, acceso para `administracion` y migración `319` de candado anti-borrado (+ reversión) | **Listo y probado en local** (`139/139` suites + `vite build` OK). Pendiente: aplicar migración `319` y desplegar/probar en staging antes de producción | — (rama `docs/op-108-auditoria-plan-auditoria-2`) | [OP-2026-109_auditoria-fase-0.md](OP-2026-109_auditoria-fase-0.md) · [plan actualizado](../plans/OP-2026-066_plan-auditoria-2.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -141,7 +142,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-109**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-110**).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.

@@ -216,7 +216,7 @@ export async function handleCrearVehiculo(request, env) {
   const [vehiculo] = await res.json()
 
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null
-  registrarAuditoria(env, headers, {
+  const audCrearVeh = registrarAuditoria(env, headers, {
     usuarioId: operador.id,
     usuarioNombre: operador.nombre,
     usuarioRol: operador.rol,
@@ -227,7 +227,9 @@ export async function handleCrearVehiculo(request, env) {
     entidadId: vehiculo.id,
     meta: { codigo, placa: placaNorm, capacidad_kg: capacidad },
     ip,
-  }).catch(() => {})
+  }).catch(() => null)
+  if (typeof env?.waitUntil === 'function') env.waitUntil(audCrearVeh)
+  else await audCrearVeh
 
   return json({ ok: true, vehiculo }, 201, request)
 }
@@ -320,7 +322,7 @@ export async function handleActualizarVehiculo(request, env) {
   if (!actualizado) return jsonError('Vehículo no encontrado en esta cuenta', 404, request)
 
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null
-  registrarAuditoria(env, headers, {
+  const audActVeh = registrarAuditoria(env, headers, {
     usuarioId: operador.id,
     usuarioNombre: operador.nombre,
     usuarioRol: operador.rol,
@@ -331,7 +333,9 @@ export async function handleActualizarVehiculo(request, env) {
     entidadId: id,
     meta: { campos_modificados: Object.keys(updateData) },
     ip,
-  }).catch(() => {})
+  }).catch(() => null)
+  if (typeof env?.waitUntil === 'function') env.waitUntil(audActVeh)
+  else await audActVeh
 
   return json({ ok: true, vehiculo: actualizado }, 200, request)
 }
@@ -370,7 +374,7 @@ export async function handleEliminarVehiculo(request, env) {
   try { resultado = texto ? JSON.parse(texto) : {} } catch { /* respuesta vacía */ }
 
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || null
-  registrarAuditoria(env, headers, {
+  const audElimVeh = registrarAuditoria(env, headers, {
     usuarioId: operador.id,
     usuarioNombre: operador.nombre,
     usuarioRol: operador.rol,
@@ -383,7 +387,9 @@ export async function handleEliminarVehiculo(request, env) {
     entidadId: id,
     meta: resultado,
     ip,
-  }).catch(() => {})
+  }).catch(() => null)
+  if (typeof env?.waitUntil === 'function') env.waitUntil(audElimVeh)
+  else await audElimVeh
 
   return json({ ok: true, ...resultado }, 200, request)
 }
