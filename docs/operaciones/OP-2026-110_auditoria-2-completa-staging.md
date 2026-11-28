@@ -34,6 +34,11 @@
   7. **Guardia de retención:** intentar archivar con menos de 365 días fue bloqueado con `RETENCION_MINIMA`.
   8. **Velocidad:** ~7,6 ms/op (límite permitido: +50 ms).
   9. **Limpieza:** 0 filas residuales en `clientes`, `auditoria`, `auditoria_cambios` y `auditoria_peticiones`.
+- **Prueba visual en navegador real (`construacero-staging`, versión `9890df81-609b-4311-9811-cc4c7d493d56`):**
+  - Detectó y se corrigieron 2 fallos reales (`cf2a1a1b`): (1) la Bitácora estaba oculta tras `esDesarrollador` en `AuditoriaView.jsx` (se habilitó para todos los roles autorizados en la pestaña Bitácora), y (2) el filtro del supervisor incluía `PROVEEDOR` que no existe en el enum `categoria_auditoria` (se dejó solo con etiquetas válidas del enum).
+  - **Re-verificación en navegador (100 % verde, 0 errores JS / 0 errores HTTP 500):**
+    - **Ana Rodríguez (`administracion`):** `1.840` registros visibles, 3 pestañas completas (`Bitácora`, `Cambios Antes/Después`, `Accesos y Errores`), `Verificar sellos` OK, cambio limpio entre pestañas.
+    - **María Fernanda González (`supervisor`):** `1.745` registros visibles (95 registros financieros/de precios ocultados por el servidor), etiqueta *"Vista operativa (sin precios ni dinero)"* visible, pestaña *Accesos y Errores* y botón *Verificar sellos* ocultos.
 
 ---
 
