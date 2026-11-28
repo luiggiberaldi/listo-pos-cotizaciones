@@ -173,11 +173,19 @@ async function leerDiaProduccion() {
     const cotizaciones = cotIds
       ? await prodSelectSql(`SELECT * FROM cotizaciones WHERE id IN (${cotIds})`)
       : []
+    const transpIdsSet = new Set([
+      ...despachos.map(d => d.transportista_id),
+      ...cotizaciones.map(c => c.transportista_id),
+    ].filter(Boolean))
+    const transpIds = [...transpIdsSet].map(id => `'${id}'`).join(',')
+    const transportistas = transpIds
+      ? await prodSelectSql(`SELECT * FROM transportistas WHERE id IN (${transpIds})`)
+      : []
     const tasaRows = await prodSelectSql(`
       SELECT tasa_bcv, tasa_usdt, tasa_cambio, tasa_manual FROM configuracion_negocio
       WHERE cuenta_id = '${PROD_CUENTA_ID}' LIMIT 1
     `)
-    return { despachos, cotizaciones, items, devoluciones, movsCxc, clientes, histCxc, productos, config: tasaRows[0] || {} }
+    return { despachos, cotizaciones, transportistas, items, devoluciones, movsCxc, clientes, histCxc, productos, config: tasaRows[0] || {} }
   }
 
   // Fallback local con SERVICE_KEY solo-GET
@@ -210,8 +218,12 @@ async function leerDiaProduccion() {
   const cotizaciones = cotIds.length
     ? await prodRestGet(`cotizaciones?id=in.(${cotIds.join(',')})&limit=500`)
     : []
+  const transpIds = [...new Set([...despachos.map(d => d.transportista_id), ...cotizaciones.map(c => c.transportista_id)].filter(Boolean))]
+  const transportistas = transpIds.length
+    ? await prodRestGet(`transportistas?id=in.(${transpIds.join(',')})&limit=500`)
+    : []
   const cfgRows = await prodRestGet(`configuracion_negocio?cuenta_id=eq.${PROD_CUENTA_ID}&limit=1`)
-  return { despachos, cotizaciones, items, devoluciones, movsCxc, clientes, histCxc, productos, config: cfgRows[0] || {} }
+  return { despachos, cotizaciones, transportistas, items, devoluciones, movsCxc, clientes, histCxc, productos, config: cfgRows[0] || {} }
 }
 
 // ── 4. Cliente para STAGING (con guardia dura) ──────────────────────────────────────────────
@@ -268,6 +280,7 @@ const stagingCuentaId = await obtenerCuentaStagingClon()
 if (stagingCuentaId) {
   const remap = (arr) => (arr || []).map(r => ('cuenta_id' in r ? { ...r, cuenta_id: stagingCuentaId } : { ...r }))
   try {
+    await stUpsert('transportistas', remap(prod.transportistas))
     await stUpsert('productos', remap(prod.productos))
     await stUpsert('clientes', remap(prod.clientes).map(c => ({ ...c, activo: true })))
     await stUpsert('cotizaciones', remap(prod.cotizaciones))
