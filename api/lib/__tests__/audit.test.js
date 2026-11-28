@@ -71,8 +71,12 @@ describe('registrarAuditoria — sin fallos silenciosos', () => {
   })
 
   it('registro RECHAZADO por la base de datos: avisa con estado y acción, y devuelve la respuesta a los llamadores', async () => {
-    const { calls } = stubFetch((url) => {
-      if (url.includes('/rest/v1/system_logs')) return Promise.resolve(respuesta(201, ''))
+    const logsEnviados = []
+    const { calls } = stubFetch((url, init) => {
+      if (url.includes('/rest/v1/system_logs')) {
+        logsEnviados.push(JSON.parse(init.body))
+        return Promise.resolve(respuesta(201, ''))
+      }
       return Promise.resolve(respuesta(400, 'invalid input value for enum categoria_auditoria: "FINANZAS"'))
     })
 
@@ -82,8 +86,9 @@ describe('registrarAuditoria — sin fallos silenciosos', () => {
     expect(res.status).toBe(400)
     expect(avisos()).toContain('RECHAZADA (400)')
     expect(avisos()).toContain('ACCION_PRUEBA')
-    // El aviso también queda persistido en system_logs.
+    // El aviso también queda persistido en system_logs con origen válido 'worker' (OP-2026-109).
     expect(calls.some((c) => c.url.includes('/rest/v1/system_logs'))).toBe(true)
+    expect(logsEnviados[0]).toMatchObject({ origen: 'worker', meta: expect.objectContaining({ suborigen: 'auditoria' }) })
   })
 
   it('OP-2026-050: anotación rechazada → se rescata como SISTEMA con la categoría original en meta', async () => {

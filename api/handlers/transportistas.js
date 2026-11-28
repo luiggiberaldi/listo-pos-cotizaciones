@@ -336,12 +336,14 @@ export async function handlePagarTransportista(request, env) {
     const raw = await atomicRes.json()
     const result = Array.isArray(raw) ? raw[0] : raw
     if (!result?.pago_id) return jsonError('La liquidación no devolvió un pago válido', 500, request)
-    registrarAuditoria(env, svcHeaders, {
+    const audPago = registrarAuditoria(env, svcHeaders, {
       usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
       categoria: 'TRANSPORTISTA', accion: 'PAGAR_TRANSPORTISTA',
       entidadTipo: 'transportista', entidadId: transportistaId,
       meta: result, ip,
-    }).catch(() => {})
+    }).catch(() => null)
+    if (typeof env?.waitUntil === 'function') env.waitUntil(audPago)
+    else await audPago
     return json({ ok: true, ...result }, 200, request)
   }
 
@@ -461,13 +463,15 @@ export async function handlePagarTransportista(request, env) {
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     'Content-Type': 'application/json',
   }
-  registrarAuditoria(env, svcHeadersAudit, {
+  const audPagoLegacy = registrarAuditoria(env, svcHeadersAudit, {
     usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
     categoria: 'TRANSPORTISTA', accion: 'PAGAR_TRANSPORTISTA',
     entidadTipo: 'transportista', entidadId: transportistaId,
     meta: { monto: montoNum, despachos_marcados: marcados.length, pago_id: pago.id },
     ip,
-  }).catch(() => {})
+  }).catch(() => null)
+  if (typeof env?.waitUntil === 'function') env.waitUntil(audPagoLegacy)
+  else await audPagoLegacy
 
   return json({
     ok: true,
@@ -520,7 +524,7 @@ export async function handleRevertirPagoTransportista(request, env) {
     }
     const raw = await atomicRes.json()
     const result = Array.isArray(raw) ? raw[0] : raw
-    registrarAuditoria(env, {
+    const audRev = registrarAuditoria(env, {
       apikey: env.SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
       'Content-Type': 'application/json',
@@ -528,7 +532,9 @@ export async function handleRevertirPagoTransportista(request, env) {
       usuarioId: operador.id, usuarioNombre: operador.nombre, usuarioRol: operador.rol,
       categoria: 'TRANSPORTISTA', accion: 'REVERTIR_PAGO_TRANSPORTISTA',
       entidadTipo: 'pago_transportista', entidadId: pagoId, meta: result, ip,
-    }).catch(() => {})
+    }).catch(() => null)
+    if (typeof env?.waitUntil === 'function') env.waitUntil(audRev)
+    else await audRev
     return json({ ok: true, ...result }, 200, request)
   }
 
@@ -606,7 +612,7 @@ export async function handleRevertirPagoTransportista(request, env) {
   if (!updatePagoRes.ok) return jsonError('Error al marcar el pago como revertido', 500, request)
 
   // 5. Auditoría
-  registrarAuditoria(env, svcHeaders, {
+  const audRevLegacy = registrarAuditoria(env, svcHeaders, {
     usuarioId: operador.id,
     usuarioNombre: operador.nombre,
     usuarioRol: operador.rol,
@@ -616,7 +622,9 @@ export async function handleRevertirPagoTransportista(request, env) {
     entidadId: pagoId,
     meta: { transportista_id: pago.transportista_id, monto: pago.monto_usd, despachos_reseteados: despachoIds.length },
     ip,
-  }).catch(() => {})
+  }).catch(() => null)
+  if (typeof env?.waitUntil === 'function') env.waitUntil(audRevLegacy)
+  else await audRevLegacy
 
   return json({ ok: true, despachos_reseteados: despachoIds.length }, 200, request)
 }

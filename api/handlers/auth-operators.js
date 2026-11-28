@@ -99,11 +99,18 @@ export async function handleSwitchOperator(request, env) {
       return jsonError('El operador no tiene PIN configurado. El supervisor debe asignarle uno.', 400, request)
     }
 
-    const audit = (payload) => registrarAuditoria(env, headers, {
-      ...payload, meta: { ...(payload.meta || {}), request_id: requestId },
-    })
+    const audit = (payload) => {
+      const p = registrarAuditoria(env, headers, {
+        ...payload, meta: { ...(payload.meta || {}), request_id: requestId },
+      }).catch(() => null)
+      if (typeof env?.waitUntil === 'function') {
+        env.waitUntil(p)
+        return Promise.resolve(null)
+      }
+      return p
+    }
     if (!await verifyPinPBKDF2(pin, operator.pin_hash, operator.pin_salt)) {
-      void audit({
+      await audit({
         usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
         categoria: 'AUTH', accion: 'LOGIN_FALLIDO', descripcion: `Intento de login fallido para ${operator.nombre}`,
         entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
@@ -119,7 +126,7 @@ export async function handleSwitchOperator(request, env) {
     }
 
     const operatorSession = await replaceOperatorSession(request, env, user.id, operator)
-    void audit({
+    await audit({
       usuarioId: operator.id, usuarioNombre: operator.nombre, usuarioRol: operator.rol,
       categoria: 'AUTH', accion: 'LOGIN_EXITOSO', descripcion: `${operator.nombre} inició sesión`,
       entidadTipo: 'usuario', entidadId: operator.id, meta: { ip }, ip,
