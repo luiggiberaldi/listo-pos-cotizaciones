@@ -124,6 +124,7 @@
 | OP-2026-104 | 2026-11-27 | Arreglo del falso positivo del monitor de Kardex en el Probador nocturno de staging (1:00 a. m. VE) + refuerzo con batería completa de pruebas y PDFs + resumen en español | **Publicado y verificado en vivo en GitHub Actions** (`#46091590162`, 3m 23s, 100 % verde) | [#92](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/92) · `2ea83fa3` | [OP-2026-104_arreglo-y-mejora-probador-nocturno-staging.md](OP-2026-104_arreglo-y-mejora-probador-nocturno-staging.md) |
 | OP-2026-105 | 2026-11-27 | Regla permanente en `AGENTS.md`: cualquier cambio que afecte los probadores o inspectores automáticos debe ser informado al usuario y documentado | **Publicado en `main`** | [#93](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/93) · `13e77f5c` | [OP-2026-105_regla-aviso-cambios-probadores.md](OP-2026-105_regla-aviso-cambios-probadores.md) |
 | OP-2026-106 | 2026-11-27 | Paso a producción (Fase 6 de OP-2026-101): arreglo integral de los 19 PDFs activos, Factura en Bolívares (`Bs`) predeterminado con selector manual, indicador visual permanente de STAGING y limpieza de código muerto | **Publicado y verificado en producción 2026-11-27** (`138/138` archivos / `1.316/1.316` pruebas en verde, `vite build` + PWA OK, Worker `#46094888786` OK, Vercel `CHSUqqPY56NuM42ooZZ6fnykjLFi` OK, `/api/ping` OK, 0 cambios en BD) | [#96](https://github.com/luiggiberaldi/listo-pos-cotizaciones/pull/96) · `bf13ff02` | [OP-2026-106_publicacion-pdfs-integral-y-factura-bs.md](OP-2026-106_publicacion-pdfs-integral-y-factura-bs.md) |
+| OP-2026-107 | 2026-11-27 | Ajuste de ancho (`max-w-6xl`, ~1.152 px) y centrado (`mx-auto`) en la pantalla de Configuración para aprovechar mejor laptops y monitores grandes | **Publicado en producción 2026-11-27** (`vite build` + PWA OK, cambio solo visual sin tocar BD ni servidor) | rama `fix/op-107-ancho-configuracion` | [OP-2026-107_ancho-centrado-configuracion.md](OP-2026-107_ancho-centrado-configuracion.md) |
 
 **Nota:** los casos OP-2026-001 a 008 y 010 dicen "Ver documento" porque su estado se confirma leyendo el documento. Se completarán en la próxima revisión.
 
@@ -139,7 +140,7 @@ Carpetas de referencia:
 
 ## Cómo agregar un caso
 
-1. Tomar el siguiente número libre (hoy: **OP-2026-107**).
+1. Tomar el siguiente número libre (hoy: **OP-2026-108**).
 2. Crear el documento con el nombre `OP-AAAA-NNN_tema.md` y una sección "En resumen" al inicio.
 3. Agregar una fila a la tabla de arriba con el número, la fecha, el estado y el enlace.
 4. Si el caso se publica, poner el número de la solicitud de cambio y el commit en la fila.
